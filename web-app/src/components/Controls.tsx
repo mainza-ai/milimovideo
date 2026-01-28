@@ -246,9 +246,12 @@ export function Controls({
                                 setHeight(h);
                             }}
                         >
-                            <option value="768x512">16:9 (Landscape)</option>
-                            <option value="512x768">9:16 (Portrait)</option>
-                            <option value="512x512">1:1 (Square)</option>
+                            <option value="1280x704">1280x704 (HD)</option>
+                            <option value="1920x1088">1920x1088 (FHD)</option>
+                            <option value="3840x2176">3840x2176 (4K)</option>
+                            <option value="768x512">768x512 (Landscape)</option>
+                            <option value="512x768">512x768 (Portrait)</option>
+                            <option value="512x512">512x512 (Square)</option>
                         </select>
                     </div>
 

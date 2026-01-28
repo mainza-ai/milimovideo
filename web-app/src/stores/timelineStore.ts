@@ -106,7 +106,7 @@ const DEFAULT_PROJECT: Project = {
             width: 768,
             height: 512,
             numFrames: 121,
-            fps: 25,
+            // fps inherited from project
             timeline: [],
             cfgScale: 3.0,
             enhancePrompt: true,
@@ -151,7 +151,7 @@ export const useTimelineStore = create<TimelineState>()(
                         width: state.project.resolutionW,
                         height: state.project.resolutionH,
                         numFrames: 121,
-                        fps: 25,
+                        // fps inherited from project
                         timeline: [],
 
                         // Defaults

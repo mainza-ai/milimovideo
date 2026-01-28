@@ -204,6 +204,10 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
     seed = params.get("seed", 42)
     width = params.get("width", 768)
     height = params.get("height", 512)
+
+    # Ensure mod64 for LTX-2
+    height = round(height / 64) * 64
+    width = round(width / 64) * 64
     # Total desired frames. The UI sends this based on selected duration.
     # e.g. 10s * 25fps = 250 frames.
     desired_total_frames = params.get("num_frames", 121) 
@@ -425,6 +429,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         seed = params.get("seed", 42)
         width = params.get("width", 768)
         height = params.get("height", 512)
+        
+        # Ensure mod64 for LTX-2
+        height = round(height / 64) * 64
+        width = round(width / 64) * 64
         num_frames = params.get("num_frames", 121) 
         num_inference_steps = params.get("num_inference_steps", 40)
         cfg_scale = params.get("cfg_scale", 3.0)
@@ -837,7 +845,7 @@ async def generate_video_task(job_id: str, params: dict):
         # Decide if chained or standard
         num_frames = params.get("num_frames", 121)
         
-        if pipeline_type == "ti2vid" and num_frames > 1201:
+        if pipeline_type == "ti2vid" and num_frames > 121:
              await generate_chained_video_task(job_id, params, pipeline)
         else:
              await generate_standard_video_task(job_id, params, pipeline)
