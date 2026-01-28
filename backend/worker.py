@@ -1,5 +1,8 @@
 import asyncio
 import os
+# Fix for MPS memory allocation limits on Apple Silicon for large generations
+os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+
 import subprocess
 import torch
 import sys

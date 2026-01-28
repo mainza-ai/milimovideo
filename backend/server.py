@@ -6,6 +6,9 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import uvicorn
 import os
+# Fix for MPS memory allocation limits on Apple Silicon for large generations
+os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+
 import shutil
 import uuid
 import json

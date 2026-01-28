@@ -81,7 +81,7 @@ Milimo Video is built on a modern, robust stack:
 Clone the repository and set up the environment:
 
 ```bash
-git clone https://github.com/yourusername/milimo-video.git
+git clone https://github.com/mainza-ai/milimovideo.git
 cd milimovideo
 ```
 
