@@ -135,6 +135,19 @@ class GemmaTextEncoderModelBase(torch.nn.Module):
     ) -> str:
         """Enhance a text prompt for I2V generation using a reference image."""
         system_prompt = system_prompt or self.default_gemma_i2v_system_prompt
+        
+        # DEBUG TRACE
+        import logging
+        logger = logging.getLogger("ltx_core.text_encoders")
+        logger.info(f"--- GEMMA I2V TRACE ---")
+        logger.info(f"System Prompt: {system_prompt[:200]}...")
+        logger.info(f"User Prompt: {prompt}")
+        if image is not None:
+            logger.info(f"Image Tensor Shape: {image.shape}")
+            logger.info(f"Image Tensor Stats - Min: {image.min()}, Max: {image.max()}, Mean: {image.float().mean()}")
+        else:
+            logger.warning("IMAGE TENSOR IS NONE in enhance_i2v!")
+            
         messages = [
             {"role": "system", "content": system_prompt},
             {

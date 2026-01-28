@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { v4 as uuidv4 } from 'uuid';
 import { persist } from 'zustand/middleware';
+import { temporal } from 'zundo';
 
 export type ConditioningType = 'image' | 'video';
 
@@ -32,6 +33,9 @@ export interface Shot {
     // Result
     lastJobId?: string;
     videoUrl?: string; // Derived from jobID
+    enhancedPromptResult?: string; // Result from backend
+    statusMessage?: string; // Real-time status text
+    currentPrompt?: string; // Live evolving prompt during generation
 
     // UI State
     isGenerating?: boolean;
@@ -115,289 +119,296 @@ const DEFAULT_PROJECT: Project = {
 };
 
 export const useTimelineStore = create<TimelineState>()(
-    persist(
-        (set, get) => ({
-            project: DEFAULT_PROJECT,
-            selectedShotId: 'shot-init', // Select by default
-            currentTime: 0,
-            isPlaying: false,
-            toasts: [],
-            assetRefreshVersion: 0,
+    temporal(
+        persist(
+            (set, get) => ({
+                // ... (store implementation remains the same, just wrapped)
+                project: DEFAULT_PROJECT,
+                selectedShotId: 'shot-init', // Select by default
+                currentTime: 0,
+                isPlaying: false,
+                toasts: [],
+                assetRefreshVersion: 0,
 
-            setProject: (p) => set({ project: p }),
+                setProject: (p) => set({ project: p }),
 
-            addToast: (message, type = 'info') => {
-                const id = uuidv4();
-                set(state => ({ toasts: [...state.toasts, { id, message, type }] }));
-                setTimeout(() => get().removeToast(id), 3000);
-            },
-
-            removeToast: (id) => set(state => ({ toasts: state.toasts.filter(t => t.id !== id) })),
-
-            addShot: () => set((state) => {
-                const newShot: Shot = {
-                    id: uuidv4(),
-                    prompt: "A cinematic shot...",
-                    negativePrompt: "low quality, blurry",
-                    seed: state.project.seed,
-                    width: state.project.resolutionW,
-                    height: state.project.resolutionH,
-                    numFrames: 121,
-                    timeline: [],
-
-                    // Defaults
-                    cfgScale: 3.0,
-                    enhancePrompt: true,
-                    upscale: true,
-                    pipelineOverride: 'auto'
-                };
-                return {
-                    project: {
-                        ...state.project,
-                        shots: [...state.project.shots, newShot]
-                    },
-                    selectedShotId: newShot.id
-                };
-            }),
-
-            updateShot: (id, updates) => set((state) => ({
-                project: {
-                    ...state.project,
-                    shots: state.project.shots.map(s => s.id === id ? { ...s, ...updates } : s)
-                }
-            })),
-
-            reorderShots: (fromIndex, toIndex) => set((state) => {
-                const shots = [...state.project.shots];
-                const [removed] = shots.splice(fromIndex, 1);
-                shots.splice(toIndex, 0, removed);
-                return {
-                    project: {
-                        ...state.project,
-                        shots
-                    }
-                };
-            }),
-
-            deleteShot: (id) => set((state) => ({
-                project: {
-                    ...state.project,
-                    shots: state.project.shots.filter(s => s.id !== id)
+                addToast: (message, type = 'info') => {
+                    const id = uuidv4();
+                    set(state => ({ toasts: [...state.toasts, { id, message, type }] }));
+                    setTimeout(() => get().removeToast(id), 3000);
                 },
-                selectedShotId: state.selectedShotId === id ? null : state.selectedShotId
-            })),
 
-            selectShot: (id) => set({ selectedShotId: id }),
+                removeToast: (id) => set(state => ({ toasts: state.toasts.filter(t => t.id !== id) })),
 
-            addConditioningToShot: (shotId, item) => set((state) => ({
-                project: {
-                    ...state.project,
-                    shots: state.project.shots.map(s => {
-                        if (s.id !== shotId) return s;
-                        return {
-                            ...s,
-                            timeline: [...s.timeline, { ...item, id: uuidv4() }]
-                        };
-                    })
-                }
-            })),
+                addShot: () => set((state) => {
+                    const newShot: Shot = {
+                        id: uuidv4(),
+                        prompt: "A cinematic shot...",
+                        negativePrompt: "low quality, blurry",
+                        seed: state.project.seed,
+                        width: state.project.resolutionW,
+                        height: state.project.resolutionH,
+                        numFrames: 121,
+                        timeline: [],
 
-            updateConditioning: (shotId, itemId, updates) => set((state) => ({
-                project: {
-                    ...state.project,
-                    shots: state.project.shots.map(s => {
-                        if (s.id !== shotId) return s;
-                        return {
-                            ...s,
-                            timeline: s.timeline.map(ti => ti.id === itemId ? { ...ti, ...updates } : ti)
-                        };
-                    })
-                }
-            })),
-
-            removeConditioning: (shotId, itemId) => set((state) => ({
-                project: {
-                    ...state.project,
-                    shots: state.project.shots.map(s => {
-                        if (s.id !== shotId) return s;
-                        return {
-                            ...s,
-                            timeline: s.timeline.filter(ti => ti.id !== itemId)
-                        };
-                    })
-                }
-            })),
-
-            setCurrentTime: (t) => set({ currentTime: t }),
-            setIsPlaying: (p) => set({ isPlaying: p }),
-
-            saveProject: async () => {
-                const { project, addToast } = get();
-                try {
-                    // Convert to snake_case for backend
-                    const payload = {
-                        id: project.id,
-                        name: project.name,
-                        fps: project.fps,
-                        seed: project.seed,
-                        resolution_w: project.resolutionW,
-                        resolution_h: project.resolutionH,
-                        shots: project.shots.map(s => ({
-                            id: s.id,
-                            prompt: s.prompt,
-                            negative_prompt: s.negativePrompt,
-                            seed: s.seed,
-                            width: s.width,
-                            height: s.height,
-                            num_frames: s.numFrames,
-                            cfg_scale: s.cfgScale,
-                            enhance_prompt: s.enhancePrompt,
-                            upscale: s.upscale,
-                            pipeline_override: s.pipelineOverride,
-                            timeline: s.timeline.map(t => ({
-                                type: t.type,
-                                path: t.path,
-                                frame_index: t.frameIndex,
-                                strength: t.strength
-                            })),
-                            last_job_id: s.lastJobId
-                        }))
+                        // Defaults
+                        cfgScale: 3.0,
+                        enhancePrompt: true,
+                        upscale: true,
+                        pipelineOverride: 'auto'
                     };
+                    return {
+                        project: {
+                            ...state.project,
+                            shots: [...state.project.shots, newShot]
+                        },
+                        selectedShotId: newShot.id
+                    };
+                }),
 
-                    const res = await fetch(`http://localhost:8000/project/${project.id}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+                updateShot: (id, updates) => set((state) => ({
+                    project: {
+                        ...state.project,
+                        shots: state.project.shots.map(s => s.id === id ? { ...s, ...updates } : s)
+                    }
+                })),
 
-                    if (res.ok) addToast("Project saved successfully", "success");
-                    else {
-                        const err = await res.json();
-                        console.error("Save failed", err);
+                reorderShots: (fromIndex, toIndex) => set((state) => {
+                    const shots = [...state.project.shots];
+                    const [removed] = shots.splice(fromIndex, 1);
+                    shots.splice(toIndex, 0, removed);
+                    return {
+                        project: {
+                            ...state.project,
+                            shots
+                        }
+                    };
+                }),
+
+                deleteShot: (id) => set((state) => ({
+                    project: {
+                        ...state.project,
+                        shots: state.project.shots.filter(s => s.id !== id)
+                    },
+                    selectedShotId: state.selectedShotId === id ? null : state.selectedShotId
+                })),
+
+                selectShot: (id) => set({ selectedShotId: id }),
+
+                addConditioningToShot: (shotId, item) => set((state) => ({
+                    project: {
+                        ...state.project,
+                        shots: state.project.shots.map(s => {
+                            if (s.id !== shotId) return s;
+                            return {
+                                ...s,
+                                timeline: [...s.timeline, { ...item, id: uuidv4() }]
+                            };
+                        })
+                    }
+                })),
+
+                updateConditioning: (shotId, itemId, updates) => set((state) => ({
+                    project: {
+                        ...state.project,
+                        shots: state.project.shots.map(s => {
+                            if (s.id !== shotId) return s;
+                            return {
+                                ...s,
+                                timeline: s.timeline.map(ti => ti.id === itemId ? { ...ti, ...updates } : ti)
+                            };
+                        })
+                    }
+                })),
+
+                removeConditioning: (shotId, itemId) => set((state) => ({
+                    project: {
+                        ...state.project,
+                        shots: state.project.shots.map(s => {
+                            if (s.id !== shotId) return s;
+                            return {
+                                ...s,
+                                timeline: s.timeline.filter(ti => ti.id !== itemId)
+                            };
+                        })
+                    }
+                })),
+
+                setCurrentTime: (t) => set({ currentTime: t }),
+                setIsPlaying: (p) => set({ isPlaying: p }),
+
+                saveProject: async () => {
+                    const { project, addToast } = get();
+                    try {
+                        // Convert to snake_case for backend
+                        const payload = {
+                            id: project.id,
+                            name: project.name,
+                            fps: project.fps,
+                            seed: project.seed,
+                            resolution_w: project.resolutionW,
+                            resolution_h: project.resolutionH,
+                            shots: project.shots.map(s => ({
+                                id: s.id,
+                                prompt: s.prompt,
+                                negative_prompt: s.negativePrompt,
+                                seed: s.seed,
+                                width: s.width,
+                                height: s.height,
+                                num_frames: s.numFrames,
+                                cfg_scale: s.cfgScale,
+                                enhance_prompt: s.enhancePrompt,
+                                upscale: s.upscale,
+                                pipeline_override: s.pipelineOverride,
+                                timeline: s.timeline.map(t => ({
+                                    type: t.type,
+                                    path: t.path,
+                                    frame_index: t.frameIndex,
+                                    strength: t.strength
+                                })),
+                                last_job_id: s.lastJobId
+                            }))
+                        };
+
+                        const res = await fetch(`http://localhost:8000/project/${project.id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (res.ok) addToast("Project saved successfully", "success");
+                        else {
+                            const err = await res.json();
+                            console.error("Save failed", err);
+                            addToast("Failed to save project", "error");
+                        }
+                    } catch (e) {
+                        console.error("Save error", e);
                         addToast("Failed to save project", "error");
                     }
-                } catch (e) {
-                    console.error("Save error", e);
-                    addToast("Failed to save project", "error");
-                }
-            },
+                },
 
-            // Project Manager (New)
+                // Project Manager (New)
 
-            createNewProject: async (name: string) => {
-                const { addToast } = get();
-                try {
-                    const res = await fetch('http://localhost:8000/project', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name })
-                    });
-                    const data = await res.json();
+                createNewProject: async (name: string) => {
+                    const { addToast } = get();
+                    try {
+                        const res = await fetch('http://localhost:8000/project', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name })
+                        });
+                        const data = await res.json();
 
-                    // Convert back to store format
-                    const newProject: Project = {
-                        id: data.id,
-                        name: data.name,
-                        shots: [], // New project has no shots
-                        fps: 25,
-                        resolutionW: 768,
-                        resolutionH: 512,
-                        seed: 42
-                    };
+                        // Convert back to store format
+                        const newProject: Project = {
+                            id: data.id,
+                            name: data.name,
+                            shots: [], // New project has no shots
+                            fps: 25,
+                            resolutionW: 768,
+                            resolutionH: 512,
+                            seed: 42
+                        };
 
-                    set({ project: newProject, selectedShotId: null });
-                    addToast("New project created", "success");
-                } catch (e) {
-                    console.error(e);
-                    addToast("Failed to create project", "error");
-                }
-            },
-
-            loadProject: async (id: string) => {
-                const { addToast } = get();
-                try {
-                    const res = await fetch(`http://localhost:8000/project/${id}`);
-                    if (!res.ok) throw new Error("Load failed");
-
-                    const data = await res.json();
-                    // Map Backend snake_case to Frontend Store
-                    const loadedProject: Project = {
-                        id: data.id,
-                        name: data.name,
-                        fps: data.settings?.fps || 25,
-                        resolutionW: data.settings?.resolution_w || 768,
-                        resolutionH: data.settings?.resolution_h || 512,
-                        seed: data.seed || 42,
-                        shots: (data.shots || []).map((s: any) => ({
-                            id: s.id,
-                            prompt: s.prompt,
-                            negativePrompt: s.negative_prompt,
-                            seed: s.seed,
-                            width: s.width,
-                            height: s.height,
-                            numFrames: s.num_frames,
-                            cfgScale: s.cfg_scale,
-                            enhancePrompt: s.enhance_prompt,
-                            upscale: s.upscale,
-                            pipelineOverride: s.pipeline_override,
-                            timeline: (s.timeline || []).map((t: any) => ({
-                                id: uuidv4(), // Generate temporary UI IDs
-                                type: t.type,
-                                path: t.path,
-                                frameIndex: t.frame_index,
-                                strength: t.strength
-                            })),
-                            lastJobId: s.last_job_id,
-                            videoUrl: s.last_job_id ? `http://localhost:8000/generated/${s.last_job_id}.mp4` : undefined
-                        }))
-                    };
-
-                    set({ project: loadedProject, selectedShotId: loadedProject.shots[0]?.id || null });
-                    addToast("Project loaded", "success");
-                } catch (e) {
-                    console.error(e);
-                    addToast("Failed to load project", "error");
-                }
-            },
-
-            deleteProject: async (id: string) => {
-                const { addToast, project } = get();
-                try {
-                    await fetch(`http://localhost:8000/project/${id}`, { method: 'DELETE' });
-                    addToast("Project deleted", "success");
-
-                    // If current project deleted, what do? Reload window or create default?
-                    if (project.id === id) {
-                        window.location.reload(); // Simple reset
+                        set({ project: newProject, selectedShotId: null });
+                        addToast("New project created", "success");
+                    } catch (e) {
+                        console.error(e);
+                        addToast("Failed to create project", "error");
                     }
-                } catch (e) {
-                    console.error(e);
-                    addToast("Failed to delete", "error");
-                }
-            },
+                },
 
-            triggerAssetRefresh: () => set(state => ({ assetRefreshVersion: state.assetRefreshVersion + 1 })),
+                loadProject: async (id: string) => {
+                    const { addToast } = get();
+                    try {
+                        const res = await fetch(`http://localhost:8000/project/${id}`);
+                        if (!res.ok) throw new Error("Load failed");
 
-            getShotStartTime: (shotId: string) => {
-                const { project } = get();
-                let time = 0;
-                for (const shot of project.shots) {
-                    if (shot.id === shotId) return time;
-                    time += shot.numFrames / (project.fps || 25);
+                        const data = await res.json();
+                        // Map Backend snake_case to Frontend Store
+                        const loadedProject: Project = {
+                            id: data.id,
+                            name: data.name,
+                            fps: data.settings?.fps || 25,
+                            resolutionW: data.settings?.resolution_w || 768,
+                            resolutionH: data.settings?.resolution_h || 512,
+                            seed: data.seed || 42,
+                            shots: (data.shots || []).map((s: any) => ({
+                                id: s.id,
+                                prompt: s.prompt,
+                                negativePrompt: s.negative_prompt,
+                                seed: s.seed,
+                                width: s.width,
+                                height: s.height,
+                                numFrames: s.num_frames,
+                                cfgScale: s.cfg_scale,
+                                enhancePrompt: s.enhance_prompt,
+                                upscale: s.upscale,
+                                pipelineOverride: s.pipeline_override,
+                                timeline: (s.timeline || []).map((t: any) => ({
+                                    id: uuidv4(), // Generate temporary UI IDs
+                                    type: t.type,
+                                    path: t.path,
+                                    frameIndex: t.frame_index,
+                                    strength: t.strength
+                                })),
+                                lastJobId: s.last_job_id,
+                                videoUrl: s.last_job_id ? `http://localhost:8000/generated/${s.last_job_id}.mp4` : undefined
+                            }))
+                        };
+
+                        set({ project: loadedProject, selectedShotId: loadedProject.shots[0]?.id || null });
+                        addToast("Project loaded", "success");
+                    } catch (e) {
+                        console.error(e);
+                        addToast("Failed to load project", "error");
+                    }
+                },
+
+                deleteProject: async (id: string) => {
+                    const { addToast, project } = get();
+                    try {
+                        await fetch(`http://localhost:8000/project/${id}`, { method: 'DELETE' });
+                        addToast("Project deleted", "success");
+
+                        // If current project deleted, what do? Reload window or create default?
+                        if (project.id === id) {
+                            window.location.reload(); // Simple reset
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        addToast("Failed to delete", "error");
+                    }
+                },
+
+                triggerAssetRefresh: () => set(state => ({ assetRefreshVersion: state.assetRefreshVersion + 1 })),
+
+                getShotStartTime: (shotId: string) => {
+                    const { project } = get();
+                    let time = 0;
+                    for (const shot of project.shots) {
+                        if (shot.id === shotId) return time;
+                        time += shot.numFrames / (project.fps || 25);
+                    }
+                    return 0; // Fallback or if not found
                 }
-                return 0; // Fallback or if not found
+            }),
+            {
+                name: 'milimo-timeline-storage',
+                onRehydrateStorage: () => (state) => {
+                    // Reset any stuck "Generating" flags on reload/init
+                    if (state) {
+                        state.project.shots.forEach(s => {
+                            if (s.isGenerating) s.isGenerating = false;
+                        });
+                    }
+                }
             }
-        }),
+        ),
         {
-            name: 'milimo-timeline-storage',
-            onRehydrateStorage: () => (state) => {
-                // Reset any stuck "Generating" flags on reload/init
-                if (state) {
-                    state.project.shots.forEach(s => {
-                        if (s.isGenerating) s.isGenerating = false;
-                    });
-                }
-            }
+            limit: 20, // Limit history to 20 steps
+            partialize: (state: TimelineState) => ({ project: state.project }),
+            equality: (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b)
         }
-    )
-);
+    ));

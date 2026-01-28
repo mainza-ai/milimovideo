@@ -19,6 +19,7 @@
     "react-dom": "^19.2.0",
     "tailwind-merge": "^3.4.0",
     "uuid": "^13.0.0",
+    "zundo": "^2.3.0",
     "zustand": "^5.0.10"
   },
   "devDependencies": {

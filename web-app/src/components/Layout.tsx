@@ -4,11 +4,14 @@ import { InspectorPanel } from './Inspector/InspectorPanel';
 import { VisualTimeline } from './Timeline/VisualTimeline';
 import { useTimelineStore } from '../stores/timelineStore';
 import { ProjectManager } from './ProjectManager';
-import { Save, Command, Share, FolderOpen } from 'lucide-react';
+import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
 
 export const Layout = ({ children }: { children: React.ReactNode }) => {
     const { project, saveProject, addToast, isPlaying, setIsPlaying, deleteShot, selectedShotId } = useTimelineStore();
     const [showProjects, setShowProjects] = useState(false);
+
+    // Access temporal store (zundo)
+    const temporal = (useTimelineStore as any).temporal;
 
     // Auto-save feedback or logic could go here
 
@@ -16,6 +19,17 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Ignore if typing in an input
             if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return;
+
+            // Undo/Redo
+            if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) {
+                    temporal.getState().redo();
+                } else {
+                    temporal.getState().undo();
+                }
+                return;
+            }
 
             if (e.code === 'Space') {
                 e.preventDefault();
@@ -30,7 +44,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isPlaying, setIsPlaying, saveProject, deleteShot, selectedShotId]);
+    }, [isPlaying, setIsPlaying, saveProject, deleteShot, selectedShotId, temporal]);
 
     const handleExport = async () => {
         addToast("Saving project...", "info");
@@ -90,6 +104,24 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {/* Undo/Redo Buttons */}
+                    <div className="flex items-center gap-1 border-r border-white/10 pr-4 mr-4">
+                        <button
+                            onClick={() => temporal.getState().undo()}
+                            className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors"
+                            title="Undo (Ctrl+Z)"
+                        >
+                            <UndoIcon size={16} />
+                        </button>
+                        <button
+                            onClick={() => temporal.getState().redo()}
+                            className="p-1.5 text-white/50 hover:text-white hover:bg-white/10 rounded transition-colors"
+                            title="Redo (Ctrl+Shift+Z)"
+                        >
+                            <RedoIcon size={16} />
+                        </button>
+                    </div>
+
                     <div className="flex items-center gap-2 text-[10px] text-white/30 mr-4">
                         <Command size={12} /> <span className="font-mono">S</span> to Save
                     </div>

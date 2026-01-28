@@ -43,6 +43,8 @@ class Job(SQLModel, table=True):
     # Config
     prompt: Optional[str] = None
     params_json: Optional[str] = None
+    enhanced_prompt: Optional[str] = None
+    status_message: Optional[str] = None
 
 # Database Setup
 DATABASE_URL = "sqlite:///./milimovideo.db"

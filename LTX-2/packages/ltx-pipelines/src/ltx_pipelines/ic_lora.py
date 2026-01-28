@@ -274,6 +274,24 @@ class ICLoraPipeline:
                 dtype=self.dtype,
                 device=self.device,
             )
+            
+            # Ensure frame count matches VAE requirement: (f - 1) % 8 == 0
+            b, c, f, h, w = video.shape
+            if (f - 1) % 8 != 0:
+                # Calculate number of frames to drop to satisfy constraint
+                rem = (f - 1) % 8
+                if f - rem < 1:
+                     # Edge case: if we reduce to < 1 (detect weird short videos?), though 1 is valid (0%8).
+                     # If f < 9 but > 1, e.g. 5. 5-1=4. rem=4. f-rem=1. Should work.
+                     # But valid counts are 1, 9, 17, 25...
+                     # If f=8, 7%8=7. drop 7 -> 1 frame.
+                     target_f = 1
+                else:
+                    target_f = f - rem
+                
+                logging.warning(f"Video conditioning frames {f} not compatible with VAE (1+8x). Trimming to {target_f}.")
+                video = video[:, :, :target_f, :, :]
+            
             encoded_video = video_encoder(video)
             conditionings.append(VideoConditionByKeyframeIndex(keyframes=encoded_video, frame_idx=0, strength=strength))
 

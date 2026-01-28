@@ -17,7 +17,7 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
 
-print("--- SERVER RESTARTING WITH NEW CODE ---")
+print("--- STARTING MILIMO VIDEO SERVER ---")
 
 # Ensure LTX-2 packages are in path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../LTX-2/packages/ltx-core/src")))
@@ -252,8 +252,20 @@ async def get_shot_last_frame(job_id: str):
     """
     # 1. Check if video exists
     video_path = os.path.join(GENERATED_DIR, f"{job_id}.mp4")
+    
+    # Check for image if video doesn't exist
     if not os.path.exists(video_path):
-        raise HTTPException(status_code=404, detail="Video not found")
+        image_path = os.path.join(GENERATED_DIR, f"{job_id}.jpg")
+        if os.path.exists(image_path):
+             return {
+                "url": f"/generated/{job_id}.jpg",
+                "path": image_path
+            }
+        
+        # Also check for _last.jpg from previous frame extractions?
+        # Or if the user generated a single frame, the job output is .jpg.
+            
+        raise HTTPException(status_code=404, detail="Video/Image not found")
         
     try:
         # 2. Extract last frame
@@ -263,9 +275,13 @@ async def get_shot_last_frame(job_id: str):
         # Use ffmpeg to get last frame
         # -sseof -0.1 gets the last 0.1s
         import subprocess
+        # Robust Last Frame Extraction:
+        # 1. Seek to last 0.5s (-sseof -0.5)
+        # 2. Output all frames in that window, overwriting the file (-update 1)
+        # 3. The final result on disk is the absolute last frame.
         subprocess.run([
-             "ffmpeg", "-y", "-sseof", "-0.1", "-i", video_path, 
-             "-vframes", "1", "-q:v", "2", "-update", "1", out_path
+             "ffmpeg", "-y", "-sseof", "-0.5", "-i", video_path, 
+             "-q:v", "2", "-update", "1", out_path
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         return {
@@ -401,7 +417,15 @@ def get_status(job_id: str):
     from worker import active_jobs
     if job_id in active_jobs:
         progress = active_jobs[job_id].get("progress", 0)
-        return {"job_id": job_id, "status": "processing", "progress": progress}
+        status_msg = active_jobs[job_id].get("status_message", "Processing...")
+        current_prompt = active_jobs[job_id].get("current_prompt", None)
+        return {
+            "job_id": job_id, 
+            "status": "processing", 
+            "progress": progress, 
+            "status_message": status_msg,
+            "current_prompt": current_prompt
+        }
     
     # 2. Check DB (Source of Truth)
     with Session(engine) as session:
@@ -414,7 +438,9 @@ def get_status(job_id: str):
                 "video_url": f"/generated/{os.path.basename(job.output_path)}" if job.output_path else None,
                 # For compatibility, mirror video_url to url
                 "url": f"/generated/{os.path.basename(job.output_path)}" if job.output_path else None,
-                "error": job.error_message
+                "error": job.error_message,
+                "enhanced_prompt": job.enhanced_prompt,
+                "status_message": job.status_message
             }
 
     # 3. Fallback: File Check (Legacy - for jobs before DB migration)
@@ -516,7 +542,11 @@ async def delete_upload(filename: str):
             # OR delete the Job if we want to remove from history.
             # Current UI implies "Delete Asset".
             if os.path.exists(job.output_path):
-                os.remove(job.output_path)
+                if os.path.isdir(job.output_path):
+                    import shutil
+                    shutil.rmtree(job.output_path)
+                else:
+                    os.remove(job.output_path)
             
             job.output_path = None # Clear path
             job.status = "deleted"

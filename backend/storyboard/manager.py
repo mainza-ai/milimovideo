@@ -147,11 +147,32 @@ class StoryboardManager:
         # Run inference (synchronously usually, but wrapped if needed)
         # generate_enhanced_prompt is blocking, so maybe we should run in executor if heavy?
         # But here we are just calling it.
+        # Define the specialized Director System Prompt for LTX-2
+        # Based on LTX-2 best practices: Detailed, chronological, specific lighting/camera/action.
+        director_system_prompt = (
+            "You are a visionary Film Director and Cinematographer. Your goal is to continue the narrative flow of a video scene.\n"
+            "You will be given the last frame of the previous shot and a global story goal.\n"
+            "TASK: Describe the next 4 seconds of video action. The transition must be seamless.\n"
+            "GUIDELINES:\n"
+            "- Analyze the visual context of the input image (characters, clothing, lighting, background).\n"
+            "- Describe the ACTION that happens next. Do not just describe the static image.\n"
+            "- Maintain character identity and visual consistency.\n"
+            "- CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right', 'handheld', 'static').\n"
+            "- LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting', 'soft morning light', 'neon rim light').\n"
+            "- AUDIO: Include a description of the soundscape (ambient sounds, Foley, dialogue if applicable) integrated into the narrative.\n"
+            "- Output ONLY the prompt for the next shot. Single paragraph, chronological flow. No polite conversation."
+        )
+        
+        # We pass the Story Goal as the "User Prompt" so the model knows WHAT to film.
+        # The system prompt tells it HOW to film it (continuation).
+        user_plot_prompt = f"Global Story Goal: {self.state.global_prompt}. {context_str}"
+
         try:
             enhanced_prompt = generate_enhanced_prompt(
                 text_encoder,
-                prompt=director_prompt,
-                image_path=image_path
+                prompt=user_plot_prompt,
+                image_path=image_path,
+                system_prompt=director_system_prompt
             )
             logger.info(f"Generated Narrative Prompt: {enhanced_prompt}")
             return enhanced_prompt

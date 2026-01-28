@@ -162,7 +162,7 @@ export const VisualTimeline = () => {
                     </button>
 
                     <div className="text-xs font-mono text-milimo-300">
-                        {formatTime(0)} / {formatTime(totalDuration)}
+                        {formatTime(currentTime)} / {formatTime(totalDuration)}
                     </div>
                 </div>
 

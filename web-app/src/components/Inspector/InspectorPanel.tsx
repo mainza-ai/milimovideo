@@ -1,11 +1,12 @@
 import { useTimelineStore } from '../../stores/timelineStore';
 import { clsx } from 'clsx';
-import { Settings, Play, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Settings, Play, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 
 export const InspectorPanel = () => {
     const {
         project, selectedShotId, updateShot, deleteShot,
-        updateConditioning, removeConditioning
+        updateConditioning, removeConditioning, addShot, addConditioningToShot
     } = useTimelineStore();
 
     const shot = project.shots.find(s => s.id === selectedShotId);
@@ -30,6 +31,10 @@ export const InspectorPanel = () => {
         );
     }
 
+    // Collapsible States
+    const [isNarrativeCollapsed, setIsNarrativeCollapsed] = useState(true);
+    const [isAdvancedCollapsed, setIsAdvancedCollapsed] = useState(false);
+
     const pollJobStatus = async (jobId: string, shotId: string) => {
         const poll = async () => {
             try {
@@ -37,11 +42,18 @@ export const InspectorPanel = () => {
                 const statusData = await res.json();
 
                 if (statusData.status === 'completed') {
-                    updateShot(shotId, {
+                    const updates: any = {
                         isGenerating: false,
-                        videoUrl: statusData.video_url, // This might be an image URL now, which is fine
-                        progress: 100
-                    });
+                        videoUrl: statusData.video_url,
+                        progress: 100,
+                        enhancedPromptResult: statusData.enhanced_prompt
+                    };
+
+                    if (statusData.actual_frames) {
+                        updates.numFrames = statusData.actual_frames;
+                    }
+
+                    updateShot(shotId, updates);
 
                     // Trigger refresh of history
                     const { triggerAssetRefresh } = useTimelineStore.getState();
@@ -52,7 +64,18 @@ export const InspectorPanel = () => {
                 } else {
                     // Still processing
                     if (statusData.progress !== undefined) {
-                        updateShot(shotId, { progress: statusData.progress });
+                        const updates: any = { progress: statusData.progress };
+                        // Enhanced prompt might be available early
+                        if (statusData.enhanced_prompt) {
+                            updates.enhancedPromptResult = statusData.enhanced_prompt;
+                        }
+                        if (statusData.status_message) {
+                            updates.statusMessage = statusData.status_message;
+                        }
+                        if (statusData.current_prompt) {
+                            updates.currentPrompt = statusData.current_prompt;
+                        }
+                        updateShot(shotId, updates);
                     }
                     setTimeout(poll, 1000);
                 }
@@ -89,6 +112,7 @@ export const InspectorPanel = () => {
 
                         cfg_scale: shot.cfgScale,
                         enhance_prompt: shot.enhancePrompt,
+                        auto_continue: true, // Enable Smart Prompt Director
                         upscale: shot.upscale,
                         pipeline_override: shot.pipelineOverride
                     }
@@ -148,11 +172,22 @@ export const InspectorPanel = () => {
 
     // Extend Shot Logic
     const handleExtend = async () => {
-        if (!shot?.lastJobId) return;
+        let jobId = shot?.lastJobId;
+
+        // Fallback: extract from videoUrl if valid
+        if (!jobId && shot?.videoUrl) {
+            const match = shot.videoUrl.match(/generated\/(job_[a-f0-9]+)/);
+            if (match) jobId = match[1];
+        }
+
+        if (!jobId) {
+            console.error("No job ID found for this shot");
+            return;
+        }
 
         try {
             // 1. Get Last Frame
-            const res = await fetch(`http://localhost:8000/shot/${shot.lastJobId}/last-frame`, {
+            const res = await fetch(`http://localhost:8000/shot/${jobId}/last-frame`, {
                 method: 'POST'
             });
             if (!res.ok) {
@@ -162,11 +197,7 @@ export const InspectorPanel = () => {
             const data = await res.json();
 
             // 2. Create New Shot
-            const { useTimelineStore } = await import('../../stores/timelineStore');
-            const store = useTimelineStore.getState();
-
-            // Add new shot (takes no args, automatically selects it)
-            store.addShot();
+            addShot(); // Use hook action
 
             // 3. Get the ID of the newly created shot
             const newShotId = useTimelineStore.getState().selectedShotId;
@@ -174,6 +205,7 @@ export const InspectorPanel = () => {
             if (!newShotId) return;
 
             // 4. Update New Shot Prompt with Previous Context
+            const store = useTimelineStore.getState();
             store.updateShot(newShotId, {
                 prompt: shot.prompt, // Carry over prompt
                 negativePrompt: shot.negativePrompt
@@ -187,7 +219,7 @@ export const InspectorPanel = () => {
                 frameIndex: 0,
                 strength: 1.0
             };
-            store.addConditioningToShot(newShotId, item);
+            addConditioningToShot(newShotId, item);
 
         } catch (e) {
             console.error(e);
@@ -215,6 +247,31 @@ export const InspectorPanel = () => {
             </div>
 
             <div className="p-6 space-y-6 flex-1">
+                {/* Live Evolving Prompt OR Final Enhanced Prompt (Collapsible) */}
+                {(shot.isGenerating || shot.currentPrompt) && (
+                    <div className="space-y-2">
+                        <button
+                            className="flex items-center gap-2 w-full group focus:outline-none"
+                            onClick={() => setIsNarrativeCollapsed(!isNarrativeCollapsed)}
+                        >
+                            {isNarrativeCollapsed ? <ChevronRight size={12} className="text-white/40 group-hover:text-white" /> : <ChevronDown size={12} className="text-white/40 group-hover:text-white" />}
+                            <label className="text-[10px] uppercase tracking-widest text-milimo-400 font-bold flex items-center gap-2 cursor-pointer group-hover:text-milimo-300">
+                                {shot.isGenerating && <span className="animate-pulse">🔴</span>}
+                                <span>Narrative Director</span>
+                            </label>
+                        </button>
+
+                        {!isNarrativeCollapsed && (
+                            <div className={clsx(
+                                "w-full bg-milimo-900/20 border border-milimo-500/30 rounded-lg p-3 text-xs text-milimo-300 italic",
+                                shot.isGenerating && "animate-pulse"
+                            )}>
+                                {shot.currentPrompt}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Prompt */}
                 <div className="space-y-2">
                     <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Prompt</label>
@@ -234,6 +291,18 @@ export const InspectorPanel = () => {
                         onChange={(e) => updateShot(shot.id, { negativePrompt: e.target.value })}
                     />
                 </div>
+
+                {/* Enhanced Prompt Result */}
+                {shot.enhancePrompt && shot.enhancedPromptResult && (
+                    <div className="space-y-2">
+                        <label className="text-[10px] uppercase tracking-widest text-milimo-500 font-bold flex items-center gap-2">
+                            <span>✨ Enhanced Prompt</span>
+                        </label>
+                        <div className="w-full bg-milimo-500/10 border border-milimo-500/30 rounded-lg p-3 text-xs text-milimo-200/90 italic font-medium min-h-[60px] max-h-[120px] overflow-y-auto">
+                            {shot.enhancedPromptResult}
+                        </div>
+                    </div>
+                )}
 
                 {/* Parameters Grid */}
                 <div className="grid grid-cols-2 gap-4">
@@ -281,7 +350,7 @@ export const InspectorPanel = () => {
                         <span>{(shot.numFrames / (project.fps || 25)).toFixed(1)}s ({shot.numFrames}f)</span>
                     </div>
                     <input
-                        type="range" min="25" max="250" step="1"
+                        type="range" min="25" max="1500" step="1"
                         className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-milimo-500"
                         value={shot.numFrames}
                         onChange={(e) => updateShot(shot.id, { numFrames: parseInt(e.target.value) })}
@@ -289,58 +358,68 @@ export const InspectorPanel = () => {
                 </div>
             )}
 
-            {/* Advanced Controls */}
+            {/* Advanced Controls (Collapsible) */}
             <div className="space-y-4 pt-4 border-t border-white/5">
-                <div className="flex justify-between items-center text-[10px] uppercase tracking-widest text-white/40 font-bold">
-                    <span>Advanced Settings</span>
-                </div>
-
-                {/* Pipeline Override */}
-                <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-widest text-white/40">Pipeline / Mode</label>
-                    <select
-                        className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white/80 focus:outline-none focus:border-milimo-500"
-                        value={shot.pipelineOverride || 'auto'}
-                        onChange={(e) => updateShot(shot.id, { pipelineOverride: e.target.value as any })}
-                    >
-                        <option value="auto">Auto (Smart Detect)</option>
-                        <option value="ti2vid">Text/Image to Video</option>
-                        <option value="ic_lora">Video to Video (IC LoRA)</option>
-                        <option value="keyframe">Keyframe Interpolation</option>
-                    </select>
-                </div>
-
-                {/* CFG Scale */}
-                <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] text-white/60">
-                        <span>CFG Scale</span>
-                        <span>{shot.cfgScale?.toFixed(1) || 3.0}</span>
+                <button
+                    className="flex justify-between items-center w-full group focus:outline-none"
+                    onClick={() => setIsAdvancedCollapsed(!isAdvancedCollapsed)}
+                >
+                    <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-white/40 font-bold group-hover:text-white/60">
+                        {isAdvancedCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                        <span>Advanced Settings</span>
                     </div>
-                    <input
-                        type="range" min="1" max="20" step="0.5"
-                        className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-milimo-500"
-                        value={shot.cfgScale || 3.0}
-                        onChange={(e) => updateShot(shot.id, { cfgScale: parseFloat(e.target.value) })}
-                    />
-                </div>
+                </button>
 
-                {/* Toggles */}
-                <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                        <div className={clsx("w-3 h-3 rounded-sm border transition-colors flex items-center justify-center", shot.enhancePrompt ? "bg-milimo-500 border-milimo-500" : "border-white/20")} >
-                            {shot.enhancePrompt && <div className="w-1.5 h-1.5 bg-black rounded-sm" />}
-                            <input type="checkbox" className="hidden" checked={shot.enhancePrompt} onChange={(e) => updateShot(shot.id, { enhancePrompt: e.target.checked })} />
+                {!isAdvancedCollapsed && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        {/* Pipeline Override */}
+                        <div className="space-y-1">
+                            <label className="text-[10px] uppercase tracking-widest text-white/40">Pipeline / Mode</label>
+                            <select
+                                className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-xs text-white/80 focus:outline-none focus:border-milimo-500"
+                                value={shot.pipelineOverride || 'auto'}
+                                onChange={(e) => updateShot(shot.id, { pipelineOverride: e.target.value as any })}
+                            >
+                                <option value="auto">Auto (Smart Detect)</option>
+                                <option value="ti2vid">Text/Image to Video</option>
+                                <option value="ic_lora">Video to Video (IC LoRA)</option>
+                                <option value="keyframe">Keyframe Interpolation</option>
+                            </select>
                         </div>
-                        <span className="text-[10px] uppercase text-white/60 group-hover:text-white/80">Enhance</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                        <div className={clsx("w-3 h-3 rounded-sm border transition-colors flex items-center justify-center", shot.upscale ? "bg-milimo-500 border-milimo-500" : "border-white/20")} >
-                            {shot.upscale && <div className="w-1.5 h-1.5 bg-black rounded-sm" />}
-                            <input type="checkbox" className="hidden" checked={shot.upscale} onChange={(e) => updateShot(shot.id, { upscale: e.target.checked })} />
+
+                        {/* CFG Scale */}
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] text-white/60">
+                                <span>CFG Scale</span>
+                                <span>{shot.cfgScale?.toFixed(1) || 3.0}</span>
+                            </div>
+                            <input
+                                type="range" min="1" max="20" step="0.5"
+                                className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-milimo-500"
+                                value={shot.cfgScale || 3.0}
+                                onChange={(e) => updateShot(shot.id, { cfgScale: parseFloat(e.target.value) })}
+                            />
                         </div>
-                        <span className="text-[10px] uppercase text-white/60 group-hover:text-white/80">Upscale</span>
-                    </label>
-                </div>
+
+                        {/* Toggles */}
+                        <div className="flex gap-4">
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <div className={clsx("w-3 h-3 rounded-sm border transition-colors flex items-center justify-center", shot.enhancePrompt ? "bg-milimo-500 border-milimo-500" : "border-white/20")} >
+                                    {shot.enhancePrompt && <div className="w-1.5 h-1.5 bg-black rounded-sm" />}
+                                    <input type="checkbox" className="hidden" checked={shot.enhancePrompt} onChange={(e) => updateShot(shot.id, { enhancePrompt: e.target.checked })} />
+                                </div>
+                                <span className="text-[10px] uppercase text-white/60 group-hover:text-white/80">Enhance</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer group">
+                                <div className={clsx("w-3 h-3 rounded-sm border transition-colors flex items-center justify-center", shot.upscale ? "bg-milimo-500 border-milimo-500" : "border-white/20")} >
+                                    {shot.upscale && <div className="w-1.5 h-1.5 bg-black rounded-sm" />}
+                                    <input type="checkbox" className="hidden" checked={shot.upscale} onChange={(e) => updateShot(shot.id, { upscale: e.target.checked })} />
+                                </div>
+                                <span className="text-[10px] uppercase text-white/60 group-hover:text-white/80">Upscale</span>
+                            </label>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Conditioning Visualizer */}
@@ -420,9 +499,10 @@ export const InspectorPanel = () => {
                     <div className="flex gap-2 w-full">
                         <button
                             disabled
-                            className="flex-1 bg-white/5 text-white/50 rounded-xl flex items-center justify-center gap-2 font-bold uppercase tracking-wider text-xs border border-white/5"
+                            className="flex-1 bg-white/5 text-white/50 rounded-xl flex flex-col items-center justify-center gap-1 font-bold uppercase tracking-wider text-xs border border-white/5 px-2"
                         >
-                            Generating {(shot as any).progress || 0}%
+                            <span>{(shot as any).statusMessage || "Generating..."}</span>
+                            <span className="text-[10px] opacity-60">{(shot as any).progress || 0}%</span>
                         </button>
                         <button
                             onClick={handleCancel}

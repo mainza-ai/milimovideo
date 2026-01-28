@@ -491,6 +491,7 @@ def generate_enhanced_prompt(
     image_long_side: int = 896,
     seed: int = 42,
     is_image: bool = False,
+    system_prompt: str | None = None,
 ) -> str:
     """Generate an enhanced prompt from a text encoder and a prompt."""
     
@@ -509,19 +510,23 @@ def generate_enhanced_prompt(
 
     image = None
     if image_path:
+        logging.info(f"--- HELPERS GENERATE_ENHANCED_PROMPT TRACE ---")
+        logging.info(f"Loading image from: {image_path}")
         image = decode_image(image_path=image_path)
+        logging.info(f"Decoded Image Shape: {image.shape}")
+        
         image = torch.tensor(image)
         image = resize_aspect_ratio_preserving(image, image_long_side).to(torch.uint8)
-        # For image-to-image with is_image=True, we should ideally use the strict system prompt too.
-        # However, enhance_i2v might not support system_prompt override in this specific Gemma implementation,
-        # let's check strictness. The base_encoder.enhance_i2v DOES support system_prompt!
-        if is_image:
-             prompt = text_encoder.enhance_i2v(prompt, image, seed=seed, system_prompt=image_system_prompt)
-        else:
-             prompt = text_encoder.enhance_i2v(prompt, image, seed=seed)
+        
+        # Prefer provided system_prompt, then image_system_prompt if is_image, else None
+        eff_sys_prompt = system_prompt if system_prompt else (image_system_prompt if is_image else None)
+        
+        prompt = text_encoder.enhance_i2v(prompt, image, seed=seed, system_prompt=eff_sys_prompt)
     else:
-        system_prompt = image_system_prompt if is_image else None
-        prompt = text_encoder.enhance_t2v(prompt, seed=seed, system_prompt=system_prompt)
+        # Prefer provided system_prompt, then image_system_prompt if is_image, else None
+        eff_sys_prompt = system_prompt if system_prompt else (image_system_prompt if is_image else None)
+        
+        prompt = text_encoder.enhance_t2v(prompt, seed=seed, system_prompt=eff_sys_prompt)
         
     logging.info(f"Enhanced prompt: {prompt}")
     return clean_response(prompt)

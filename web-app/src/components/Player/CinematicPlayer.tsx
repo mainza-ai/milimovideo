@@ -1,6 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
-import { Play, Pause, SkipBack, SkipForward, Maximize, RefreshCw } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Maximize } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const CinematicPlayer = () => {
@@ -74,11 +74,59 @@ export const CinematicPlayer = () => {
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-white/20 gap-4">
                             {selectedShot.isGenerating ? (
-                                <div className="animate-pulse flex flex-col items-center">
-                                    <RefreshCw className="animate-spin mb-2" size={32} />
-                                    <span className="text-sm font-mono tracking-widest uppercase">
-                                        {selectedShot.numFrames === 1 ? "Rendering Milimo Image..." : "Rendering Milimo Video..."}
-                                    </span>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm z-10 overflow-hidden">
+                                    {/* Background Ambient Glow */}
+                                    <div className="absolute w-full h-full opacity-10">
+                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-milimo-500/30 rounded-full blur-[100px] animate-pulse" />
+                                    </div>
+
+                                    {/* Central Cinematic Loader */}
+                                    <div className="relative w-24 h-24 mb-8">
+                                        {/* Rotating Rings */}
+                                        <motion.div
+                                            animate={{ rotate: 360 }}
+                                            transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                                            className="absolute inset-0 border-2 border-t-milimo-400 border-r-transparent border-b-milimo-600/50 border-l-transparent rounded-full"
+                                        />
+                                        <motion.div
+                                            animate={{ rotate: -360 }}
+                                            transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+                                            className="absolute inset-2 border-2 border-t-transparent border-r-milimo-500/50 border-b-transparent border-l-milimo-300 rounded-full"
+                                        />
+
+                                        {/* Core Core */}
+                                        <motion.div
+                                            animate={{ scale: [0.8, 1.2, 0.8], opacity: [0.5, 1, 0.5] }}
+                                            transition={{ duration: 2, repeat: Infinity }}
+                                            className="absolute inset-8 bg-milimo-500 rounded-full blur-md"
+                                        />
+                                        <div className="absolute inset-8 bg-white rounded-full mix-blend-overlay" />
+                                    </div>
+
+                                    {/* Text Animation */}
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.5 }}
+                                        className="text-center z-10"
+                                    >
+                                        <h3 className="text-xl font-bold tracking-[0.2em] text-white uppercase mb-2">
+                                            Generating
+                                        </h3>
+                                        <div className="flex items-center justify-center gap-2 text-[10px] text-milimo-400 uppercase tracking-widest font-mono">
+                                            <motion.span
+                                                animate={{ opacity: [1, 0.4, 1] }}
+                                                transition={{ duration: 1.5, repeat: Infinity }}
+                                            >
+                                                AI Director Active
+                                            </motion.span>
+                                            <span className="opacity-30">|</span>
+                                            <span>{(selectedShot as any).progress || 0}%</span>
+                                        </div>
+                                    </motion.div>
+
+                                    {/* Scanline Effect */}
+                                    <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-20 bg-[length:100%_2px,3px_100%] opacity-20" />
                                 </div>
                             ) : (
                                 <>

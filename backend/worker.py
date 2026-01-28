@@ -1,5 +1,6 @@
 import asyncio
 import os
+import subprocess
 import torch
 import sys
 import uuid
@@ -35,7 +36,7 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def update_job_db(job_id: str, status: str, output_path: str = None, error: str = None):
+def update_job_db(job_id: str, status: str, output_path: str = None, error: str = None, enhanced_prompt: str = None, status_message: str = None):
     """Helper to update Job record in SQLite."""
     try:
         with Session(engine) as session:
@@ -46,6 +47,10 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
                     job.output_path = output_path
                 if error: 
                     job.error_message = str(error)
+                if enhanced_prompt:
+                    job.enhanced_prompt = enhanced_prompt
+                if status_message:
+                    job.status_message = status_message
                 if status in ["completed", "failed", "cancelled"]:
                     job.completed_at = datetime.utcnow()
                 session.add(job)
@@ -246,7 +251,10 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # 1. Prepare configuration via Manager
             # We pass the text encoder here so the manager can use it for prompt enhancement
             text_encoder = None
-            if chunk_idx > 0 and params.get("auto_continue", False) and hasattr(pipeline, "stage_1_model_ledger"):
+            # Force auto_continue if enhance_prompt is active (Smart Prompt Evolution)
+            should_auto_continue = params.get("auto_continue", False) or params.get("enhance_prompt", False)
+
+            if chunk_idx > 0 and should_auto_continue and hasattr(pipeline, "stage_1_model_ledger"):
                  logger.info("Retrieving text encoder for narrative prompt generation...")
                  try:
                      text_encoder = pipeline.stage_1_model_ledger.text_encoder()
@@ -263,10 +271,79 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Extract params
             chunk_prompt = chunk_config.get("prompt", prompt)
             chunk_images = chunk_config.get("images", []) # list of (path, idx, strength)
+
+            # Critical Fix for Extend + Smart Continue:
+            # If this is the first chunk, and we have global input images (from Extend timeline),
+            # we must use them! Storyboard doesn't know about them yet (or returned empty).
+            if chunk_idx == 0 and not chunk_images and params.get("images"):
+                 chunk_images = params.get("images")
+                 logger.info(f"Using initial timeline images for Chunk 0: {len(chunk_images)}")
+
+            # Manually handle Prompt Enhancement to inject "Director" logic
+            # The pipeline's internal enhance_prompt doesn't support our custom system_prompt.
+            # So we enhance here and disable pipeline enhancement.
+            do_pipeline_enhance = False 
+            
+            if params.get("enhance_prompt", True):
+                # If Storyboard already gave us a prompt (Chunk > 0), it's already enhanced.
+                if chunk_idx > 0 and chunk_config.get("prompt"):
+                    do_pipeline_enhance = False
+                elif chunk_idx == 0:
+                    # Chunk 0: We need to enhance manually, especially if extending (Video Input)
+                    # to use the Director System Prompt.
+                    
+                    # Get Text Encoder
+                    if not text_encoder and hasattr(pipeline, "stage_1_model_ledger"):
+                        try:
+                             text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                        except: pass
+                    
+                    if text_encoder:
+                        # Detect extend mode
+                        is_extend = (chunk_idx == 0 and chunk_images)
+                        sys_prompt = None
+                        effective_prompt = chunk_prompt
+                        
+                        if is_extend:
+                             sys_prompt = (
+                                "You are a visionary Film Director. "
+                                "TASK: The user has provided the last frame of a video. "
+                                "Analyze it and describe the NEXT 4 seconds of action to extend the shot seamlessly. "
+                                "Maintain visual consistency, lighting, and character details. "
+                                "CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right'). "
+                                "LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting'). "
+                                "AUDIO: Include a description of the soundscape (ambient sounds, Foley). "
+                                "Output ONLY the prompt for the next shot."
+                             )
+                             effective_prompt = f"Global Goal: {chunk_prompt}"
+
+                        try:
+                            logger.info(f"Manually enhancing Chunk 0 prompt (Extend={is_extend})...")
+                            enhanced = generate_enhanced_prompt(
+                                text_encoder, 
+                                effective_prompt, 
+                                image_path=chunk_images[0][0] if chunk_images else None,
+                                seed=seed,
+                                is_image=False, # Video generation
+                                system_prompt=sys_prompt
+                            )
+                            if enhanced:
+                                chunk_prompt = enhanced
+                                active_jobs[job_id]["current_prompt"] = chunk_prompt
+                        except Exception as e:
+                            logger.warning(f"Manual enhancement failed: {e}")
+                            do_pipeline_enhance = True # Fallback to pipeline
+                
+            
+            # Expose current prompt to UI
+            if job_id in active_jobs:
+                active_jobs[job_id]["current_prompt"] = chunk_prompt
+                # Also status message
+                active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
             
             
             # 2. Define Pipeline execution wrapper
-            def _run_chunk_pipeline(images_arg, current_prompt):
+            def _run_chunk_pipeline(images_arg, current_prompt, pipeline_enhance):
                 return pipeline(
                     prompt=current_prompt,
                     negative_prompt=negative_prompt,
@@ -279,12 +356,12 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     cfg_guidance_scale=params.get("cfg_scale", 3.0),
                     images=images_arg,
                     tiling_config=TilingConfig.default(),
-                    enhance_prompt=params.get("enhance_prompt", True),
+                    enhance_prompt=pipeline_enhance,
                     callback_on_step_end=cancellation_check
                 )
                 
             # 3. Run Pipeline
-            video, audio = await loop.run_in_executor(None, _run_chunk_pipeline, chunk_images, chunk_prompt)
+            video, audio = await loop.run_in_executor(None, _run_chunk_pipeline, chunk_images, chunk_prompt, do_pipeline_enhance)
             
             # 4. Save Output
             video_chunks_number = get_video_chunks_number(chunk_size, TilingConfig.default())
@@ -356,6 +433,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         def cancellation_check(step_idx, total_steps, *args):
             if job_id in active_jobs:
                 active_jobs[job_id]["progress"] = int((step_idx / total_steps) * 100)
+                active_jobs[job_id]["status_message"] = f"Generating ({step_idx}/{total_steps})"
                 
             if active_jobs.get(job_id, {}).get("cancelled", False):
                 raise RuntimeError(f"Job {job_id} cancelled by user.")
@@ -367,17 +445,41 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 # Use local variable to avoid UnboundLocalError with closure capture
                 run_prompt = prompt
                 if enhance_prompt:
+                    if job_id in active_jobs:
+                        active_jobs[job_id]["status_message"] = "Enhancing Prompt..."
                     logger.info("Enhancing prompt with Gemma...")
                     try: 
                         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
                         is_image_mode = (num_frames == 1)
+                        
+                        # Detect if we are extending a video (Input Image + Video Output)
+                        # Use Director logic
+                        sys_prompt = None
+                        if not is_image_mode and input_images:
+                             sys_prompt = (
+                                "You are a visionary Film Director. "
+                                "TASK: The user has provided the last frame of a video. "
+                                "Analyze it and describe the NEXT 4 seconds of action to extend the shot seamlessly. "
+                                "Maintain visual consistency, lighting, and character details. "
+                                "CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right'). "
+                                "LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting'). "
+                                "AUDIO: Include a description of the soundscape (ambient sounds, Foley). "
+                                "Output ONLY the prompt for the next shot."
+                             )
+                             # Prefix user prompt effectively
+                             prompt = f"Global Goal: {prompt}"
+
                         run_prompt = generate_enhanced_prompt(
                             text_encoder, 
                             prompt, 
                             image_path=input_images[0][0] if input_images else None,
                             seed=seed,
-                            is_image=is_image_mode
+                            is_image=is_image_mode,
+                            system_prompt=sys_prompt
                         )
+                        # Save enhanced prompt immediately
+                        update_job_db(job_id, "processing", enhanced_prompt=run_prompt)
+                        
                         del text_encoder
                         cleanup_memory()
                     except Exception as e:
@@ -433,10 +535,8 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         
         output_dir = os.path.join(get_base_dir(), "generated")
         os.makedirs(output_dir, exist_ok=True)
-        video, audio = await loop.run_in_executor(None, _run_pipeline)
-        
-        output_dir = os.path.join(get_base_dir(), "generated")
-        os.makedirs(output_dir, exist_ok=True)
+        # Default output path for video (will be overwritten if image)
+        output_path = os.path.join(output_dir, f"{job_id}.mp4")
         
         # Check for image mode
         if num_frames == 1:
@@ -588,12 +688,39 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 output_path=output_path,
                 video_chunks_number=video_chunks_number,
             )
+            
+
+
+            logger.info(f"Video saved to {output_path}")
+            
+            # Detect actual frame count to sync UI
+            actual_frames = num_frames
+            try:
+                # Probe the file
+                cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", output_path]
+                res = subprocess.check_output(cmd).decode("utf-8").strip()
+                if res and res.isdigit():
+                    actual_frames = int(res)
+                    logger.info(f"Verified actual frame count: {actual_frames}")
+                    if job_id in active_jobs:
+                        active_jobs[job_id]["actual_frames"] = actual_frames
+            except Exception as e:
+                logger.warning(f"Could not verify frame count: {e}")
+
+            update_job_db(job_id, "completed", output_path=f"/generated/{os.path.basename(output_path)}")
+            await event_manager.broadcast("complete", {
+                "job_id": job_id, 
+                "url": f"/generated/{os.path.basename(output_path)}", 
+                "type": "video",
+                "actual_frames": actual_frames
+            })
             logger.info(f"Video saved to {output_path}")
             update_job_db(job_id, "completed", output_path=f"/generated/{os.path.basename(output_path)}")
 
 async def generate_video_task(job_id: str, params: dict):
     logger.info(f"Starting generation for job {job_id}")
     active_jobs[job_id] = {'cancelled': False}
+    # Initial update
     update_job_db(job_id, "processing")
     
     try:
@@ -674,6 +801,8 @@ async def generate_video_task(job_id: str, params: dict):
             else:
                 pipeline_type = "ti2vid"
                 params["images"] = input_images
+            
+            logger.info(f"Pipeline: {pipeline_type}, Input Images: {len(input_images)}, Video Cond: {len(video_cond)}")
 
         # Explicitly handle Image Generation (num_frames == 1)
         # If user wants an image, we should ensure we use a pipeline that supports it (ti2vid is best for T2I/I2I)
