@@ -136,6 +136,14 @@ export const CinematicPlayer = () => {
                                 <span className="opacity-30">|</span>
                                 <span>{progress}%</span>
                             </div>
+
+                            {/* Job Parameters Stats */}
+                            <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-6 text-[9px] font-mono text-white/30 uppercase tracking-widest text-left border-t border-white/5 pt-4">
+                                <div className="flex justify-between gap-4"><span>Res</span> <span className="text-white/60">{selectedShot.width}x{selectedShot.height}</span></div>
+                                <div className="flex justify-between gap-4"><span>FPS</span> <span className="text-white/60">{selectedShot.fps || project.fps}</span></div>
+                                <div className="flex justify-between gap-4"><span>Frames</span> <span className="text-white/60">{selectedShot.numFrames}</span></div>
+                                <div className="flex justify-between gap-4"><span>Seed</span> <span className="text-white/60">{selectedShot.seed}</span></div>
+                            </div>
                         </div>
 
                         {/* Scanline Effect */}
