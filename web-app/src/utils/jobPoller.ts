@@ -35,23 +35,33 @@ export const pollJobStatus = async (jobId: string, shotId: string) => {
 
             } else {
                 // Still processing
+                // Still processing
                 if (statusData.progress !== undefined) {
-                    const updates: any = { progress: statusData.progress };
-                    if (statusData.enhanced_prompt) {
-                        updates.enhancedPromptResult = statusData.enhanced_prompt;
+                    const { project } = useTimelineStore.getState();
+                    const currentShot = project.shots.find(s => s.id === shotId);
+                    const currentProgress = currentShot?.progress || 0;
+
+                    // Prevent flickering to 0% if we are already progressed
+                    // Only allow 0 if current is also low, or if we really want to support restart.
+                    // For now, simple monotonicity check: if new < old, ignore unless new is 0 (maybe restart) AND old is 100? 
+                    // Actually, getting 0 after 20% is the bug.
+                    // So if new < current, ignore it.
+                    if (statusData.progress >= currentProgress) {
+                        const updates: any = { progress: statusData.progress };
+                        if (statusData.enhanced_prompt) {
+                            updates.enhancedPromptResult = statusData.enhanced_prompt;
+                        }
+                        if (statusData.status_message) {
+                            updates.statusMessage = statusData.status_message;
+                        }
+                        if (statusData.current_prompt) {
+                            updates.currentPrompt = statusData.current_prompt;
+                        }
+                        updateShot(shotId, updates);
                     }
-                    if (statusData.status_message) {
-                        updates.statusMessage = statusData.status_message;
-                    }
-                    if (statusData.current_prompt) {
-                        updates.currentPrompt = statusData.current_prompt;
-                    }
-                    updateShot(shotId, updates);
                 }
 
                 // Continue polling
-                // We can check if shot still exists or state is valid if we want to abort?
-                // But fire-and-forget is safer for background jobs.
                 setTimeout(poll, 1000);
             }
         } catch (e) {
