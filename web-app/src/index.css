@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+@theme {
+    --color-milimo-50: #f0fdff;
+    --color-milimo-100: #e0faff;
+    --color-milimo-200: #baf3ff;
+    --color-milimo-300: #7de8ff;
+    --color-milimo-400: #38d6ff;
+    --color-milimo-500: #06b2eb;
+    --color-milimo-600: #0090c9;
+    --color-milimo-700: #0073a3;
+    --color-milimo-800: #026086;
+    --color-milimo-900: #064f6e;
+    --color-milimo-950: #04334a;
+
+    --animate-float: float 6s ease-in-out infinite;
+    --animate-fade-in: fadeIn 0.5s ease-out forwards;
+    --animate-slide-up: slideUp 0.5s ease-out forwards;
+    --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+
+    @keyframes float {
+
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+
+        50% {
+            transform: translateY(-20px);
+        }
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideUp {
+        from {
+            transform: translateY(20px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+}
+
+/* Glassmorphism Utilities */
+@utility glass {
+    @apply backdrop-blur-xl bg-white/5 border border-white/10 shadow-lg;
+}
+
+@utility glass-card {
+    @apply glass rounded-2xl p-6 transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:shadow-milimo-500/10;
+}
+
+@utility glass-input {
+    @apply w-full bg-black/20 border border-white/10 rounded-xl p-4 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-milimo-500/50 focus:bg-black/40 focus:ring-1 focus:ring-milimo-500/50 transition-all duration-300 shadow-inner;
+}
+
+@utility glass-button {
+    @apply px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform active:scale-95;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: theme('colors.white / 10%');
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.white / 20%');
+}

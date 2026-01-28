@@ -1,0 +1,43 @@
+# System
+.DS_Store
+.Thumbnails
+.Trashes
+
+# Environment
+milimov/
+milimovideo/
+venv/
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# LTX-2 Models & Large Files
+LTX-2/models/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+
+# Backend Data
+backend/generated/
+backend/uploads/
+backend/milimovideo.db
+backend/*.log
+backend/*.txt
+backend/server_last_request.json
+
+# Project Plans & Private Docs
+mv_plan/
+dev_diary/
+.agent/
+
+# Node Modules
+node_modules/
+dist/
+build/
+.output/
+
+# Editor
+.vscode/
+.idea/
