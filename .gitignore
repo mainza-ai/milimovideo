@@ -22,7 +22,7 @@ LTX-2/models/
 # Backend Data
 backend/generated/
 backend/uploads/
-backend/milimovideo.db
+*.db
 backend/*.log
 backend/*.txt
 backend/server_last_request.json
