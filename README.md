@@ -32,6 +32,13 @@ A fully functional timeline built for the AI workflow.
 - **Precision Control**: Frame-accurate seeking, scrubbing, and trimming.
 - **Extend & Morph**: Seamlessly extend clips or morph between shots using advanced conditioning.
 
+### 🌟 High Fidelity Generation (New)
+Pushing the boundaries of LTX-2.
+- **4K Ultra HD**: Generate stunning visuals at **3840x2160** resolution.
+- **Dynamic High FPS**: Native support for **50fps and 60fps** playback for buttery smooth motion.
+- **Deep Context**: Generate up to **20 seconds** in a single continuous shot.
+- **Audio Intelligence**: The AI Co-Pilot now directs audio soundscapes, generating synchronized ambient noise and dialogue descriptions.
+
 ### 🧠 Advanced Conditioning & Control
 Go beyond simple text-to-video.
 - **Image-to-Video**: Bring static images to life with motion.
@@ -41,6 +48,7 @@ Go beyond simple text-to-video.
 
 ### ⚡ Local & Privately Hosted
 - **100% Offline Capable**: Runs entirely on your local hardware (NVIDIA GPU or Apple Silicon).
+- **SQLite Persistence**: Robust, single-file database for all your projects and assets.
 - **No API Costs**: You own the model and the generations.
 - **Privacy First**: Your creative assets never leave your machine.
 
