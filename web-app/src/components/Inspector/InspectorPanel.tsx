@@ -9,6 +9,10 @@ export const InspectorPanel = () => {
         updateConditioning, removeConditioning, addShot, addConditioningToShot
     } = useTimelineStore();
 
+    // Collapsible States
+    const [isNarrativeCollapsed, setIsNarrativeCollapsed] = useState(true);
+    const [isAdvancedCollapsed, setIsAdvancedCollapsed] = useState(false);
+
     const shot = project.shots.find(s => s.id === selectedShotId);
 
     if (!shot) {
@@ -31,9 +35,7 @@ export const InspectorPanel = () => {
         );
     }
 
-    // Collapsible States
-    const [isNarrativeCollapsed, setIsNarrativeCollapsed] = useState(true);
-    const [isAdvancedCollapsed, setIsAdvancedCollapsed] = useState(false);
+
 
     const pollJobStatus = async (jobId: string, shotId: string) => {
         const poll = async () => {
