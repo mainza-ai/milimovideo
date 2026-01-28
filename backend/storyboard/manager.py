@@ -40,7 +40,7 @@ class StoryboardManager:
         # Number of frames to overlap/condition on
         self.overlap_frames = params.get("overlap_frames", 8)
         self.total_frames = params.get("num_frames", 121)
-        self.chunk_size = 121 # Native model limit logic
+        self.chunk_size = params.get("chunk_size", 1201) # Native model limit logic
         
         # Ensure working directory for this job's artifacts exists
         self.job_work_dir = os.path.join(output_dir, f"{job_id}_artifacts")

@@ -21,6 +21,7 @@ export interface Shot {
     width: number;
     height: number;
     numFrames: number;
+    fps?: number; // Optional override, defaults to project FPS
     timeline: ConditioningItem[];
 
     // Advanced Params
@@ -85,7 +86,7 @@ interface TimelineState {
     triggerAssetRefresh: () => void;
 
     // Project Actions
-    createNewProject: (name: string) => Promise<void>;
+    createNewProject: (name: string, settings?: { resolutionW: number; resolutionH: number; fps: number; seed: number }) => Promise<void>;
     loadProject: (id: string) => Promise<void>;
     deleteProject: (id: string) => Promise<void>;
 
@@ -105,6 +106,7 @@ const DEFAULT_PROJECT: Project = {
             width: 768,
             height: 512,
             numFrames: 121,
+            fps: 25,
             timeline: [],
             cfgScale: 3.0,
             enhancePrompt: true,
@@ -149,6 +151,7 @@ export const useTimelineStore = create<TimelineState>()(
                         width: state.project.resolutionW,
                         height: state.project.resolutionH,
                         numFrames: 121,
+                        fps: 25,
                         timeline: [],
 
                         // Defaults
@@ -290,13 +293,22 @@ export const useTimelineStore = create<TimelineState>()(
 
                 // Project Manager (New)
 
-                createNewProject: async (name: string) => {
+                createNewProject: async (name: string, settings) => {
                     const { addToast } = get();
+                    const defaults = { resolutionW: 768, resolutionH: 512, fps: 25, seed: 42 };
+                    const finalSettings = { ...defaults, ...settings };
+
                     try {
                         const res = await fetch('http://localhost:8000/project', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ name })
+                            body: JSON.stringify({
+                                name,
+                                resolution_w: finalSettings.resolutionW,
+                                resolution_h: finalSettings.resolutionH,
+                                fps: finalSettings.fps,
+                                seed: finalSettings.seed
+                            })
                         });
                         const data = await res.json();
 
@@ -305,10 +317,10 @@ export const useTimelineStore = create<TimelineState>()(
                             id: data.id,
                             name: data.name,
                             shots: [], // New project has no shots
-                            fps: 25,
-                            resolutionW: 768,
-                            resolutionH: 512,
-                            seed: 42
+                            fps: data.fps || finalSettings.fps,
+                            resolutionW: data.resolution_w || finalSettings.resolutionW,
+                            resolutionH: data.resolution_h || finalSettings.resolutionH,
+                            seed: data.seed || finalSettings.seed
                         };
 
                         set({ project: newProject, selectedShotId: null });
@@ -330,9 +342,9 @@ export const useTimelineStore = create<TimelineState>()(
                         const loadedProject: Project = {
                             id: data.id,
                             name: data.name,
-                            fps: data.settings?.fps || 25,
-                            resolutionW: data.settings?.resolution_w || 768,
-                            resolutionH: data.settings?.resolution_h || 512,
+                            fps: data.fps || 25,
+                            resolutionW: data.resolution_w || 768,
+                            resolutionH: data.resolution_h || 512,
                             seed: data.seed || 42,
                             shots: (data.shots || []).map((s: any) => ({
                                 id: s.id,
@@ -396,14 +408,7 @@ export const useTimelineStore = create<TimelineState>()(
             }),
             {
                 name: 'milimo-timeline-storage',
-                onRehydrateStorage: () => (state) => {
-                    // Reset any stuck "Generating" flags on reload/init
-                    if (state) {
-                        state.project.shots.forEach(s => {
-                            if (s.isGenerating) s.isGenerating = false;
-                        });
-                    }
-                }
+
             }
         ),
         {

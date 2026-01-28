@@ -155,11 +155,13 @@ class ShotConfig(BaseModel):
     width: int = 768
     height: int = 512
     num_frames: int = 121
+    fps: int = 25
     num_inference_steps: int = 40
     cfg_scale: float = 3.0
     enhance_prompt: bool = True
     upscale: bool = True
     pipeline_override: Optional[str] = "auto"
+    auto_continue: bool = False
     timeline: List[TimelineItem] = []
 
 class GenerateAdvancedRequest(BaseModel):
@@ -170,6 +172,17 @@ class ProjectState(BaseModel):
     id: str
     name: str
     shots: List[dict]
+    resolution_w: int = 768
+    resolution_h: int = 512
+    fps: int = 25
+    seed: int = 42
+
+class CreateProjectRequest(BaseModel):
+    name: str
+    resolution_w: int = 768
+    resolution_h: int = 512
+    fps: int = 25
+    seed: int = 42
 
 # --- Helper functions ---
 
@@ -276,11 +289,11 @@ async def get_shot_last_frame(job_id: str):
         # -sseof -0.1 gets the last 0.1s
         import subprocess
         # Robust Last Frame Extraction:
-        # 1. Seek to last 0.5s (-sseof -0.5)
-        # 2. Output all frames in that window, overwriting the file (-update 1)
+        # 1. Seek to last 1.0s (-sseof -1.0) to ensure we catch the stream even if duration metadata is slightly off.
+        # 2. Output all frames in that window, overwriting the file (-update 1).
         # 3. The final result on disk is the absolute last frame.
         subprocess.run([
-             "ffmpeg", "-y", "-sseof", "-0.5", "-i", video_path, 
+             "ffmpeg", "-y", "-sseof", "-1.0", "-i", video_path, 
              "-q:v", "2", "-update", "1", out_path
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
@@ -300,12 +313,78 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     """
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     
-    # Create params/config for worker
+    # Validated Params
     params = req.shot_config.model_dump()
     params["job_id"] = job_id
     params["project_id"] = req.project_id
-    params["pipeline_type"] = "advanced" # Worker will switch logic based on content
-    
+    params["pipeline_type"] = "advanced"
+
+    # --- Smart Continue / Auto-Conditioning Logic ---
+    # If auto_continue is True and NO explicit image/video conditioning is provided for frame 0,
+    # try to use the last completed shot from this project.
+    if req.shot_config.auto_continue:
+        has_initial_cond = any(
+            t.frame_index == 0 and t.type in ["image", "video"] 
+            for t in req.shot_config.timeline
+        )
+        
+        if not has_initial_cond:
+            # Query DB for last successful job in this project
+            with Session(engine) as session:
+                last_job = session.exec(
+                    select(Job)
+                    .where(Job.project_id == req.project_id)
+                    .where(Job.status == "completed")
+                    .where(Job.output_path != None)
+                    .order_by(Job.created_at.desc())
+                ).first()
+                
+                if last_job and last_job.output_path:
+                    logger.info(f"Smart Continue: Extending from last job {last_job.id}")
+                    
+                    # Ensure we have a frame to use. 
+                    # If it's a video, extract last frame. If image, use it directly.
+                    try:
+                        cond_path = last_job.output_path
+                        if cond_path.endswith(".mp4") or cond_path.endswith(".mov"):
+                             # We need to extract the last frame. 
+                             # We can reuse the logic from get_shot_last_frame or call it internaly?
+                             # Better to do it inline or call helper.
+                             
+                             # Let's generate a temporary last frame path
+                             last_frame_path = os.path.join(GENERATED_DIR, f"{last_job.id}_auto_last.jpg")
+                             
+                             # Reuse FFmpeg command logic
+                             import subprocess
+                             if not os.path.exists(last_frame_path):
+                                 subprocess.run([
+                                     "ffmpeg", "-y", "-sseof", "-1.0", "-i", cond_path, 
+                                     "-q:v", "2", "-update", "1", last_frame_path
+                                 ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                             
+                             cond_path = last_frame_path
+
+                        # Add to params AND timeline
+                        # We must update 'params' (dict) passed to worker
+                        # And strictly speaking, worker parses 'timeline' list.
+                        
+                        # Add to timeline params
+                        new_item = {
+                            "path": cond_path, 
+                            "frame_index": 0, 
+                            "strength": 1.0, 
+                            "type": "image"
+                        }
+                        
+                        # Append to params["timeline"]
+                        params["timeline"] = [new_item] + params.get("timeline", [])
+                        
+                        # Update description string for UI/Logs
+                        logger.info(f"Auto-injected conditioning from {cond_path}")
+                        
+                    except Exception as e:
+                        logger.error(f"Smart Continue failed to extract frame: {e}")
+
     # Persist Job to DB (Pending)
     with Session(engine) as session:
         job = Job(
@@ -327,55 +406,135 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
 # --- Project Persistence ---
 
 @app.post("/project")
-async def create_project(name: str = Body(..., embed=True)):
+async def create_project(request: CreateProjectRequest):
     project_id = uuid.uuid4().hex
-    # 1. Save to JSON (Legacy/Current Frontend Source)
-    project_state = ProjectState(
-        id=project_id,
-        name=name,
-        shots=[]
-    )
-    with open(os.path.join(PROJECTS_DIR, f"{project_id}.json"), "w") as f:
-        f.write(project_state.json())
     
-    # 2. Persist to DB (Registry)
     with Session(engine) as session:
         db_project = Project(
             id=project_id,
-            name=name
+            name=request.name,
+            shots=[],
+            resolution_w=request.resolution_w,
+            resolution_h=request.resolution_h,
+            fps=request.fps,
+            seed=request.seed,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
         )
         session.add(db_project)
         session.commit()
-        
-    return project_state # Return the Pydantic model
+        session.refresh(db_project)
+
+        return {
+            "id": db_project.id,
+            "name": db_project.name,
+            "shots": db_project.shots,
+            "seed": db_project.seed,
+            "resolution_w": db_project.resolution_w,
+            "resolution_h": db_project.resolution_h,
+            "fps": db_project.fps
+        }
 
 @app.get("/project/{project_id}")
 async def get_project(project_id: str):
-    path = os.path.join(PROJECTS_DIR, f"{project_id}.json")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Project not found")
+    with Session(engine) as session:
+        project = session.get(Project, project_id)
         
-    with open(path, "r") as f:
-        data = json.load(f)
-    return data
+        if not project:
+            # Fallback: Check if it exists as legacy JSON but not in DB? 
+            # (Unlikely given create_project history, but possible if DB was wiped but files kept)
+            legacy_path = os.path.join(PROJECTS_DIR, f"{project_id}.json")
+            if os.path.exists(legacy_path):
+                # Restore to DB
+                with open(legacy_path, "r") as f:
+                    data = json.load(f)
+                
+                restored_project = Project(
+                    id=data.get("id", project_id),
+                    name=data.get("name", "Restored Project"),
+                    shots=data.get("shots", []),
+                    resolution_w=data.get("resolution_w", 768),
+                    resolution_h=data.get("resolution_h", 512),
+                    fps=data.get("fps", 25),
+                    seed=data.get("seed", 42)
+                )
+                session.add(restored_project)
+                session.commit()
+                return data
+            
+            raise HTTPException(status_code=404, detail="Project not found")
+
+        # Lazy Migration: If DB has no shots but JSON exists (Migration scenario)
+        if not project.shots:
+            legacy_path = os.path.join(PROJECTS_DIR, f"{project_id}.json")
+            if os.path.exists(legacy_path):
+                try:
+                    with open(legacy_path, "r") as f:
+                        data = json.load(f)
+                        if data.get("shots"):
+                            project.shots = data["shots"]
+                            # Also update settings if they were default in DB
+                            project.resolution_w = data.get("resolution_w", project.resolution_w)
+                            project.resolution_h = data.get("resolution_h", project.resolution_h)
+                            project.fps = data.get("fps", project.fps)
+                            project.seed = data.get("seed", project.seed)
+                            
+                            session.add(project)
+                            session.commit()
+                            logger.info(f"Lazily migrated project {project_id} from JSON to DB")
+                except Exception as e:
+                    logger.error(f"Failed to migrate project {project_id}: {e}")
+
+        # Construct response matching Frontend Project interface
+        return {
+            "id": project.id,
+            "name": project.name,
+            "shots": project.shots,
+            "settings": { # Frontend expects legacy structure occasionally? Or straight fields?
+                # TimelineStore.loadProject maps data.settings?.fps OR data.fps
+                # But safer to return flat and let store handle it, or match store expecation.
+                # Store expects snake_case from backend usually?
+                "resolution_w": project.resolution_w,
+                "resolution_h": project.resolution_h,
+                "fps": project.fps
+            },
+            "fps": project.fps, # Redundant but safe
+            "resolution_w": project.resolution_w,
+            "resolution_h": project.resolution_h,
+            "seed": project.seed 
+        }
 
 @app.put("/project/{project_id}")
 async def save_project(project_id: str, state: ProjectState):
     if state.id != project_id:
         raise HTTPException(status_code=400, detail="Project ID mismatch")
     
-    # 1. Save JSON
-    path = os.path.join(PROJECTS_DIR, f"{project_id}.json")
-    with open(path, "w") as f:
-        f.write(state.json())
-        
-    # 2. Update DB Timestamp
     with Session(engine) as session:
         db_project = session.get(Project, project_id)
-        if db_project:
-            db_project.updated_at = datetime.utcnow()
-            session.add(db_project)
-            session.commit()
+        if not db_project:
+             # Create if missing?
+             raise HTTPException(status_code=404, detail="Project not found")
+        
+        db_project.name = state.name
+        db_project.shots = state.shots
+        
+        # Save settings
+        db_project.resolution_w = state.resolution_w
+        db_project.resolution_h = state.resolution_h
+        db_project.fps = state.fps
+        db_project.seed = state.seed
+        
+        db_project.updated_at = datetime.utcnow()
+        
+        session.add(db_project)
+        session.commit()
+        
+    # Optional: Still save JSON for backup/safety during transition?
+    # No, we want to unify. BUT if we want to be safe...
+    # Let's delete the JSON to avoid confusion if it exists.
+    legacy_path = os.path.join(PROJECTS_DIR, f"{project_id}.json")
+    if os.path.exists(legacy_path):
+        os.remove(legacy_path)
         
     return {"status": "saved"}
 
@@ -404,7 +563,7 @@ async def delete_project(project_id: str):
         session.delete(project)
         session.commit()
         
-        # Delete JSON file
+        # Delete JSON file if exists
         path = os.path.join(PROJECTS_DIR, f"{project_id}.json")
         if os.path.exists(path):
             os.remove(path)
@@ -419,13 +578,26 @@ def get_status(job_id: str):
         progress = active_jobs[job_id].get("progress", 0)
         status_msg = active_jobs[job_id].get("status_message", "Processing...")
         current_prompt = active_jobs[job_id].get("current_prompt", None)
-        return {
+        actual_frames = active_jobs[job_id].get("actual_frames", None)
+        
+        status_response = {
             "job_id": job_id, 
             "status": "processing", 
             "progress": progress, 
             "status_message": status_msg,
             "current_prompt": current_prompt
         }
+        
+        # If job is technically done but still in active_jobs (e.g. just finished), 
+        # expose actual_frames
+        if actual_frames:
+             status_response["actual_frames"] = actual_frames
+             # If it has actual_frames, it might be completed?
+             # worker updates active_jobs status? NO. worker only updates DB status.
+             # active_jobs just holds progress.
+             # but we added `active_jobs[job_id]["actual_frames"] = actual_frames` in worker.
+             
+        return status_response
     
     # 2. Check DB (Source of Truth)
     with Session(engine) as session:

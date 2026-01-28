@@ -306,14 +306,17 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                         
                         if is_extend:
                              sys_prompt = (
-                                "You are a visionary Film Director. "
-                                "TASK: The user has provided the last frame of a video. "
-                                "Analyze it and describe the NEXT 4 seconds of action to extend the shot seamlessly. "
-                                "Maintain visual consistency, lighting, and character details. "
-                                "CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right'). "
-                                "LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting'). "
-                                "AUDIO: Include a description of the soundscape (ambient sounds, Foley). "
-                                "Output ONLY the prompt for the next shot."
+                                "You are an expert Prompt Engineer for the LTX-2 Video Generation model. "
+                                "TASK: The user has provided the last frame of a video. Analyze it and write a prompt to GENERATE THE NEXT 4 SECONDS of video, extending the shot seamlessly. "
+                                "The output must be a single flowing paragraph following this structure: "
+                                "1. Establish the shot (cinematography, scale). "
+                                "2. Set the scene (lighting, atmosphere). "
+                                "3. Describe the action (natural sequence, present tense). "
+                                "4. Visual Details (characters, appearance). "
+                                "5. Camera Movement (how view shifts). "
+                                "6. Audio (ambient sounds, dialogue in quotes). "
+                                "Avoid internal emotional labels; use visual cues. Avoid text/logos. "
+                                "Output ONLY the prompt paragraph."
                              )
                              effective_prompt = f"Global Goal: {chunk_prompt}"
 
@@ -351,7 +354,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     height=height,
                     width=width,
                     num_frames=chunk_size,
-                    frame_rate=25.0,
+                    frame_rate=float(params.get("fps", 25.0)),
                     num_inference_steps=params.get("num_inference_steps", 40),
                     cfg_guidance_scale=params.get("cfg_scale", 3.0),
                     images=images_arg,
@@ -367,7 +370,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             video_chunks_number = get_video_chunks_number(chunk_size, TilingConfig.default())
             encode_video(
                 video=video,
-                fps=25.0,
+                fps=float(params.get("fps", 25.0)),
                 audio=audio,
                 audio_sample_rate=AUDIO_SAMPLE_RATE,
                 output_path=chunk_output_path,
@@ -457,21 +460,24 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         sys_prompt = None
                         if not is_image_mode and input_images:
                              sys_prompt = (
-                                "You are a visionary Film Director. "
-                                "TASK: The user has provided the last frame of a video. "
-                                "Analyze it and describe the NEXT 4 seconds of action to extend the shot seamlessly. "
-                                "Maintain visual consistency, lighting, and character details. "
-                                "CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right'). "
-                                "LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting'). "
-                                "AUDIO: Include a description of the soundscape (ambient sounds, Foley). "
-                                "Output ONLY the prompt for the next shot."
+                                "You are an expert Prompt Engineer for the LTX-2 Video Generation model. "
+                                "TASK: The user has provided the last frame of a video. Analyze it and write a prompt to GENERATE THE NEXT 4 SECONDS of video, extending the shot seamlessly. "
+                                "The output must be a single flowing paragraph following this structure: "
+                                "1. Establish the shot (cinematography, scale). "
+                                "2. Set the scene (lighting, atmosphere). "
+                                "3. Describe the action (natural sequence, present tense). "
+                                "4. Visual Details (characters, appearance). "
+                                "5. Camera Movement (how view shifts). "
+                                "6. Audio (ambient sounds, dialogue in quotes). "
+                                "Avoid internal emotional labels; use visual cues. Avoid text/logos. "
+                                "Output ONLY the prompt paragraph."
                              )
                              # Prefix user prompt effectively
-                             prompt = f"Global Goal: {prompt}"
+                             enhancement_input = f"Global Goal: {prompt}"
 
                         run_prompt = generate_enhanced_prompt(
                             text_encoder, 
-                            prompt, 
+                            enhancement_input if sys_prompt else prompt, 
                             image_path=input_images[0][0] if input_images else None,
                             seed=seed,
                             is_image=is_image_mode,
@@ -492,7 +498,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     height=height,
                     width=width,
                     num_frames=num_frames,
-                    frame_rate=25.0,
+                    frame_rate=float(params.get("fps", 25.0)),
                     num_inference_steps=num_inference_steps,
                     cfg_guidance_scale=cfg_scale,
                     images=input_images,
@@ -507,7 +513,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     height=height,
                     width=width,
                     num_frames=num_frames,
-                    frame_rate=25.0,
+                    frame_rate=float(params.get("fps", 25.0)),
                     images=input_images,
                     video_conditioning=video_cond,
                     enhance_prompt=enhance_prompt,
@@ -522,7 +528,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     height=height,
                     width=width,
                     num_frames=num_frames,
-                    frame_rate=25.0,
+                    frame_rate=float(params.get("fps", 25.0)),
                     num_inference_steps=num_inference_steps,
                     cfg_guidance_scale=cfg_scale,
                     images=input_images,
@@ -682,7 +688,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             
             encode_video(
                 video=video,
-                fps=25.0,
+                fps=float(params.get("fps", 25.0)),
                 audio=audio,
                 audio_sample_rate=AUDIO_SAMPLE_RATE,
                 output_path=output_path,
@@ -828,7 +834,7 @@ async def generate_video_task(job_id: str, params: dict):
         # Decide if chained or standard
         num_frames = params.get("num_frames", 121)
         
-        if pipeline_type == "ti2vid" and num_frames > 125:
+        if pipeline_type == "ti2vid" and num_frames > 1201:
              await generate_chained_video_task(job_id, params, pipeline)
         else:
              await generate_standard_video_task(job_id, params, pipeline)

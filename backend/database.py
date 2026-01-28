@@ -1,6 +1,7 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, Field
 from typing import Optional, List
+from sqlalchemy import Column, JSON
 from datetime import datetime
 import uuid
 
@@ -15,6 +16,9 @@ class Project(SQLModel, table=True):
     resolution_w: int = 768
     resolution_h: int = 512
     fps: int = 25
+    seed: int = 42
+    # Full State
+    shots: List[dict] = Field(default=[], sa_column=Column(JSON))
 
 class Asset(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
