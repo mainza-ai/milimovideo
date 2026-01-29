@@ -185,7 +185,7 @@ export const MediaLibrary = () => {
 
             {/* Preview Modal */}
             {previewAsset && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/80 backdrop-blur-sm" onClick={() => setPreviewAsset(null)}>
+                <div className="fixed inset-0 z-[1000] flex items-center justify-center p-8 bg-black/80 backdrop-blur-sm" onClick={() => setPreviewAsset(null)}>
                     <div className="bg-[#111] border border-white/10 rounded-2xl overflow-hidden max-w-4xl max-h-full flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
                         <div className="flex-1 overflow-hidden bg-black/50 flex items-center justify-center min-h-[300px]">
                             {previewAsset.type === 'image' ? (

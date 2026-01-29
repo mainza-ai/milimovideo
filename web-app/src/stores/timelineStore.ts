@@ -37,6 +37,7 @@ export interface Shot {
     enhancedPromptResult?: string; // Result from backend
     statusMessage?: string; // Real-time status text
     currentPrompt?: string; // Live evolving prompt during generation
+    etaSeconds?: number; // Estimated time remaining
 
     // UI State
     isGenerating?: boolean;
@@ -386,7 +387,15 @@ export const useTimelineStore = create<TimelineState>()(
 
                         // If current project deleted, what do? Reload window or create default?
                         if (project.id === id) {
-                            window.location.reload(); // Simple reset
+                            // Reset to default project instead of reloading
+                            const defaultProj = JSON.parse(JSON.stringify(DEFAULT_PROJECT));
+                            defaultProj.id = uuidv4(); // New ID for new project
+                            defaultProj.shots[0].id = uuidv4();
+
+                            set({
+                                project: defaultProj,
+                                selectedShotId: defaultProj.shots[0].id
+                            });
                         }
                     } catch (e) {
                         console.error(e);
@@ -408,7 +417,12 @@ export const useTimelineStore = create<TimelineState>()(
             }),
             {
                 name: 'milimo-timeline-storage',
-
+                partialize: (state: TimelineState) => ({ project: state.project }),
+                merge: (persistedState: any, currentState: TimelineState) => ({
+                    ...currentState,
+                    ...(persistedState as Partial<TimelineState>),
+                    toasts: [] as { id: string; message: string; type: 'success' | 'error' | 'info' }[]
+                }),
             }
         ),
         {

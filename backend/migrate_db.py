@@ -36,6 +36,21 @@ def migrate():
         else:
             print(f"Column {col_name} already exists.")
 
+    # Job Table Migration
+    cursor.execute("PRAGMA table_info(job)")
+    job_columns = [row[1] for row in cursor.fetchall()]
+    print(f"Existing Job columns: {job_columns}")
+
+    if "actual_frames" not in job_columns:
+        print("Adding actual_frames to job table")
+        try:
+             cursor.execute("ALTER TABLE job ADD COLUMN actual_frames INTEGER")
+             print("Successfully added actual_frames")
+        except Exception as e:
+             print(f"Failed to add actual_frames: {e}")
+    else:
+        print("Column actual_frames already exists in job.")
+
     conn.commit()
     conn.close()
     print("Migration complete.")

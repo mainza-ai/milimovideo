@@ -49,6 +49,7 @@ class Job(SQLModel, table=True):
     params_json: Optional[str] = None
     enhanced_prompt: Optional[str] = None
     status_message: Optional[str] = None
+    actual_frames: Optional[int] = None
 
 # Database Setup
 DATABASE_URL = "sqlite:///./milimovideo.db"

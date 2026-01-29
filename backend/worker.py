@@ -1,7 +1,6 @@
 import asyncio
 import os
-# Fix for MPS memory allocation limits on Apple Silicon for large generations
-os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+
 
 import subprocess
 import torch
@@ -39,7 +38,7 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def update_job_db(job_id: str, status: str, output_path: str = None, error: str = None, enhanced_prompt: str = None, status_message: str = None):
+def update_job_db(job_id: str, status: str, output_path: str = None, error: str = None, enhanced_prompt: str = None, status_message: str = None, actual_frames: int = None):
     """Helper to update Job record in SQLite."""
     try:
         with Session(engine) as session:
@@ -54,6 +53,8 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
                     job.enhanced_prompt = enhanced_prompt
                 if status_message:
                     job.status_message = status_message
+                if actual_frames is not None:
+                    job.actual_frames = actual_frames
                 if status in ["completed", "failed", "cancelled"]:
                     job.completed_at = datetime.utcnow()
                 session.add(job)
@@ -219,23 +220,15 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
     chunk_size = storyboard_manager.chunk_size # 121
     num_chunks = storyboard_manager.get_total_chunks()
     
+    # Initialize ETA immediately (45s per chunk heuristic)
+    if job_id in active_jobs:
+        active_jobs[job_id]["eta_seconds"] = num_chunks * 45
+        active_jobs[job_id]["status_message"] = f"Initializing generation ({num_chunks} chunks)..."
+    
     logger.info(f"Chained generation: {desired_total_frames} frames split into {num_chunks} chunks.")
     
     files_to_stitch = []
-    
-    # Prepare cancellation
-    def cancellation_check(step_idx, total_steps, *args):
-        progress = int((step_idx / total_steps) * 100)
-        # We can't await inside this sync callback easily without creating a task?
-        # Ideally pipeline callback should be async or we fire and forget. 
-        # For now, let's just update active_jobs dict and maybe background thread sends events?
-        # Or simpler: Just accept that callback is sync.
-        if job_id in active_jobs:
-             active_jobs[job_id]["progress"] = progress
-             
-        if active_jobs.get(job_id, {}).get("cancelled", False):
-            raise RuntimeError(f"Job {job_id} cancelled by user.")
-            
+
     # Helper to broadcast async (can be called from main loop)
     async def update_ui(msg: str):
          await broadcast_log(job_id, msg)
@@ -246,10 +239,37 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
     
     try:
         for chunk_idx in range(num_chunks):
+            # Check for cancellation before starting chunk
+            if active_jobs.get(job_id, {}).get("cancelled", False):
+                raise RuntimeError(f"Job {job_id} cancelled by user.")
+
             chunk_job_id = f"{job_id}_part_{chunk_idx}"
             chunk_output_path = os.path.join(output_dir, f"{chunk_job_id}.mp4")
             files_to_stitch.append(chunk_output_path)
             
+            # Prepare cancellation (and progress updates)
+            # Defined INSIDE loop to access chunk_idx for global progress
+            def cancellation_check(step_idx, total_steps, *args):
+                 if job_id in active_jobs:
+                     chunk_progress = step_idx / total_steps
+                     
+                     # 1. Global Progress
+                     global_progress = int(((chunk_idx + chunk_progress) / num_chunks) * 100)
+                     active_jobs[job_id]["progress"] = global_progress
+                     
+                     # 2. Dynamic ETA
+                     # Remaining full chunks + remaining time in current chunk
+                     remaining_chunks = num_chunks - chunk_idx - 1
+                     current_chunk_remaining = 45 * (1 - chunk_progress)
+                     eta = int((remaining_chunks * 45) + current_chunk_remaining)
+                     active_jobs[job_id]["eta_seconds"] = eta
+                     
+                     # 3. Status Message
+                     active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks} ({int(chunk_progress*100)}%)"
+
+                 if active_jobs.get(job_id, {}).get("cancelled", False):
+                     raise RuntimeError(f"Job {job_id} cancelled by user.")
+
             await update_ui(f"Generating chunk {chunk_idx+1}/{num_chunks}...")
             # Calculate roughly global progress? 
             # Chunk progress is local. Global = (chunk_idx / num_chunks) * 100.
@@ -312,20 +332,26 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                         effective_prompt = chunk_prompt
                         
                         if is_extend:
+                             # Use the same STRICT Director Prompt as StoryboardManager to prevent drift!
                              sys_prompt = (
-                                "You are an expert Prompt Engineer for the LTX-2 Video Generation model. "
-                                "TASK: The user has provided the last frame of a video. Analyze it and write a prompt to GENERATE THE NEXT 4 SECONDS of video, extending the shot seamlessly. "
-                                "The output must be a single flowing paragraph following this structure: "
-                                "1. Establish the shot (cinematography, scale). "
-                                "2. Set the scene (lighting, atmosphere). "
-                                "3. Describe the action (natural sequence, present tense). "
-                                "4. Visual Details (characters, appearance). "
-                                "5. Camera Movement (how view shifts). "
-                                "6. Audio (ambient sounds, dialogue in quotes). "
-                                "Avoid internal emotional labels; use visual cues. Avoid text/logos. "
-                                "Output ONLY the prompt paragraph."
+                                "You are a visionary Film Director and Cinematographer. Your goal is to continue the narrative flow of a video scene.\n"
+                                "You will be given the Global Story Goal (which you must adhere to) and the immediate context (last frame description).\n"
+                                "TASK: Describe the next 4 seconds of video action. The transition must be seamless but FOCUSED on the Global Goal.\n"
+                                "GUIDELINES:\n"
+                                "- Analyze the visual context of the input image (characters, clothing, lighting, background).\n"
+                                "- Describe the ACTION that happens next. Do not just describe the static image.\n"
+                                "- CRITICAL: Do not drift from the Global Story Goal. If the context has drifted, steer it back.\n"
+                                "- Maintain character identity and visual consistency.\n"
+                                "- CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right', 'handheld', 'static').\n"
+                                "- LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting', 'soft morning light', 'neon rim light').\n"
+                                "- AUDIO: Include a description of the soundscape (ambient sounds, dialogue if applicable).\n"
+                                "- Output ONLY the prompt for the next shot. Single paragraph, chronological flow."
                              )
-                             effective_prompt = f"Global Goal: {chunk_prompt}"
+                             effective_prompt = (
+                                f"Global Story Goal (PRIMARY): {chunk_prompt}. "
+                                f"Task: Write a prompt for the NEXT 4 seconds of video extending the provided frame. "
+                                f"The action MUST advance the Global Story Goal."
+                             )
 
                         try:
                             logger.info(f"Manually enhancing Chunk 0 prompt (Extend={is_extend})...")
@@ -340,6 +366,12 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                             if enhanced:
                                 chunk_prompt = enhanced
                                 active_jobs[job_id]["current_prompt"] = chunk_prompt
+                                
+                                # CRITICAL FIX: Update the Global Story Goal!
+                                # The enhanced prompt contains the detailed vision/style we want to maintain.
+                                # If we don't update this, the Manager will revert to the raw (short) prompt as the goal.
+                                logger.info(f"Updating Global Story Goal to match enhanced Chunk 0 prompt...")
+                                storyboard_manager.state.global_prompt = enhanced
                         except Exception as e:
                             logger.warning(f"Manual enhancement failed: {e}")
                             do_pipeline_enhance = True # Fallback to pipeline
@@ -348,6 +380,12 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Expose current prompt to UI
             if job_id in active_jobs:
                 active_jobs[job_id]["current_prompt"] = chunk_prompt
+                # Determine progress
+                remaining_chunks = num_chunks - chunk_idx
+                # Heuristic: 45 seconds per chunk
+                eta_seconds = remaining_chunks * 45 
+                active_jobs[job_id]["eta_seconds"] = eta_seconds
+                
                 # Also status message
                 active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
             
@@ -392,29 +430,100 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             del video
             del audio
             cleanup_memory()
+
+            # TRIM OVERLAP (Fix for "Slow Motion" stutter at seams)
+            # If this is not the first chunk, we must trim the overlapping frames 
+            # from the start, otherwise they are repeated (concatenated) 
+            # creating a duplicate motion effect.
+            # LTX-2 often has 1-8 static frames at start of continuation.
+            if chunk_idx > 0:
+                 # Force aggressive trim of 8 frames (~0.32s at 25fps) to remove static warm-up
+                overlap = 8 
+                if overlap > 0:
+                    logger.info(f"Trimming {overlap} overlap frames from chunk {chunk_idx} start...")
+                    temp_raw_path = chunk_output_path.replace(".mp4", "_raw.mp4")
+                    os.rename(chunk_output_path, temp_raw_path)
+                    
+                    try:
+                        # Use select filter to drop first N frames. 
+                        # -vsync vfr ensures frames are dropped correctly without duping.
+                        # Re-encoding is safer for precise frame cutting than -ss with copy.
+                        subprocess.run([
+                            "ffmpeg", "-i", temp_raw_path,
+                            "-vf", f"select=gte(n\\,{overlap}),setpts=PTS-STARTPTS",
+                            "-af", f"ashowinfo,arealtime,asetpts=PTS-STARTPTS", # Handle audio timestamps if present, though often silent
+                            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
+                            "-y", chunk_output_path
+                        ], cwd=output_dir, check=True, stderr=subprocess.DEVNULL)
+                        logger.info(f"Trimmed overlap from chunk {chunk_idx}.")
+                        # Optional: Remove raw file to save space
+                        # os.remove(temp_raw_path) 
+                    except Exception as e:
+                        logger.error(f"Failed to trim chunk overlap: {e}. Restoring raw.")
+                        if os.path.exists(temp_raw_path):
+                            os.rename(temp_raw_path, chunk_output_path)
             
         # Stitching
-        logger.info("Stitching chunks...")
+        logger.info("Stitching chunks with re-encoding (filter_complex) to ensure stream integrity...")
         final_output_path = os.path.join(output_dir, f"{job_id}.mp4")
         
-        # Create file list for ffmpeg
-        list_file_path = os.path.join(output_dir, f"{job_id}_list.txt")
-        with open(list_file_path, "w") as f:
-            for mp4 in files_to_stitch:
-                f.write(f"file '{os.path.basename(mp4)}'\n")
+        # Build ffmpeg command for filter_complex
+        # We re-encode to avoid codec mismatches between original chunks and trimmed chunks.
+        input_args = []
+        filter_parts = []
         
-        # Run ffmpeg concat
-        subprocess.run([
-            "ffmpeg", "-f", "concat", "-safe", "0", "-i", list_file_path, 
-            "-c", "copy", "-y", final_output_path
-        ], cwd=output_dir, check=True)
+        for i, mp4 in enumerate(files_to_stitch):
+            input_args.extend(["-i", mp4])
+            filter_parts.append(f"[{i}:v][{i}:a]")
+            
+        # Construct filter string: "[0:v][0:a][1:v][1:a]concat=n=N:v=1:a=1[outv][outa]"
+        filter_complex = f"{''.join(filter_parts)}concat=n={len(files_to_stitch)}:v=1:a=1[outv][outa]"
         
-        logger.info(f"Stitched video saved to {final_output_path}")
-        update_job_db(job_id, "completed", output_path=f"/generated/{job_id}.mp4")
+        cmd = ["ffmpeg"] + input_args + [
+            "-filter_complex", filter_complex,
+            "-map", "[outv]", "-map", "[outa]",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18", # Good quality re-encode
+            "-c:a", "aac", "-b:a", "192k",
+            "-y", final_output_path
+        ]
+        
+        try:
+            subprocess.run(cmd, cwd=output_dir, check=True)
+            logger.info(f"Stitched video saved to {final_output_path}")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Stitching failed with audio: {e}. Retrying video only...")
+            # Fallback: Video only if audio mapping fails (e.g. some chunks have no audio)
+            filter_parts_v = [f"[{i}:v]" for i in range(len(files_to_stitch))]
+            filter_complex_v = f"{''.join(filter_parts_v)}concat=n={len(files_to_stitch)}:v=1[outv]"
+            cmd_v = ["ffmpeg"] + input_args + [
+                "-filter_complex", filter_complex_v,
+                "-map", "[outv]",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                "-y", final_output_path
+            ]
+            subprocess.run(cmd_v, cwd=output_dir, check=True)
+            logger.info(f"Stitched video (video-only) saved to {final_output_path}")
+        
+        # Detect actual frame count to sync UI for Chained Generation
+        actual_frames = desired_total_frames
+        try:
+            # Probe the file
+            cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", final_output_path]
+            res = subprocess.check_output(cmd).decode("utf-8").strip()
+            if res and res.isdigit():
+                actual_frames = int(res)
+                logger.info(f"Verified actual frame count for chained video: {actual_frames}")
+                if job_id in active_jobs:
+                    active_jobs[job_id]["actual_frames"] = actual_frames
+        except Exception as e:
+            logger.warning(f"Could not verify chained frame count: {e}")
+
+        update_job_db(job_id, "completed", output_path=f"/generated/{job_id}.mp4", actual_frames=actual_frames)
         await event_manager.broadcast("complete", {
             "job_id": job_id, 
             "url": f"/generated/{job_id}.mp4", 
-            "type": "video"
+            "type": "video",
+            "actual_frames": actual_frames
         })
         
     finally:
@@ -440,6 +549,13 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         input_images = params.get("images", [])
         video_cond = params.get("video_conditioning", [])
         pipeline_type = params.get("pipeline_type", "ti2vid")
+        
+        # Initialize ETA
+        if job_id in active_jobs:
+            # Heuristic: 45s for video, 5s for image
+            est_time = 45 if num_frames > 1 else 5
+            active_jobs[job_id]["eta_seconds"] = est_time
+            active_jobs[job_id]["status_message"] = "Initializing generation..."
         
         
         tiling_config = TilingConfig.default()
@@ -724,7 +840,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             except Exception as e:
                 logger.warning(f"Could not verify frame count: {e}")
 
-            update_job_db(job_id, "completed", output_path=f"/generated/{os.path.basename(output_path)}")
+            update_job_db(job_id, "completed", output_path=f"/generated/{os.path.basename(output_path)}", actual_frames=actual_frames)
             await event_manager.broadcast("complete", {
                 "job_id": job_id, 
                 "url": f"/generated/{os.path.basename(output_path)}", 

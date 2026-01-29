@@ -6,8 +6,7 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import uvicorn
 import os
-# Fix for MPS memory allocation limits on Apple Silicon for large generations
-os.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0.0"
+
 
 import shutil
 import uuid
@@ -17,7 +16,15 @@ from typing import List, Optional, Literal
 from datetime import datetime
 
 # Logging
-logging.basicConfig(level=logging.INFO)
+# Logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("server_debug.log"),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger("server")
 
 print("--- STARTING MILIMO VIDEO SERVER ---")
@@ -578,23 +585,18 @@ def get_status(job_id: str):
     # 1. Check Active Jobs (Memory - Fastest)
     from worker import active_jobs
     if job_id in active_jobs:
-        progress = active_jobs[job_id].get("progress", 0)
-        status_msg = active_jobs[job_id].get("status_message", "Processing...")
-        current_prompt = active_jobs[job_id].get("current_prompt", None)
-        actual_frames = active_jobs[job_id].get("actual_frames", None)
-        
+        # Active in memory
+        job_data = active_jobs[job_id]
         status_response = {
-            "job_id": job_id, 
-            "status": "processing", 
-            "progress": progress, 
-            "status_message": status_msg,
-            "current_prompt": current_prompt
+            "job_id": job_id,
+            "status": job_data.get("status", "processing"),
+            "progress": job_data.get("progress", 0),
+            "eta_seconds": job_data.get("eta_seconds", None),
+            "current_prompt": job_data.get("current_prompt", None),
+            "status_message": job_data.get("status_message", "Processing..."),
+            "actual_frames": job_data.get("actual_frames", None)
         }
-        
-        # If job is technically done but still in active_jobs (e.g. just finished), 
-        # expose actual_frames
-        if actual_frames:
-             status_response["actual_frames"] = actual_frames
+        return status_response
              # If it has actual_frames, it might be completed?
              # worker updates active_jobs status? NO. worker only updates DB status.
              # active_jobs just holds progress.
@@ -615,7 +617,8 @@ def get_status(job_id: str):
                 "url": f"/generated/{os.path.basename(job.output_path)}" if job.output_path else None,
                 "error": job.error_message,
                 "enhanced_prompt": job.enhanced_prompt,
-                "status_message": job.status_message
+                "status_message": job.status_message,
+                "actual_frames": job.actual_frames
             }
 
     # 3. Fallback: File Check (Legacy - for jobs before DB migration)

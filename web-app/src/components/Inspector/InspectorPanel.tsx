@@ -61,6 +61,8 @@ export const InspectorPanel = () => {
                             strength: t.strength
                         })),
                         // Explicitly map camelCase to snake_case for backend
+                        // FIX: Ensure FPS is sent, falling back to project default if shot specific is undefined
+                        fps: shot.fps || project.fps,
                         num_frames: shot.numFrames,
                         negative_prompt: shot.negativePrompt,
                         num_inference_steps: 40, // Default or add to store if needed

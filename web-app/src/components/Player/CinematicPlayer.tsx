@@ -8,6 +8,7 @@ export const CinematicPlayer = () => {
     const selectedShotId = useTimelineStore(state => state.selectedShotId);
     const isPlaying = useTimelineStore(state => state.isPlaying);
     const setIsPlaying = useTimelineStore(state => state.setIsPlaying);
+    const currentTime = useTimelineStore(state => state.currentTime);
     const setCurrentTime = useTimelineStore(state => state.setCurrentTime);
 
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -33,6 +34,26 @@ export const CinematicPlayer = () => {
         if (isPlaying) videoRef.current.play();
         else videoRef.current.pause();
     }, [isPlaying]);
+
+    // Sync time (Seek when playhead moves)
+    useEffect(() => {
+        if (!videoRef.current || !selectedShot) return;
+
+        const startTime = useTimelineStore.getState().getShotStartTime(selectedShot.id);
+        const localTime = currentTime - startTime;
+
+        // Only seek if the difference is significant (to avoid fighting normal playback)
+        // or if we are paused (scrubbing)
+        // 0.2s threshold is usually safe enough for 24fps
+        if (Math.abs(videoRef.current.currentTime - localTime) > 0.2) {
+            // Check if localTime is valid for this clip
+            if (localTime >= 0 && localTime <= videoRef.current.duration) {
+                videoRef.current.currentTime = localTime;
+            } else if (localTime < 0) {
+                videoRef.current.currentTime = 0;
+            }
+        }
+    }, [currentTime, selectedShot]);
 
     return (
         <div className="flex-1 bg-black relative flex flex-col items-center justify-center overflow-hidden group">
@@ -97,7 +118,7 @@ export const CinematicPlayer = () => {
 
                 {/* Overlay: Generation Animation - Shows ON TOP of everything if generating */}
                 {isGenerating && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-50">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-40">
                         {/* Background Ambient Glow */}
                         <div className="absolute w-full h-full opacity-20">
                             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-milimo-500/30 rounded-full blur-[100px] animate-pulse" />
@@ -131,10 +152,17 @@ export const CinematicPlayer = () => {
                             <h3 className="text-xl font-bold tracking-[0.2em] text-white uppercase mb-2 animate-pulse">
                                 Generating
                             </h3>
-                            <div className="flex items-center justify-center gap-2 text-[10px] text-milimo-400 uppercase tracking-widest font-mono">
-                                <span className="opacity-80">Director Mode</span>
-                                <span className="opacity-30">|</span>
-                                <span>{progress}%</span>
+                            <div className="flex flex-col items-center justify-center gap-2">
+                                <div className="flex items-center justify-center gap-2 text-[10px] text-milimo-400 uppercase tracking-widest font-mono">
+                                    <span className="opacity-80">Director Mode</span>
+                                    <span className="opacity-30">|</span>
+                                    <span>{progress}%</span>
+                                </div>
+                                {selectedShot?.etaSeconds && selectedShot.etaSeconds > 0 && (
+                                    <div className="text-[10px] text-milimo-500/80 font-mono animate-pulse">
+                                        EST. {Math.floor(selectedShot.etaSeconds / 60)}:{(selectedShot.etaSeconds % 60).toString().padStart(2, '0')}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Job Parameters Stats */}

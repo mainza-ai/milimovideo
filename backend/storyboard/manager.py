@@ -115,7 +115,15 @@ class StoryboardManager:
         # 2. Prompt Generation (Narrative Logic)
         if chunk_index > 0 and text_encoder and last_frame_path:
              try:
-                 new_prompt = await self.generate_narrative_prompt(text_encoder, last_frame_path)
+                 # Fetch previous prompt if available
+                 prev_prompt = None
+                 if chunk_index > 0:
+                     # Attempt to find chunk_index - 1
+                     prev_meta = next((c for c in self.state.generated_chunks if c.chunk_index == chunk_index - 1), None)
+                     if prev_meta:
+                         prev_prompt = prev_meta.prompt_used
+
+                 new_prompt = await self.generate_narrative_prompt(text_encoder, last_frame_path, previous_prompt=prev_prompt)
                  if new_prompt:
                      chunk_config["prompt"] = new_prompt
              except Exception as e:
@@ -125,7 +133,7 @@ class StoryboardManager:
 
         return chunk_config
 
-    async def generate_narrative_prompt(self, text_encoder, image_path: str) -> str:
+    async def generate_narrative_prompt(self, text_encoder, image_path: str, previous_prompt: str = None) -> str:
         """
         Uses the provided text_encoder (Gemma) to generate a narratively consistent prompt
         based on the global goal and the last frame context.
@@ -136,36 +144,38 @@ class StoryboardManager:
         # We include previous context if available
         context_str = f" Previous context: {self.state.current_context}" if self.state.current_context else ""
         
+        # New Strategy: Explicitly separate Global Goal from Context to prevent drift.
+        # The Model must know that the Global Goal is the primary directive.
+        
         director_prompt = (
-            f"You are a director. Global Story Goal: {self.state.global_prompt}.{context_str} "
-            f"Task: Describe the next 4 seconds of video starting from the attached image. "
-            f"Focus on continuing the action and narrative logic seamlessly."
+            f"Global Story Goal (PRIMARY): {self.state.global_prompt}. "
+            f"Previous Shot Prompt: {previous_prompt if previous_prompt else 'None (Start)'}. "
+            f"Immediate Context: {self.state.current_context} "
+            f"Task: Write a prompt for the NEXT 4 seconds of video. "
+            f"The action MUST advance the Global Story Goal while maintaining continuity with the Previous Shot."
         )
         
         logger.info(f"Generating narrative prompt with Director instruction: {director_prompt}")
         
-        # Run inference (synchronously usually, but wrapped if needed)
-        # generate_enhanced_prompt is blocking, so maybe we should run in executor if heavy?
-        # But here we are just calling it.
         # Define the specialized Director System Prompt for LTX-2
-        # Based on LTX-2 best practices: Detailed, chronological, specific lighting/camera/action.
+        # Enhanced to be stricter about Goal Adherence.
         director_system_prompt = (
             "You are a visionary Film Director and Cinematographer. Your goal is to continue the narrative flow of a video scene.\n"
-            "You will be given the last frame of the previous shot and a global story goal.\n"
-            "TASK: Describe the next 4 seconds of video action. The transition must be seamless.\n"
+            "You will be given the Global Story Goal (which you must adhere to) and the immediate context (last frame description).\n"
+            "TASK: Describe the next 4 seconds of video action. The transition must be seamless but FOCUSED on the Global Goal.\n"
             "GUIDELINES:\n"
             "- Analyze the visual context of the input image (characters, clothing, lighting, background).\n"
             "- Describe the ACTION that happens next. Do not just describe the static image.\n"
+            "- CRITICAL: Do not drift from the Global Story Goal. If the context has drifted, steer it back.\n"
             "- Maintain character identity and visual consistency.\n"
             "- CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right', 'handheld', 'static').\n"
             "- LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting', 'soft morning light', 'neon rim light').\n"
-            "- AUDIO: Include a description of the soundscape (ambient sounds, Foley, dialogue if applicable) integrated into the narrative.\n"
+            "- AUDIO: Include a description of the soundscape (ambient sounds, Foley, dialogue if applicable).\n"
             "- Output ONLY the prompt for the next shot. Single paragraph, chronological flow. No polite conversation."
         )
         
-        # We pass the Story Goal as the "User Prompt" so the model knows WHAT to film.
-        # The system prompt tells it HOW to film it (continuation).
-        user_plot_prompt = f"Global Story Goal: {self.state.global_prompt}. {context_str}"
+        # We pass the formatted input as the "User Prompt"
+        user_plot_prompt = director_prompt
 
         try:
             enhanced_prompt = generate_enhanced_prompt(
