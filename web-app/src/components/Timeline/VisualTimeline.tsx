@@ -233,7 +233,18 @@ export const VisualTimeline = () => {
                                             <div className="absolute inset-0 overflow-hidden rounded-md bg-zinc-900">
                                                 {/* Clip Content */}
                                                 {clip.thumbnail ? (
-                                                    <img src={clip.thumbnail} className="w-full h-full object-cover opacity-80 pointer-events-none" alt="" />
+                                                    <img
+                                                        src={clip.thumbnail}
+                                                        className="w-full h-full object-cover opacity-80 pointer-events-none"
+                                                        alt=""
+                                                        onError={(e) => {
+                                                            console.warn("Thumbnail load failed:", clip.thumbnail);
+                                                            // e.currentTarget.style.display = 'none'; // Don't hide completely, maybe show placeholder?
+                                                            // Fallback to clear
+                                                            e.currentTarget.style.opacity = '0';
+                                                        }}
+                                                        onLoad={() => console.log("Thumbnail loaded:", clip.thumbnail)}
+                                                    />
                                                 ) : clip.shot.videoUrl ? (
                                                     <video src={clip.shot.videoUrl} className="w-full h-full object-cover opacity-60 pointer-events-none" />
                                                 ) : (

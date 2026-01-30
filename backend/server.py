@@ -529,25 +529,29 @@ async def get_project(project_id: str):
             if shot_id not in current_shot_ids:
                 logger.info(f"[Hydration] RESTORING missing shot {shot_id} from Job {job.id}")
                 
-                # Reconstruct Shot Object
+                # Reconstruct Shot Object (snake_case for DB/Frontend)
                 reconstructed_shot = {
                     "id": shot_id,
                     "prompt": job.prompt or "Recovered Shot",
-                    "negativePrompt": "", # Lost if not in Job, but minor
+                    "negative_prompt": "", 
                     "seed": params.get("seed", 42),
                     "width": params.get("width", project.resolution_w),
                     "height": params.get("height", project.resolution_h),
-                    "numFrames": job.actual_frames or params.get("num_frames", 121),
-                    # "fps": params.get("fps", project.fps), # Let frontend inherit
-                    "timeline": [], # Conditioning lost? Or in params?
-                    "cfgScale": params.get("cfg_scale", 3.0),
-                    "enhancePrompt": True,
+                    "num_frames": job.actual_frames or params.get("num_frames", 121),
+                    # "fps": params.get("fps", project.fps), 
+                    "timeline": [], 
+                    "cfg_scale": params.get("cfg_scale", 3.0),
+                    "enhance_prompt": True,
                     "upscale": True,
-                    "pipelineOverride": "auto",
-                    "lastJobId": job.id,
-                    "videoUrl": f"/generated/{os.path.basename(job.output_path)}",
-                    "thumbnailUrl": job.thumbnail_path, # DB Truth
-                    "enhancedPromptResult": job.enhanced_prompt
+                    "pipeline_override": "auto",
+                    "last_job_id": job.id,
+                    # We send relative path in URL, frontend handles full URL conversion? 
+                    # Actually job.output_path in DB is usually /generated/....mp4 (absolute string but relative to domain)
+                    # Frontend expects snake_case keys.
+                    # video_url is not strictly needed if last_job_id is present, but good for cache.
+                    # "video_url": ...
+                    "thumbnail_url": job.thumbnail_path, 
+                    "enhanced_prompt_result": job.enhanced_prompt
                 }
                 
                 # Add to project
@@ -557,7 +561,50 @@ async def get_project(project_id: str):
             else:
                  logger.info(f"[Hydration] Skip {shot_id}, already exists.")
         
-        if shots_restored:
+        # --- SYNC EXISTING SHOTS (Update Metadata from Job Truth) ---
+        shots_updated = False
+        job_map = {j.id: j for j in completed_jobs}
+        
+        # We must use a separate list or careful iteration if we plan to modify
+        for i, shot in enumerate(project.shots):
+             matched_job = None
+             # Check snake_case keys first (DB format)
+             if shot.get("last_job_id") and shot["last_job_id"] in job_map:
+                 matched_job = job_map[shot["last_job_id"]]
+             elif shot.get("id") in job_map:
+                 matched_job = job_map[shot["id"]]
+             
+             if matched_job:
+                 changes = False
+                 # Sync Thumbnail
+                 if matched_job.thumbnail_path and shot.get("thumbnail_url") != matched_job.thumbnail_path:
+                     shot["thumbnail_url"] = matched_job.thumbnail_path
+                     changes = True
+                 
+                 # Sync Frames
+                 if matched_job.actual_frames and shot.get("num_frames") != matched_job.actual_frames:
+                     shot["num_frames"] = matched_job.actual_frames
+                     changes = True
+                 
+                 # Sync Video URL (if we store it in DB shots)
+                 # Frontend usually generates it from last_job_id, but if we store explicit video_url:
+                 # It's usually not stored in DB shots by default unless we saved it.
+                 # But let's actally NOT force video_url if it's dynamic.
+                 # Wait, if we are restoring, we probably want to ensure it's playable.
+                 # But frontend `loadProject` does `videoUrl: s.last_job_id ? getAssetUrl(...) : undefined`.
+                 # So `last_job_id` is the key.
+                 
+                 # Sync enhanced prompt
+                 if matched_job.enhanced_prompt and shot.get("enhanced_prompt_result") != matched_job.enhanced_prompt:
+                     shot["enhanced_prompt_result"] = matched_job.enhanced_prompt
+                     changes = True
+                 
+                 if changes:
+                     project.shots[i] = shot
+                     shots_updated = True
+                     logger.info(f"[Hydration] Synced shot {shot.get('id')} with latest Job data (snake_case)")
+
+        if shots_restored or shots_updated:
             # Persist immediately so it sticks
             # Re-assign to trigger SQLModel/SQLAlchemy change detection for JSON column
             project.shots = list(project.shots) 

@@ -1,4 +1,5 @@
 import { useTimelineStore } from '../stores/timelineStore';
+import { getAssetUrl } from '../config';
 
 export const pollJobStatus = async (jobId: string, shotId: string) => {
     const poll = async () => {
@@ -12,10 +13,10 @@ export const pollJobStatus = async (jobId: string, shotId: string) => {
             if (statusData.status === 'completed') {
                 const updates: any = {
                     isGenerating: false,
-                    videoUrl: statusData.video_url,
+                    videoUrl: getAssetUrl(statusData.video_url),
                     progress: 100,
                     enhancedPromptResult: statusData.enhanced_prompt,
-                    thumbnailUrl: statusData.thumbnail_url
+                    thumbnailUrl: getAssetUrl(statusData.thumbnail_url)
                 };
 
                 if (statusData.actual_frames) {

@@ -30,7 +30,9 @@ const ShotBlock = ({ shot, isSelected, onSelect }: { shot: Shot, isSelected: boo
             )}
 
             {/* Content Preview (Thumbnail if available, or placeholder) */}
-            {shot.videoUrl ? (
+            {shot.thumbnailUrl ? (
+                <img src={shot.thumbnailUrl} className="w-full h-full object-cover opacity-80" alt="" />
+            ) : shot.videoUrl ? (
                 <video src={shot.videoUrl} className="w-full h-full object-cover opacity-60" muted />
             ) : (
                 <div className="w-full h-full flex items-center justify-center text-xs text-white/30 font-mono p-2 text-center">

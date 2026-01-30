@@ -124,6 +124,8 @@ const DEFAULT_PROJECT: Project = {
 
 const DEFAULT_NEGATIVE_PROMPT = "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless";
 
+import { getAssetUrl } from '../config';
+
 export const useTimelineStore = create<TimelineState>()(
     temporal(
         persist(
@@ -278,10 +280,11 @@ export const useTimelineStore = create<TimelineState>()(
                                 timeline: s.timeline.map(t => ({
                                     type: t.type,
                                     path: t.path,
-                                    frame_index: t.frameIndex,
+                                    frameIndex: t.frameIndex,
                                     strength: t.strength
                                 })),
-                                last_job_id: s.lastJobId
+                                last_job_id: s.lastJobId,
+                                thumbnail_url: s.thumbnailUrl
                             }))
                         };
 
@@ -378,7 +381,8 @@ export const useTimelineStore = create<TimelineState>()(
                                     strength: t.strength
                                 })),
                                 lastJobId: s.last_job_id,
-                                videoUrl: s.last_job_id ? `http://localhost:8000/generated/${s.last_job_id}.mp4` : undefined
+                                videoUrl: s.last_job_id ? getAssetUrl(`/generated/${s.last_job_id}.mp4`) : undefined,
+                                thumbnailUrl: getAssetUrl(s.thumbnail_url)
                             }))
                         };
 

@@ -3,6 +3,7 @@ import { useTimelineStore } from '../../stores/timelineStore';
 import type { ConditioningItem } from '../../stores/timelineStore';
 import { Upload, Image as ImageIcon, Film, Plus, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { getAssetUrl } from '../../config';
 
 interface Asset {
     id: string;
@@ -36,11 +37,11 @@ export const MediaLibrary = () => {
 
             const newAsset: Asset = {
                 id: data.asset_id,
-                url: `http://localhost:8000${data.url}`,
+                url: getAssetUrl(data.url) || data.url,
                 path: data.access_path,
                 type: data.type,
                 filename: data.filename,
-                thumbnail: data.thumbnail ? `http://localhost:8000${data.thumbnail}` : null
+                thumbnail: getAssetUrl(data.thumbnail)
             };
 
             setAssets(prev => [newAsset, ...prev]);
@@ -77,10 +78,8 @@ export const MediaLibrary = () => {
             const data = await res.json();
             const mapped = data.map((a: any) => ({
                 ...a,
-                url: a.url.startsWith('http') ? a.url : `http://localhost:8000${a.url}`,
-                thumbnail: a.thumbnail && !a.thumbnail.startsWith('http')
-                    ? `http://localhost:8000${a.thumbnail}`
-                    : a.thumbnail
+                url: getAssetUrl(a.url),
+                thumbnail: getAssetUrl(a.thumbnail)
             }));
             setAssets(mapped);
         } catch (e) { console.error(e); }
