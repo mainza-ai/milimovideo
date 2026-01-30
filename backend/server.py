@@ -608,11 +608,22 @@ def get_status(job_id: str):
     with Session(engine) as session:
         job = session.get(Job, job_id)
         if job:
-            thumb_url = None
-            if job.output_path and os.path.exists(job.output_path):
-                 thumb_path = job.output_path.replace(".mp4", "_thumb.jpg")
-                 if os.path.exists(thumb_path):
-                     thumb_url = f"/generated/{os.path.basename(thumb_path)}"
+            thumb_url = job.thumbnail_path # Single Source of Truth from DB
+            
+            # Legacy Fallback (Migration Period)
+            if not thumb_url and job.output_path:
+                 # Only check FS if DB is empty (for old jobs)
+                 alt_thumb_path = job.output_path.replace(".mp4", "_thumb.jpg").replace(".mov", "_thumb.jpg")
+                 # Check if actually exists on disk? NO. 
+                 # We agreed on DB Truth. But for old jobs, we might need to check.
+                 # Let's keep a minimal check only for legacy.
+                 # Actually, better to just return None if not in DB to encourage migration?
+                 # No, user experience first.
+                 # If job.output_path is a URL like /generated/..., we need os path.
+                 filename = os.path.basename(job.output_path)
+                 fs_path = os.path.join(GENERATED_DIR, filename.replace(".mp4", "_thumb.jpg").replace(".mov", "_thumb.jpg"))
+                 if os.path.exists(fs_path):
+                     thumb_url = f"/generated/{os.path.basename(fs_path)}"
 
             return {
                 "job_id": job.id,

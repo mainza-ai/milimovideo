@@ -42,13 +42,14 @@ from datetime import datetime, timezone
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def update_job_db(job_id: str, status: str, output_path: str = None, error: str = None, enhanced_prompt: str = None, status_message: str = None, actual_frames: int = None):
+def update_job_db(job_id: str, status: str, output_path: str = None, error: str = None, enhanced_prompt: str = None, status_message: str = None, actual_frames: int = None, thumbnail_path: str = None):
     """Helper to update Job record in SQLite."""
     try:
         with Session(engine) as session:
             job = session.get(Job, job_id)
             if job:
                 job.status = status
+                job.params_json = job.params_json
                 if output_path: 
                     job.output_path = output_path
                 if error: 
@@ -59,12 +60,14 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
                     job.status_message = status_message
                 if actual_frames is not None:
                     job.actual_frames = actual_frames
+                if thumbnail_path:
+                    job.thumbnail_path = thumbnail_path
                 if status in ["completed", "failed", "cancelled"]:
                     job.completed_at = datetime.now(timezone.utc)
                 session.add(job)
                 session.commit()
     except Exception as e:
-        logger.error(f"Failed to update Job DB for {job_id}: {e}")
+        logger.error(f"Failed to update job DB for {job_id}: {e}")
 
 async def broadcast_log(job_id: str, message: str):
     logger.info(f"[{job_id}] {message}")
@@ -639,6 +642,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             logger.warning(f"Could not verify chained duration: {e}")
 
         # GENERATE THUMBNAIL (For Timeline UI)
+        thumbnail_web_path = None
         try:
             thumb_path = final_output_path.replace(".mp4", "_thumb.jpg")
             # Extract at 0.5s or 0s
@@ -646,16 +650,25 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 "ffmpeg", "-y", "-i", final_output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             logger.info(f"Generated thumbnail: {thumb_path}")
+            thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"
         except Exception as e:
             logger.warning(f"Failed to generate thumbnail: {e}")
 
-        update_job_db(job_id, "completed", output_path=f"/generated/{job_id}.mp4", actual_frames=actual_frames)
+        # Update DB with explicit thumbnail path (Source of Truth)
+        update_job_db(
+            job_id, 
+            "completed", 
+            output_path=f"/generated/{job_id}.mp4", 
+            actual_frames=actual_frames,
+            thumbnail_path=thumbnail_web_path
+        )
+        
         await event_manager.broadcast("complete", {
             "job_id": job_id, 
             "url": f"/generated/{job_id}.mp4", 
             "type": "video",
             "actual_frames": actual_frames,
-            "thumbnail_url": f"/generated/{job_id}_thumb.jpg" # Optimistic URL
+            "thumbnail_url": thumbnail_web_path
         })
         
     finally:
@@ -979,15 +992,36 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             except Exception as e:
                 logger.warning(f"Could not verify frame count: {e}")
 
-            update_job_db(job_id, "completed", output_path=f"/generated/{os.path.basename(output_path)}", actual_frames=actual_frames)
+            # GENERATE THUMBNAIL (Standard)
+            thumbnail_web_path = None
+            try:
+                thumb_path = output_path.replace(".mp4", "_thumb.jpg")
+                # Extract at 0.5s or 0s
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
+                ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                logger.info(f"Generated thumbnail: {thumb_path}")
+                thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"
+            except Exception as e:
+                logger.warning(f"Failed to generate thumbnail: {e}")
+
+            # Update DB with explicit thumbnail path
+            update_job_db(
+                job_id, 
+                "completed", 
+                output_path=f"/generated/{os.path.basename(output_path)}",
+                thumbnail_path=thumbnail_web_path,
+                actual_frames=actual_frames
+            )
+            
             await event_manager.broadcast("complete", {
                 "job_id": job_id, 
                 "url": f"/generated/{os.path.basename(output_path)}", 
                 "type": "video",
+                "thumbnail_url": thumbnail_web_path,
                 "actual_frames": actual_frames
             })
             logger.info(f"Video saved to {output_path}")
-            update_job_db(job_id, "completed", output_path=f"/generated/{os.path.basename(output_path)}")
 
 async def generate_video_task(job_id: str, params: dict):
     logger.info(f"Starting generation for job {job_id}")

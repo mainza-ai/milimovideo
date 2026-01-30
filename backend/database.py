@@ -50,6 +50,7 @@ class Job(SQLModel, table=True):
     enhanced_prompt: Optional[str] = None
     status_message: Optional[str] = None
     actual_frames: Optional[int] = None
+    thumbnail_path: Optional[str] = None
 
 # Database Setup
 DATABASE_URL = "sqlite:///./milimovideo.db"
