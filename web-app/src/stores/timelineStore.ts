@@ -34,6 +34,7 @@ export interface Shot {
     // Result
     lastJobId?: string;
     videoUrl?: string; // Derived from jobID
+    thumbnailUrl?: string; // Static Preview
     enhancedPromptResult?: string; // Result from backend
     statusMessage?: string; // Real-time status text
     currentPrompt?: string; // Live evolving prompt during generation

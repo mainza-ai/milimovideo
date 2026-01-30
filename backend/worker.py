@@ -36,7 +36,7 @@ except ImportError:
 from events import event_manager
 from database import engine, Job
 from sqlmodel import Session
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Configure simple logging
 logging.basicConfig(level=logging.INFO)
@@ -60,7 +60,7 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
                 if actual_frames is not None:
                     job.actual_frames = actual_frames
                 if status in ["completed", "failed", "cancelled"]:
-                    job.completed_at = datetime.utcnow()
+                    job.completed_at = datetime.now(timezone.utc)
                 session.add(job)
                 session.commit()
     except Exception as e:
@@ -617,26 +617,45 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             subprocess.run(cmd_v, cwd=output_dir, check=True)
             logger.info(f"Stitched video (video-only) saved to {final_output_path}")
         
-        # Detect actual frame count to sync UI for Chained Generation
+        # Detect actual frame count (DURATION PROBE) to sync UI for Chained Generation
         actual_frames = desired_total_frames
         try:
-            # Probe the file
-            cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", final_output_path]
+            # Probe the file DURATION (more accurate for player sync than packet count)
+            # -show_entries format=duration
+            cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", final_output_path]
             res = subprocess.check_output(cmd).decode("utf-8").strip()
-            if res and res.isdigit():
-                actual_frames = int(res)
-                logger.info(f"Verified actual frame count for chained video: {actual_frames}")
+            
+            if res:
+                duration_sec = float(res)
+                fps = float(params.get("fps", 25.0))
+                actual_frames_calc = int(round(duration_sec * fps))
+                
+                logger.info(f"Verified actual duration: {duration_sec}s -> {actual_frames_calc} frames (UI Sync)")
+                actual_frames = actual_frames_calc
+                
                 if job_id in active_jobs:
                     active_jobs[job_id]["actual_frames"] = actual_frames
         except Exception as e:
-            logger.warning(f"Could not verify chained frame count: {e}")
+            logger.warning(f"Could not verify chained duration: {e}")
+
+        # GENERATE THUMBNAIL (For Timeline UI)
+        try:
+            thumb_path = final_output_path.replace(".mp4", "_thumb.jpg")
+            # Extract at 0.5s or 0s
+            subprocess.run([
+                "ffmpeg", "-y", "-i", final_output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            logger.info(f"Generated thumbnail: {thumb_path}")
+        except Exception as e:
+            logger.warning(f"Failed to generate thumbnail: {e}")
 
         update_job_db(job_id, "completed", output_path=f"/generated/{job_id}.mp4", actual_frames=actual_frames)
         await event_manager.broadcast("complete", {
             "job_id": job_id, 
             "url": f"/generated/{job_id}.mp4", 
             "type": "video",
-            "actual_frames": actual_frames
+            "actual_frames": actual_frames,
+            "thumbnail_url": f"/generated/{job_id}_thumb.jpg" # Optimistic URL
         })
         
     finally:

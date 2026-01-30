@@ -13,7 +13,7 @@ import uuid
 import json
 import logging
 from typing import List, Optional, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Logging
 # Logging
@@ -80,9 +80,9 @@ def sync_storage():
                 
                 # Try to use file creation time
                 try:
-                    ctime = datetime.fromtimestamp(os.path.getctime(path))
+                    ctime = datetime.fromtimestamp(os.path.getctime(path), tz=timezone.utc)
                 except:
-                    ctime = datetime.utcnow()
+                    ctime = datetime.now(timezone.utc)
                     
                 asset = Asset(
                     id=filename.split(".")[0], # Best guess ID
@@ -112,9 +112,9 @@ def sync_storage():
             if not exists:
                 # Create a legacy job record
                 try:
-                    ctime = datetime.fromtimestamp(os.path.getctime(path))
+                    ctime = datetime.fromtimestamp(os.path.getctime(path), tz=timezone.utc)
                 except:
-                    ctime = datetime.utcnow()
+                    ctime = datetime.now(timezone.utc)
                 
                 job = Job(
                     id=job_id,
@@ -249,7 +249,7 @@ async def upload_asset(file: UploadFile = File(...)):
             path=file_path,
             url=f"/uploads/{filename}",
             filename=file.filename,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc)
         )
         session.add(asset)
         session.commit()
@@ -402,7 +402,7 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
             project_id=req.project_id,
             type="advanced",
             status="pending",
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(timezone.utc),
             prompt=req.shot_config.prompt,
             params_json=json.dumps(params)
         )
@@ -428,8 +428,8 @@ async def create_project(request: CreateProjectRequest):
             resolution_h=request.resolution_h,
             fps=request.fps,
             seed=request.seed,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
         )
         session.add(db_project)
         session.commit()
@@ -534,7 +534,7 @@ async def save_project(project_id: str, state: ProjectState):
         db_project.fps = state.fps
         db_project.seed = state.seed
         
-        db_project.updated_at = datetime.utcnow()
+        db_project.updated_at = datetime.now(timezone.utc)
         
         session.add(db_project)
         session.commit()
@@ -608,6 +608,12 @@ def get_status(job_id: str):
     with Session(engine) as session:
         job = session.get(Job, job_id)
         if job:
+            thumb_url = None
+            if job.output_path and os.path.exists(job.output_path):
+                 thumb_path = job.output_path.replace(".mp4", "_thumb.jpg")
+                 if os.path.exists(thumb_path):
+                     thumb_url = f"/generated/{os.path.basename(thumb_path)}"
+
             return {
                 "job_id": job.id,
                 "status": job.status,
@@ -615,6 +621,7 @@ def get_status(job_id: str):
                 "video_url": f"/generated/{os.path.basename(job.output_path)}" if job.output_path else None,
                 # For compatibility, mirror video_url to url
                 "url": f"/generated/{os.path.basename(job.output_path)}" if job.output_path else None,
+                "thumbnail_url": thumb_url,
                 "error": job.error_message,
                 "enhanced_prompt": job.enhanced_prompt,
                 "status_message": job.status_message,

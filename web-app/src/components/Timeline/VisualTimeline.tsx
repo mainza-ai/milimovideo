@@ -32,7 +32,7 @@ export const VisualTimeline = () => {
                 duration: duration,
                 track: 0,
                 name: shot.prompt || 'Untitled Shot',
-                thumbnail: shot.videoUrl,
+                thumbnail: shot.thumbnailUrl, // Use static thumbnail if available
                 shot: shot // Keep ref
             };
             currentTime += duration;
@@ -230,10 +230,12 @@ export const VisualTimeline = () => {
                                             whileDrag={{ scale: 1.02, zIndex: 100, boxShadow: "0 10px 20px rgba(0,0,0,0.5)" }}
                                         >
                                             {/* Clip Content (Masked) */}
-                                            <div className="absolute inset-0 overflow-hidden rounded-md">
+                                            <div className="absolute inset-0 overflow-hidden rounded-md bg-zinc-900">
                                                 {/* Clip Content */}
                                                 {clip.thumbnail ? (
-                                                    <video src={clip.thumbnail} className="w-full h-full object-cover opacity-60 pointer-events-none" />
+                                                    <img src={clip.thumbnail} className="w-full h-full object-cover opacity-80 pointer-events-none" alt="" />
+                                                ) : clip.shot.videoUrl ? (
+                                                    <video src={clip.shot.videoUrl} className="w-full h-full object-cover opacity-60 pointer-events-none" />
                                                 ) : (
                                                     <div className="w-full h-full bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center">
                                                         <span className="text-[10px] text-white/30 truncate px-2">{clip.name}</span>
