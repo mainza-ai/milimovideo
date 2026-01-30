@@ -103,7 +103,7 @@ const DEFAULT_PROJECT: Project = {
         {
             id: 'shot-init', // Static ID for init
             prompt: "A cinematic shot...",
-            negativePrompt: "low quality, blurry",
+            negativePrompt: "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless",
             seed: 42,
             width: 768,
             height: 512,
@@ -122,12 +122,22 @@ const DEFAULT_PROJECT: Project = {
     seed: 42
 };
 
+const DEFAULT_NEGATIVE_PROMPT = "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless";
+
 export const useTimelineStore = create<TimelineState>()(
     temporal(
         persist(
             (set, get) => ({
                 // ... (store implementation remains the same, just wrapped)
-                project: DEFAULT_PROJECT,
+                project: {
+                    ...DEFAULT_PROJECT,
+                    shots: [
+                        {
+                            ...DEFAULT_PROJECT.shots[0],
+                            negativePrompt: DEFAULT_NEGATIVE_PROMPT
+                        }
+                    ]
+                },
                 selectedShotId: 'shot-init', // Select by default
                 currentTime: 0,
                 isPlaying: false,
@@ -148,7 +158,7 @@ export const useTimelineStore = create<TimelineState>()(
                     const newShot: Shot = {
                         id: uuidv4(),
                         prompt: "A cinematic shot...",
-                        negativePrompt: "low quality, blurry",
+                        negativePrompt: DEFAULT_NEGATIVE_PROMPT,
                         seed: state.project.seed,
                         width: state.project.resolutionW,
                         height: state.project.resolutionH,

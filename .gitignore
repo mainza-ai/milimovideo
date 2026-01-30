@@ -26,6 +26,7 @@ backend/uploads/
 backend/*.log
 backend/*.txt
 backend/server_last_request.json
+backend/projects/
 
 # Project Plans & Private Docs
 mv_plan/
