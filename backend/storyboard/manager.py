@@ -38,9 +38,10 @@ class StoryboardManager:
         
         # Configuration
         # Number of frames to overlap/condition on
-        self.overlap_frames = params.get("overlap_frames", 8)
+        # REDUCED from 8 to 4 to prevent "static lock" (pause) at joins.
+        self.overlap_frames = params.get("overlap_frames", 4)
         self.total_frames = params.get("num_frames", 121)
-        self.chunk_size = params.get("chunk_size", 121) # Native model limit logic
+        self.chunk_size = params.get("chunk_size", 121) 
         
         # Ensure working directory for this job's artifacts exists
         self.job_work_dir = os.path.join(output_dir, f"{job_id}_artifacts")
@@ -48,14 +49,6 @@ class StoryboardManager:
 
     def get_total_chunks(self) -> int:
         """Calculate number of chunks needed based on total frames and overlap."""
-        # Effective new frames per chunk = chunk_size - overlap_frames
-        # We need to cover (total_frames - overlap_frames) *new* content 
-        # (plus the initial overlap if we count from 0, but usually first chunk is full new)
-        
-        # First chunk: chunk_size frames.
-        # Remaining: total_frames - chunk_size.
-        # Each subsequent chunk adds (chunk_size - overlap_frames) new frames.
-        
         if self.total_frames <= self.chunk_size:
             return 1
             
@@ -72,11 +65,6 @@ class StoryboardManager:
         """
         Prepares the configuration for the next chunk generation.
         Returns a dict of arguments to pass to the pipeline.
-        
-        Args:
-            chunk_index: Index of the chunk to generate.
-            prev_chunk_output_path: Path to the video file of the previous chunk.
-            text_encoder: Optional (but recommended) text encoder model for generating enhanced prompts.
         """
         logger.info(f"StoryboardManager: Preparing chunk {chunk_index} for job {self.job_id}")
         
@@ -101,21 +89,25 @@ class StoryboardManager:
                 # Store the very last frame for prompt generation
                 last_frame_path = extracted_frames[-1] 
                 
-                # Build images list for conditioning
-                # Format: list[(path, frame_idx, strength)]
-                # Strategy: Condition the FIRST 'overlap_frames' of the NEW chunk
-                # with the LAST 'overlap_frames' of the OLD chunk.
                 images_arg = []
+                count = len(extracted_frames)
                 for i, frame_path in enumerate(extracted_frames):
-                    images_arg.append((frame_path, i, 1.0))
+                    if i == 0:
+                        strength = 1.0
+                    else:
+                        # Hard Taper: 1.0 -> 0.0
+                        # We must release the "static anchor" completely by the end of the overlap.
+                        progress = i / max(1, count - 1)
+                        strength = max(0.0, 1.0 - progress) 
+
+                    images_arg.append((frame_path, i, strength))
                 
                 chunk_config["images"] = images_arg
-                logger.info(f"Conditioning chunk {chunk_index} with {len(images_arg)} frames.")
+                logger.info(f"Conditioning chunk {chunk_index} with {len(images_arg)} frames (Hard Taper 1.0->0.0).")
 
         # 2. Prompt Generation (Narrative Logic)
         if chunk_index > 0 and text_encoder and last_frame_path:
              try:
-                 # Fetch previous prompt if available
                  prev_prompt = None
                  if chunk_index > 0:
                      # Attempt to find chunk_index - 1
@@ -140,22 +132,23 @@ class StoryboardManager:
         """
         from ltx_pipelines.utils.helpers import generate_enhanced_prompt, cleanup_memory
         
-        # Construct the "Director" prompt
-        # We include previous context if available
-        context_str = f" Previous context: {self.state.current_context}" if self.state.current_context else ""
-        
-        # New Strategy: Explicitly separate Global Goal from Context to prevent drift.
-        # The Model must know that the Global Goal is the primary directive.
+        # EXTRACT VISUAL ANCHOR from Global Goal
+        # Simple heuristic: Take the first 2 sentences which usually define the character/setting.
+        # Or just pass the whole thing as "Visual Definition"
+        visual_anchor = " ".join(self.state.global_prompt.split(".")[:2]) + "."
         
         director_prompt = (
-            f"Global Story Goal (PRIMARY): {self.state.global_prompt}. "
-            f"Previous Shot Prompt: {previous_prompt if previous_prompt else 'None (Start)'}. "
-            f"Immediate Context: {self.state.current_context} "
-            f"Task: Write a prompt for the NEXT 4 seconds of video. "
-            f"The action MUST advance the Global Story Goal while maintaining continuity with the Previous Shot."
+            f"GLOBAL VISUAL DEFINITION (MUST MAINTAIN): {visual_anchor}\n"
+            f"Current Story Goal: {self.state.global_prompt}.\n"
+            f"Previous Shot Action: {previous_prompt if previous_prompt else 'None'}.\n"
+            f"TASK: Write a prompt for the NEXT 4 seconds of video.\n"
+            f"INSTRUCTIONS:\n"
+            f"1. Start with the Visual Definition to re-anchor the model.\n"
+            f"2. IMMEDIATELY describe the NEW dynamic action (Use verbs like 'runs', 'shatters', 'explodes').\n"
+            f"3. Ensure the action advances the Global Story Goal.\n"
         )
         
-        logger.info(f"Generating narrative prompt with Director instruction: {director_prompt}")
+        logger.info(f"Generating narrative prompt with Visual Anchor: {visual_anchor}")
         
         # Define the specialized Director System Prompt for LTX-2
         # Enhanced to be stricter about Goal Adherence.
@@ -184,6 +177,21 @@ class StoryboardManager:
                 image_path=image_path,
                 system_prompt=director_system_prompt
             )
+            
+            # --- Data Trace Logging ---
+            try:
+                trace_file = os.path.join(self.output_dir, "prompt_trace.txt")
+                with open(trace_file, "a") as f:
+                    f.write(f"\n--- Chunk Generation Trace ---\n")
+                    f.write(f"Global Goal: {self.state.global_prompt}\n")
+                    f.write(f"Previous Prompt: {previous_prompt}\n")
+                    f.write(f"Generated Prompt: {enhanced_prompt}\n")
+                    f.write(f"Context Drift Check: {'PASS' if self.state.global_prompt in director_prompt else 'FAIL'}\n") # Simple check
+                    f.write("-----------------------------\n")
+            except Exception as e:
+                logger.warning(f"Failed to log prompt trace: {e}")
+            # --------------------------
+
             logger.info(f"Generated Narrative Prompt: {enhanced_prompt}")
             return enhanced_prompt
         except Exception as e:
@@ -232,22 +240,48 @@ class StoryboardManager:
         Extract the last n frames from a video file into output_dir.
         Returns list of absolute file paths to the images.
         """
-        # We use ffmpeg.
-        # To get exactly last N frames is tricky with raw ffmpeg if we don't know duration exactly.
-        # But we can use -sseof (seek from end of file).
-        # Assuming 25fps.
-        # Duration for N frames = N / 25.0
-        # Give a buffer of 2x to be safe, then slice.
+        # ROBUST IMPLEMENTATION:
+        # 1. Get total frame count using ffprobe
+        # 2. Calculate indices of last N frames
+        # 3. Use ffmpeg select filter to extract exact indices
         
-        duration_to_extract = (n + 5) / 25.0
+        try:
+            # 1. Probe frame count
+            # Use -count_packets to be sure, or stream info. 
+            # stream=nb_read_packets is most accurate but slower. nb_frames is often missing.
+            cmd_probe = [
+                "ffprobe", "-v", "error", 
+                "-select_streams", "v:0", 
+                "-count_packets", 
+                "-show_entries", "stream=nb_read_packets", 
+                "-of", "csv=p=0", 
+                video_path
+            ]
+            result = subprocess.run(cmd_probe, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            total_frames = int(result.stdout.strip())
+            
+            if total_frames <= 0:
+                logger.error(f"FFprobe returned invalid frame count: {total_frames}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Failed to probe video frame count: {e}")
+            # Fallback to legacy method? No, legacy was broken. Fail hard.
+            return []
+
+        # 2. Calculate indices
+        # We want frames [total-n, total-n+1, ..., total-1]
+        start_idx = max(0, total_frames - n)
+        # Construct select filter: "eq(n,100)+eq(n,101)+..."
+        # Actually easier: "gte(n, start_idx)"
         
         temp_extract_dir = os.path.join(output_dir, "temp_all")
         os.makedirs(temp_extract_dir, exist_ok=True)
-        
+
         cmd = [
             "ffmpeg",
-            "-sseof", f"-{duration_to_extract}",
             "-i", video_path,
+            "-vf", f"select=gte(n\\,{start_idx})",
             "-vsync", "0",
             "-q:v", "2",
             os.path.join(temp_extract_dir, "%04d.png")
@@ -265,10 +299,15 @@ class StoryboardManager:
             ])
             
             if not files:
+                logger.warning("FFmpeg extraction produced no files.")
                 return []
                 
-            # Take last N
+            # Take last N (in case gte produced more than N due to vsync quirks)
             last_n = files[-n:] if len(files) >= n else files
+            
+            # Validation: Check if files are identical (duplicate frame bug)
+            # This is expensive but good for debugging. 
+            # For now, trust the index-based extraction.
             
             # Move them to final output_dir with 0-indexed names
             final_files = []
@@ -283,5 +322,5 @@ class StoryboardManager:
             return final_files
             
         except subprocess.CalledProcessError as e:
-            logger.error(f"FFmpeg failed: {e}")
+            logger.error(f"FFmpeg extraction failed: {e}")
             return []

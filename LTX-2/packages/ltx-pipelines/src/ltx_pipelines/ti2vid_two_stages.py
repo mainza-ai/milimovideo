@@ -81,7 +81,7 @@ class TI2VidTwoStagesPipeline:
         )
 
     @smart_inference_mode()
-    def __call__(  # noqa: PLR0913
+    def __call__(
         self,
         prompt: str,
         negative_prompt: str,
@@ -93,11 +93,14 @@ class TI2VidTwoStagesPipeline:
         num_inference_steps: int,
         cfg_guidance_scale: float,
         images: list[tuple[str, int, float]],
+        previous_latent_tensor: torch.Tensor | None = None, # New: Latent Handoff
         tiling_config: TilingConfig | None = None,
         enhance_prompt: bool = False,
         callback_on_step_end: Callable | None = None,
-    ) -> tuple[Iterator[torch.Tensor], torch.Tensor]:
+    ) -> tuple[Iterator[torch.Tensor], torch.Tensor, LatentState]:
         assert_resolution(height=height, width=width, is_two_stage=True)
+        # ... (setup code skipped, see diff) ...
+        # (imports inside function to avoid circular dep if needed, or assume global)
 
         generator = torch.Generator(device=self.device).manual_seed(seed)
         noiser = GaussianNoiser(generator=generator)
@@ -106,6 +109,9 @@ class TI2VidTwoStagesPipeline:
         dtype = torch.bfloat16
 
         text_encoder = self.stage_1_model_ledger.text_encoder()
+        if enhance_prompt:
+             # ... prompt enhance ...
+             pass # kept existing logic
         if enhance_prompt:
             prompt = generate_enhanced_prompt(
                 text_encoder, prompt, images[0][0] if len(images) > 0 else None, seed=seed
@@ -141,7 +147,7 @@ class TI2VidTwoStagesPipeline:
                     v_context_n,
                     a_context_p,
                     a_context_n,
-                    transformer=transformer,  # noqa: F821
+                    transformer=transformer,
                 ),
                 callback_on_step_end=callback_on_step_end,
             )
@@ -153,6 +159,8 @@ class TI2VidTwoStagesPipeline:
             height=height // 2,
             fps=frame_rate,
         )
+        
+        # CONDITIONING PREP
         stage_1_conditionings = image_conditionings_by_replacing_latent(
             images=images,
             height=stage_1_output_shape.height,
@@ -161,6 +169,55 @@ class TI2VidTwoStagesPipeline:
             dtype=dtype,
             device=self.device,
         )
+        
+        # LATENT HANDOFF (Stage 1 Downsample)
+        if previous_latent_tensor is not None:
+            # previous_latent_tensor is Stage 2 (Full Res). 
+            # We must downsample for Stage 1.
+            # Shape: [1, C, F, H, W]
+            s1_lat = torch.nn.functional.interpolate(
+                previous_latent_tensor, 
+                scale_factor=(1.0, 0.5, 0.5), # Scale only H,W. Keep F same (unless frame rate change? assume no)
+                mode='trilinear',
+                align_corners=False
+            ).to(dtype=dtype)
+            
+            # Create conditioning items. 
+            # Note: Taper strength is handled by the caller via updating 'images' logic?
+            # Wait, 'images' logic has the strength taper.
+            # We are replacing the *source* of the conditioning, but we want to respect the *overlap/strength* logic.
+            # BUT 'images' list has (path, idx, strength). 
+            # 'previous_latent_tensor' is just a raw tensor.
+            # Assumption: Caller passes `previous_latent_tensor` containing ONLY the overlap frames.
+            # If so, we assume strength=1.0? 
+            # No, we need the strength curve.
+            # Simpler: We assume that if `previous_latent_tensor` is passed, `images` list is EMPTY or unused for those frames?
+            # Actually, the user is passing `images` list with file paths. 
+            # We should probably intercept: "If we have a latent for frame I, use it. Else use image."
+            # OR for simplicity: Just ADD the latent conditioning. It overrides image conditioning if index matches?
+            # `state_with_conditionings` applies sequentially.
+            
+            # Let's assume strict usage: If Latent Handoff is used, we inject it.
+            # We need the strength...
+            # The strength is encoded in the `images` list.
+            # We can't easily extract it without parsing `images`.
+            # HACK: If Latent Handoff is on, we blindly apply it with strength=1.0? No, that freezes it.
+            # We need the taper.
+            # Let's use `latent_conditionings_from_tensor` but we need a custom wrapper to apply specific strengths per frame.
+            
+            # Since we can't change the `images` list easily, let's just use `latent_conditionings_from_tensor`
+            # and hardcode a default taper? Or assume the caller handles the masking?
+            # Wait, "Hard Taper" logic is in Manager.
+            # For now, let's just apply it as a BLOCK with `strength=1.0` (or whatever default)
+            # CAUTION: If we don't taper, we re-introduce the pause if stasis exists.
+            # BUT the whole point is that `previous_latent_tensor` HAS MOTION. So 1.0 is fine!
+            # The taper was needed because the *Image* was static.
+            # If the Latent has motion, we WANT to lock to it!
+            
+            from ltx_pipelines.utils.helpers import latent_conditionings_from_tensor
+            s1_items = latent_conditionings_from_tensor(s1_lat, start_frame_idx=0, strength=1.0)
+            stage_1_conditionings.extend(s1_items)
+
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_1_output_shape,
             conditionings=stage_1_conditionings,
@@ -178,7 +235,7 @@ class TI2VidTwoStagesPipeline:
         del transformer
         cleanup_memory()
 
-        # Stage 2: Upsample and refine the video at higher resolution with distilled LORA.
+        # Stage 2: Upsample
         upscaled_video_latent = upsample_video(
             latent=video_state.latent[:1],
             video_encoder=video_encoder,
@@ -212,6 +269,7 @@ class TI2VidTwoStagesPipeline:
             )
 
         stage_2_output_shape = VideoPixelShape(batch=1, frames=num_frames, width=width, height=height, fps=frame_rate)
+        
         stage_2_conditionings = image_conditionings_by_replacing_latent(
             images=images,
             height=stage_2_output_shape.height,
@@ -220,6 +278,14 @@ class TI2VidTwoStagesPipeline:
             dtype=dtype,
             device=self.device,
         )
+        
+        # LATENT HANDOFF (Stage 2 Direct)
+        if previous_latent_tensor is not None:
+            # Use directly
+            from ltx_pipelines.utils.helpers import latent_conditionings_from_tensor
+            s2_items = latent_conditionings_from_tensor(previous_latent_tensor, start_frame_idx=0, strength=1.0)
+            stage_2_conditionings.extend(s2_items)
+
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_2_output_shape,
             conditionings=stage_2_conditionings,
@@ -248,7 +314,8 @@ class TI2VidTwoStagesPipeline:
             audio_state.latent, self.stage_2_model_ledger.audio_decoder(), self.stage_2_model_ledger.vocoder()
         )
 
-        return decoded_video, decoded_audio
+        # Return LatentState for chaining
+        return decoded_video, decoded_audio, video_state.latent
 
 
 @smart_inference_mode()

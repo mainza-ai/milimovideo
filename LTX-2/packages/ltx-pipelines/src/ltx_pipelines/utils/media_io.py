@@ -199,6 +199,14 @@ def encode_video(
     stream.width = width
     stream.height = height
     stream.pix_fmt = "yuv420p"
+    
+    # Optimization for single-frame (Image Generation) or static video
+    # Although encode_single_frame handles pure images, sometimes the pipeline 
+    # runs a 1-frame "video" job. 
+    if video_chunks_number == 1 and fps <= 1:
+        stream.options = {"crf": "18", "preset": "veryslow"} # High quality for single image
+    else:
+        stream.options = {"crf": "23", "preset": "medium"} # Standard for video
 
     if audio is not None:
         if audio_sample_rate is None:

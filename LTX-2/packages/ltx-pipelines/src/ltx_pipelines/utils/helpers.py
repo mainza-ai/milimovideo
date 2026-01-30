@@ -6,8 +6,18 @@ from typing import Callable
 import torch
 from tqdm import tqdm
 
+from ltx_core.components.diffusion_steps import EulerDiffusionStep
+from ltx_core.components.protocols import (
+    DiffusionStepProtocol,
+    GuiderProtocol,
+)
+from ltx_pipelines.utils.types import (
+    DenoisingFunc,
+    DenoisingLoopFunc,
+    PipelineComponents,
+)
 from ltx_core.components.noisers import Noiser
-from ltx_core.components.protocols import DiffusionStepProtocol, GuiderProtocol
+from ltx_core.utils import to_denoised, to_velocity
 from ltx_core.conditioning import (
     ConditioningItem,
     VideoConditionByKeyframeIndex,
@@ -18,14 +28,44 @@ from ltx_core.model.video_vae import VideoEncoder
 from ltx_core.text_encoders.gemma import GemmaTextEncoderModelBase
 from ltx_core.tools import AudioLatentTools, LatentTools, VideoLatentTools
 from ltx_core.types import AudioLatentShape, LatentState, VideoLatentShape, VideoPixelShape
-from ltx_core.utils import to_denoised, to_velocity
-from ltx_pipelines.utils.media_io import decode_image, load_image_conditioning, resize_aspect_ratio_preserving
-from ltx_pipelines.utils.types import (
-    DenoisingFunc,
-    DenoisingLoopFunc,
-    PipelineComponents,
+from ltx_pipelines.utils.constants import DEFAULT_IMAGE_CRF
+from ltx_pipelines.utils.media_io import (
+    decode_image,
+    decode_video_from_file,
+    load_image_conditioning,
+    resize_and_center_crop,
+    resize_aspect_ratio_preserving,
 )
 
+
+
+def latent_conditionings_from_tensor(
+    latents: torch.Tensor,
+    start_frame_idx: int,
+    strength: float = 1.0,
+) -> list[ConditioningItem]:
+    """
+    Creates conditioning items from a latent tensor (e.g. from a previous chunk).
+    The tensor is sliced along the frame dimension if needed, or used as is.
+    Assumes latent shape [1, C, F, H, W].
+    """
+    conditionings = []
+    num_frames = latents.shape[2]
+    
+    # We iterate and create a conditioning for each frame in the latent tensor
+    # applying it to the corresponding target index (start_frame_idx + i)
+    for i in range(num_frames):
+        # Extract single frame latent: [1, C, 1, H, W]
+        single_latent = latents[:, :, i : i + 1, :, :]
+        
+        conditionings.append(
+            VideoConditionByLatentIndex(
+                latent=single_latent,
+                strength=strength,
+                latent_idx=start_frame_idx + i,
+            )
+        )
+    return conditionings
 
 
 def get_device() -> torch.device:
@@ -468,8 +508,14 @@ def clean_response(text: str) -> str:
     """Clean a response from curly quotes and leading non-letter characters which Gemma tends to insert."""
     text = text.translate(_UNICODE_REPLACEMENTS)
 
+    import re
     # Remove leading non-letter characters (like colons, quotes)
     cleaned_text = text.strip()
+    
+    # NEW: Aggressive Markdown Artifact Cleaning
+    # Removes **Next Shot Prompt:**, ## Prompt:, etc.
+    cleaned_text = re.sub(r'(?i)^\s*[\#\*]+\s*(Next Shot Prompt|Prompt|Response|Output)[:\*]*\s*', '', cleaned_text)
+    
     while cleaned_text and not cleaned_text[0].isalnum():
         cleaned_text = cleaned_text[1:].strip()
     text = cleaned_text

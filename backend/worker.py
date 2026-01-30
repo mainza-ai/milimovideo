@@ -11,6 +11,10 @@ import gc
 from typing import Optional, Any, Dict
 
 # Ensure LTX-2 packages are in path
+import os
+import sys
+import math
+import inspect # For generator check
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../LTX-2/packages/ltx-core/src")))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../LTX-2/packages/ltx-pipelines/src")))
 
@@ -238,6 +242,8 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
     last_chunk_output = None
     
     try:
+        last_chunk_latent = None
+        
         for chunk_idx in range(num_chunks):
             # Check for cancellation before starting chunk
             if active_jobs.get(job_id, {}).get("cancelled", False):
@@ -298,6 +304,53 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Extract params
             chunk_prompt = chunk_config.get("prompt", prompt)
             chunk_images = chunk_config.get("images", []) # list of (path, idx, strength)
+            overlap_count = 0
+
+            # PREPARE LATENT CONDITIONING for Handoff (QUANTUM ALIGNMENT FIX)
+            conditioning_latent_tensor = None
+            frames_to_trim = 0 # Track exact number of frames to trim later
+            
+            if last_chunk_latent is not None:
+                # LTX-2 Temporal Downsample Factor is 8.
+                # We typically interpret 'overlap' as pixel frames (e.g., 24).
+                # We must convert this to 'latent frames', but robustly.
+                # Formula: latent_slices = ceil((overlap_pixels - 1) / 8) + 1
+                # Example: 24 pixels -> ceil(23/8) + 1 = 3 + 1 = 4 latent slices.
+                
+                requested_pixel_overlap = len(chunk_images)
+                overlap_count = requested_pixel_overlap # Keep for reference
+                
+                if requested_pixel_overlap > 0:
+                    # 1. Calculate Latent Slices needed to cover these pixels
+                    latent_slice_count = math.ceil((requested_pixel_overlap - 1) / 8) + 1
+                    
+                    # 2. Back-calculate the EFFECTIVE pixel overlap this represents
+                    # (latent_slice_count - 1) * 8 + 1
+                    effective_overlap_pixels = (latent_slice_count - 1) * 8 + 1
+                    frames_to_trim = effective_overlap_pixels
+                    
+                    # 3. Slice the Latent Tensor
+                    # last_chunk_latent shape: [1, C, F, H, W]
+                    total_prev_latents = last_chunk_latent.shape[2]
+                    
+                    # Safety clamp
+                    latent_slice_count = min(latent_slice_count, total_prev_latents)
+                    
+                    # Extract last N latent frames
+                    # conditioning_latent_tensor = last_chunk_latent[:, :, -latent_slice_count:, :, :].clone()
+                    start_slice = total_prev_latents - latent_slice_count
+                    conditioning_latent_tensor = last_chunk_latent[:, :, start_slice:, :, :].clone()
+                    
+                    logger.info(f"Latent Handoff: Requested {requested_pixel_overlap} px -> Aligning to {latent_slice_count} Latents ({effective_overlap_pixels} px effective).")
+                    
+                    # CONFLICT RESOLUTION (Static Anchor Fix):
+                    # If we have successfully prepared High-Fidelity Latent Handoff (Motion),
+                    # we must DISCARD the Static Pixel Conditioning (Images).
+                    # Otherwise, the static images "anchor" the generation, freezing the first second.
+                    if conditioning_latent_tensor is not None:
+                        logger.info("Latent Handoff Active: Disabling Static Pixel Conditioning to prevent 'Frozen Anchor' effect.")
+                        chunk_images = [] 
+
 
             # Critical Fix for Extend + Smart Continue:
             # If this is the first chunk, and we have global input images (from Extend timeline),
@@ -307,74 +360,65 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                  logger.info(f"Using initial timeline images for Chunk 0: {len(chunk_images)}")
 
             # Manually handle Prompt Enhancement to inject "Director" logic
-            # The pipeline's internal enhance_prompt doesn't support our custom system_prompt.
-            # So we enhance here and disable pipeline enhancement.
+            # Update: delegated to StoryboardManager.prepare_next_chunk
+            # We only need to ensure we use the prompt it returns.
             do_pipeline_enhance = False 
-            
-            if params.get("enhance_prompt", True):
-                # If Storyboard already gave us a prompt (Chunk > 0), it's already enhanced.
-                if chunk_idx > 0 and chunk_config.get("prompt"):
-                    do_pipeline_enhance = False
-                elif chunk_idx == 0:
-                    # Chunk 0: We need to enhance manually, especially if extending (Video Input)
-                    # to use the Director System Prompt.
-                    
-                    # Get Text Encoder
-                    if not text_encoder and hasattr(pipeline, "stage_1_model_ledger"):
-                        try:
-                             text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-                        except: pass
-                    
-                    if text_encoder:
-                        # Detect extend mode
-                        is_extend = (chunk_idx == 0 and chunk_images)
-                        sys_prompt = None
-                        effective_prompt = chunk_prompt
-                        
-                        if is_extend:
-                             # Use the same STRICT Director Prompt as StoryboardManager to prevent drift!
-                             sys_prompt = (
-                                "You are a visionary Film Director and Cinematographer. Your goal is to continue the narrative flow of a video scene.\n"
-                                "You will be given the Global Story Goal (which you must adhere to) and the immediate context (last frame description).\n"
-                                "TASK: Describe the next 4 seconds of video action. The transition must be seamless but FOCUSED on the Global Goal.\n"
-                                "GUIDELINES:\n"
-                                "- Analyze the visual context of the input image (characters, clothing, lighting, background).\n"
-                                "- Describe the ACTION that happens next. Do not just describe the static image.\n"
-                                "- CRITICAL: Do not drift from the Global Story Goal. If the context has drifted, steer it back.\n"
-                                "- Maintain character identity and visual consistency.\n"
-                                "- CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right', 'handheld', 'static').\n"
-                                "- LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting', 'soft morning light', 'neon rim light').\n"
-                                "- AUDIO: Include a description of the soundscape (ambient sounds, dialogue if applicable).\n"
-                                "- Output ONLY the prompt for the next shot. Single paragraph, chronological flow."
-                             )
-                             effective_prompt = (
-                                f"Global Story Goal (PRIMARY): {chunk_prompt}. "
-                                f"Task: Write a prompt for the NEXT 4 seconds of video extending the provided frame. "
-                                f"The action MUST advance the Global Story Goal."
-                             )
 
-                        try:
-                            logger.info(f"Manually enhancing Chunk 0 prompt (Extend={is_extend})...")
-                            enhanced = generate_enhanced_prompt(
-                                text_encoder, 
-                                effective_prompt, 
-                                image_path=chunk_images[0][0] if chunk_images else None,
-                                seed=seed,
-                                is_image=False, # Video generation
-                                system_prompt=sys_prompt
-                            )
-                            if enhanced:
-                                chunk_prompt = enhanced
-                                active_jobs[job_id]["current_prompt"] = chunk_prompt
-                                
-                                # CRITICAL FIX: Update the Global Story Goal!
-                                # The enhanced prompt contains the detailed vision/style we want to maintain.
-                                # If we don't update this, the Manager will revert to the raw (short) prompt as the goal.
-                                logger.info(f"Updating Global Story Goal to match enhanced Chunk 0 prompt...")
-                                storyboard_manager.state.global_prompt = enhanced
-                        except Exception as e:
-                            logger.warning(f"Manual enhancement failed: {e}")
-                            do_pipeline_enhance = True # Fallback to pipeline
+            # Only enhance manually for Chunk 0 if it wasn't handled (e.g. Extend mode needs Director prompt)
+            if chunk_idx == 0 and params.get("enhance_prompt", True):
+                if not text_encoder and hasattr(pipeline, "stage_1_model_ledger"):
+                     try:
+                         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                     except: pass
+                
+                if text_encoder:
+                     # Detect extend mode
+                     is_extend = (chunk_idx == 0 and chunk_images)
+                     sys_prompt = None
+                     effective_prompt = chunk_prompt
+                     
+                     if is_extend:
+                          # Use the same STRICT Director Prompt as StoryboardManager to prevent drift!
+                          sys_prompt = (
+                             "You are a visionary Film Director and Cinematographer. Your goal is to continue the narrative flow of a video scene.\n"
+                             "You will be given the Global Story Goal (which you must adhere to) and the immediate context (last frame description).\n"
+                             "TASK: Describe the next 4 seconds of video action. The transition must be seamless but FOCUSED on the Global Goal.\n"
+                             "GUIDELINES:\n"
+                             "- Analyze the visual context of the input image (characters, clothing, lighting, background).\n"
+                             "- Describe the ACTION that happens next. Do not just describe the static image.\n"
+                             "- CRITICAL: Do not drift from the Global Story Goal. If the context has drifted, steer it back.\n"
+                             "- Maintain character identity and visual consistency.\n"
+                             "- CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right', 'handheld', 'static').\n"
+                             "- LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting', 'soft morning light', 'neon rim light').\n"
+                             "- AUDIO: Include a description of the soundscape (ambient sounds, dialogue if applicable).\n"
+                             "- Output ONLY the prompt for the next shot. Single paragraph, chronological flow."
+                          )
+                          effective_prompt = (
+                             f"Global Story Goal (PRIMARY): {chunk_prompt}. "
+                             f"Task: Write a prompt for the NEXT 4 seconds of video extending the provided frame. "
+                             f"The action MUST advance the Global Story Goal."
+                          )
+
+                     try:
+                         logger.info(f"Manually enhancing Chunk 0 prompt (Extend={is_extend})...")
+                         enhanced = generate_enhanced_prompt(
+                             text_encoder, 
+                             effective_prompt, 
+                             image_path=chunk_images[0][0] if chunk_images else None,
+                             seed=seed,
+                             is_image=False, # Video generation
+                             system_prompt=sys_prompt
+                         )
+                         if enhanced:
+                             chunk_prompt = enhanced
+                             active_jobs[job_id]["current_prompt"] = chunk_prompt
+                             
+                             # CRITICAL FIX: Update the Global Story Goal!
+                             logger.info(f"Updating Global Story Goal to match enhanced Chunk 0 prompt...")
+                             storyboard_manager.state.global_prompt = enhanced
+                     except Exception as e:
+                         logger.warning(f"Manual enhancement failed: {e}")
+                         do_pipeline_enhance = True # Fallback to pipeline
                 
             
             # Expose current prompt to UI
@@ -389,12 +433,26 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 # Also status message
                 active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
             
+            logger.info(f"Starting chunk {chunk_idx}: {chunk_prompt[:50]}...")
             
+            # Check cancellation again before expensive call
+            if job_id not in active_jobs or active_jobs[job_id].get("cancelled", False):
+                break
+            
+            # Update status
+            active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
+
             # 2. Define Pipeline execution wrapper
-            def _run_chunk_pipeline(images_arg, current_prompt, pipeline_enhance):
+            def _run_chunk_pipeline(images_arg, current_prompt, pipeline_enhance, latents_in):
+                # Force Negative Prompt for chained chunks to kill static inertia
+                # We start with the user's negative prompt (if any) and append our bans.
+                effective_negative_prompt = negative_prompt or ""
+                if chunk_idx > 0:
+                     effective_negative_prompt += ", static, freeze, loop, pause, still image, motionless, blurred, morphing"
+                
                 return pipeline(
                     prompt=current_prompt,
-                    negative_prompt=negative_prompt,
+                    negative_prompt=effective_negative_prompt,
                     seed=seed + chunk_idx, # vary seed slightly
                     height=height,
                     width=width,
@@ -403,15 +461,71 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     num_inference_steps=params.get("num_inference_steps", 40),
                     cfg_guidance_scale=params.get("cfg_scale", 3.0),
                     images=images_arg,
+                    previous_latent_tensor=latents_in, # New Arg
                     tiling_config=TilingConfig.default(),
                     enhance_prompt=pipeline_enhance,
                     callback_on_step_end=cancellation_check
                 )
                 
             # 3. Run Pipeline
-            video, audio = await loop.run_in_executor(None, _run_chunk_pipeline, chunk_images, chunk_prompt, do_pipeline_enhance)
+            # Returns (video, audio, latent)
+            try:
+                video, audio, new_full_latent = await loop.run_in_executor(
+                    None, _run_chunk_pipeline, chunk_images, chunk_prompt, do_pipeline_enhance, conditioning_latent_tensor
+                )
+                
+                # Update cache for next iteration
+                last_chunk_latent = new_full_latent
+                
+            except Exception as e:
+                logger.error(f"Pipeline execution failed: {e}")
+                raise e
             
             # 4. Save Output
+            
+            # LATENT HANDOFF: TRIM OVERLAP
+            # If we used latent conditioning from the previous chunk, the model generated
+            # those frames at the start. We must remove them to avoid "skip back" in playback.
+            # QUANTUM FIX: Use 'frames_to_trim' which is aligned to latent boundaries.
+            if chunk_idx > 0 and conditioning_latent_tensor is not None and frames_to_trim > 0:
+                logger.info(f"Trimming {frames_to_trim} overlap frames from start of Chunk {chunk_idx}...")
+                
+                # Helper for generator trimming
+                def trim_video_iterator(iterator, n_trim):
+                    frames_trimmed = 0
+                    for chunk in iterator:
+                        # chunk shape: [F, H, W, C]
+                        n_frames = chunk.shape[0]
+                        
+                        if frames_trimmed < n_trim:
+                            remaining_to_trim = n_trim - frames_trimmed
+                            if n_frames <= remaining_to_trim:
+                                # Drop entire chunk
+                                frames_trimmed += n_frames
+                                continue
+                            else:
+                                # Partial drop
+                                yield chunk[remaining_to_trim:]
+                                frames_trimmed = n_trim # Done
+                        else:
+                            yield chunk
+
+                # Trim Video
+                if inspect.isgenerator(video):
+                    video = trim_video_iterator(video, frames_to_trim)
+                elif isinstance(video, torch.Tensor):
+                    # Expecting [F, H, W, C] from decode_video output convention
+                    video = video[frames_to_trim:]
+                
+                # Trim Audio: [B, C, Samples] or [C, Samples]
+                if audio is not None:
+                     fps = float(params.get("fps", 25.0))
+                     trim_samples = int(frames_to_trim * (AUDIO_SAMPLE_RATE / fps))
+                     if audio.ndim == 3:
+                        audio = audio[:, :, trim_samples:]
+                     elif audio.ndim == 2:
+                        audio = audio[:, trim_samples:]
+            
             video_chunks_number = get_video_chunks_number(chunk_size, TilingConfig.default())
             encode_video(
                 video=video,
@@ -433,12 +547,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
 
             # TRIM OVERLAP (Fix for "Slow Motion" stutter at seams)
             # If this is not the first chunk, we must trim the overlapping frames 
-            # from the start, otherwise they are repeated (concatenated) 
-            # creating a duplicate motion effect.
-            # LTX-2 often has 1-8 static frames at start of continuation.
             if chunk_idx > 0:
-                 # Force aggressive trim of 8 frames (~0.32s at 25fps) to remove static warm-up
-                overlap = 8 
+                 # Use global overlap setting from manager
+                overlap = storyboard_manager.overlap_frames
                 if overlap > 0:
                     logger.info(f"Trimming {overlap} overlap frames from chunk {chunk_idx} start...")
                     temp_raw_path = chunk_output_path.replace(".mp4", "_raw.mp4")
@@ -446,18 +557,20 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     
                     try:
                         # Use select filter to drop first N frames. 
-                        # -vsync vfr ensures frames are dropped correctly without duping.
-                        # Re-encoding is safer for precise frame cutting than -ss with copy.
+                        # -vsync vfr ensures frames are dropped correctly without duping, 
+                        # but we want to ensure the output is compatible with the target fps.
+                        # ADDED: afade to smooth the audio join (fadeIn 0.1s)
+                        fps = params.get("fps", 25.0)
+                        
                         subprocess.run([
                             "ffmpeg", "-i", temp_raw_path,
                             "-vf", f"select=gte(n\\,{overlap}),setpts=PTS-STARTPTS",
-                            "-af", f"ashowinfo,arealtime,asetpts=PTS-STARTPTS", # Handle audio timestamps if present, though often silent
-                            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "18",
+                            "-af", f"ashowinfo,arealtime,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.1", 
+                            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                            "-r", str(fps),
                             "-y", chunk_output_path
                         ], cwd=output_dir, check=True, stderr=subprocess.DEVNULL)
-                        logger.info(f"Trimmed overlap from chunk {chunk_idx}.")
-                        # Optional: Remove raw file to save space
-                        # os.remove(temp_raw_path) 
+                        logger.info(f"Trimmed overlap from chunk {chunk_idx} (with Audio Fade).")
                     except Exception as e:
                         logger.error(f"Failed to trim chunk overlap: {e}. Restoring raw.")
                         if os.path.exists(temp_raw_path):
@@ -798,7 +911,14 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 
                 # So I can just take it, ensure it's uint8, and save.
                 
-                frame_arr = frame_tensor.numpy().astype(np.uint8)
+                frame_arr = frame_tensor.numpy()
+                
+                # Robustness check: If pipeline returns floats (0..1), scale to 255
+                if frame_arr.dtype != np.uint8:
+                    if frame_arr.max() <= 1.0:
+                         logger.info("Scaling image tensor from 0..1 to 0..255")
+                         frame_arr = (frame_arr * 255).clip(0, 255)
+                    frame_arr = frame_arr.astype(np.uint8)
                 
                 img = Image.fromarray(frame_arr)
                 img.save(output_path, quality=95)
@@ -852,7 +972,13 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
 
 async def generate_video_task(job_id: str, params: dict):
     logger.info(f"Starting generation for job {job_id}")
-    active_jobs[job_id] = {'cancelled': False}
+    active_jobs[job_id] = {
+        "cancelled": False,
+        "status": "processing",
+        "progress": 0,
+        "eta_seconds": None,
+        "status_message": "Initializing..."
+    }
     # Initial update
     update_job_db(job_id, "processing")
     
