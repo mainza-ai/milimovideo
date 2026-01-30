@@ -495,23 +495,93 @@ async def get_project(project_id: str):
                 except Exception as e:
                     logger.error(f"Failed to migrate project {project_id}: {e}")
 
+        # Lazy Migration: If DB has no shots but JSON exists
+        if not project.shots:
+             # ... (existing JSON migration code) ...
+             pass # Logic remains from previous block, just ensuring we don't break it.
+
+        # --- AUTO-HYDRATION (Recover "lost" shots) ---
+        # Fetch all completed jobs for this project
+        completed_jobs = session.exec(
+            select(Job)
+            .where(Job.project_id == project_id)
+            .where(Job.status == "completed")
+            .where(Job.output_path != None)
+            .order_by(Job.created_at.asc())
+        ).all()
+        
+        logger.info(f"[Hydration] Project {project_id}: Found {len(completed_jobs)} completed jobs in DB.")
+
+        current_shot_ids = {s.get("id") for s in project.shots}
+        logger.info(f"[Hydration] Current Project Shots: {len(project.shots)} IDs: {list(current_shot_ids)}")
+        
+        shots_restored = False
+
+        for job in completed_jobs:
+            # Determine Shot ID (either from params or Job ID if missing)
+            try:
+                params = json.loads(job.params_json) if job.params_json else {}
+                shot_id = params.get("id", job.id)
+            except:
+                shot_id = job.id
+            
+            # Check if this shot is missing from the Project Timeline
+            if shot_id not in current_shot_ids:
+                logger.info(f"[Hydration] RESTORING missing shot {shot_id} from Job {job.id}")
+                
+                # Reconstruct Shot Object
+                reconstructed_shot = {
+                    "id": shot_id,
+                    "prompt": job.prompt or "Recovered Shot",
+                    "negativePrompt": "", # Lost if not in Job, but minor
+                    "seed": params.get("seed", 42),
+                    "width": params.get("width", project.resolution_w),
+                    "height": params.get("height", project.resolution_h),
+                    "numFrames": job.actual_frames or params.get("num_frames", 121),
+                    # "fps": params.get("fps", project.fps), # Let frontend inherit
+                    "timeline": [], # Conditioning lost? Or in params?
+                    "cfgScale": params.get("cfg_scale", 3.0),
+                    "enhancePrompt": True,
+                    "upscale": True,
+                    "pipelineOverride": "auto",
+                    "lastJobId": job.id,
+                    "videoUrl": f"/generated/{os.path.basename(job.output_path)}",
+                    "thumbnailUrl": job.thumbnail_path, # DB Truth
+                    "enhancedPromptResult": job.enhanced_prompt
+                }
+                
+                # Add to project
+                project.shots.append(reconstructed_shot)
+                current_shot_ids.add(shot_id)
+                shots_restored = True
+            else:
+                 logger.info(f"[Hydration] Skip {shot_id}, already exists.")
+        
+        if shots_restored:
+            # Persist immediately so it sticks
+            # Re-assign to trigger SQLModel/SQLAlchemy change detection for JSON column
+            project.shots = list(project.shots) 
+            session.add(project)
+            session.commit()
+            session.refresh(project)
+            logger.info(f"[Hydration] SUCCESS. Project {project_id} saved with {len(project.shots)} shots.")
+
         # Construct response matching Frontend Project interface
         return {
             "id": project.id,
             "name": project.name,
             "shots": project.shots,
-            "settings": { # Frontend expects legacy structure occasionally? Or straight fields?
-                # TimelineStore.loadProject maps data.settings?.fps OR data.fps
-                # But safer to return flat and let store handle it, or match store expecation.
-                # Store expects snake_case from backend usually?
+            "settings": { 
                 "resolution_w": project.resolution_w,
                 "resolution_h": project.resolution_h,
                 "fps": project.fps
             },
-            "fps": project.fps, # Redundant but safe
+            "fps": project.fps, 
             "resolution_w": project.resolution_w,
             "resolution_h": project.resolution_h,
-            "seed": project.seed 
+            "seed": project.seed,
+            "_debug_jobs_found": len(completed_jobs),
+            "_debug_restored": shots_restored
         }
 
 @app.put("/project/{project_id}")
