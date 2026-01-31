@@ -44,6 +44,14 @@ class EventManager:
             "data": json.dumps(data)
         }
         
+        # Log frequent events only periodically to avoid spam
+        if event_type not in ["progress", "edit_progress"]:
+            logger.info(f"Broadcasting {event_type} to {len(self.clients)} clients")
+        elif len(self.clients) > 0 and data.get("progress", 0) % 10 == 0:
+             logger.debug(f"Progress update: {data.get('progress')}%")
+
+        # We need to dispatch to all queues
+        
         # We need to dispatch to all queues
         # Use asyncio.gather to avoid blocking? 
         # Actually EventSourceResponse expects dict or specific format.

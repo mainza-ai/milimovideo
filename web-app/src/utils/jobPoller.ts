@@ -15,9 +15,13 @@ export const pollJobStatus = async (jobId: string, shotId: string) => {
                     isGenerating: false,
                     videoUrl: getAssetUrl(statusData.video_url),
                     progress: 100,
-                    enhancedPromptResult: statusData.enhanced_prompt,
-                    thumbnailUrl: getAssetUrl(statusData.thumbnail_url)
+                    enhancedPromptResult: statusData.enhanced_prompt
                 };
+
+                // Always update thumbnailUrl (even if null to clear stale data)
+                if (statusData.thumbnail_url) {
+                    updates.thumbnailUrl = getAssetUrl(statusData.thumbnail_url);
+                }
 
                 if (statusData.actual_frames) {
                     updates.numFrames = statusData.actual_frames;

@@ -58,11 +58,17 @@ export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
         onClose();
     };
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-        if (!confirm("Delete this project? This cannot be undone.")) return;
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
-        await deleteProject(id);
+    const handleDeleteClick = (e: React.MouseEvent, id: string) => {
+        e.stopPropagation();
+        setDeletingId(id);
+    };
+
+    const confirmDelete = async () => {
+        if (!deletingId) return;
+        await deleteProject(deletingId);
+        setDeletingId(null);
         await fetchProjects();
     };
 
@@ -226,8 +232,9 @@ export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
                                         </span>
                                     )}
                                     <button
-                                        onClick={(e) => handleDelete(e, p.id)}
-                                        className="p-2 bg-white/5 text-white/30 hover:bg-red-500/20 hover:text-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                        onClick={(e) => handleDeleteClick(e, p.id)}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        className="p-2 bg-white/5 text-white/30 hover:bg-red-500/20 hover:text-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100 z-10"
                                         title="Delete Project"
                                     >
                                         <Trash2 size={16} />
@@ -246,6 +253,36 @@ export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
                     )}
                 </div>
             </div>
+            {/* Delete Confirmation Modal */}
+            {deletingId && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-[#1a1a1a] border border-white/10 p-6 rounded-xl shadow-2xl max-w-sm w-full space-y-4 mx-4" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 text-red-500">
+                            <div className="p-3 bg-red-500/10 rounded-full">
+                                <Trash2 size={24} />
+                            </div>
+                            <h3 className="text-lg font-bold text-white">Delete Project?</h3>
+                        </div>
+                        <p className="text-sm text-white/60">
+                            Are you sure you want to delete "{projects.find(p => p.id === deletingId)?.name}"? This action cannot be undone.
+                        </p>
+                        <div className="flex gap-3 pt-2">
+                            <button
+                                onClick={confirmDelete}
+                                className="flex-1 py-2 bg-red-500 hover:bg-red-400 text-white rounded-lg text-sm font-bold transition-colors"
+                            >
+                                Yes, Delete
+                            </button>
+                            <button
+                                onClick={() => setDeletingId(null)}
+                                className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,7 +1,8 @@
 import { useRef, useEffect } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
-import { Play, Pause, SkipBack, SkipForward, Maximize } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Maximize, Brush } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { MaskingCanvas } from '../Editor/MaskingCanvas';
 
 export const CinematicPlayer = () => {
     const project = useTimelineStore(state => state.project);
@@ -203,10 +204,53 @@ export const CinematicPlayer = () => {
 
                 <div className="w-px h-6 bg-white/10 mx-2" />
 
+                {/* Edit Button */}
+                <button
+                    onClick={() => {
+                        const { isEditing, setEditing } = useTimelineStore.getState();
+                        setEditing(!isEditing);
+                    }}
+                    className={`transition-colors ${useTimelineStore(state => state.isEditing) ? 'text-milimo-500' : 'text-white/50 hover:text-white'}`}
+                    title="Toggle Edit Mode"
+                >
+                    <Brush size={18} />
+                </button>
+
                 <button className="text-white/50 hover:text-white transition-colors">
                     <Maximize size={18} />
                 </button>
             </motion.div>
+
+            {/* Masking Overlay */}
+            {useTimelineStore(state => state.isEditing) && videoRef.current && (
+                <MaskingCanvas
+                    width={videoRef.current.videoWidth || 1280}
+                    height={videoRef.current.videoHeight || 720}
+                    onCancel={() => useTimelineStore.getState().setEditing(false)}
+                    onSave={async (maskDataUrl) => {
+                        if (!selectedShot || !videoRef.current) return;
+
+                        // 1. Capture current frame
+                        const canvas = document.createElement('canvas');
+                        canvas.width = videoRef.current.videoWidth || 1280;
+                        canvas.height = videoRef.current.videoHeight || 720;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+                        }
+                        const frameDataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+                        // 2. Get Prompt
+                        const prompt = window.prompt("Describe what to generate in the masked area:", selectedShot.prompt);
+                        if (!prompt) return;
+
+                        // 3. Trigger Store Action
+                        await useTimelineStore.getState().inpaintShot(selectedShot.id, frameDataUrl, maskDataUrl, prompt);
+
+                        useTimelineStore.getState().setEditing(false);
+                    }}
+                />
+            )}
         </div>
     );
 };

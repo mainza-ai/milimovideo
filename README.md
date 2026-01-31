@@ -25,6 +25,13 @@ Milimo isn't just a generation slot machine; it understands your story.
 - **Smart Continue**: Autoregressive video chaining that maintains character and style consistency across long generations.
 - **Live Evolution**: Watch the "Director's" thought process in real-time as it crafts the scene description during generation.
 
+### 📝 Storyboard Engine (New)
+Transform screenplays into video productions instantly.
+- **Script-to-Video**: Paste your standard screenplay text, and Milimo parses it into distinct Scenes and Shots.
+- **Story Elements**: Create reusable **Characters, Locations, and Objects** in the new **Elements Panel**.
+- **Auto-Injection**: The system automatically detects `@Element` references in your script and injects their detailed visual descriptions into the prompt, ensuring consistency across shots.
+- **Dual View Modes**: Switch seamlessly between the **Timeline** (NLE) for editing and the **Storyboard** for high-level narrative planning.
+
 ### 🎞️ Professional Non-Linear Editor (NLE)
 A fully functional timeline built for the AI workflow.
 - **Multi-Track Editing**: Compose complex scenes with multiple video and audio tracks (roadmap).
@@ -38,6 +45,12 @@ Pushing the boundaries of LTX-2.
 - **Dynamic High FPS**: Native support for **50fps and 60fps** playback for buttery smooth motion.
 - **Deep Context**: Generate up to **20 seconds** in a single continuous shot.
 - **Audio Intelligence**: The AI Co-Pilot now directs audio soundscapes, generating synchronized ambient noise and dialogue descriptions.
+
+### ✂️ In-Painting & Editing (Completed)
+Professional-grade retouching and alterations.
+- **Flux 2 In-Painting**: Select any frame, mask an area, and use natural language to magically add or remove elements (e.g., "Add sunglasses", "Remove car").
+- **Integrated Mask Editor**: Draw precise masks directly on your video frames within the player interface.
+- **SAM 3 Integration**: (Optional) Use Segment Anything Model 3 for intelligent, click-based object masking.
 
 ### 🧠 Advanced Conditioning & Control
 Go beyond simple text-to-video.
@@ -60,8 +73,14 @@ Milimo Video is built on a modern, robust stack:
 
 - **Frontend**: **React 18**, **TypeScript**, **Vite**, **Zustand** (State), **TailwindCSS** (Styling). Designed with a premium "Glassmorphism" aesthetic.
 - **Backend**: **FastAPI** (Python 3.10+), **SQLAlchemy** (SQLite), **AsyncIO** worker queues.
-- **AI Core**: **LTX-2 19B** (Lightricks), **Gemma 3** (Google DeepMind) for prompt understanding, **Diffusers** for pipeline management.
-- **Optimization**: Supports **FP8 on CUDA** and heavily optimized for **Apple Silicon (MPS)**.
+- **Microservices**: **SAM 3** runs as a dedicated decoupled service (Port 8001) to ensure environment stability.
+- **AI Core**: 
+    - **LTX-2 19B** (Lightricks) for video generation.
+    - **Gemma 3** (Google DeepMind) for prompt understanding.
+    - **Flux 2** (Black Forest Labs) for high-fidelity in-painting.
+- **Optimization**: 
+    - Supports **FP8 on CUDA**.
+    - Heavily optimized for **Apple Silicon (MPS)**, including specific VAE stability fixes (Float32 forcing) to prevent black images.
 
 ---
 
@@ -95,6 +114,7 @@ Milimo uses a specialized version of LTX-2. You must download the checkpoints ma
     python3 -m venv ../milimov
     source ../milimov/bin/activate
     pip install -e ../LTX-2
+    pip install -e ../flux2
     pip install -r requirements.txt
     ```
 
@@ -104,15 +124,38 @@ Milimo uses a specialized version of LTX-2. You must download the checkpoints ma
     - [LTX-2 Spatial Upscaler](https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors)
     - [Gemma 3 Text Encoders](https://huggingface.co/google/gemma-3-12b-it-qat-q4_0-unquantized/tree/main) (place contents in `gemma-3-12b-it-qat-q4_0-unquantized/`)
 
+    **SAM 3 Setup (In-Painting):**
+    The SAM 3 service runs in a separate environment (`sam3_env`).
+    1.  Create environment:
+        ```bash
+        conda create -n sam3_env python=3.12
+        conda activate sam3_env
+        pip install -e sam3
+        pip install fastapi uvicorn python-multipart psutil pycocotools
+        # Optional: pip install eva-decord (for video support on compatible systems)
+        ```
+    2.  **Download Model**:
+        Download `sam3.pt` (or `sam3_large.pth`) from [ModelScope](https://www.modelscope.cn/models/facebook/sam3/files) or [HuggingFace](https://huggingface.co/facebook/sam3).
+    3.  Place it in: `backend/models/sam3_large.pth`
+
 ### 3. Running the Studio
 
-**Start the Backend API**:
+**1. Start the Backend API (Core)**:
 ```bash
 # In a new terminal
 source milimov/bin/activate
 cd backend
 python server.py
 ```
+
+**2. Start the SAM 3 Service (Optional)**:
+```bash
+# In a separate terminal
+conda activate sam3_env
+cd sam3
+python start_sam_server.py
+```
+*Note: This must be running for In-Painting features to work.*
 
 **Start the Web Interface**:
 ```bash

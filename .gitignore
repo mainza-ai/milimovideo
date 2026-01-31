@@ -18,6 +18,22 @@ LTX-2/models/
 *.pt
 *.pth
 *.ckpt
+*.bin
+*.onnx
+
+# Backend Models (Exclude all downloaded weights/tokenizers)
+backend/models/*
+!backend/models/.gitkeep
+!backend/models/flux_wrapper.py
+!backend/models/__init__.py
+
+# Third Party Assets & Eval Data
+flux2/assets/
+sam3/assets/
+sam3/scripts/eval/
+sam3/examples/
+*_image_subset.json
+*_image_uuids.json
 
 # Backend Data
 backend/generated/
@@ -26,6 +42,8 @@ backend/uploads/
 backend/*.log
 backend/*.txt
 backend/server_last_request.json
+*.log
+server_last_request.json
 backend/projects/
 
 # Project Plans & Private Docs

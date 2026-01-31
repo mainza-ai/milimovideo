@@ -1,7 +1,5 @@
 import asyncio
 import os
-
-
 import subprocess
 import torch
 import sys
@@ -9,14 +7,12 @@ import uuid
 import logging
 import gc
 from typing import Optional, Any, Dict
-
-# Ensure LTX-2 packages are in path
-import os
-import sys
 import math
-import inspect # For generator check
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../LTX-2/packages/ltx-core/src")))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../LTX-2/packages/ltx-pipelines/src")))
+import inspect 
+import config
+
+# Setup paths
+config.setup_paths()
 
 from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
 from ltx_pipelines.ic_lora import ICLoraPipeline
@@ -28,6 +24,7 @@ from ltx_core.loader import LoraPathStrengthAndSDOps
 from ltx_pipelines.utils.helpers import generate_enhanced_prompt, cleanup_memory
 from PIL import Image
 import numpy as np
+
 try:
     from backend.storyboard.manager import StoryboardManager
 except ImportError:
@@ -92,7 +89,11 @@ class ModelManager:
         return os.path.dirname(os.path.abspath(__file__))
 
     def get_model_paths(self):
-        ltx2_root = os.path.abspath(os.path.join(self.get_base_dir(), "../LTX-2"))
+        # Use centralized config for model paths
+        # Note: If config doesn't have specific LTX weights defined yet, we can use default logic
+        # but optimally we should move all hardcoded paths to config.py
+        
+        ltx2_root = config.LTX_DIR
         models_dir = os.path.join(ltx2_root, "models")
         
         return {
@@ -189,9 +190,41 @@ class ModelManager:
 manager = ModelManager()
 
 def get_base_dir():
+    """Get backend base directory."""
     return os.path.dirname(os.path.abspath(__file__))
 
+def get_project_output_paths(job_id: str, project_id: str = None):
+    """
+    Get output paths for a generation job.
+    If project_id is provided, uses project workspace.
+    Otherwise falls back to legacy generated/ folder.
+    """
+    base_dir = get_base_dir()
+    
+    if project_id:
+        # Project-scoped paths
+        projects_dir = os.path.join(base_dir, "projects", project_id)
+        return {
+            "output_dir": os.path.join(projects_dir, "generated"),
+            "thumbnail_dir": os.path.join(projects_dir, "thumbnails"),
+            "workspace_dir": os.path.join(projects_dir, "workspace"),
+            "output_path": os.path.join(projects_dir, "generated", f"{job_id}.mp4"),
+            "thumbnail_path": os.path.join(projects_dir, "thumbnails", f"{job_id}_thumb.jpg"),
+            "project_id": project_id
+        }
+    else:
+        # Legacy global paths (for backward compatibility)
+        generated_dir = os.path.join(base_dir, "generated")
+        return {
+            "output_dir": generated_dir,
+            "thumbnail_dir": generated_dir,
+            "workspace_dir": generated_dir,
+            "output_path": os.path.join(generated_dir, f"{job_id}.mp4"),
+            "thumbnail_path": os.path.join(generated_dir, f"{job_id}_thumb.jpg"),
+            "project_id": None
+        }
 
+# --- Pipeline Cache ---
 # Cancellation tracking
 # job_id -> {'cancelled': bool}
 active_jobs: Dict[str, Dict[str, Any]] = {}
@@ -220,9 +253,12 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
     # e.g. 10s * 25fps = 250 frames.
     desired_total_frames = params.get("num_frames", 121) 
     
-    # Initialize Storyboard Manager
-    output_dir = os.path.join(get_base_dir(), "generated")
-    storyboard_manager = StoryboardManager(job_id, prompt, params, output_dir)
+    # Get project-scoped output paths
+    project_id = params.get("project_id", None)
+    paths = get_project_output_paths(job_id, project_id)
+    
+    # Initialize Storyboard Manager with project workspace
+    storyboard_manager = StoryboardManager(job_id, prompt, params, paths["workspace_dir"])
     
     chunk_size = storyboard_manager.chunk_size # 121
     num_chunks = storyboard_manager.get_total_chunks()
@@ -579,11 +615,18 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                         if os.path.exists(temp_raw_path):
                             os.rename(temp_raw_path, chunk_output_path)
             
-        # Stitching
-        logger.info("Stitching chunks with re-encoding (filter_complex) to ensure stream integrity...")
-        final_output_path = os.path.join(output_dir, f"{job_id}.mp4")
+        # Final stitching complete
+        logger.info(f"All chunks generated successfully. Stitching {len(files_to_stitch)} parts...")
         
-        # Build ffmpeg command for filter_complex
+        # Ensure output directories exist
+        os.makedirs(paths["output_dir"], exist_ok=True)
+        os.makedirs(paths["thumbnail_dir"], exist_ok=True)
+        
+        # Use project-scoped final output path
+        final_output = paths["output_path"]
+        
+        # Stitch videos using ffmpeg
+        concat_list = os.path.join(paths["workspace_dir"], f"{job_id}_concat_list.txt")
         # We re-encode to avoid codec mismatches between original chunks and trimmed chunks.
         input_args = []
         filter_parts = []
@@ -642,33 +685,46 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             logger.warning(f"Could not verify chained duration: {e}")
 
         # GENERATE THUMBNAIL (For Timeline UI)
+        # Generate thumbnail from final video
+        thumb_path = paths["thumbnail_path"]
         thumbnail_web_path = None
         try:
-            thumb_path = final_output_path.replace(".mp4", "_thumb.jpg")
-            # Extract at 0.5s or 0s
             subprocess.run([
-                "ffmpeg", "-y", "-i", final_output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
+                "ffmpeg", "-y", "-i", final_output, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             logger.info(f"Generated thumbnail: {thumb_path}")
-            thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"
+            thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}" if project_id else thumb_path
         except Exception as e:
             logger.warning(f"Failed to generate thumbnail: {e}")
 
-        # Update DB with explicit thumbnail path (Source of Truth)
+        
+        cleanup_memory()
+        
+        # Convert to project-relative URLs for database
+        if project_id:
+            relative_output = f"/projects/{project_id}/generated/{os.path.basename(final_output)}"
+            relative_thumb = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}" if thumb_path else None
+        else:
+            # Legacy paths (backward compatibility)
+            relative_output = final_output
+            relative_thumb = thumb_path
+        
+        # Update job record
         update_job_db(
             job_id, 
             "completed", 
-            output_path=f"/generated/{job_id}.mp4", 
+            output_path=relative_output,
+            enhanced_prompt=final_prompt,
             actual_frames=actual_frames,
-            thumbnail_path=thumbnail_web_path
+            thumbnail_path=relative_thumb
         )
         
         await event_manager.broadcast("complete", {
             "job_id": job_id, 
-            "url": f"/generated/{job_id}.mp4", 
+            "url": relative_output,  # Use project-scoped URL
             "type": "video",
             "actual_frames": actual_frames,
-            "thumbnail_url": thumbnail_web_path
+            "thumbnail_url": relative_thumb  # Use project-scoped URL
         })
         
     finally:
@@ -694,6 +750,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         input_images = params.get("images", [])
         video_cond = params.get("video_conditioning", [])
         pipeline_type = params.get("pipeline_type", "ti2vid")
+        project_id = params.get("project_id", None)  # Extract project_id for workspace paths
         
         # Initialize ETA
         if job_id in active_jobs:
@@ -716,6 +773,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         loop = asyncio.get_running_loop()
         
         def _run_pipeline():
+            result = None
             if pipeline_type == "ti2vid":
                 # Use local variable to avoid UnboundLocalError with closure capture
                 run_prompt = prompt
@@ -733,15 +791,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         if not is_image_mode and input_images:
                              sys_prompt = (
                                 "You are an expert Prompt Engineer for the LTX-2 Video Generation model. "
-                                "TASK: The user has provided the last frame of a video. Analyze it and write a prompt to GENERATE THE NEXT 4 SECONDS of video, extending the shot seamlessly. "
-                                "The output must be a single flowing paragraph following this structure: "
-                                "1. Establish the shot (cinematography, scale). "
-                                "2. Set the scene (lighting, atmosphere). "
-                                "3. Describe the action (natural sequence, present tense). "
-                                "4. Visual Details (characters, appearance). "
-                                "5. Camera Movement (how view shifts). "
-                                "6. Audio (ambient sounds, dialogue in quotes). "
-                                "Avoid internal emotional labels; use visual cues. Avoid text/logos. "
+                                "Your task is to take the user's Global Goal and expand it into a rich, detailed, "
+                                "cinematic prompt. "
+                                "CRITICAL: The output video MUST transition seamlessly from the provided input image. "
+                                "Ensure visual coherence of: characters, style, lighting, environment, camera angle. "
                                 "Output ONLY the prompt paragraph."
                              )
                              # Prefix user prompt effectively
@@ -763,7 +816,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     except Exception as e:
                         logger.warning(f"Prompt enhancement failed: {e}")
                 
-                return pipeline(
+                result = pipeline(
                     prompt=run_prompt,
                     negative_prompt=negative_prompt,
                     seed=seed,
@@ -779,7 +832,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     callback_on_step_end=cancellation_check
                 )
             elif pipeline_type == "ic_lora":
-                return pipeline(
+                result = pipeline(
                     prompt=prompt,
                     seed=seed,
                     height=height,
@@ -793,7 +846,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     callback_on_step_end=cancellation_check
                 )
             elif pipeline_type == "keyframe":
-                return pipeline(
+                result = pipeline(
                     prompt=prompt,
                     negative_prompt=negative_prompt,
                     seed=seed,
@@ -808,17 +861,42 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     enhance_prompt=enhance_prompt,
                     callback_on_step_end=cancellation_check
                 )
+            
+            # Handle different return types
+            if isinstance(result, tuple):
+                logger.info(f"Pipeline returned tuple with {len(result)} elements")
+                # Extract only first 2 values (video, audio) even if tuple has more
+                if len(result) >= 2:
+                    return (result[0], result[1])
+                elif len(result) == 1:
+                    return (result[0], None)
+                else:
+                    return (None, None)
+            else:
+                logger.info(f"Pipeline returned single value, type: {type(result)}")
+                return (result, None)  # Standardize to (video, None)
         
-        video, audio = await loop.run_in_executor(None, _run_pipeline)
+        # Execute pipeline and unpack result
+        pipeline_result = await loop.run_in_executor(None, _run_pipeline)
+        logger.info(f"_run_pipeline returned: type={type(pipeline_result)}, len={len(pipeline_result) if isinstance(pipeline_result, tuple) else 'N/A'}")
         
-        output_dir = os.path.join(get_base_dir(), "generated")
-        os.makedirs(output_dir, exist_ok=True)
-        # Default output path for video (will be overwritten if image)
-        output_path = os.path.join(output_dir, f"{job_id}.mp4")
+        video, audio = pipeline_result
+        
+        # Get project-scoped output paths
+        paths = get_project_output_paths(job_id, project_id)
+        
+        # Ensure output directories exist
+        os.makedirs(paths["output_dir"], exist_ok=True)
+        os.makedirs(paths["thumbnail_dir"], exist_ok=True)
+        
+        # Determine output path based on image/video mode
+        if num_frames == 1:
+            output_path = paths["output_path"].replace(".mp4", ".jpg")
+        else:
+            output_path = paths["output_path"]
         
         # Check for image mode
         if num_frames == 1:
-            output_path = os.path.join(output_dir, f"{job_id}.jpg")
             logger.info(f"Saving single frame as image to {output_path}")
             
             # extract first frame
@@ -955,7 +1033,35 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 img = Image.fromarray(frame_arr)
                 img.save(output_path, quality=95)
                 logger.info(f"Image saved to {output_path}")
-                update_job_db(job_id, "completed", output_path=f"/generated/{os.path.basename(output_path)}")
+                
+                # Generate a thumbnail for the image (copy or resize it)
+                thumbnail_web_path = None
+                try:
+                    if output_path != thumb_path:
+                        img.thumbnail((256, 256))
+                        img.save(thumb_path, quality=85)
+                        logger.info(f"Generated thumbnail: {thumb_path}")
+                    # Use project-scoped URL
+                    if project_id:
+                        thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
+                    else:
+                        thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"
+                except Exception as e:
+                    logger.warning(f"Thumbnail gen failed for image: {e}")
+
+                # Use project-scoped paths for DB
+                if project_id:
+                    output_url = f"/projects/{project_id}/generated/{os.path.basename(output_path)}"
+                else:
+                    output_url = f"/generated/{os.path.basename(output_path)}"
+                
+                update_job_db(
+                    job_id, 
+                    "completed", 
+                    output_path=output_url,
+                    thumbnail_path=thumbnail_web_path,
+                    actual_frames=1
+                )
 
             except Exception as e:
                 logger.error(f"Failed to save image: {e}")
@@ -964,22 +1070,46 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 raise e
         else:
             video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
-            
+            # For video: encode normally
+            # encode_video signature: (video, fps, audio, audio_sample_rate, output_path, video_chunks_number)
             encode_video(
-                video=video,
-                fps=float(params.get("fps", 25.0)),
-                audio=audio,
-                audio_sample_rate=AUDIO_SAMPLE_RATE,
-                output_path=output_path,
-                video_chunks_number=video_chunks_number,
+                video,                                                           # 1st: video tensor
+                int(params.get("fps", 25)),                                     # 2nd: fps
+                audio,                                                          # 3rd: audio tensor
+                AUDIO_SAMPLE_RATE if audio is not None else None,              # 4th: audio_sample_rate
+                output_path,                                                    # 5th: output_path
+                video_chunks_number                                             # 6th: video_chunks_number
             )
-            
-
-
             logger.info(f"Video saved to {output_path}")
-            
-            # Detect actual frame count to sync UI
-            actual_frames = num_frames
+        
+        # Generate thumbnail (using project-scoped path)
+        thumb_path = paths["thumbnail_path"]
+        thumbnail_web_path = None
+        try:
+            if num_frames == 1:
+                # For images, resize the saved image
+                img = Image.open(output_path)
+                img.thumbnail((256, 256))
+                img.save(thumb_path, quality=85)
+                logger.info(f"Generated thumbnail: {thumb_path}")
+            else:
+                # For videos, extract a frame using ffmpeg
+                # Extract at 0.5s or 0s
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
+                ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                logger.info(f"Generated thumbnail: {thumb_path}")
+            # Use project-scoped URL
+            if project_id:
+                thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
+            else:
+                thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"  # Legacy fallback
+        except Exception as e:
+            logger.warning(f"Failed to generate thumbnail: {e}")
+
+        # Detect actual frame count to sync UI
+        actual_frames = num_frames
+        if num_frames > 1: # Only probe video files
             try:
                 # Probe the file
                 cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", output_path]
@@ -993,15 +1123,25 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 logger.warning(f"Could not verify frame count: {e}")
 
             # GENERATE THUMBNAIL (Standard)
+            # GENERATE THUMBNAIL (Standard)
             thumbnail_web_path = None
             try:
-                thumb_path = output_path.replace(".mp4", "_thumb.jpg")
-                # Extract at 0.5s or 0s
+                if project_id:
+                    # Use thumbnails/ directory for project-based jobs
+                    thumb_dir = os.path.join(PROJECTS_DIR, project_id, "thumbnails")
+                    os.makedirs(thumb_dir, exist_ok=True)
+                    thumb_path = os.path.join(thumb_dir, f"{job_id}_thumb.jpg")
+                    thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
+                else:
+                    # Legacy fallback (same folder as video)
+                    thumb_path = output_path.replace(".mp4", "_thumb.jpg")
+                    thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"
+
+                # Extract at 0.5s
                 subprocess.run([
                     "ffmpeg", "-y", "-i", output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
                 ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 logger.info(f"Generated thumbnail: {thumb_path}")
-                thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"
             except Exception as e:
                 logger.warning(f"Failed to generate thumbnail: {e}")
 
@@ -1009,14 +1149,14 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             update_job_db(
                 job_id, 
                 "completed", 
-                output_path=f"/generated/{os.path.basename(output_path)}",
+                output_path=f"/projects/{project_id}/generated/{os.path.basename(output_path)}" if project_id else f"/generated/{os.path.basename(output_path)}",
                 thumbnail_path=thumbnail_web_path,
                 actual_frames=actual_frames
             )
             
             await event_manager.broadcast("complete", {
                 "job_id": job_id, 
-                "url": f"/generated/{os.path.basename(output_path)}", 
+                "url": f"/projects/{project_id}/generated/{os.path.basename(output_path)}" if project_id else f"/generated/{os.path.basename(output_path)}", 
                 "type": "video",
                 "thumbnail_url": thumbnail_web_path,
                 "actual_frames": actual_frames

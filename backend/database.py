@@ -1,5 +1,5 @@
 import os
-from sqlmodel import SQLModel, create_engine, Session, Field
+from sqlmodel import SQLModel, create_engine, Session, Field, Relationship
 from typing import Optional, List
 from sqlalchemy import Column, JSON
 from datetime import datetime
@@ -17,8 +17,64 @@ class Project(SQLModel, table=True):
     resolution_h: int = 512
     fps: int = 25
     seed: int = 42
-    # Full State
-    shots: List[dict] = Field(default=[], sa_column=Column(JSON))
+    # Storyboard Support
+    script_content: Optional[str] = None # Raw script text
+    
+    shots: List["Shot"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+    scenes: List["Scene"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
+
+class Scene(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    project_id: str = Field(index=True, foreign_key="project.id")
+    index: int
+    name: str # "Scene 1: The Chase"
+    script_content: Optional[str] = None # The text segment for this scene
+    
+    project: Optional[Project] = Relationship(back_populates="scenes")
+    # shots: List["Shot"] = Relationship(back_populates="scene") # Future
+
+class Shot(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    scene_id: Optional[str] = Field(default=None, index=True) # Optional link to Scene
+    project_id: str = Field(index=True, foreign_key="project.id") # Redundant but useful for queries
+    index: Optional[int] = None
+    
+    project: Optional[Project] = Relationship(back_populates="shots")
+    
+    # Content
+    action: Optional[str] = None # "Hero runs down the alley" (Storyboard context)
+    prompt: Optional[str] = None # (Generator context)
+    dialogue: Optional[str] = None
+    character: Optional[str] = None
+    
+    # Generation Params (Persisted from ShotConfig)
+    negative_prompt: Optional[str] = ""
+    seed: int = 42
+    width: int = 768
+    height: int = 512
+    num_frames: int = 121
+    fps: int = 25
+    
+    # Generation State
+    prompt_enhanced: Optional[str] = None # The actual prompt sent to LTX
+    status: str = "pending" # pending, generating, completed, failed
+    
+    # Results
+    video_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    duration: float = 4.0
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class Element(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    project_id: str = Field(index=True)
+    name: str          # e.g., "Hero", "Kitchen"
+    trigger_word: str  # e.g., "@Hero"
+    type: str          # "character", "location", "object"
+    description: str   # "A tall woman with red hair"
+    image_path: Optional[str] = None # Reference image path
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class Asset(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
@@ -53,7 +109,7 @@ class Job(SQLModel, table=True):
     thumbnail_path: Optional[str] = None
 
 # Database Setup
-DATABASE_URL = "sqlite:///./milimovideo.db"
+from config import DATABASE_URL
 # check_same_thread=False is required for SQLite when using FastAPI BackgroundTasks
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 

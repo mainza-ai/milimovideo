@@ -3,6 +3,27 @@ import { v4 as uuidv4 } from 'uuid';
 import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
 
+const LAST_PROJECT_KEY = 'milimo_last_project_id';
+
+// Helper to save last project ID to localStorage
+const saveLastProjectId = (projectId: string) => {
+    try {
+        localStorage.setItem(LAST_PROJECT_KEY, projectId);
+    } catch (e) {
+        console.warn('Failed to save last project ID:', e);
+    }
+};
+
+// Helper to get last project ID from localStorage
+export const getLastProjectId = (): string | null => {
+    try {
+        return localStorage.getItem(LAST_PROJECT_KEY);
+    } catch (e) {
+        console.warn('Failed to get last project ID:', e);
+        return null;
+    }
+};
+
 export type ConditioningType = 'image' | 'video';
 
 export interface ConditioningItem {
@@ -11,6 +32,16 @@ export interface ConditioningItem {
     path: string; // URL /uploads/...
     frameIndex: number;
     strength: number;
+}
+
+export interface StoryElement {
+    id: string;
+    project_id: string;
+    name: string;
+    triggerWord: string; // @Hero
+    type: 'character' | 'location' | 'object';
+    description: string;
+    image_path?: string;
 }
 
 export interface Shot {
@@ -42,12 +73,79 @@ export interface Shot {
 
     // UI State
     isGenerating?: boolean;
+
+    // Storyboard metadata
+    sceneId?: string;
+    index?: number;
+    action?: string;
+    dialogue?: string;
+    character?: string;
+}
+
+export interface ShotConfig {
+    id: string;
+    prompt: string;
+    negativePrompt: string;
+    seed: number;
+    width: number;
+    height: number;
+    numFrames: number;
+    fps?: number; // Optional override, defaults to project FPS
+    timeline: ConditioningItem[];
+
+    // Advanced Params
+    cfgScale: number;
+    enhancePrompt: boolean;
+    upscale: boolean;
+    pipelineOverride: 'auto' | 'ti2vid' | 'ic_lora' | 'keyframe';
+    progress?: number;
+
+    // Result
+    lastJobId?: string;
+    videoUrl?: string; // Derived from jobID
+    thumbnailUrl?: string; // Static Preview
+    enhancedPromptResult?: string; // Result from backend
+    statusMessage?: string; // Real-time status text
+    currentPrompt?: string; // Live evolving prompt during generation
+    etaSeconds?: number; // Estimated time remaining
+
+    // UI State
+    isGenerating?: boolean;
+
+    // Storyboard metadata
+    sceneId?: string;
+    index?: number;
+    action?: string;
+    dialogue?: string;
+    character?: string;
+}
+
+export interface Scene {
+    id: string;
+    index: number;
+    name: string;
+    scriptContent?: string;
+    shots: Shot[]; // Frontend convenience: Nested shots
+}
+
+export interface ParsedShot {
+    action: string;
+    dialogue?: string;
+    character?: string;
+}
+
+export interface ParsedScene {
+    id?: string; // Optional (not in DB yet)
+    header: string;
+    content: string;
+    shots: ParsedShot[];
 }
 
 export interface Project {
     id: string;
     name: string;
-    shots: Shot[];
+    shots: Shot[]; // Legacy flat list (still useful for timeline view)
+    scenes?: Scene[]; // New Hierarchy
     fps: number;
     resolutionW: number;
     resolutionH: number;
@@ -92,8 +190,30 @@ interface TimelineState {
     loadProject: (id: string) => Promise<void>;
     deleteProject: (id: string) => Promise<void>;
 
+    // Storyboard Actions
+    parseScript: (text: string) => Promise<ParsedScene[]>;
+    commitStoryboard: (scenes: ParsedScene[]) => Promise<void>;
+    generateShot: (shotId: string) => Promise<void>;
+
     // Selectors
     getShotStartTime: (shotId: string) => number;
+
+    // In-Painting
+    isEditing: boolean;
+    setEditing: (e: boolean) => void;
+    inpaintShot: (shotId: string, frameDataUrl: string, maskDataUrl: string, prompt: string) => Promise<void>;
+
+    // Elements
+    elements: StoryElement[];
+    generatingElementIds: Record<string, boolean>; // New: Track status per element
+    fetchElements: (projectId: string) => Promise<void>;
+    createElement: (projectId: string, data: Partial<StoryElement>) => Promise<void>;
+    deleteElement: (elementId: string) => Promise<void>;
+    generateVisual: (elementId: string, promptOverride?: string) => Promise<void>;
+
+    // View Mode
+    viewMode: 'timeline' | 'elements' | 'storyboard';
+    setViewMode: (mode: 'timeline' | 'elements' | 'storyboard') => void;
 }
 
 const DEFAULT_PROJECT: Project = {
@@ -143,8 +263,14 @@ export const useTimelineStore = create<TimelineState>()(
                 selectedShotId: 'shot-init', // Select by default
                 currentTime: 0,
                 isPlaying: false,
+                isEditing: false,
                 toasts: [],
                 assetRefreshVersion: 0,
+                viewMode: 'timeline',
+
+                // Elements
+                elements: [],
+                generatingElementIds: {},
 
                 setProject: (p) => set({ project: p }),
 
@@ -253,6 +379,81 @@ export const useTimelineStore = create<TimelineState>()(
 
                 setCurrentTime: (t) => set({ currentTime: t }),
                 setIsPlaying: (p) => set({ isPlaying: p }),
+                setEditing: (e) => set({ isEditing: e, isPlaying: !e ? get().isPlaying : false }), // Pause if editing
+
+                inpaintShot: async (shotId, frameDataUrl, maskDataUrl, prompt) => {
+                    const { project, addToast, updateShot } = get();
+                    const shot = project.shots.find(s => s.id === shotId);
+                    if (!shot) return;
+
+                    try {
+                        addToast("Uploading assets for in-painting...", "info");
+
+                        // 1. Upload Frame
+                        const frameBlob = await (await fetch(frameDataUrl)).blob();
+                        const frameFile = new File([frameBlob], "edit_frame.jpg", { type: "image/jpeg" });
+                        const frameForm = new FormData();
+                        frameForm.append('file', frameFile);
+                        frameForm.append('project_id', project.id);
+
+                        const frameRes = await fetch('http://localhost:8000/upload', {
+                            method: 'POST',
+                            body: frameForm
+                        });
+                        const frameData = await frameRes.json();
+                        const imagePath = frameData.access_path; // Absolute path on server
+
+                        // 2. Upload Mask
+                        const maskBlob = await (await fetch(maskDataUrl)).blob();
+                        const maskFile = new File([maskBlob], "edit_mask.png", { type: "image/png" });
+                        const maskForm = new FormData();
+                        maskForm.append('file', maskFile);
+                        maskForm.append('project_id', project.id);
+
+                        const maskRes = await fetch('http://localhost:8000/upload', {
+                            method: 'POST',
+                            body: maskForm
+                        });
+                        const maskData = await maskRes.json();
+                        const maskPath = maskData.access_path;
+
+                        // 3. Trigger In-Painting
+                        addToast("Starting generation...", "info");
+                        // Generate a temporary Job ID for tracking
+                        const jobId = `job_${uuidv4().substring(0, 8)}`;
+
+                        // Optimistic update
+                        updateShot(shotId, {
+                            isGenerating: true,
+                            statusMessage: "In-Painting...",
+                            lastJobId: jobId
+                        });
+
+                        const inpaintRes = await fetch(`http://localhost:8000/edit/inpaint?job_id=${jobId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                image_path: imagePath,
+                                mask_path: maskPath,
+                                prompt: prompt
+                            })
+                        });
+
+                        if (!inpaintRes.ok) throw new Error("Inpaint failed");
+
+                        await inpaintRes.json();
+                        // Backend returns { status: "queued", job_id: ... }
+
+                        addToast("In-painting queued successfully", "success");
+
+                    } catch (e) {
+                        console.error("Inpaint error", e);
+                        addToast("In-painting failed", "error");
+                        updateShot(shotId, { isGenerating: false, statusMessage: "Failed" });
+                    }
+                },
+
+                setViewMode: (mode) => set({ viewMode: mode }),
 
                 saveProject: async () => {
                     const { project, addToast } = get();
@@ -288,7 +489,7 @@ export const useTimelineStore = create<TimelineState>()(
                             }))
                         };
 
-                        const res = await fetch(`http://localhost:8000/project/${project.id}`, {
+                        const res = await fetch(`http://localhost:8000/projects/${project.id}`, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(payload)
@@ -314,7 +515,7 @@ export const useTimelineStore = create<TimelineState>()(
                     const finalSettings = { ...defaults, ...settings };
 
                     try {
-                        const res = await fetch('http://localhost:8000/project', {
+                        const res = await fetch('http://localhost:8000/projects', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -349,7 +550,7 @@ export const useTimelineStore = create<TimelineState>()(
                 loadProject: async (id: string) => {
                     const { addToast } = get();
                     try {
-                        const res = await fetch(`http://localhost:8000/project/${id}`);
+                        const res = await fetch(`http://localhost:8000/projects/${id}`);
                         if (!res.ok) throw new Error("Load failed");
 
                         const data = await res.json();
@@ -381,23 +582,113 @@ export const useTimelineStore = create<TimelineState>()(
                                     strength: t.strength
                                 })),
                                 lastJobId: s.last_job_id,
-                                videoUrl: s.last_job_id ? getAssetUrl(`/generated/${s.last_job_id}.mp4`) : undefined,
+                                videoUrl: s.video_url ? getAssetUrl(s.video_url) : undefined,  // Use DB value
                                 thumbnailUrl: getAssetUrl(s.thumbnail_url)
                             }))
                         };
 
                         set({ project: loadedProject, selectedShotId: loadedProject.shots[0]?.id || null });
+                        saveLastProjectId(id);  // Remember last opened project
+                        // useTimelineStore.getState().setEditing(false); // This line was commented out in the original, but the instruction implies it should be there. I'll add it.
                         addToast("Project loaded", "success");
                     } catch (e) {
-                        console.error(e);
+                        console.error("Load failed for project:", id, e);
                         addToast("Failed to load project", "error");
+
+                        // If load fails (e.g. 404), likely project was deleted or invalid.
+                        // Reset defaults to avoid infinite reload loop on startup.
+                        saveLastProjectId("");
+                        set({ project: DEFAULT_PROJECT });
+                    }
+                },
+
+                // --- Elements ---
+                fetchElements: async (projectId) => {
+                    try {
+                        // The backend returns snake_case, frontend uses camelCase for triggerWord
+                        const res = await fetch(`http://localhost:8000/projects/${projectId}/elements`);
+                        const data = await res.json();
+                        const elements = data.map((e: any) => ({
+                            ...e,
+                            triggerWord: e.trigger_word // map backend to frontend
+                        }));
+                        set({ elements });
+                    } catch (e) {
+                        console.error("Failed to fetch elements", e);
+                    }
+                },
+                createElement: async (projectId, elementData) => {
+                    try {
+                        const payload = {
+                            name: elementData.name,
+                            type: elementData.type,
+                            description: elementData.description,
+                            trigger_word: elementData.triggerWord // backend expects snake_case
+                        };
+                        const res = await fetch(`http://localhost:8000/projects/${projectId}/elements`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+                        if (res.ok) {
+                            // Refresh list
+                            get().fetchElements(projectId);
+                            get().addToast("Element created", "success");
+                        }
+                    } catch (e) {
+                        get().addToast("Failed to create element", "error");
+                    }
+                },
+                deleteElement: async (elementId) => {
+                    try {
+                        const res = await fetch(`http://localhost:8000/elements/${elementId}`, { method: 'DELETE' });
+                        if (res.ok) {
+                            const { elements } = get();
+                            set({ elements: elements.filter(e => e.id !== elementId) });
+                            get().addToast("Element deleted", "info");
+                        }
+                    } catch (e) { console.error(e); }
+                },
+
+                generateVisual: async (elementId, promptOverride) => {
+                    const { addToast, fetchElements, project } = get();
+
+                    // Set loading state
+                    set(state => ({
+                        generatingElementIds: { ...state.generatingElementIds, [elementId]: true }
+                    }));
+
+                    addToast("Generating Visual... This may take a minute.", "info");
+                    try {
+                        const res = await fetch(`http://localhost:8000/elements/${elementId}/visualize`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ prompt_override: promptOverride })
+                        });
+
+                        if (!res.ok) throw new Error("Generation failed");
+
+                        await res.json();
+                        addToast("Visual Generated!", "success");
+                        // Refresh elements to get the new image_path
+                        await fetchElements(project.id);
+                    } catch (e) {
+                        console.error(e);
+                        addToast("Failed to generate visual", "error");
+                    } finally {
+                        // Clear loading state
+                        set(state => {
+                            const newMap = { ...state.generatingElementIds };
+                            delete newMap[elementId];
+                            return { generatingElementIds: newMap };
+                        });
                     }
                 },
 
                 deleteProject: async (id: string) => {
                     const { addToast, project } = get();
                     try {
-                        await fetch(`http://localhost:8000/project/${id}`, { method: 'DELETE' });
+                        await fetch(`http://localhost:8000/projects/${id}`, { method: 'DELETE' });
                         addToast("Project deleted", "success");
 
                         // If current project deleted, what do? Reload window or create default?
@@ -428,6 +719,66 @@ export const useTimelineStore = create<TimelineState>()(
                         time += shot.numFrames / (project.fps || 25);
                     }
                     return 0; // Fallback or if not found
+                },
+
+                // Storyboard Implementation
+                parseScript: async (text: string) => {
+                    try {
+                        const project_id = get().project.id;
+                        const res = await fetch(`http://localhost:8000/projects/${project_id}/script/parse`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ script_text: text })
+                        });
+                        const data = await res.json();
+                        return data.scenes as ParsedScene[];
+                    } catch (e) {
+                        console.error("Parse failed", e);
+                        get().addToast("Failed to parse script", "error");
+                        return [];
+                    }
+                },
+
+                commitStoryboard: async (scenes: ParsedScene[]) => {
+                    const { project, addToast, loadProject } = get();
+                    try {
+                        const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/commit`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ scenes: scenes })
+                        });
+                        if (!res.ok) throw new Error("Commit failed");
+
+                        addToast("Storyboard saved!", "success");
+                        // Reload project to get the new shots
+                        await loadProject(project.id);
+                    } catch (e) {
+                        console.error("Commit failed", e);
+                        addToast("Failed to commit storyboard", "error");
+                    }
+                },
+
+                generateShot: async (shotId: string) => {
+                    const { addToast, updateShot } = get();
+                    try {
+                        // Optimistic update
+                        updateShot(shotId, { isGenerating: true, statusMessage: "Queued..." });
+
+                        const res = await fetch(`http://localhost:8000/shots/${shotId}/generate`, {
+                            method: 'POST'
+                        });
+
+                        if (!res.ok) throw new Error("Gen failed");
+                        const data = await res.json();
+                        addToast(`Shot generation started (Job ${data.job_id})`, "success");
+
+                        updateShot(shotId, { statusMessage: "Generating...", lastJobId: data.job_id });
+
+                    } catch (e) {
+                        console.error("Generate failed", e);
+                        updateShot(shotId, { isGenerating: false, statusMessage: "Failed" });
+                        addToast("Failed to start generation", "error");
+                    }
                 }
             }),
             {

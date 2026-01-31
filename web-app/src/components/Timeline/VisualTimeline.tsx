@@ -113,7 +113,8 @@ export const VisualTimeline = () => {
             updateShot(selectedShotId, {
                 prompt: `Shot using ${asset.filename}`,
                 numFrames: asset.type === 'video' ? 121 : 49, // Default duration
-                videoUrl: asset.url // Preview the asset immediately
+                videoUrl: asset.url, // Preview the asset immediately
+                thumbnailUrl: asset.thumbnail || (asset.type === 'image' ? asset.url : undefined) // Set thumbnail
             });
 
             // Add conditioning

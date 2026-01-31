@@ -1,1 +1,25 @@
-"{"id":"default","name":"Untitled Project","shots":[{"id":"shot-init","prompt":"A cinematic shot...","negative_prompt":"worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless","seed":42,"width":768,"height":512,"num_frames":121,"cfg_scale":3.0,"enhance_prompt":true,"upscale":true,"pipeline_override":"auto","timeline":[],"last_job_id":null}],"fps":24,"resolution_w":768,"resolution_h":512,"seed":42}"
+{
+    "id": "default",
+    "name": "Untitled Project",
+    "shots": [
+        {
+            "id": "shot-init",
+            "prompt": "A cinematic shot...",
+            "negative_prompt": "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless",
+            "seed": 42,
+            "width": 768,
+            "height": 512,
+            "num_frames": 121,
+            "cfg_scale": 3.0,
+            "enhance_prompt": true,
+            "upscale": true,
+            "pipeline_override": "auto",
+            "timeline": [],
+            "last_job_id": null
+        }
+    ],
+    "fps": 24,
+    "resolution_w": 768,
+    "resolution_h": 512,
+    "seed": 42
+}
