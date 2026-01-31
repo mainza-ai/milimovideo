@@ -124,7 +124,19 @@ Milimo uses a specialized version of LTX-2. You must download the checkpoints ma
     - [LTX-2 Spatial Upscaler](https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors)
     - [Gemma 3 Text Encoders](https://huggingface.co/google/gemma-3-12b-it-qat-q4_0-unquantized/tree/main) (place contents in `gemma-3-12b-it-qat-q4_0-unquantized/`)
 
-    **SAM 3 Setup (In-Painting):**
+3.  **Flux 2 Setup (In-Painting)**:
+    Download the model files from [Black Forest Labs FLUX.2-dev](https://huggingface.co/black-forest-labs/FLUX.2-dev/tree/main) and place them in `backend/models/flux2/`.
+    
+    **Required Structure:**
+    ```text
+    backend/models/flux2/
+    ├── flux-2-klein-9b.safetensors  <-- Rename main model file to this
+    ├── ae.safetensors               <-- Rename VAE file to this
+    ├── text_encoder/                <-- T5/Clip encoder folder
+    └── tokenizer/                   <-- Tokenizer files folder
+    ```
+
+4.  **SAM 3 Setup (In-Painting Helper)**:
     The SAM 3 service runs in a separate environment (`sam3_env`).
     1.  Create environment:
         ```bash
