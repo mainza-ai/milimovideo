@@ -141,7 +141,12 @@ export const VisualTimeline = () => {
             <div className="h-10 flex items-center px-4 border-b border-white/5 bg-white/5 justify-between shrink-0">
                 <div className="flex items-center gap-4">
                     <button
-                        onClick={() => setCurrentTime(0)}
+                        onClick={() => {
+                            setCurrentTime(0);
+                            if (scrollContainerRef.current) {
+                                scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+                            }
+                        }}
                         className="text-white hover:text-milimo-400 focus:outline-none"
                         title="Reset Playhead"
                     >
@@ -216,6 +221,7 @@ export const VisualTimeline = () => {
                                             drag="x"
                                             dragMomentum={false}
                                             dragElastic={0}
+                                            dragConstraints={{ left: -(clip.start * zoom) }}
                                             onDragEnd={(_, info) => handleDragEnd(clip, info)}
                                             onClick={(e) => { e.stopPropagation(); selectShot(clip.id); }}
                                             className={clsx(

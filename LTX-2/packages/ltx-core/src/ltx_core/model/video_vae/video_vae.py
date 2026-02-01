@@ -799,6 +799,9 @@ class VideoDecoder(nn.Module):
                 tile.out_coords[3],  # height
                 tile.out_coords[4],  # width
             )
+            
+            # DEBUG: Print types to confirm Pure BFloat16
+            # print(f"DEBUG_VAE: Buffer={buffer.dtype} Tile={decoded_tile.dtype} Mask={mask.dtype}")
 
             # Slice decoded_tile and mask to match the actual length we're writing
             decoded_slice = decoded_tile[:, :, :actual_temporal_len, :, :]

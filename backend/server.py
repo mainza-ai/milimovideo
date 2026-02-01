@@ -42,6 +42,7 @@ PROJECTS_DIR = config.PROJECTS_DIR
 from events import event_manager
 from database import init_db, get_session, Project, Job, Asset, Shot, engine
 from sqlmodel import Session, select
+from managers.element_manager import element_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -294,6 +295,15 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     params["project_id"] = req.project_id
     params["pipeline_type"] = "advanced"
 
+    # --- Element Injection (Triggers) ---
+    raw_prompt = params.get("prompt", "")
+    raw_prompt = params.get("prompt", "")
+    if "@" in raw_prompt:
+         enriched_prompt, element_images = element_manager.inject_elements_into_prompt(raw_prompt, req.project_id)
+         params["prompt"] = enriched_prompt
+         params["element_images"] = element_images
+         logger.info(f"Enriched prompt: {enriched_prompt} | Visuals: {len(element_images)}")
+
     # --- Smart Continue / Auto-Conditioning Logic ---
     # If auto_continue is True and NO explicit image/video conditioning is provided for frame 0,
     # try to use the last completed shot from this project.
@@ -373,8 +383,6 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
         )
         session.add(job)
         session.commit()
-    
-    background_tasks.add_task(generate_video_task, job_id, params)
     
     background_tasks.add_task(generate_video_task, job_id, params)
     
@@ -701,7 +709,7 @@ async def get_project(project_id: str):
 
         # Fetch Shots from DB
         shots = session.exec(select(Shot).where(Shot.project_id == project_id).order_by(Shot.index)).all()
-        shots_list = [s.dict() for s in shots]
+        shots_list = [s.model_dump() for s in shots]
 
         # Construct response
         return {
@@ -849,7 +857,8 @@ def get_status(job_id: str):
                  # No, user experience first.
                  # If job.output_path is a URL like /generated/..., we need os path.
                  filename = os.path.basename(job.output_path)
-                 fs_path = os.path.join(GENERATED_DIR, filename.replace(".mp4", "_thumb.jpg").replace(".mov", "_thumb.jpg"))
+                 # Fix for NameError: GENERATED_DIR is not defined locally. Use config.
+                 fs_path = os.path.join(config.GENERATED_DIR, filename.replace(".mp4", "_thumb.jpg").replace(".mov", "_thumb.jpg"))
                  if os.path.exists(fs_path):
                      thumb_url = f"/generated/{os.path.basename(fs_path)}"
 

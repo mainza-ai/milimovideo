@@ -5,6 +5,7 @@ import sys
 BACKEND_DIR = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
 PROJECTS_DIR = os.path.join(BACKEND_DIR, "projects")
+GENERATED_DIR = os.path.join(BACKEND_DIR, "generated") # Legacy Support
 
 # LTX-2 Paths
 LTX_DIR = os.path.join(PROJECT_ROOT, "LTX-2")
@@ -15,6 +16,10 @@ LTX_PIPELINES_DIR = os.path.join(LTX_DIR, "packages/ltx-pipelines/src")
 MODELS_DIR = os.path.join(BACKEND_DIR, "models")
 FLUX_WEIGHTS_PATH = os.path.join(MODELS_DIR, "flux2") # Updated path to directory
 SAM_WEIGHTS_PATH = os.path.join(MODELS_DIR, "sam3.pt")
+
+# IP-Adapter Paths (Visual Conditioning)
+FLUX_IP_ADAPTER_PATH = os.path.join(MODELS_DIR, "flux-ip-adapter.safetensors") # Placeholder
+LTX_IP_ADAPTER_PATH = os.path.join(MODELS_DIR, "ltx-ip-adapter.safetensors")   # Placeholder
 
 # Service Ports
 API_PORT = 8000

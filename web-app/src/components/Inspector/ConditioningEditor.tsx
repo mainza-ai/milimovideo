@@ -38,6 +38,20 @@ export const ConditioningEditor = ({ shot }: ConditioningEditorProps) => {
         <div className="space-y-3 pt-4 border-t border-white/5">
             <div className="flex justify-between items-center">
                 <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Conditioning ({shot.timeline.length})</label>
+                <button
+                    onClick={() => {
+                        shot.timeline.forEach(t => removeConditioning(shot.id, t.id));
+                    }}
+                    disabled={shot.timeline.length === 0}
+                    className={clsx(
+                        "text-[10px] transition-colors uppercase font-bold px-2 py-1 rounded",
+                        shot.timeline.length > 0
+                            ? "text-red-400 hover:bg-red-500/10 cursor-pointer"
+                            : "text-white/10 cursor-not-allowed"
+                    )}
+                >
+                    Clear All
+                </button>
             </div>
 
             <div

@@ -40,6 +40,12 @@ class PytorchAttention(AttentionCallable):
             # add a heads dimension if there isn't already one
             if mask.ndim == 3:
                 mask = mask.unsqueeze(1)
+            
+            # Fix: Cast mask to match query dtype (Needed for Gemma which seems to run in Float32)
+            if mask.dtype != q.dtype:
+                mask = mask.to(q.dtype)
+            
+
 
         out = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=mask, dropout_p=0.0, is_causal=False)
         out = out.transpose(1, 2).reshape(b, -1, heads * dim_head)

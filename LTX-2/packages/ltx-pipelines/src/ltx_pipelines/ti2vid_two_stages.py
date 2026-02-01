@@ -106,7 +106,7 @@ class TI2VidTwoStagesPipeline:
         noiser = GaussianNoiser(generator=generator)
         stepper = EulerDiffusionStep()
         cfg_guider = CFGGuider(cfg_guidance_scale)
-        dtype = torch.bfloat16
+        dtype = self.dtype
 
         text_encoder = self.stage_1_model_ledger.text_encoder()
         if enhance_prompt:
@@ -306,7 +306,7 @@ class TI2VidTwoStagesPipeline:
         del transformer
         del video_encoder
         cleanup_memory()
-
+        
         decoded_video = vae_decode_video(
             video_state.latent, self.stage_2_model_ledger.video_decoder(), tiling_config, generator
         )

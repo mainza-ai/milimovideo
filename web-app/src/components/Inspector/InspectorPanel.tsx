@@ -53,25 +53,29 @@ export const InspectorPanel = () => {
                 body: JSON.stringify({
                     project_id: project.id,
                     shot_config: {
-                        ...shot,
+                        // Explicitly map fields to match backend ShotConfig(BaseModel)
+                        // Do NOT spread ...shot to avoid sending junk(UI state, etc) causing 422
+                        id: shot.id,
+                        prompt: shot.prompt,
+                        negative_prompt: shot.negativePrompt,
+                        seed: shot.seed,
+                        width: shot.width,
+                        height: shot.height,
+                        fps: shot.fps || project.fps,
+                        num_frames: shot.numFrames,
+                        num_inference_steps: 40,
+                        cfg_scale: shot.cfgScale,
+                        enhance_prompt: shot.enhancePrompt,
+                        upscale: shot.upscale,
+                        pipeline_override: shot.pipelineOverride,
+                        auto_continue: true,
+
                         timeline: shot.timeline.map(t => ({
                             type: t.type,
                             path: t.path,
                             frame_index: t.frameIndex,
                             strength: t.strength
-                        })),
-                        // Explicitly map camelCase to snake_case for backend
-                        // FIX: Ensure FPS is sent, falling back to project default if shot specific is undefined
-                        fps: shot.fps || project.fps,
-                        num_frames: shot.numFrames,
-                        negative_prompt: shot.negativePrompt,
-                        num_inference_steps: 40, // Default or add to store if needed
-
-                        cfg_scale: shot.cfgScale,
-                        enhance_prompt: shot.enhancePrompt,
-                        auto_continue: true, // Enable Smart Prompt Director
-                        upscale: shot.upscale,
-                        pipeline_override: shot.pipelineOverride
+                        }))
                     }
                 })
             });

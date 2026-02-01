@@ -10,6 +10,7 @@ from typing import Optional, Any, Dict
 import math
 import inspect 
 import config
+from config import PROJECTS_DIR
 
 # Setup paths
 config.setup_paths()
@@ -89,10 +90,7 @@ class ModelManager:
         return os.path.dirname(os.path.abspath(__file__))
 
     def get_model_paths(self):
-        # Use centralized config for model paths
-        # Note: If config doesn't have specific LTX weights defined yet, we can use default logic
-        # but optimally we should move all hardcoded paths to config.py
-        
+        # Use centralized config
         ltx2_root = config.LTX_DIR
         models_dir = os.path.join(ltx2_root, "models")
         
@@ -101,6 +99,8 @@ class ModelManager:
             "distilled_lora_path": os.path.join(models_dir, "checkpoints", "ltx-2-19b-distilled-lora-384.safetensors"), 
             "spatial_upsampler_path": os.path.join(models_dir, "upscalers", "ltx-2-spatial-upscaler-x2-1.0.safetensors"),
             "gemma_root": os.path.join(models_dir, "text_encoders", "gemma3"),
+            # Placeholder for IP-Adapters
+            "flux_ip_adapter": config.FLUX_IP_ADAPTER_PATH,
         }
 
     async def load_pipeline(self, pipeline_type: str, loras: list = None):
@@ -183,6 +183,12 @@ class ModelManager:
                 raise ValueError(f"Unknown pipeline type: {pipeline_type}")
 
             self._pipeline_type = pipeline_type
+            
+            # MPS VAE Fix: Force Float32 to prevent black output
+            if device == "mps" and hasattr(self._pipeline, "vae"):
+                logger.info("MPS detected: Converting VAE to float32 to prevent black output...")
+                self._pipeline.vae = self._pipeline.vae.to(dtype=torch.float32)
+
             logger.info(f"LTX-2 Pipeline {pipeline_type} loaded successfully.")
             return self._pipeline
 
@@ -748,6 +754,61 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         cfg_scale = params.get("cfg_scale", 3.0)
         enhance_prompt = params.get("enhance_prompt", True)
         input_images = params.get("images", [])
+        
+        # RESOLVE WEB PATHS for Timeline Input Images
+        # Structure: [(path, idx, strength)]
+        # Converts /projects/... -> /Users/.../backend/projects/...
+        if input_images:
+            resolved_inputs = []
+            base_dir = get_base_dir()
+            for item in input_images:
+                # Handle potential unpacking issues if item structure varies, but assumed tuple/list
+                try:
+                    path, idx, strength = item
+                    if isinstance(path, str) and path.startswith("/projects"):
+                        abs_path = os.path.join(base_dir, path.lstrip("/"))
+                        if os.path.exists(abs_path):
+                            resolved_inputs.append((abs_path, idx, strength))
+                        else:
+                            logger.warning(f"Timeline Image Not Found & Skipped: {abs_path}")
+                            # SKIP adding it to resolved_inputs so pipeline ignores it
+                    else:
+                        if os.path.exists(path) if isinstance(path, str) else True:
+                            resolved_inputs.append(item)
+                except Exception as e:
+                    logger.warning(f"Failed to resolve input image path: {item} - {e}")
+                    resolved_inputs.append(item)
+            input_images = resolved_inputs
+
+        element_images = params.get("element_images", [])
+
+        # RESOLVE WEB PATHS for Element Images
+        # Converts /projects/... -> /Users/.../backend/projects/...
+        if element_images:
+            resolved_elements = []
+            base_dir = get_base_dir()
+            for img_path in element_images:
+                if isinstance(img_path, str) and img_path.startswith("/projects"):
+                    abs_path = os.path.join(base_dir, img_path.lstrip("/"))
+                    if os.path.exists(abs_path):
+                        resolved_elements.append(abs_path)
+                    else:
+                        logger.warning(f"Element Image Not Found & Skipped: {abs_path}")
+                        # SKIP
+                else:
+                    if os.path.exists(img_path) if isinstance(img_path, str) else True:
+                        resolved_elements.append(img_path)
+            element_images = resolved_elements
+        
+        # Visual Conditioning Logic (Phase 1.5)
+        # If no explicit timeline images, use Element Visuals as Start Frame
+        is_inferred_start_frame = False
+        if not input_images and element_images:
+            logger.info(f"Applying Visual Conditioning from Elements: {len(element_images)} images.")
+            # Use first element image as Start Frame (idx=0, str=1.0)
+            input_images = [(element_images[0], 0, 1.0)]
+            is_inferred_start_frame = True
+
         video_cond = params.get("video_conditioning", [])
         pipeline_type = params.get("pipeline_type", "ti2vid")
         project_id = params.get("project_id", None)  # Extract project_id for workspace paths
@@ -760,26 +821,119 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             active_jobs[job_id]["status_message"] = "Initializing generation..."
         
         
+        loop = asyncio.get_running_loop()
+        
+        if num_frames == 1:
+            logger.info(f"Detected single-frame generation. Delegating to Flux 2 (T2I mode)...")
+            from models.flux_wrapper import flux_inpainter
+            
+            # Use executor to run blocking Flux generation
+            def _run_flux():
+                 def flux_callback(step, total):
+                     if job_id in active_jobs:
+                         active_jobs[job_id]["progress"] = int((step / total) * 100)
+                         active_jobs[job_id]["status_message"] = f"Generating Image ({step}/{total})"
+
+                 img = flux_inpainter.generate_image(
+                     prompt=prompt,
+                     width=width,
+                     height=height,
+                     guidance=cfg_scale, # Flux guidance
+                     ip_adapter_images=element_images, # Pass visual conditioning 
+                     callback=flux_callback
+                 )
+                 # Save
+                 out_filename = f"{job_id}.jpg"
+                 
+                 # Project scoped path?
+                 if project_id:
+                     projects_dir = os.path.join(get_base_dir(), "projects", project_id)
+                     out_path = os.path.join(projects_dir, "generated", out_filename)
+                     # Ensure dirs
+                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                     
+                     # Also thumb
+                     thumb_dir = os.path.join(projects_dir, "thumbnails")
+                     os.makedirs(thumb_dir, exist_ok=True)
+                     thumb_path = os.path.join(thumb_dir, f"{job_id}_thumb.jpg")
+                     
+                     # Web paths
+                     web_url = f"/projects/{project_id}/generated/{out_filename}"
+                     web_thumb = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
+                 else:
+                     # Legacy
+                     out_path = os.path.join(os.path.dirname(__file__), "generated", out_filename)
+                     thumb_path = out_path.replace(".jpg", "_thumb.jpg")
+                     web_url = f"/generated/{out_filename}"
+                     web_thumb = web_url.replace(".jpg", "_thumb.jpg")
+                 
+                 img.save(out_path, quality=95)
+                 img.resize((round(width/4), round(height/4))).save(thumb_path)
+                 
+                 return web_url, web_thumb
+
+            try:
+                web_url, web_thumb = await loop.run_in_executor(None, _run_flux)
+                
+                logger.info(f"Flux Image Generated: {web_url}")
+                
+                update_job_db(
+                    job_id, 
+                    "completed", 
+                    output_path=web_url, 
+                    thumbnail_path=web_thumb,
+                    actual_frames=1,
+                    status_message="Flux Image Ready"
+                )
+                
+                await event_manager.broadcast("complete", {
+                    "job_id": job_id, 
+                    "url": web_url,
+                    "type": "image",
+                    "thumbnail_url": web_thumb
+                })
+                return
+                
+            except Exception as e:
+                logger.error(f"Flux Generation failed: {e}")
+                update_job_db(job_id, "failed", error=str(e))
+                await event_manager.broadcast("error", {"job_id": job_id, "message": str(e)})
+                return
+
         tiling_config = TilingConfig.default()
         
-        def cancellation_check(step_idx, total_steps, *args):
+        # Progress Stages
+        # 0-5%: Init
+        # 5-10%: Enhancement
+        # 10-90%: Generation
+        # 90-100%: Saving
+        
+        def update_job_progress(percent: int, message: str = None):
             if job_id in active_jobs:
-                active_jobs[job_id]["progress"] = int((step_idx / total_steps) * 100)
-                active_jobs[job_id]["status_message"] = f"Generating ({step_idx}/{total_steps})"
+                active_jobs[job_id]["progress"] = percent
+                if message:
+                    active_jobs[job_id]["status_message"] = message
+
+        def cancellation_check(step_idx, total_steps, *args):
+            # Map generation progress (0-100) to Global Progress (10-90)
+            gen_percent = (step_idx + 1) / total_steps
+            global_percent = 10 + int(gen_percent * 80)
+            
+            update_job_progress(global_percent, f"Generating ({step_idx + 1}/{total_steps})")
                 
             if active_jobs.get(job_id, {}).get("cancelled", False):
                 raise RuntimeError(f"Job {job_id} cancelled by user.")
         
-        loop = asyncio.get_running_loop()
+        # loop moved to start of function
         
         def _run_pipeline():
+            nonlocal input_images
             result = None
             if pipeline_type == "ti2vid":
                 # Use local variable to avoid UnboundLocalError with closure capture
                 run_prompt = prompt
                 if enhance_prompt:
-                    if job_id in active_jobs:
-                        active_jobs[job_id]["status_message"] = "Enhancing Prompt..."
+                    update_job_progress(5, "Enhancing Prompt...")
                     logger.info("Enhancing prompt with Gemma...")
                     try: 
                         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
@@ -800,10 +954,18 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                              # Prefix user prompt effectively
                              enhancement_input = f"Global Goal: {prompt}"
 
+                        # Logic to prevent "Character Sheet" description contamination:
+                        # If the input image is inferred from Element Visuals (Reference), 
+                        # DO NOT pass it to Gemma for captioning. We only want 'Action' enhancement.
+                        
+                        image_for_gemma = None
+                        if input_images and not is_inferred_start_frame:
+                            image_for_gemma = input_images[0][0]
+
                         run_prompt = generate_enhanced_prompt(
                             text_encoder, 
                             enhancement_input if sys_prompt else prompt, 
-                            image_path=input_images[0][0] if input_images else None,
+                            image_path=image_for_gemma,
                             seed=seed,
                             is_image=is_image_mode,
                             system_prompt=sys_prompt
@@ -815,6 +977,30 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         cleanup_memory()
                     except Exception as e:
                         logger.warning(f"Prompt enhancement failed: {e}")
+
+                # VALIDATE INPUT IMAGES (Prevent Black Output)
+                if input_images:
+                    valid_inputs = []
+                    for item in input_images:
+                        try:
+                            # Item structure: (path, idx, strength)
+                            start_path = item[0]
+                            if os.path.exists(start_path):
+                                # Fix: Pipeline expects PATHS (strings), not PIL Objects.
+                                # LTX-2 media_io.py calls Image.open(path), which fails if we pass an object.
+                                # So we just validate existence here.
+                                valid_inputs.append(item)
+                            else:
+                                logger.warning(f"Skipping Missing Start Frame: {start_path}")
+                        except Exception as e:
+                            logger.warning(f"Failed to validate start frame {item}: {e}")
+                    input_images = valid_inputs
+                    
+                    if not input_images:
+                         logger.warning("No valid input images remaining after validation. Proceeding with T2V (No Visual Conditioning).")
+                
+                # Update progress before heavy model load/start
+                update_job_progress(10, "Starting Generation...")
                 
                 result = pipeline(
                     prompt=run_prompt,
@@ -877,7 +1063,9 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 return (result, None)  # Standardize to (video, None)
         
         # Execute pipeline and unpack result
+        # Note: 90% update is handled AFTER generation now to avoid premature jump.
         pipeline_result = await loop.run_in_executor(None, _run_pipeline)
+        update_job_progress(90, "Finalizing & Saving...")
         logger.info(f"_run_pipeline returned: type={type(pipeline_result)}, len={len(pipeline_result) if isinstance(pipeline_result, tuple) else 'N/A'}")
         
         video, audio = pipeline_result
@@ -1153,6 +1341,8 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 thumbnail_path=thumbnail_web_path,
                 actual_frames=actual_frames
             )
+            
+            update_job_progress(100, "Done")
             
             await event_manager.broadcast("complete", {
                 "job_id": job_id, 

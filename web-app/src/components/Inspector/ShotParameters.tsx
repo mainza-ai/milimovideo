@@ -33,7 +33,7 @@ export const ShotParameters = ({ shot, fps }: ShotParametersProps) => {
                         ))}
                     </select>
 
-                    <div className="flex-1 flex bg-white/5 rounded border border-white/10 p-0.5">
+                    <div className="flex-1 flex bg-white/5 rounded border border-white/10 p-0.5 gap-1">
                         <button
                             onClick={() => updateShot(shot.id, { numFrames: 121 })}
                             className={clsx(
