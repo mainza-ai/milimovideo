@@ -169,6 +169,13 @@ Visit **`http://localhost:5173`** to enter the studio.
 
 ---
 
+## ✍️ Author
+
+**Mainza Kangombe**  
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue.svg)](https://www.linkedin.com/in/mainza-kangombe-6214295)
+
+---
+
 ## 📜 License
 
 This project is licensed under the Apache 2.0 License.
