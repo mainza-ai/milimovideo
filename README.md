@@ -19,7 +19,7 @@
 
 Unlike simple "prompt-to-video" interfaces, Milimo is a full **Non-Linear Editor (NLE)** that combines:
 *   **LTX-2** for cinematic video generation.
-*   **Flux.1** for high-fidelity image synthesis and visual conditioning.
+*   **Flux 2** for high-fidelity image synthesis and visual conditioning.
 *   **SAM 3** for precise object masking and tracking.
 *   **Gemma 3** for intelligent narrative direction.
 
@@ -65,7 +65,7 @@ Milimo Video is built on a modern, robust stack:
 - **Backend**: **FastAPI** (Python 3.10+), **SQLAlchemy** (SQLite).
 - **AI Core**: 
     - **LTX-2 19B** (Lightricks): Video Foundation.
-    - **Flux.1** (Black Forest Labs): Image Generation & In-Painting.
+    - **Flux 2** (Black Forest Labs): Image Generation & In-Painting.
     - **SAM 3** (Meta): Segmentation & Tracking.
     - **Gemma 3** (Google DeepMind): Prompt Understanding & Narrative Direction.
 - **Optimization**: 
