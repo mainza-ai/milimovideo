@@ -68,7 +68,7 @@ export const InspectorPanel = () => {
                         enhance_prompt: shot.enhancePrompt,
                         upscale: shot.upscale,
                         pipeline_override: shot.pipelineOverride,
-                        auto_continue: true,
+                        auto_continue: !!shot.autoContinue,
 
                         timeline: shot.timeline.map(t => ({
                             type: t.type,

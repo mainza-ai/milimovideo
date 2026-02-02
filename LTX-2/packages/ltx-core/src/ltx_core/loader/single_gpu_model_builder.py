@@ -77,10 +77,22 @@ class SingleGPUModelBuilder(Generic[ModelType], ModelBuilderProtocol[ModelType],
                 device = torch.device("mps")
             else:
                 device = torch.device("cpu")
+        
+        if isinstance(device, str):
+            device = torch.device(device)
+        
+        # MPS/FP8 Fix: MPS cannot load FP8 tensors. We must load to CPU, cast, then move.
+        # We use a separate 'load_device' for the initial state dict loading.
+        load_device = device
+        if device.type == "mps":
+            load_device = torch.device("cpu")
+
         config = self.model_config()
         meta_model = self.meta_model(config, self.module_ops)
         model_paths = self.model_path if isinstance(self.model_path, tuple) else [self.model_path]
-        model_state_dict = self.load_sd(model_paths, sd_ops=self.model_sd_ops, registry=self.registry, device=device)
+        
+        # Load state dict to load_device (CPU if MPS)
+        model_state_dict = self.load_sd(model_paths, sd_ops=self.model_sd_ops, registry=self.registry, device=load_device)
 
         lora_strengths = [lora.strength for lora in self.loras]
         if not lora_strengths or (min(lora_strengths) == 0 and max(lora_strengths) == 0):
@@ -91,7 +103,7 @@ class SingleGPUModelBuilder(Generic[ModelType], ModelBuilderProtocol[ModelType],
             return self._return_model(meta_model, device)
 
         lora_state_dicts = [
-            self.load_sd([lora.path], sd_ops=lora.sd_ops, registry=self.registry, device=device) for lora in self.loras
+            self.load_sd([lora.path], sd_ops=lora.sd_ops, registry=self.registry, device=load_device) for lora in self.loras
         ]
         lora_sd_and_strengths = [
             LoraStateDictWithStrength(sd, strength)

@@ -206,7 +206,7 @@ validation:
     - "A chef in a white uniform stands in a professional kitchen, carefully plating a gourmet dish with precise movements. Steam rises from freshly cooked vegetables as he arranges them with tweezers. The stainless steel surfaces gleam under bright overhead lights, and various pots simmer on the stove behind him. The audio features the sizzling of pans, the clinking of utensils against plates, and the ambient hum of kitchen ventilation."
 
   # Negative prompt to avoid unwanted artifacts
-  negative_prompt: "worst quality, inconsistent motion, blurry, jittery, distorted"
+  negative_prompt: "low quality, worst quality, inconsistent motion, blurry, jittery, distorted"
 
   # Optional: First frame images for image-to-video validation
   # If provided, must have one image per prompt

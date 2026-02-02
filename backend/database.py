@@ -88,6 +88,7 @@ class Asset(SQLModel, table=True):
     width: Optional[int] = None
     height: Optional[int] = None
     duration: Optional[float] = None
+    meta_json: Optional[str] = None # JSON string for prompt, seed, refs, etc.
 
 class Job(SQLModel, table=True):
     id: str = Field(primary_key=True) # Job ID from worker
@@ -111,7 +112,8 @@ class Job(SQLModel, table=True):
 # Database Setup
 from config import DATABASE_URL
 # check_same_thread=False is required for SQLite when using FastAPI BackgroundTasks
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# Increased pool size to prevent "QueuePool limit" errors during heavy polling
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, pool_size=20, max_overflow=40)
 
 def init_db():
     SQLModel.metadata.create_all(engine)

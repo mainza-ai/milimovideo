@@ -254,7 +254,7 @@ validation:
   prompts: # Validation prompts
     - "A cat playing with a ball"
     - "A dog running in a field"
-  negative_prompt: "worst quality, inconsistent motion, blurry, jittery, distorted"
+  negative_prompt: "low quality, worst quality, inconsistent motion, blurry, jittery, distorted"
   images: null                        # Optional image paths for image-to-video
   reference_videos: null              # Reference video paths (IC-LoRA only)
   video_dims: [ 576, 576, 89 ]        # Video dimensions [width, height, frames]

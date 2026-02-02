@@ -191,7 +191,7 @@ class ValidationConfig(ConfigBaseModel):
     )
 
     negative_prompt: str = Field(
-        default="worst quality, inconsistent motion, blurry, jittery, distorted",
+        default="low quality, worst quality, inconsistent motion, blurry, jittery, distorted",
         description="Negative prompt to use for validation examples",
     )
 

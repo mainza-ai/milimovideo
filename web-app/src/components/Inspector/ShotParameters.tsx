@@ -1,4 +1,4 @@
-import { clsx } from 'clsx';
+
 import { useTimelineStore, type Shot } from '../../stores/timelineStore';
 
 interface ShotParametersProps {
@@ -33,26 +33,7 @@ export const ShotParameters = ({ shot, fps }: ShotParametersProps) => {
                         ))}
                     </select>
 
-                    <div className="flex-1 flex bg-white/5 rounded border border-white/10 p-0.5 gap-1">
-                        <button
-                            onClick={() => updateShot(shot.id, { numFrames: 121 })}
-                            className={clsx(
-                                "flex-1 text-[9px] uppercase font-bold rounded py-1 transition-all",
-                                shot.numFrames > 1 ? "bg-milimo-500 text-black shadow-sm" : "text-white/40 hover:text-white"
-                            )}
-                        >
-                            Video
-                        </button>
-                        <button
-                            onClick={() => updateShot(shot.id, { numFrames: 1 })}
-                            className={clsx(
-                                "flex-1 text-[9px] uppercase font-bold rounded py-1 transition-all",
-                                shot.numFrames === 1 ? "bg-milimo-500 text-black shadow-sm" : "text-white/40 hover:text-white"
-                            )}
-                        >
-                            Image
-                        </button>
-                    </div>
+
                 </div>
             </div>
 

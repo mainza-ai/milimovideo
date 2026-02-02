@@ -6,6 +6,7 @@ import sys
 import uuid
 import logging
 import gc
+import json
 from typing import Optional, Any, Dict
 import math
 import inspect 
@@ -67,6 +68,30 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
     except Exception as e:
         logger.error(f"Failed to update job DB for {job_id}: {e}")
 
+def resolve_element_image_path(image_path: str) -> str | None:
+    """Resolve element image_path (web URL format) to absolute filesystem path.
+    
+    Element visuals are stored as web URLs (e.g., /projects/{id}/assets/elements/...)
+    but we need absolute paths for image loading.
+    """
+    if not image_path:
+        return None
+    
+    # Already an absolute path that exists
+    if os.path.isabs(image_path) and os.path.exists(image_path):
+        return image_path
+    
+    # Web URL format: /projects/{id}/assets/...
+    if image_path.startswith("/projects"):
+        relative = image_path.lstrip("/projects/")  # -> {id}/assets/elements/...
+        full_path = os.path.join(PROJECTS_DIR, relative)
+        if os.path.exists(full_path):
+            return full_path
+        else:
+            logger.warning(f"Element image not found at resolved path: {full_path}")
+    
+    return None
+
 async def broadcast_log(job_id: str, message: str):
     logger.info(f"[{job_id}] {message}")
     await event_manager.broadcast("log", {"job_id": job_id, "message": message})
@@ -94,10 +119,26 @@ class ModelManager:
         ltx2_root = config.LTX_DIR
         models_dir = os.path.join(ltx2_root, "models")
         
+        # Auto-select best available checkpoint
+        # Priority 1: Full Precision / BF16 (Better for MPS/CPU stability if available)
+        ckpt_full = os.path.join(models_dir, "checkpoints", "ltx-2-19b-distilled.safetensors")
+        # Priority 2: FP8 (Smaller, but requires cast on MPS)
+        ckpt_fp8 = os.path.join(models_dir, "checkpoints", "ltx-2-19b-distilled-fp8.safetensors")
+        
+        selected_ckpt = ckpt_full
+        if os.path.exists(ckpt_full):
+            logger.info(f"Selected Main Checkpoint: {ckpt_full}")
+        elif os.path.exists(ckpt_fp8):
+            selected_ckpt = ckpt_fp8
+            logger.info(f"Selected FP8 Checkpoint: {ckpt_fp8}")
+        else:
+            logger.warning("No checkpoint found! Defaulting to full path logic.")
+
         return {
-            "checkpoint_path": os.path.join(models_dir, "checkpoints", "ltx-2-19b-distilled.safetensors"),
+            "checkpoint_path": selected_ckpt,
             "distilled_lora_path": os.path.join(models_dir, "checkpoints", "ltx-2-19b-distilled-lora-384.safetensors"), 
             "spatial_upsampler_path": os.path.join(models_dir, "upscalers", "ltx-2-spatial-upscaler-x2-1.0.safetensors"),
+            "temporal_upsampler_path": os.path.join(models_dir, "upscalers", "ltx-2-temporal-upscaler-x2-1.0.safetensors"),
             "gemma_root": os.path.join(models_dir, "text_encoders", "gemma3"),
             # Placeholder for IP-Adapters
             "flux_ip_adapter": config.FLUX_IP_ADAPTER_PATH,
@@ -154,6 +195,7 @@ class ModelManager:
                     checkpoint_path=paths["checkpoint_path"],
                     distilled_lora=distilled_lora_objs,
                     spatial_upsampler_path=paths["spatial_upsampler_path"],
+                    temporal_upsampler_path=paths["temporal_upsampler_path"],
                     gemma_root=paths["gemma_root"],
                     loras=loras,
                     device=device,
@@ -262,6 +304,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
     # Get project-scoped output paths
     project_id = params.get("project_id", None)
     paths = get_project_output_paths(job_id, project_id)
+    output_dir = paths["output_dir"] # Fix NameError
     
     # Initialize Storyboard Manager with project workspace
     storyboard_manager = StoryboardManager(job_id, prompt, params, paths["workspace_dir"])
@@ -629,7 +672,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         os.makedirs(paths["thumbnail_dir"], exist_ok=True)
         
         # Use project-scoped final output path
-        final_output = paths["output_path"]
+        final_output_path = paths["output_path"]
         
         # Stitch videos using ffmpeg
         concat_list = os.path.join(paths["workspace_dir"], f"{job_id}_concat_list.txt")
@@ -1492,6 +1535,207 @@ async def generate_video_task(job_id: str, params: dict):
             f.write(f"Error: {e}\n")
             traceback.print_exc(file=f)
         traceback.print_exc()
+    finally:
+        if job_id in active_jobs:
+            del active_jobs[job_id]
+
+async def generate_image_task(job_id: str, params: dict):
+    """
+    Handles Flux 2 Image Generation asynchronously.
+    """
+    logger.info(f"Starting Image Generation for job {job_id}")
+    
+    prompt = params.get("prompt", "")
+    negative_prompt = params.get("negative_prompt", "")
+    seed = params.get("seed", 42)
+    width = params.get("width", 1024)
+    height = params.get("height", 1024)
+    steps = params.get("num_inference_steps", 25)
+    guidance = params.get("guidance_scale", 3.5)
+    project_id = params.get("project_id")
+    ip_adapter_images = params.get("reference_images", [])
+
+    # Get paths
+    if project_id:
+        output_dir = os.path.join(PROJECTS_DIR, project_id, "generated", "images")
+        web_prefix = f"/projects/{project_id}/generated/images"
+    else:
+        output_dir = os.path.join(GENERATED_DIR, "images") 
+        web_prefix = "/generated/images"
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    output_filename = f"{job_id}.jpg" # Images usually JPG/PNG
+    output_path = os.path.join(output_dir, output_filename)
+    
+    # Progress Callback
+    # Flux callback returns (step_idx, total_steps)
+    
+    # Resolve Elements / IP-Adapter
+    # params['reference_images'] contains element_ids
+    from database import Session, engine, Element
+    from sqlmodel import select
+    
+    resolved_ip_paths = set() # Use set for deduplication
+    resolved_triggers_injected = []
+    
+    logger.info(f"[generate_image_task] Resolving elements. Explicit IDs: {ip_adapter_images}, Project: {project_id}")
+    
+    with Session(engine) as session:
+        # 1. Resolve Explicitly Selected IDs (from UI dropdown)
+        if ip_adapter_images:
+            for el_id in ip_adapter_images:
+                el = session.get(Element, el_id)
+                if el:
+                    resolved_path = resolve_element_image_path(el.image_path)
+                    if resolved_path:
+                        resolved_ip_paths.add(resolved_path)
+                        logger.info(f"Resolved element {el.name}: {resolved_path}")
+                    # Inject trigger if missing
+                    if el.trigger_word and el.trigger_word not in prompt:
+                         resolved_triggers_injected.append(el.trigger_word)
+        
+        # 2. Scan Prompt for Implicit Triggers (e.g. "@Hero")
+        # Only if we have a project context (which we do)
+        if project_id:
+            all_elements = session.exec(select(Element).where(Element.project_id == project_id)).all()
+            for el in all_elements:
+                if el.trigger_word and el.trigger_word in prompt:
+                    resolved_path = resolve_element_image_path(el.image_path)
+                    if resolved_path:
+                        logger.info(f"Auto-detected trigger in prompt: {el.trigger_word} -> {resolved_path}")
+                        resolved_ip_paths.add(resolved_path)
+
+    # Convert back to list for Flux
+    final_ip_images = list(resolved_ip_paths) if resolved_ip_paths else None
+    
+    # Inject Detected Triggers (only for explicit ones that were missing)
+    if resolved_triggers_injected:
+        prompt = f"{prompt} {' '.join(resolved_triggers_injected)}"
+        logger.info(f"Injected Explicit Triggers: {resolved_triggers_injected}. New Prompt: {prompt}")
+    
+    logger.info(f"[generate_image_task] Resolved IP-Adapter paths: {final_ip_images}")
+    # Define callback
+    def progress_callback(step, total):
+        if job_id in active_jobs:
+            pct = int((step / total) * 100)
+            active_jobs[job_id]["progress"] = pct
+            active_jobs[job_id]["status_message"] = f"Denoising step {step}/{total}"
+            
+            # Broadcast throttled? broadcast_progress is async, but we are in sync callback?
+            # We can't await here easily unless we queue it or use run_coroutine_threadsafe.
+            # But simpler: just update active_jobs and let a poller handle it? 
+            # OR - since we run in executor, we can't easily call async.
+            # However, broadcast_log uses event_manager.broadcast which is async.
+            # Ideally we just update the in-memory state and the UI polls / WebSocket broadcasts appropriately.
+            # But our event_manager is async.
+            pass
+
+    # Initialize Job State
+    active_jobs[job_id] = {
+        "progress": 0, 
+        "status": "processing",
+        "status_message": "Initializing ...", 
+        "eta_seconds": steps * 1.5 # Rough guess
+    }
+    
+    try:
+        from models.flux_wrapper import flux_inpainter
+        
+        loop = asyncio.get_running_loop()
+        
+        # We need to wrap the callback to be thread-safe for asyncio broadcast if we wanted real-time push events from thread.
+        # But for now `active_jobs` update is enough if we have a poller. 
+        # Wait, the frontend polls /jobs/{id} right? No, /jobs/{id} logic needs to exist.
+        # Currently `server.py` doesn't seem to have a generic `GET /jobs/{id}`? 
+        # Existing logic uses `event_manager` (SSE).
+        # To make SSE work from threaded execution, we need `loop.call_soon_threadsafe`.
+
+        def thread_safe_callback(step, total):
+            pct = int((step / total) * 100)
+            msg = f"Denoising step {step}/{total}"
+            
+            # Update local state
+            if job_id in active_jobs:
+                # CHECK CANCELLATION
+                if active_jobs[job_id].get("status") == "cancelling":
+                    raise Exception("Job Cancelled by User")
+                    
+                active_jobs[job_id]["progress"] = pct
+                active_jobs[job_id]["status_message"] = msg
+            
+            # Schedule async broadcast
+            async def send_update():
+               await broadcast_progress(job_id, pct, "processing")
+            
+            asyncio.run_coroutine_threadsafe(send_update(), loop)
+
+        # Run Blocking Generation in Executor
+        image = await loop.run_in_executor(
+            None,
+            lambda: flux_inpainter.generate_image(
+                prompt=prompt,
+                width=width,
+                height=height,
+                guidance=guidance,
+                num_inference_steps=steps,
+                seed=seed,
+                ip_adapter_images=final_ip_images,
+                callback=thread_safe_callback
+            )
+        )
+        
+        # Save Image
+        image.save(output_path, quality=95)
+        
+        # Create Asset Record
+        from database import Asset, Session, engine
+        asset_id = uuid.uuid4().hex
+        
+        with Session(engine) as session:
+            asset = Asset(
+                id=asset_id,
+                project_id=project_id,
+                type="image",
+                path=output_path,
+                url=f"{web_prefix}/{output_filename}",
+                filename=output_filename,
+                width=width,
+                height=height,
+                created_at=datetime.now(timezone.utc),
+                meta_json=json.dumps({
+                    "prompt": prompt,
+                    "negative_prompt": negative_prompt,
+                    "seed": seed,
+                    "steps": steps,
+                    "guidance": guidance,
+                    "reference_elements": ip_adapter_images # Store original IDs for UI restoration
+                })
+            )
+            session.add(asset)
+            session.commit()
+            
+        # Update Job
+        update_job_db(
+            job_id, 
+            "completed", 
+            output_path=f"{web_prefix}/{output_filename}",
+            status_message="Done"
+        )
+        
+        # Final Broadcast
+        await event_manager.broadcast("complete", {
+            "job_id": job_id,
+            "url": f"{web_prefix}/{output_filename}",
+            "type": "image",
+            "asset_id": asset_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Image generation failed: {e}")
+        update_job_db(job_id, "failed", error=str(e))
+        await event_manager.broadcast("error", {"job_id": job_id, "message": str(e)})
+        raise e
     finally:
         if job_id in active_jobs:
             del active_jobs[job_id]

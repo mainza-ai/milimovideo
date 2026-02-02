@@ -140,11 +140,12 @@ def listed_wrapper(fn):
 
 def prc_img(x: Tensor, t_coord: Tensor | None = None) -> tuple[Tensor, Tensor]:
     _, h, w = x.shape  # noqa: F841
+    device = x.device  # Get device from input tensor
     x_coords = {
-        "t": torch.arange(1) if t_coord is None else t_coord,
-        "h": torch.arange(h),
-        "w": torch.arange(w),
-        "l": torch.arange(1),
+        "t": torch.arange(1, device=device) if t_coord is None else t_coord.to(device),
+        "h": torch.arange(h, device=device),
+        "w": torch.arange(w, device=device),
+        "l": torch.arange(1, device=device),
     }
     x_ids = torch.cartesian_prod(x_coords["t"], x_coords["h"], x_coords["w"], x_coords["l"])
     x = rearrange(x, "c h w -> (h w) c")

@@ -201,7 +201,7 @@ validation:
     - "/path/to/reference_video_2.mp4"
 
   # Negative prompt to avoid unwanted artifacts
-  negative_prompt: "worst quality, inconsistent motion, blurry, jittery, distorted"
+  negative_prompt: "low quality, worst quality, inconsistent motion, blurry, jittery, distorted"
 
   # Optional: First frame images for additional conditioning
   # If provided, must have one image per prompt

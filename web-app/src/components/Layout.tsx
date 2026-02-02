@@ -5,6 +5,7 @@ import { InspectorPanel } from './Inspector/InspectorPanel';
 import { VisualTimeline } from './Timeline/VisualTimeline';
 import { StoryboardView } from './Storyboard/StoryboardView';
 import { ElementsView } from './Elements/ElementsView';
+import { ImagesView } from './Images/ImagesView';
 import { useTimelineStore, getLastProjectId } from '../stores/timelineStore';
 import { ProjectManager } from './ProjectManager';
 import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
@@ -135,6 +136,12 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                                 >
                                     Storyboard
                                 </button>
+                                <button
+                                    onClick={() => setViewMode('images')}
+                                    className={`px-3 py-1 text-[10px] font-medium rounded-md transition-all ${viewMode === 'images' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/60'}`}
+                                >
+                                    Images
+                                </button>
                             </div>
                         </span>
                         <span className="text-[10px] text-white/30 font-mono uppercase">Resolution: {project.resolutionW}x{project.resolutionH}</span>
@@ -201,6 +208,11 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                                 <ElementsView />
                             </div>
                         )}
+                        {viewMode === 'images' && (
+                            <div className="absolute inset-0 z-10 bg-[#050505] w-full h-full">
+                                <ImagesView />
+                            </div>
+                        )}
                     </div>
 
                     {/* Bottom: Timeline (Only in Timeline View) */}
@@ -217,6 +229,6 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
 
             {/* Modals */}
             {showProjects && <ProjectManager onClose={() => setShowProjects(false)} />}
-        </div>
+        </div >
     );
 };

@@ -56,6 +56,7 @@ class TI2VidTwoStagesPipeline:
         spatial_upsampler_path: str,
         gemma_root: str,
         loras: list[LoraPathStrengthAndSDOps],
+        temporal_upsampler_path: str | None = None, # Added
         device: str = device,
         fp8transformer: bool = False,
     ):
@@ -67,6 +68,7 @@ class TI2VidTwoStagesPipeline:
             checkpoint_path=checkpoint_path,
             gemma_root_path=gemma_root,
             spatial_upsampler_path=spatial_upsampler_path,
+            temporal_upsampler_path=temporal_upsampler_path, # Added
             loras=loras,
             fp8transformer=fp8transformer,
         )
@@ -109,9 +111,6 @@ class TI2VidTwoStagesPipeline:
         dtype = self.dtype
 
         text_encoder = self.stage_1_model_ledger.text_encoder()
-        if enhance_prompt:
-             # ... prompt enhance ...
-             pass # kept existing logic
         if enhance_prompt:
             prompt = generate_enhanced_prompt(
                 text_encoder, prompt, images[0][0] if len(images) > 0 else None, seed=seed
@@ -172,51 +171,17 @@ class TI2VidTwoStagesPipeline:
         
         # LATENT HANDOFF (Stage 1 Downsample)
         if previous_latent_tensor is not None:
-            # previous_latent_tensor is Stage 2 (Full Res). 
-            # We must downsample for Stage 1.
-            # Shape: [1, C, F, H, W]
-            s1_lat = torch.nn.functional.interpolate(
+             # ... existing handoff logic ...
+             from ltx_pipelines.utils.helpers import latent_conditionings_from_tensor
+             # Downsample H, W
+             s1_lat = torch.nn.functional.interpolate(
                 previous_latent_tensor, 
-                scale_factor=(1.0, 0.5, 0.5), # Scale only H,W. Keep F same (unless frame rate change? assume no)
+                scale_factor=(1.0, 0.5, 0.5), 
                 mode='trilinear',
                 align_corners=False
             ).to(dtype=dtype)
-            
-            # Create conditioning items. 
-            # Note: Taper strength is handled by the caller via updating 'images' logic?
-            # Wait, 'images' logic has the strength taper.
-            # We are replacing the *source* of the conditioning, but we want to respect the *overlap/strength* logic.
-            # BUT 'images' list has (path, idx, strength). 
-            # 'previous_latent_tensor' is just a raw tensor.
-            # Assumption: Caller passes `previous_latent_tensor` containing ONLY the overlap frames.
-            # If so, we assume strength=1.0? 
-            # No, we need the strength curve.
-            # Simpler: We assume that if `previous_latent_tensor` is passed, `images` list is EMPTY or unused for those frames?
-            # Actually, the user is passing `images` list with file paths. 
-            # We should probably intercept: "If we have a latent for frame I, use it. Else use image."
-            # OR for simplicity: Just ADD the latent conditioning. It overrides image conditioning if index matches?
-            # `state_with_conditionings` applies sequentially.
-            
-            # Let's assume strict usage: If Latent Handoff is used, we inject it.
-            # We need the strength...
-            # The strength is encoded in the `images` list.
-            # We can't easily extract it without parsing `images`.
-            # HACK: If Latent Handoff is on, we blindly apply it with strength=1.0? No, that freezes it.
-            # We need the taper.
-            # Let's use `latent_conditionings_from_tensor` but we need a custom wrapper to apply specific strengths per frame.
-            
-            # Since we can't change the `images` list easily, let's just use `latent_conditionings_from_tensor`
-            # and hardcode a default taper? Or assume the caller handles the masking?
-            # Wait, "Hard Taper" logic is in Manager.
-            # For now, let's just apply it as a BLOCK with `strength=1.0` (or whatever default)
-            # CAUTION: If we don't taper, we re-introduce the pause if stasis exists.
-            # BUT the whole point is that `previous_latent_tensor` HAS MOTION. So 1.0 is fine!
-            # The taper was needed because the *Image* was static.
-            # If the Latent has motion, we WANT to lock to it!
-            
-            from ltx_pipelines.utils.helpers import latent_conditionings_from_tensor
-            s1_items = latent_conditionings_from_tensor(s1_lat, start_frame_idx=0, strength=1.0)
-            stage_1_conditionings.extend(s1_items)
+             s1_items = latent_conditionings_from_tensor(s1_lat, start_frame_idx=0, strength=1.0)
+             stage_1_conditionings.extend(s1_items)
 
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_1_output_shape,
@@ -301,10 +266,45 @@ class TI2VidTwoStagesPipeline:
             initial_audio_latent=audio_state.latent,
             callback_on_step_end=callback_on_step_end,
         )
-
+        
         synchronize_device()
         del transformer
-        del video_encoder
+        cleanup_memory()
+
+        # Stage 3: Temporal Upsample (Optional)
+        # If the model ledger has a temporal upsampler, apply it.
+        try:
+            temporal_upsampler = self.stage_2_model_ledger.temporal_upsampler()
+            logging.info("Applying Temporal Upsample (Stage 3)...")
+            
+            # Upsample
+            time_upscaled_latent = upsample_video(
+                latent=video_state.latent,
+                video_encoder=video_encoder,
+                upsampler=temporal_upsampler,
+            )
+            
+            video_state = replace(video_state, latent=time_upscaled_latent)
+            
+            # Since we doubled frames, we should ideally double the audio length?
+            # Or assume audio is matching in length.
+            # LTX-2 output audio is latent-based.
+            # The current pipeline logic for audio is often independent or matching video length.
+            # We will just proceed with the upscaled video latent.
+            
+            synchronize_device()
+            del temporal_upsampler
+            cleanup_memory()
+            
+        except ValueError:
+            # No temporal upsampler configured, continue.
+            pass
+        except Exception as e:
+            logging.warning(f"Temporal Upsample Failed: {e}. proceed with Stage 2 output.")
+            pass
+        
+        # Final cleanup for video encoder before decode
+        del video_encoder 
         cleanup_memory()
         
         decoded_video = vae_decode_video(

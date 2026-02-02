@@ -60,6 +60,7 @@ export interface Shot {
     enhancePrompt: boolean;
     upscale: boolean;
     pipelineOverride: 'auto' | 'ti2vid' | 'ic_lora' | 'keyframe';
+    autoContinue?: boolean;
     progress?: number;
 
     // Result
@@ -98,6 +99,7 @@ export interface ShotConfig {
     enhancePrompt: boolean;
     upscale: boolean;
     pipelineOverride: 'auto' | 'ti2vid' | 'ic_lora' | 'keyframe';
+    autoContinue?: boolean; // New: Smart Continue Toggle
     progress?: number;
 
     // Result
@@ -212,8 +214,8 @@ interface TimelineState {
     generateVisual: (elementId: string, promptOverride?: string) => Promise<void>;
 
     // View Mode
-    viewMode: 'timeline' | 'elements' | 'storyboard';
-    setViewMode: (mode: 'timeline' | 'elements' | 'storyboard') => void;
+    viewMode: 'timeline' | 'elements' | 'storyboard' | 'images';
+    setViewMode: (mode: 'timeline' | 'elements' | 'storyboard' | 'images') => void;
 }
 
 const DEFAULT_PROJECT: Project = {
@@ -223,7 +225,7 @@ const DEFAULT_PROJECT: Project = {
         {
             id: 'shot-init', // Static ID for init
             prompt: "A cinematic shot...",
-            negativePrompt: "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless",
+            negativePrompt: "low quality, worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless",
             seed: 42,
             width: 768,
             height: 512,
@@ -242,7 +244,7 @@ const DEFAULT_PROJECT: Project = {
     seed: 42
 };
 
-const DEFAULT_NEGATIVE_PROMPT = "worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless";
+const DEFAULT_NEGATIVE_PROMPT = "low quality, worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless";
 
 import { getAssetUrl } from '../config';
 

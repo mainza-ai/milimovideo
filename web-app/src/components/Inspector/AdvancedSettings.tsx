@@ -79,6 +79,13 @@ export const AdvancedSettings = ({ shot }: AdvancedSettingsProps) => {
                             </div>
                             <span className="text-[10px] uppercase text-white/60 group-hover:text-white/80">Upscale</span>
                         </label>
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                            <div className={clsx("w-3 h-3 rounded-sm border transition-colors flex items-center justify-center", shot.autoContinue ? "bg-amber-500 border-amber-500" : "border-white/20")} >
+                                {shot.autoContinue && <div className="w-1.5 h-1.5 bg-black rounded-sm" />}
+                                <input type="checkbox" className="hidden" checked={!!shot.autoContinue} onChange={(e) => updateShot(shot.id, { autoContinue: e.target.checked })} />
+                            </div>
+                            <span className="text-[10px] uppercase text-white/60 group-hover:text-white/80">Smart Continue</span>
+                        </label>
                     </div>
                 </div>
             )}

@@ -47,8 +47,13 @@ server_last_request.json
 backend/projects/
 
 # Project Plans & Private Docs
+milimo-video-bible.md
 mv_plan/
 dev_diary/
+original-repos/
+original-repos/flux2-orginal-repo-do-not-modify/
+original-repos/ltx2-orginal-repo-do-not-modify/
+original-repos/sam3-orginal-repo-do-not-modify/
 .agent/
 
 # Node Modules

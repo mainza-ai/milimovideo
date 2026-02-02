@@ -156,16 +156,9 @@ class FluxInpainter:
             # Set environment variables for util.py
             os.environ["KLEIN_9B_MODEL_PATH"] = os.path.join(base_path, "flux-2-klein-9b.safetensors")
             
-            # Check for AE in vae/
-            ae_path_dir = os.path.join(base_path, "vae")
-            ae_path_file = os.path.join(base_path, "ae.safetensors") # fallback
-            
-            # Decide AE path
-            final_ae_path = None
-            if os.path.exists(ae_path_dir) and os.path.exists(os.path.join(ae_path_dir, "config.json")):
-                 final_ae_path = ae_path_dir
-            elif os.path.exists(ae_path_file):
-                 final_ae_path = ae_path_file
+            # Check for AE - prioritize native ae.safetensors for correct reference encoding
+            ae_path_file = os.path.join(base_path, "ae.safetensors")
+            ae_path_dir = os.path.join(base_path, "vae")  # Diffusers format fallback
             
             # Set Qwen paths
             qwen_path = os.path.join(base_path, "text_encoder")
@@ -182,12 +175,24 @@ class FluxInpainter:
             # We must pass device to load_text_encoder
             self.text_encoder = load_text_encoder(model_name, device=self.device)
             
-            logger.info("Loading AutoEncoder (Diffusers Wrapper)...")
-            if final_ae_path:
-                self.ae = FluxAEWrapper(final_ae_path, self.device, dtype=self.dtype)
-            else:
-                logger.warning("Local VAE not found, trying native load...")
+            # Load AutoEncoder - prefer native format for correct reference conditioning
+            if os.path.exists(ae_path_file):
+                logger.info(f"Loading Native AutoEncoder from {ae_path_file}...")
+                os.environ["AE_MODEL_PATH"] = ae_path_file
                 self.ae = load_ae(model_name, device=self.device)
+                self.ae.eval()
+                # Cast to correct dtype for MPS compatibility
+                if self.device == "mps":
+                    # Native AE may not support float32 well, keep bf16 and handle in decode
+                    pass
+                logger.info("Native AutoEncoder loaded - reference conditioning enabled")
+            elif os.path.exists(ae_path_dir) and os.path.exists(os.path.join(ae_path_dir, "config.json")):
+                logger.warning("Using Diffusers VAE fallback - reference conditioning may not work correctly")
+                self.ae = FluxAEWrapper(ae_path_dir, self.device, dtype=self.dtype)
+            else:
+                logger.warning("No local VAE found, trying HuggingFace download...")
+                self.ae = load_ae(model_name, device=self.device)
+                self.ae.eval()
 
             logger.info("Loading Flow Model...")
             self.model = load_flow_model(model_name, device=self.device)
@@ -316,54 +321,95 @@ class FluxInpainter:
 
         return x
 
-    def get_ip_adapter_embeds(self, ip_adapter_images):
-        """Encodes and projects images for IP-Adapter"""
-        if not self.ip_adapter_loaded or not ip_adapter_images:
+    def get_reference_embeds(self, reference_images):
+        """Encode reference images using flux2's approach (autoencoder latents).
+        
+        Adapted from flux2/src/flux2/sampling.py:encode_image_refs for 
+        compatibility with FluxAEWrapper and MPS devices.
+        """
+        if not reference_images:
             return None, None
             
         try:
-            # 1. Preprocess Images
-            # ip_adapter_images is list of paths or PIL images
+            import torchvision
+            from flux2.sampling import listed_prc_img
+            
+            # Load and preprocess PIL images from paths
             pil_images = []
-            for img in ip_adapter_images:
+            for img in reference_images:
                 if isinstance(img, str):
-                    pil_images.append(Image.open(img).convert("RGB"))
+                    if os.path.exists(img):
+                        pil_images.append(Image.open(img).convert("RGB"))
+                        logger.info(f"Loaded reference image: {img}")
+                    else:
+                        logger.warning(f"Reference image not found: {img}")
                 else:
                     pil_images.append(img.convert("RGB"))
             
-            inputs = self.image_processor(images=pil_images, return_tensors="pt").to(self.device)
+            if not pil_images:
+                logger.warning("No valid reference images to encode")
+                return None, None
             
-            # 2. Encode
-            with torch.no_grad():
-                image_embeds = self.image_encoder(**inputs).image_embeds # (B, 1024)
+            # MPS memory optimization: limit reference images
+            if self.device == "mps" and len(pil_images) > 2:
+                logger.warning(f"MPS memory limit: reducing from {len(pil_images)} to 2 reference images")
+                pil_images = pil_images[:2]
+            
+            # Preprocess images (resize and normalize)
+            scale = 10  # Time offset scale from flux2
+            # MPS needs smaller references to avoid OOM
+            if self.device == "mps":
+                limit_pixels = 768**2  # Reduced for MPS
+            else:
+                limit_pixels = 2024**2 if len(pil_images) == 1 else 1024**2
+            
+            encoded_refs = []
+            for img in pil_images:
+                # Cap pixels if too large
+                w, h = img.size
+                if w * h > limit_pixels:
+                    import math
+                    factor = math.sqrt(limit_pixels / (w * h))
+                    img = img.resize((int(w * factor), int(h * factor)), Image.Resampling.LANCZOS)
                 
-            # 3. Project
-            # (B, 1024) -> (B, 4, 4096)
-            clip_extra_context_tokens = self.ip_adapter_projector(image_embeds.to(dtype=self.dtype))
+                # Center crop to multiple of 16
+                w, h = img.size
+                new_w = (w // 16) * 16
+                new_h = (h // 16) * 16
+                left = (w - new_w) // 2
+                top = (h - new_h) // 2
+                img = img.crop((left, top, left + new_w, top + new_h))
+                
+                # Convert to tensor and normalize to [-1, 1]
+                img_tensor = torchvision.transforms.ToTensor()(img)
+                img_tensor = 2 * img_tensor - 1
+                img_tensor = img_tensor.unsqueeze(0).to(self.device).to(self.dtype)
+                
+                # Encode through autoencoder
+                encoded = self.ae.encode(img_tensor)
+                encoded_refs.append(encoded[0])  # Remove batch dimension
             
-            # Flatten to (1, N*4, 4096) context sequence
-            # Flux expects (1, L, D)
-            img_cond_seq = clip_extra_context_tokens.reshape(1, -1, clip_extra_context_tokens.shape[-1])
+            # Create time offsets for each reference (separates them in temporal space)
+            t_off = [torch.tensor([scale + scale * t]).to(self.device) for t in range(len(encoded_refs))]
             
-            # 4. Create IDs
-            # Flux needs IDs for these tokens.
-            # We can reuse standard logic or create simple linear IDs.
-            # Let's verify flux2.sampling logic for IDs.
-            # It uses `prc_img` logic usually.
-            # For simplicity, we can extend existing IDs or just use zeros if model is robust (Flux 2 uses RoPE, so IDs matter).
-            # We'll use a simple placeholder ID generation for now or generic range.
-            # Actually, `flux2.sampling.py` has `prc_txt` which generates standard IDs.
-            # Let's generate IDs that place these tokens "after" the text or somewhere.
-            # Usually IP-Adapter tokens are appended.
+            # Process with position IDs
+            ref_tokens, ref_ids = listed_prc_img(encoded_refs, t_coord=t_off)
             
-            # Helper from flux2.sampling (we can look at it later or mock it)
-            # For now, let's just return the embeds and handle IDs in generate_image loop 
-            # by mimicking what `batched_prc_txt` does but for image tokens.
+            # Concatenate all references along sequence dimension
+            ref_tokens = torch.cat(ref_tokens, dim=0)  # (total_ref_tokens, C)
+            ref_ids = torch.cat(ref_ids, dim=0)  # (total_ref_tokens, 4)
             
-            return img_cond_seq, None 
+            # Add batch dimension
+            ref_tokens = ref_tokens.unsqueeze(0).to(self.dtype)  # (1, total_ref_tokens, C)
+            ref_ids = ref_ids.unsqueeze(0)  # (1, total_ref_tokens, 4)
+            
+            logger.info(f"Reference images encoded: {ref_tokens.shape[1]} tokens from {len(pil_images)} images")
+            return ref_tokens, ref_ids
 
         except Exception as e:
-            logger.error(f"Error encoding IP-Adapter images: {e}")
+            logger.error(f"Error encoding reference images: {e}")
+            import traceback
+            traceback.print_exc()
             return None, None
 
     def _trace(self, name, tensor):
@@ -380,13 +426,22 @@ class FluxInpainter:
         has_nan = torch.isnan(tensor).any().item()
         logger.info(f"[Trace] {name}: Shape={tensor.shape}, Range=[{min_v:.4f}, {max_v:.4f}], Mean={mean_v:.4f}, HasNaN={has_nan}")
 
-    def generate_image(self, prompt: str, width: int = 1024, height: int = 1024, guidance: float = 3.5, ip_adapter_images: list = None, callback=None) -> Image.Image:
+    def generate_image(self, prompt: str, width: int = 1024, height: int = 1024, guidance: float = 3.5, num_inference_steps: int = 25, seed: int = None, ip_adapter_images: list = None, callback=None) -> Image.Image:
         if not self.model_loaded:
             self.load_model()
 
-        logger.info(f"Generating Image with Flux 2. Prompt: {prompt}")
+        logger.info(f"Generating Image with Flux 2. Prompt: {prompt}, Steps: {num_inference_steps}, Seed: {seed}")
         
         from flux2.sampling import get_schedule, batched_prc_img, batched_prc_txt, scatter_ids
+
+        # Set Seed
+        if seed is None:
+            seed = torch.seed()
+        
+        # Ensure reproducibility
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
 
         try:
             with torch.no_grad():
@@ -394,19 +449,14 @@ class FluxInpainter:
                 ctx = self.text_encoder([prompt]).to(self.dtype)
                 ctx, ctx_ids = batched_prc_txt(ctx)
 
-                # 1b. Prepare IP-Adapter (Visual Conditioning)
+                # 1b. Prepare Reference Image Conditioning (Native Flux2)
                 img_cond_seq = None
                 img_cond_seq_ids = None
                 if ip_adapter_images:
-                     if not self.ip_adapter_loaded:
-                        self.load_ip_adapter()
-                        
-                     if self.ip_adapter_loaded:
-                         raw_img_cond, _ = self.get_ip_adapter_embeds(ip_adapter_images)
-                         if raw_img_cond is not None:
-                             # Generate IDs mimicking text sequence (linear)
-                             img_cond_seq, img_cond_seq_ids = batched_prc_txt(raw_img_cond)
-                             logger.info(f"IP-Adapter Active: {img_cond_seq.shape[1]} tokens injected.")
+                    # Use flux2's native encode_image_refs (autoencoder-based)
+                    img_cond_seq, img_cond_seq_ids = self.get_reference_embeds(ip_adapter_images)
+                    if img_cond_seq is not None:
+                        logger.info(f"Reference Conditioning Active: {img_cond_seq.shape[1]} tokens")
                 
                 # 2. Prepare Latents (Noise)
                 W = (width // 16) * 16
@@ -417,7 +467,10 @@ class FluxInpainter:
                 img_tensor = rearrange(img_tensor, "h w c -> 1 c h w").to(self.device).to(self.dtype)
                 z_shape_ref = self.ae.encode(img_tensor)
                 
-                x = torch.randn_like(z_shape_ref)
+                # Use Generator for noise to respect seed properly on all devices
+                generator = torch.Generator(device=self.device).manual_seed(seed)
+                x = torch.randn(z_shape_ref.shape, generator=generator, device=self.device, dtype=self.dtype)
+
                 self._trace("Initial Latents (x)", x)
                 if torch.isnan(x).any():
                     logger.warning("[FluxInpainter] WARNING: Initial latents contain NaNs!")
@@ -425,8 +478,15 @@ class FluxInpainter:
                 x, x_ids = batched_prc_img(x)
                 self._trace("Initial Latents (x) after batched_prc_img", x)
                 
+                # MPS Memory Optimization: Clear cache before heavy denoising
+                if self.device == "mps":
+                    import gc
+                    gc.collect()
+                    torch.mps.empty_cache()
+                    logger.info("[MPS] Cleared cache before denoising")
+                
                 # 3. Denoise Loop
-                timesteps = get_schedule(25, x.shape[1]) 
+                timesteps = get_schedule(num_inference_steps, x.shape[1]) 
                 
                 x_out = self.denoise_inpaint(
                     self.model,
@@ -468,7 +528,10 @@ class FluxInpainter:
         self.model_loaded = False
         import gc
         gc.collect()
-        torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
         logger.info("Flux Model Unloaded")
 
 flux_inpainter = FluxInpainter()

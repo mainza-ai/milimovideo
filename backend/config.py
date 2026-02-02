@@ -44,3 +44,18 @@ def setup_paths():
 # Ensure directories exist
 os.makedirs(PROJECTS_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
+
+
+PRESETS = {
+    "Standard": {"width": 1280, "height": 720},
+    "Cinematic": {"width": 1920, "height": 800},
+    "4K": {"width": 3840, "height": 2160},
+    "Social": {"width": 1080, "height": 1920}
+}
+
+FILTER_PRESETS = [
+    {"name": "Cinematic", "prompt": "cinematic lighting, shallow depth of field, 35mm film grain, high budget movie"},
+    {"name": "Cyberpunk", "prompt": "neon lights, rain, wet streets, futuristic city, high tech, blue and pink lighting"},
+    {"name": "Anime", "prompt": "studio ghibli style, cel shaded, vibrant colors, detailed background"},
+    {"name": "Vintage", "prompt": "1950s footage, black and white, film grain, scratches, flickering"},
+]

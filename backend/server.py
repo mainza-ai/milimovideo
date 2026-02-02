@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 # Logging
 import config
+from config import PROJECTS_DIR, PRESETS, FILTER_PRESETS, GENERATED_DIR
 
 # Logging
 logging.basicConfig(
@@ -34,7 +35,7 @@ print("--- STARTING MILIMO VIDEO SERVER ---")
 # Setup Paths (Sys.path) from config
 config.setup_paths()
 
-from worker import generate_video_task
+from worker import generate_video_task, generate_image_task
 
 PROJECTS_DIR = config.PROJECTS_DIR
 # Note: All assets (uploads, generated, thumbnails) are now in /projects/{id}/ subfolders
@@ -324,7 +325,10 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
                     .order_by(Job.created_at.desc())
                 ).first()
                 
+                logger.info(f"Smart Continue Debug: ProjectID={req.project_id}, AutoContinue={req.shot_config.auto_continue}")
+                
                 if last_job and last_job.output_path:
+                    logger.info(f"Smart Continue: Found last job {last_job.id} (Project: {last_job.project_id})")
                     logger.info(f"Smart Continue: Extending from last job {last_job.id}")
                     
                     # Ensure we have a frame to use. 
@@ -337,11 +341,25 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
                              # Better to do it inline or call helper.
                              
                              # Let's generate a temporary last frame path
-                             last_frame_path = os.path.join(GENERATED_DIR, f"{last_job.id}_auto_last.jpg")
+                             if req.project_id:
+                                 project_dir = os.path.join(PROJECTS_DIR, req.project_id)
+                                 last_frame_path = os.path.join(project_dir, "thumbnails", f"{last_job.id}_auto_last.jpg")
+                                 
+                                 # Convert URL to FS Path for input video if needed
+                                 if cond_path.startswith("/projects/"):
+                                     rel = cond_path.lstrip("/projects/")
+                                     cond_path = os.path.join(PROJECTS_DIR, rel)
+                                 elif cond_path.startswith("/generated/"):
+                                     # Handle legacy if it somehow exists
+                                     cond_path = os.path.join(GENERATED_DIR, os.path.basename(cond_path))
+                             else:
+                                 last_frame_path = os.path.join(GENERATED_DIR, f"{last_job.id}_auto_last.jpg")
                              
                              # Reuse FFmpeg command logic
                              import subprocess
                              if not os.path.exists(last_frame_path):
+                                 # Ensure dir exists
+                                 os.makedirs(os.path.dirname(last_frame_path), exist_ok=True)
                                  subprocess.run([
                                      "ffmpeg", "-y", "-sseof", "-1.0", "-i", cond_path, 
                                      "-q:v", "2", "-update", "1", last_frame_path
@@ -856,11 +874,18 @@ def get_status(job_id: str):
                  # Actually, better to just return None if not in DB to encourage migration?
                  # No, user experience first.
                  # If job.output_path is a URL like /generated/..., we need os path.
-                 filename = os.path.basename(job.output_path)
-                 # Fix for NameError: GENERATED_DIR is not defined locally. Use config.
-                 fs_path = os.path.join(config.GENERATED_DIR, filename.replace(".mp4", "_thumb.jpg").replace(".mov", "_thumb.jpg"))
-                 if os.path.exists(fs_path):
-                     thumb_url = f"/generated/{os.path.basename(fs_path)}"
+                 # Use config.PROJECTS_DIR to resolve path if possible
+                 fs_path = None
+                 if job.output_path.startswith("/projects/"):
+                     # /projects/{proj_id}/generated/xyz.mp4 -> PROJECTS_DIR/{proj_id}/generated/xyz.mp4
+                     rel_path = job.output_path.lstrip("/projects/")
+                     fs_path = os.path.join(config.PROJECTS_DIR, rel_path)
+                 
+                 if fs_path and os.path.exists(fs_path):
+                     thumb_fs = fs_path.replace(".mp4", "_thumb.jpg").replace(".mov", "_thumb.jpg")
+                     if os.path.exists(thumb_fs):
+                         # Reconstruct thumb URL from video URL logic
+                         thumb_url = job.output_path.replace(".mp4", "_thumb.jpg").replace(".mov", "_thumb.jpg")
 
             return {
                 "job_id": job.id,
@@ -905,25 +930,29 @@ async def cancel_job(job_id: str):
 async def list_uploads():
     """
     Returns a combined list of Assets (Uploaded) and Completed Jobs (Generated)
-    from the SQLite database.
+    from the SQLite database, deduplicated by URL.
     """
     files = []
+    seen_urls = set()  # Track URLs to avoid duplicates
     
     with Session(engine) as session:
-        # 1. Get Assets (Uploaded)
+        # 1. Get Assets (Uploaded + Generated Images) - these take priority
         assets = session.exec(select(Asset).order_by(Asset.created_at.desc())).all()
         for a in assets:
+            if a.url in seen_urls:
+                continue
+            seen_urls.add(a.url)
             files.append({
                 "id": a.id,
                 "url": a.url,
                 "path": a.path,
                 "type": a.type,
                 "filename": a.filename,
-                "thumbnail": None, # Add logic if we store thumbnail url in Asset
+                "thumbnail": None,
                 "created_at": a.created_at.timestamp()
             })
             
-        # 2. Get Completed Jobs (Generated)
+        # 2. Get Completed Jobs (Generated Videos) - skip if URL already seen
         jobs = session.exec(select(Job).where(Job.status == "completed").order_by(Job.created_at.desc())).all()
         for j in jobs:
             if not j.output_path: continue
@@ -936,15 +965,16 @@ async def list_uploads():
             if j.output_path.startswith("/"): # Absolute path in DB?
                 # Check if it's in projects dir
                 if "/projects/" in j.output_path:
-                    # Extract relative path: /projects/{id}/generated/{filename}
-                    # DB path might be: /Users/.../backend/projects/{id}/generated/{filename}
-                    # OR web path: /projects/{id}/...
-                    
                     if j.output_path.startswith(PROJECTS_DIR):
                         rel = os.path.relpath(j.output_path, os.path.dirname(PROJECTS_DIR))
                         video_url = f"/{rel}"
                     elif j.output_path.startswith("/projects/"):
                          video_url = j.output_path
+            
+            # Skip if already seen (e.g., image already in Assets)
+            if video_url in seen_urls:
+                continue
+            seen_urls.add(video_url)
             
             # THUMBNAIL LOGIC
             thumb_url = None
@@ -955,18 +985,12 @@ async def list_uploads():
                 if filename.endswith(".mp4"):
                     # Check project 'thumbnails' folder first
                     if "/projects/" in video_url:
-                        # Construct thumb URL by replacing generated -> thumbnails ?
-                        # Video: /projects/{id}/generated/foo.mp4
-                        # Thumb: /projects/{id}/thumbnails/foo_thumb.jpg
                         try:
                             parts = video_url.split("/")
-                            # parts: ['', 'projects', '{id}', 'generated', 'foo.mp4']
                             if len(parts) >= 5 and parts[3] == "generated":
                                 parts[3] = "thumbnails"
                                 parts[-1] = parts[-1].replace(".mp4", "_thumb.jpg")
                                 cand_url = "/".join(parts)
-                                # Verify file existence?
-                                # Convert URL to Path
                                 cand_path = os.path.join(os.path.dirname(__file__), cand_url.lstrip("/"))
                                 if os.path.exists(cand_path):
                                     thumb_url = cand_url
@@ -1108,6 +1132,71 @@ async def render_project(project_id: str, background_tasks: BackgroundTasks):
         except Exception as e:
             print(f"Render failed: {e}")
             raise HTTPException(status_code=500, detail=str(e))
+
+class GenerateImageRequest(BaseModel):
+    project_id: str
+    prompt: str
+    negative_prompt: Optional[str] = ""
+    width: int = 1024
+    height: int = 1024
+    num_inference_steps: int = 25
+    guidance_scale: float = 3.5
+    seed: Optional[int] = None
+    reference_images: List[str] = []
+
+@app.post("/generate/image")
+async def generate_image(req: GenerateImageRequest, background_tasks: BackgroundTasks):
+    job_id = f"job_{uuid.uuid4().hex[:8]}"
+    
+    # Create Job Record
+    with Session(engine) as session:
+        job = Job(
+            id=job_id,
+            project_id=req.project_id,
+            type="image_generation",
+            status="pending",
+            created_at=datetime.now(timezone.utc),
+            prompt=req.prompt,
+            params_json=json.dumps(req.model_dump())
+        )
+        session.add(job)
+        session.commit()
+    
+    # Trigger Async Task
+    background_tasks.add_task(generate_image_task, job_id, req.model_dump())
+    
+    return {"job_id": job_id, "status": "queued"}
+
+@app.get("/projects/{project_id}/images")
+async def get_project_images(project_id: str):
+    """List all generated images for a project."""
+    with Session(engine) as session:
+        statement = select(Asset).where(Asset.project_id == project_id, Asset.type == "image").order_by(Asset.created_at.desc())
+        results = session.exec(statement).all()
+        return results
+
+@app.post("/jobs/{job_id}/cancel")
+async def cancel_job(job_id: str):
+    """Cancel a running job."""
+    from worker import active_jobs, update_job_db
+    if job_id in active_jobs:
+        active_jobs[job_id]["status"] = "cancelling"
+        active_jobs[job_id]["status_message"] = "Cancelling..."
+        return {"status": "cancelling"}
+    
+    # If not active, might just be queued or already done?
+    # For simplicity, if not in active, just try to mark DB as cancelled if it's pending.
+    with Session(engine) as session:
+        job = session.get(Job, job_id)
+        if job and job.status == "pending":
+            job.status = "cancelled"
+            session.add(job)
+            session.commit()
+            return {"status": "cancelled"}
+            
+    return {"status": "not_found_or_already_done"}
+
+
 
 # Static file mount MUST come after API routes (otherwise intercepts /projects/{id} API calls)
 app.mount("/projects", StaticFiles(directory=PROJECTS_DIR), name="projects")
