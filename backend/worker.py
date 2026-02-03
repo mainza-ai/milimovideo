@@ -786,6 +786,9 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         num_inference_steps = params.get("num_inference_steps", 40)
         cfg_scale = params.get("cfg_scale", 3.0)
         enhance_prompt = params.get("enhance_prompt", True)
+        upscale = params.get("upscale", False)  # TODO: Implement upscaling with LTX-2 upscalers
+        if upscale:
+            logger.info(f"Upscale requested for job {job_id} - NOT YET IMPLEMENTED")
         input_images = params.get("images", [])
         
         # RESOLVE WEB PATHS for Timeline Input Images
@@ -879,7 +882,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             is_inferred_start_frame = True
 
         video_cond = params.get("video_conditioning", [])
-        pipeline_type = params.get("pipeline_type", "ti2vid")
+        pipeline_type = params.get("pipeline_override") or params.get("pipeline_type", "ti2vid")
         project_id = params.get("project_id", None)  # Extract project_id for workspace paths
         
         # Initialize ETA
@@ -1447,7 +1450,7 @@ async def generate_video_task(job_id: str, params: dict):
     update_job_db(job_id, "processing")
     
     try:
-        pipeline_type = params.get("pipeline_type", "ti2vid")
+        pipeline_type = params.get("pipeline_override") or params.get("pipeline_type", "ti2vid")
         timeline = params.get("timeline", [])
         
         # DEBUG: Log raw params
