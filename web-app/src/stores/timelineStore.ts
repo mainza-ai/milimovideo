@@ -573,7 +573,7 @@ export const useTimelineStore = create<TimelineState>()(
                                 height: s.height,
                                 numFrames: s.num_frames,
                                 cfgScale: s.cfg_scale,
-                                enhancePrompt: s.enhance_prompt,
+                                enhancePrompt: s.enhance_prompt ?? true, // Default to true if not set
                                 upscale: s.upscale,
                                 pipelineOverride: s.pipeline_override,
                                 timeline: (s.timeline || []).map((t: any) => ({
@@ -585,7 +585,8 @@ export const useTimelineStore = create<TimelineState>()(
                                 })),
                                 lastJobId: s.last_job_id,
                                 videoUrl: s.video_url ? getAssetUrl(s.video_url) : undefined,  // Use DB value
-                                thumbnailUrl: getAssetUrl(s.thumbnail_url)
+                                thumbnailUrl: getAssetUrl(s.thumbnail_url),
+                                enhancedPromptResult: s.enhanced_prompt_result // Map from backend
                             }))
                         };
 

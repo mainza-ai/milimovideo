@@ -204,7 +204,7 @@ export const InspectorPanel = () => {
                 </div>
 
                 {/* Enhanced Prompt Result */}
-                {shot.enhancePrompt && shot.enhancedPromptResult && (
+                {shot.enhancedPromptResult && (
                     <div className="space-y-2">
                         <label className="text-[10px] uppercase tracking-widest text-milimo-500 font-bold flex items-center gap-2">
                             <span>✨ Enhanced Prompt</span>

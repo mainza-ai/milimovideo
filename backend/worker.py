@@ -68,6 +68,24 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
     except Exception as e:
         logger.error(f"Failed to update job DB for {job_id}: {e}")
 
+def update_shot_db(shot_id: str, **updates):
+    """Helper to update Shot record in SQLite with any provided fields."""
+    if not shot_id:
+        return
+    try:
+        from database import Shot
+        with Session(engine) as session:
+            shot = session.get(Shot, shot_id)
+            if shot:
+                for key, value in updates.items():
+                    if hasattr(shot, key) and value is not None:
+                        setattr(shot, key, value)
+                session.add(shot)
+                session.commit()
+                logger.info(f"Updated Shot {shot_id}: {list(updates.keys())}")
+    except Exception as e:
+        logger.error(f"Failed to update shot DB for {shot_id}: {e}")
+
 def resolve_element_image_path(image_path: str) -> str | None:
     """Resolve element image_path (web URL format) to absolute filesystem path.
     
@@ -1013,22 +1031,23 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
                         is_image_mode = (num_frames == 1)
                         
-                        # Detect if we are extending a video (Input Image + Video Output)
-                        # Use Director logic
+                        # Custom system prompt for video enhancement
+                        # Always use for video mode to ensure complete, standalone prompts
                         sys_prompt = None
-                        if not is_image_mode and input_images:
+                        if not is_image_mode:
                              sys_prompt = (
                                 "You are an expert Prompt Engineer for the LTX-2 Video Generation model. "
-                                "Given the user's goal and an input image (first frame), generate a COMPLETE, "
-                                "detailed, cinematic prompt for a 4-second video clip.\n\n"
-                                "GUIDELINES:\n"
-                                "- Analyze the input image: Describe visible characters, setting, lighting, style.\n"
-                                "- Follow the user's goal: Include requested actions, movements, audio.\n"
+                                "Your task: REWRITE the user's goal into a COMPLETE, standalone, "
+                                "detailed cinematic prompt for a 4-second video clip.\n\n"
+                                "CRITICAL INSTRUCTIONS:\n"
+                                "- Generate a COMPLETE prompt from scratch. DO NOT continue or append to the input.\n"
+                                "- Start your output with 'Style:' followed by the visual style.\n"
+                                "- Describe the scene, characters, actions, and audio in a single paragraph.\n"
                                 "- Use active language: Present progressive verbs (is walking, is speaking).\n"
-                                "- Include audio layer: Describe sounds alongside actions throughout the prompt.\n"
-                                "- Maintain visual continuity: Output must seamlessly extend from the input image.\n"
-                                "- Output Format: Single paragraph. Start with 'Style: ...' if style is clear.\n"
-                                "- CRITICAL: Output ONLY the complete prompt. No explanations or markdown.\n"
+                                "- Include audio layer: Describe sounds alongside actions.\n"
+                                "- DO NOT output fragments that start mid-sentence.\n"
+                                "- DO NOT include any prefixes like 'Here is...', explanations, or markdown.\n"
+                                "- Output ONLY the complete prompt text, nothing else.\n"
                              )
                              # Prefix user prompt effectively
                              enhancement_input = f"User Goal: {prompt}"
@@ -1038,6 +1057,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         # DO NOT pass it to Gemma for captioning. We only want 'Action' enhancement.
                         
                         image_for_gemma = None
+                        logger.info(f"DEBUG: input_images at enhancement time: {input_images}")
                         if input_images and not is_inferred_start_frame:
                             image_for_gemma = input_images[0][0]
 
@@ -1160,6 +1180,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         logger.info(f"_run_pipeline returned: type={type(pipeline_result)}, len={len(pipeline_result) if isinstance(pipeline_result, tuple) else 'N/A'}")
         
         video, audio = pipeline_result
+        
+        # Validate pipeline output
+        if video is None:
+            raise ValueError(f"Pipeline returned no video output for job {job_id}. Check pipeline logs for errors.")
         
         # Get project-scoped output paths
         paths = get_project_output_paths(job_id, project_id)
@@ -1428,6 +1452,26 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             
             update_job_progress(100, "Done")
             
+            # --- Update Shot record with results ---
+            shot_id = params.get("id")
+            if shot_id:
+                # Retrieve enhanced_prompt from Job (it was saved during generation)
+                try:
+                    with Session(engine) as session:
+                        job = session.get(Job, job_id)
+                        enhanced_prompt_result = job.enhanced_prompt if job else None
+                except:
+                    enhanced_prompt_result = None
+                
+                update_shot_db(
+                    shot_id,
+                    video_url=output_url,
+                    thumbnail_url=thumbnail_web_path,
+                    last_job_id=job_id,
+                    enhanced_prompt_result=enhanced_prompt_result,
+                    status="completed"
+                )
+            
             await event_manager.broadcast("complete", {
                 "job_id": job_id, 
                 "url": output_url, 
@@ -1490,8 +1534,8 @@ async def generate_video_task(job_id: str, params: dict):
                 
             return p
 
-        # If "advanced" mode, we infer the actual pipeline from the timeline assets
-        if pipeline_type == "advanced":
+        # If "advanced" or "auto" mode, we infer the actual pipeline from the timeline assets
+        if pipeline_type in ("advanced", "auto"):
             input_images = []
             video_cond = []
             
@@ -1545,11 +1589,18 @@ async def generate_video_task(job_id: str, params: dict):
                  params["pipeline_type"] = "ti2vid" # Override for worker
                  pipeline_type = "ti2vid"
 
+        # Resolve "auto" to actual pipeline type if not already resolved by timeline logic
+        if pipeline_type == "auto":
+            pipeline_type = "ti2vid"  # Default to ti2vid for auto mode
+            logger.info(f"Auto pipeline resolved to: {pipeline_type}")
+        
         # Load the selected pipeline
         pipeline = await manager.load_pipeline(pipeline_type)
         
-        # Adjust params for specific pipelines
+        # Adjust params for specific pipelines - UPDATE BOTH KEYS
+        # This ensures generate_standard_video_task reads the resolved value
         params["pipeline_type"] = pipeline_type
+        params["pipeline_override"] = pipeline_type  # Clear "auto" value
         
         # Decide if chained or standard
         num_frames = params.get("num_frames", 121)

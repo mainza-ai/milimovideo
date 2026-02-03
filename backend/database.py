@@ -54,10 +54,16 @@ class Shot(SQLModel, table=True):
     height: int = 512
     num_frames: int = 121
     fps: int = 25
+    cfg_scale: float = 3.0
+    enhance_prompt: bool = True
+    upscale: bool = False
+    pipeline_override: str = "auto"
     
     # Generation State
-    prompt_enhanced: Optional[str] = None # The actual prompt sent to LTX
+    prompt_enhanced: Optional[str] = None # Legacy field
+    enhanced_prompt_result: Optional[str] = None # For frontend display
     status: str = "pending" # pending, generating, completed, failed
+    last_job_id: Optional[str] = None
     
     # Results
     video_url: Optional[str] = None
