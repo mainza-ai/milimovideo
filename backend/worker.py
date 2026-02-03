@@ -241,36 +241,26 @@ def get_base_dir():
     """Get backend base directory."""
     return os.path.dirname(os.path.abspath(__file__))
 
-def get_project_output_paths(job_id: str, project_id: str = None):
+def get_project_output_paths(job_id: str, project_id: str):
     """
     Get output paths for a generation job.
-    If project_id is provided, uses project workspace.
-    Otherwise falls back to legacy generated/ folder.
+    project_id is REQUIRED - all outputs are stored in project workspaces.
     """
+    if not project_id:
+        raise ValueError(f"project_id is required for job {job_id}. Legacy paths are no longer supported.")
+    
     base_dir = get_base_dir()
     
-    if project_id:
-        # Project-scoped paths
-        projects_dir = os.path.join(base_dir, "projects", project_id)
-        return {
-            "output_dir": os.path.join(projects_dir, "generated"),
-            "thumbnail_dir": os.path.join(projects_dir, "thumbnails"),
-            "workspace_dir": os.path.join(projects_dir, "workspace"),
-            "output_path": os.path.join(projects_dir, "generated", f"{job_id}.mp4"),
-            "thumbnail_path": os.path.join(projects_dir, "thumbnails", f"{job_id}_thumb.jpg"),
-            "project_id": project_id
-        }
-    else:
-        # Legacy global paths (for backward compatibility)
-        generated_dir = os.path.join(base_dir, "generated")
-        return {
-            "output_dir": generated_dir,
-            "thumbnail_dir": generated_dir,
-            "workspace_dir": generated_dir,
-            "output_path": os.path.join(generated_dir, f"{job_id}.mp4"),
-            "thumbnail_path": os.path.join(generated_dir, f"{job_id}_thumb.jpg"),
-            "project_id": None
-        }
+    # Project-scoped paths (the ONLY supported path structure)
+    projects_dir = os.path.join(base_dir, "projects", project_id)
+    return {
+        "output_dir": os.path.join(projects_dir, "generated"),
+        "thumbnail_dir": os.path.join(projects_dir, "thumbnails"),
+        "workspace_dir": os.path.join(projects_dir, "workspace"),
+        "output_path": os.path.join(projects_dir, "generated", f"{job_id}.mp4"),
+        "thumbnail_path": os.path.join(projects_dir, "thumbnails", f"{job_id}_thumb.jpg"),
+        "project_id": project_id
+    }
 
 # --- Pipeline Cache ---
 # Cancellation tracking
@@ -801,27 +791,63 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         # RESOLVE WEB PATHS for Timeline Input Images
         # Structure: [(path, idx, strength)]
         # Converts /projects/... -> /Users/.../backend/projects/...
+        logger.info(f"=== IMAGE PATH RESOLUTION DEBUG ===")
+        logger.info(f"Raw input_images from params: {input_images}")
+        project_id = params.get("project_id", None)
         if input_images:
             resolved_inputs = []
             base_dir = get_base_dir()
+            logger.info(f"base_dir: {base_dir}, project_id: {project_id}")
             for item in input_images:
                 # Handle potential unpacking issues if item structure varies, but assumed tuple/list
                 try:
                     path, idx, strength = item
+                    logger.info(f"Processing item: path='{path}', idx={idx}, strength={strength}")
                     if isinstance(path, str) and path.startswith("/projects"):
                         abs_path = os.path.join(base_dir, path.lstrip("/"))
+                        logger.info(f"Resolved to abs_path: {abs_path}")
                         if os.path.exists(abs_path):
                             resolved_inputs.append((abs_path, idx, strength))
+                            logger.info(f"✓ Path exists, added to resolved_inputs")
                         else:
-                            logger.warning(f"Timeline Image Not Found & Skipped: {abs_path}")
+                            logger.warning(f"✗ Timeline Image Not Found & Skipped: {abs_path}")
                             # SKIP adding it to resolved_inputs so pipeline ignores it
                     else:
+                        logger.info(f"Path doesn't start with /projects, checking raw: {path}")
                         if os.path.exists(path) if isinstance(path, str) else True:
                             resolved_inputs.append(item)
+                            logger.info(f"✓ Raw path added")
+                        else:
+                            # FALLBACK: Legacy paths like /backend/generated/images/job_x.jpg
+                            # Try to find in current project's generated folder
+                            found = False
+                            if project_id and isinstance(path, str):
+                                filename = os.path.basename(path)
+                                # Check in project's generated/images folder
+                                project_path = os.path.join(base_dir, "projects", project_id, "generated", "images", filename)
+                                logger.info(f"Trying fallback project path: {project_path}")
+                                if os.path.exists(project_path):
+                                    resolved_inputs.append((project_path, idx, strength))
+                                    logger.info(f"✓ Fallback path found and added")
+                                    found = True
+                                else:
+                                    # Also check legacy path in generated folder
+                                    legacy_path = os.path.join(base_dir, "projects", project_id, "generated", filename)
+                                    if os.path.exists(legacy_path):
+                                        resolved_inputs.append((legacy_path, idx, strength))
+                                        logger.info(f"✓ Legacy generated path found: {legacy_path}")
+                                        found = True
+                            
+                            if not found:
+                                logger.warning(f"✗ Raw path not found (no fallback worked): {path}")
                 except Exception as e:
                     logger.warning(f"Failed to resolve input image path: {item} - {e}")
                     resolved_inputs.append(item)
             input_images = resolved_inputs
+            logger.info(f"Final resolved input_images: {len(input_images)} items")
+        else:
+            logger.info(f"No input_images to resolve")
+        logger.info(f"=== END PATH RESOLUTION DEBUG ===")
 
         element_images = params.get("element_images", [])
 
@@ -888,27 +914,23 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                  # Save
                  out_filename = f"{job_id}.jpg"
                  
-                 # Project scoped path?
-                 if project_id:
-                     projects_dir = os.path.join(get_base_dir(), "projects", project_id)
-                     out_path = os.path.join(projects_dir, "generated", out_filename)
-                     # Ensure dirs
-                     os.makedirs(os.path.dirname(out_path), exist_ok=True)
-                     
-                     # Also thumb
-                     thumb_dir = os.path.join(projects_dir, "thumbnails")
-                     os.makedirs(thumb_dir, exist_ok=True)
-                     thumb_path = os.path.join(thumb_dir, f"{job_id}_thumb.jpg")
-                     
-                     # Web paths
-                     web_url = f"/projects/{project_id}/generated/{out_filename}"
-                     web_thumb = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
-                 else:
-                     # Legacy
-                     out_path = os.path.join(os.path.dirname(__file__), "generated", out_filename)
-                     thumb_path = out_path.replace(".jpg", "_thumb.jpg")
-                     web_url = f"/generated/{out_filename}"
-                     web_thumb = web_url.replace(".jpg", "_thumb.jpg")
+                 # Project-scoped path (project_id is REQUIRED)
+                 if not project_id:
+                     raise ValueError(f"project_id is required for Flux image generation {job_id}")
+                 
+                 projects_dir = os.path.join(get_base_dir(), "projects", project_id)
+                 out_path = os.path.join(projects_dir, "generated", out_filename)
+                 # Ensure dirs
+                 os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                 
+                 # Also thumb
+                 thumb_dir = os.path.join(projects_dir, "thumbnails")
+                 os.makedirs(thumb_dir, exist_ok=True)
+                 thumb_path = os.path.join(thumb_dir, f"{job_id}_thumb.jpg")
+                 
+                 # Web paths
+                 web_url = f"/projects/{project_id}/generated/{out_filename}"
+                 web_thumb = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
                  
                  img.save(out_path, quality=95)
                  img.resize((round(width/4), round(height/4))).save(thumb_path)
@@ -943,7 +965,13 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 await event_manager.broadcast("error", {"job_id": job_id, "message": str(e)})
                 return
 
-        tiling_config = TilingConfig.default()
+        # Use MPS-specific tiling to prevent OOM during VAE decode
+        # MPS devices have unified memory and require smaller tiles
+        if torch.backends.mps.is_available():
+            tiling_config = TilingConfig.default()
+            logger.info("Using MPS-optimized tiling configuration")
+        else:
+            tiling_config = TilingConfig.default()
         
         # Progress Stages
         # 0-5%: Init
@@ -988,14 +1016,19 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         if not is_image_mode and input_images:
                              sys_prompt = (
                                 "You are an expert Prompt Engineer for the LTX-2 Video Generation model. "
-                                "Your task is to take the user's Global Goal and expand it into a rich, detailed, "
-                                "cinematic prompt. "
-                                "CRITICAL: The output video MUST transition seamlessly from the provided input image. "
-                                "Ensure visual coherence of: characters, style, lighting, environment, camera angle. "
-                                "Output ONLY the prompt paragraph."
+                                "Given the user's goal and an input image (first frame), generate a COMPLETE, "
+                                "detailed, cinematic prompt for a 4-second video clip.\n\n"
+                                "GUIDELINES:\n"
+                                "- Analyze the input image: Describe visible characters, setting, lighting, style.\n"
+                                "- Follow the user's goal: Include requested actions, movements, audio.\n"
+                                "- Use active language: Present progressive verbs (is walking, is speaking).\n"
+                                "- Include audio layer: Describe sounds alongside actions throughout the prompt.\n"
+                                "- Maintain visual continuity: Output must seamlessly extend from the input image.\n"
+                                "- Output Format: Single paragraph. Start with 'Style: ...' if style is clear.\n"
+                                "- CRITICAL: Output ONLY the complete prompt. No explanations or markdown.\n"
                              )
                              # Prefix user prompt effectively
-                             enhancement_input = f"Global Goal: {prompt}"
+                             enhancement_input = f"User Goal: {prompt}"
 
                         # Logic to prevent "Character Sheet" description contamination:
                         # If the input image is inferred from Element Visuals (Reference), 
@@ -1005,9 +1038,21 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         if input_images and not is_inferred_start_frame:
                             image_for_gemma = input_images[0][0]
 
+                        # DEBUG TRACE - Enhanced Prompt Input Values
+                        effective_prompt = enhancement_input if sys_prompt else prompt
+                        logger.info(f"=== ENHANCE PROMPT DEBUG ===")
+                        logger.info(f"Original prompt (raw): '{prompt}'")
+                        logger.info(f"sys_prompt set: {bool(sys_prompt)}")
+                        logger.info(f"enhancement_input: '{enhancement_input if sys_prompt else 'N/A'}'")
+                        logger.info(f"Effective prompt to Gemma: '{effective_prompt}'")
+                        logger.info(f"image_for_gemma: {image_for_gemma}")
+                        logger.info(f"is_image_mode: {is_image_mode}")
+                        logger.info(f"is_inferred_start_frame: {is_inferred_start_frame}")
+                        logger.info(f"=== END DEBUG ===")
+
                         run_prompt = generate_enhanced_prompt(
                             text_encoder, 
-                            enhancement_input if sys_prompt else prompt, 
+                            effective_prompt, 
                             image_path=image_for_gemma,
                             seed=seed,
                             is_image=is_image_mode,
@@ -1272,19 +1317,13 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         img.thumbnail((256, 256))
                         img.save(thumb_path, quality=85)
                         logger.info(f"Generated thumbnail: {thumb_path}")
-                    # Use project-scoped URL
-                    if project_id:
-                        thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
-                    else:
-                        thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"
+                    # Use project-scoped URL (project_id is REQUIRED)
+                    thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
                 except Exception as e:
                     logger.warning(f"Thumbnail gen failed for image: {e}")
 
-                # Use project-scoped paths for DB
-                if project_id:
-                    output_url = f"/projects/{project_id}/generated/{os.path.basename(output_path)}"
-                else:
-                    output_url = f"/generated/{os.path.basename(output_path)}"
+                # Use project-scoped paths for DB (project_id is REQUIRED)
+                output_url = f"/projects/{project_id}/generated/{os.path.basename(output_path)}"
                 
                 update_job_db(
                     job_id, 
@@ -1303,14 +1342,21 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
             # For video: encode normally
             # encode_video signature: (video, fps, audio, audio_sample_rate, output_path, video_chunks_number)
-            encode_video(
-                video,                                                           # 1st: video tensor
-                int(params.get("fps", 25)),                                     # 2nd: fps
-                audio,                                                          # 3rd: audio tensor
-                AUDIO_SAMPLE_RATE if audio is not None else None,              # 4th: audio_sample_rate
-                output_path,                                                    # 5th: output_path
-                video_chunks_number                                             # 6th: video_chunks_number
-            )
+            try:
+                encode_video(
+                    video,                                                           # 1st: video tensor
+                    int(params.get("fps", 25)),                                     # 2nd: fps
+                    audio,                                                          # 3rd: audio tensor
+                    AUDIO_SAMPLE_RATE if audio is not None else None,              # 4th: audio_sample_rate
+                    output_path,                                                    # 5th: output_path
+                    video_chunks_number                                             # 6th: video_chunks_number
+                )
+            finally:
+                # MPS CRITICAL: Force cleanup after VAE iteration to free GPU memory
+                import gc
+                gc.collect()
+                if torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
             logger.info(f"Video saved to {output_path}")
         
         # Generate thumbnail (using project-scoped path)
@@ -1330,11 +1376,8 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     "ffmpeg", "-y", "-i", output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
                 ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 logger.info(f"Generated thumbnail: {thumb_path}")
-            # Use project-scoped URL
-            if project_id:
-                thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
-            else:
-                thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"  # Legacy fallback
+            # Use project-scoped URL (project_id is REQUIRED)
+            thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
         except Exception as e:
             logger.warning(f"Failed to generate thumbnail: {e}")
 
@@ -1353,20 +1396,14 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             except Exception as e:
                 logger.warning(f"Could not verify frame count: {e}")
 
-            # GENERATE THUMBNAIL (Standard)
-            # GENERATE THUMBNAIL (Standard)
+            # GENERATE THUMBNAIL (Standard) - project_id is REQUIRED
             thumbnail_web_path = None
             try:
-                if project_id:
-                    # Use thumbnails/ directory for project-based jobs
-                    thumb_dir = os.path.join(PROJECTS_DIR, project_id, "thumbnails")
-                    os.makedirs(thumb_dir, exist_ok=True)
-                    thumb_path = os.path.join(thumb_dir, f"{job_id}_thumb.jpg")
-                    thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
-                else:
-                    # Legacy fallback (same folder as video)
-                    thumb_path = output_path.replace(".mp4", "_thumb.jpg")
-                    thumbnail_web_path = f"/generated/{os.path.basename(thumb_path)}"
+                # Use thumbnails/ directory for project-based jobs
+                thumb_dir = os.path.join(PROJECTS_DIR, project_id, "thumbnails")
+                os.makedirs(thumb_dir, exist_ok=True)
+                thumb_path = os.path.join(thumb_dir, f"{job_id}_thumb.jpg")
+                thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
 
                 # Extract at 0.5s
                 subprocess.run([
@@ -1376,11 +1413,12 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             except Exception as e:
                 logger.warning(f"Failed to generate thumbnail: {e}")
 
-            # Update DB with explicit thumbnail path
+            # Update DB with project-scoped paths (project_id is REQUIRED)
+            output_url = f"/projects/{project_id}/generated/{os.path.basename(output_path)}"
             update_job_db(
                 job_id, 
                 "completed", 
-                output_path=f"/projects/{project_id}/generated/{os.path.basename(output_path)}" if project_id else f"/generated/{os.path.basename(output_path)}",
+                output_path=output_url,
                 thumbnail_path=thumbnail_web_path,
                 actual_frames=actual_frames
             )
@@ -1389,7 +1427,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             
             await event_manager.broadcast("complete", {
                 "job_id": job_id, 
-                "url": f"/projects/{project_id}/generated/{os.path.basename(output_path)}" if project_id else f"/generated/{os.path.basename(output_path)}", 
+                "url": output_url, 
                 "type": "video",
                 "thumbnail_url": thumbnail_web_path,
                 "actual_frames": actual_frames
@@ -1555,13 +1593,12 @@ async def generate_image_task(job_id: str, params: dict):
     project_id = params.get("project_id")
     ip_adapter_images = params.get("reference_images", [])
 
-    # Get paths
-    if project_id:
-        output_dir = os.path.join(PROJECTS_DIR, project_id, "generated", "images")
-        web_prefix = f"/projects/{project_id}/generated/images"
-    else:
-        output_dir = os.path.join(GENERATED_DIR, "images") 
-        web_prefix = "/generated/images"
+    # Get paths - project_id is REQUIRED
+    if not project_id:
+        raise ValueError(f"project_id is required for image generation job {job_id}. Legacy paths are no longer supported.")
+    
+    output_dir = os.path.join(PROJECTS_DIR, project_id, "generated", "images")
+    web_prefix = f"/projects/{project_id}/generated/images"
     
     os.makedirs(output_dir, exist_ok=True)
     

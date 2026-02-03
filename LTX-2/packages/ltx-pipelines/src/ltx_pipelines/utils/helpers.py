@@ -519,11 +519,8 @@ def clean_response(text: str) -> str:
     while cleaned_text and not cleaned_text[0].isalnum():
         cleaned_text = cleaned_text[1:].strip()
     text = cleaned_text
-            
-    # Fix common LLM completion artifacts
-    if text.lower().startswith("and "):
-        text = text[4:].strip()
-        
+    
+    # Capitalize first letter if lowercase
     if text and text[0].islower():
         text = text[0].upper() + text[1:]
         

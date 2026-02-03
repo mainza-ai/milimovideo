@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 # Logging
 import config
-from config import PROJECTS_DIR, PRESETS, FILTER_PRESETS, GENERATED_DIR
+from config import PROJECTS_DIR, PRESETS, FILTER_PRESETS
 
 # Logging
 logging.basicConfig(
@@ -210,77 +210,56 @@ async def get_shot_last_frame(job_id: str):
     """
     Returns the path/url to the last frame of a generated video.
     Used for 'Extend' functionality.
+    Only supports project-scoped paths - legacy /generated/ paths are not supported.
     """
     import subprocess
     
-    # 1. Look up the job in DB to get project-scoped output path
+    # Look up the job in DB to get project-scoped output path
     with Session(engine) as session:
         job = session.get(Job, job_id)
         
-        if job and job.output_path:
-            # Convert DB path to filesystem path
-            # job.output_path can be: /projects/{id}/generated/file.mp4 or /generated/file.mp4
-            if job.output_path.startswith("/projects/"):
-                # Project-scoped: /projects/{id}/generated/filename.mp4
-                video_path = os.path.join(os.path.dirname(__file__), job.output_path.lstrip("/"))
-            else:
-                # Legacy: /generated/filename.mp4
-                video_path = os.path.join(GENERATED_DIR, os.path.basename(job.output_path))
-            
-            # Check if it's an image (single frame generation)
-            if job.output_path.endswith(".jpg") or job.output_path.endswith(".png"):
-                if os.path.exists(video_path):
-                    return {"url": job.output_path, "path": video_path}
-            
+        if not job or not job.output_path:
+            raise HTTPException(status_code=404, detail=f"Job {job_id} not found or has no output")
+        
+        # Require project-scoped paths
+        if not job.output_path.startswith("/projects/"):
+            raise HTTPException(status_code=400, detail=f"Job {job_id} uses legacy path format. Please regenerate in a project.")
+        
+        # Project-scoped: /projects/{id}/generated/filename.mp4
+        video_path = os.path.join(os.path.dirname(__file__), job.output_path.lstrip("/"))
+        
+        # Check if it's an image (single frame generation)
+        if job.output_path.endswith(".jpg") or job.output_path.endswith(".png"):
             if os.path.exists(video_path):
-                try:
-                    # Extract last frame to project workspace
-                    out_name = f"{job_id}_last.jpg"
-                    
-                    # Determine output directory (same as video)
-                    out_dir = os.path.dirname(video_path)
-                    out_path = os.path.join(out_dir, out_name)
-                    
-                    # Extract last frame using ffmpeg
-                    subprocess.run([
-                        "ffmpeg", "-y", "-sseof", "-1.0", "-i", video_path,
-                        "-q:v", "2", "-update", "1", out_path
-                    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    
-                    # Build URL based on original path pattern
-                    if job.output_path.startswith("/projects/"):
-                        # Extract project path prefix
-                        parts = job.output_path.split("/")
-                        project_id = parts[2]
-                        out_url = f"/projects/{project_id}/generated/{out_name}"
-                    else:
-                        out_url = f"/generated/{out_name}"
-                    
-                    return {"url": out_url, "path": out_path}
-                except Exception as e:
-                    logger.error(f"Failed to extract last frame from {video_path}: {e}")
-    
-    # 2. Legacy fallback: Check GENERATED_DIR directly
-    video_path = os.path.join(GENERATED_DIR, f"{job_id}.mp4")
-    if not os.path.exists(video_path):
-        image_path = os.path.join(GENERATED_DIR, f"{job_id}.jpg")
-        if os.path.exists(image_path):
-            return {"url": f"/generated/{job_id}.jpg", "path": image_path}
-        raise HTTPException(status_code=404, detail="Video/Image not found")
-    
-    try:
-        out_name = f"{job_id}_last.jpg"
-        out_path = os.path.join(GENERATED_DIR, out_name)
+                return {"url": job.output_path, "path": video_path}
+            raise HTTPException(status_code=404, detail=f"Image not found: {job.output_path}")
         
-        subprocess.run([
-            "ffmpeg", "-y", "-sseof", "-1.0", "-i", video_path,
-            "-q:v", "2", "-update", "1", out_path
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if not os.path.exists(video_path):
+            raise HTTPException(status_code=404, detail=f"Video not found: {video_path}")
         
-        return {"url": f"/generated/{out_name}", "path": out_path}
-    except Exception as e:
-        logger.error(f"Failed to extract last frame: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        try:
+            # Extract last frame to project workspace
+            out_name = f"{job_id}_last.jpg"
+            
+            # Determine output directory (same as video)
+            out_dir = os.path.dirname(video_path)
+            out_path = os.path.join(out_dir, out_name)
+            
+            # Extract last frame using ffmpeg
+            subprocess.run([
+                "ffmpeg", "-y", "-sseof", "-1.0", "-i", video_path,
+                "-q:v", "2", "-update", "1", out_path
+            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # Build URL based on original path pattern
+            parts = job.output_path.split("/")
+            project_id = parts[2]
+            out_url = f"/projects/{project_id}/generated/{out_name}"
+            
+            return {"url": out_url, "path": out_path}
+        except Exception as e:
+            logger.error(f"Failed to extract last frame from {video_path}: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/generate/advanced")
 async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: BackgroundTasks):
@@ -337,23 +316,20 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
                         cond_path = last_job.output_path
                         if cond_path.endswith(".mp4") or cond_path.endswith(".mov"):
                              # We need to extract the last frame. 
-                             # We can reuse the logic from get_shot_last_frame or call it internaly?
-                             # Better to do it inline or call helper.
+                             # Project-scoped paths are REQUIRED
                              
-                             # Let's generate a temporary last frame path
-                             if req.project_id:
+                             # Skip if using legacy paths
+                             if not cond_path.startswith("/projects/"):
+                                 logger.warning(f"Smart Continue: Skipping job {last_job.id} - uses legacy path format")
+                                 cond_path = None
+                             else:
+                                 # Let's generate a temporary last frame path
                                  project_dir = os.path.join(PROJECTS_DIR, req.project_id)
                                  last_frame_path = os.path.join(project_dir, "thumbnails", f"{last_job.id}_auto_last.jpg")
                                  
-                                 # Convert URL to FS Path for input video if needed
-                                 if cond_path.startswith("/projects/"):
-                                     rel = cond_path.lstrip("/projects/")
-                                     cond_path = os.path.join(PROJECTS_DIR, rel)
-                                 elif cond_path.startswith("/generated/"):
-                                     # Handle legacy if it somehow exists
-                                     cond_path = os.path.join(GENERATED_DIR, os.path.basename(cond_path))
-                             else:
-                                 last_frame_path = os.path.join(GENERATED_DIR, f"{last_job.id}_auto_last.jpg")
+                                 # Convert URL to FS Path for input video
+                                 rel = cond_path.lstrip("/projects/")
+                                 cond_path = os.path.join(PROJECTS_DIR, rel)
                              
                              # Reuse FFmpeg command logic
                              import subprocess
@@ -902,17 +878,7 @@ def get_status(job_id: str):
                 "actual_frames": job.actual_frames
             }
 
-    # 3. Fallback: File Check (Legacy - for jobs before DB migration)
-    video_path = os.path.join(GENERATED_DIR, f"{job_id}.mp4")
-    if os.path.exists(video_path):
-        return {
-            "job_id": job_id, 
-            "status": "completed", 
-            "video_url": f"/generated/{job_id}.mp4",
-            "url": f"/generated/{job_id}.mp4",
-            "content_type": "video"
-        }
-        
+    # 3. No job found in DB or active jobs
     return {"job_id": job_id, "status": "not_found", "progress": 0}
 
 @app.post("/cancel/{job_id}")
@@ -959,17 +925,21 @@ async def list_uploads():
             
             filename = os.path.basename(j.output_path)
             
-            # DEFAULT: Legacy
-            url_prefix = "/generated"
-            video_url = f"/generated/{filename}"
-            if j.output_path.startswith("/"): # Absolute path in DB?
-                # Check if it's in projects dir
-                if "/projects/" in j.output_path:
-                    if j.output_path.startswith(PROJECTS_DIR):
-                        rel = os.path.relpath(j.output_path, os.path.dirname(PROJECTS_DIR))
-                        video_url = f"/{rel}"
-                    elif j.output_path.startswith("/projects/"):
-                         video_url = j.output_path
+            # Only serve project-scoped paths
+            if j.output_path.startswith("/projects/"):
+                video_url = j.output_path
+            elif "/projects/" in j.output_path:
+                # Handle absolute filesystem paths like PROJECTS_DIR/...
+                if j.output_path.startswith(PROJECTS_DIR):
+                    rel = os.path.relpath(j.output_path, os.path.dirname(PROJECTS_DIR))
+                    video_url = f"/{rel}"
+                else:
+                    # Skip - cannot determine correct URL
+                    continue
+            else:
+                # Skip legacy /generated/ paths - no longer supported
+                logger.debug(f"Skipping job {j.id} with legacy path: {j.output_path}")
+                continue
             
             # Skip if already seen (e.g., image already in Assets)
             if video_url in seen_urls:
@@ -996,11 +966,7 @@ async def list_uploads():
                                     thumb_url = cand_url
                         except: pass
                     
-                    if not thumb_url:
-                        # Legacy fallback
-                        thumb_path = j.output_path.replace(".mp4", "_thumb.jpg")
-                        if os.path.exists(thumb_path):
-                             thumb_url = f"/generated/{os.path.basename(thumb_path)}"
+                    # No thumbnail found - thumb_url remains None
             
             files.append({
                 "id": j.id,
@@ -1088,11 +1054,12 @@ async def render_project(project_id: str, background_tasks: BackgroundTasks):
             # Look up job to get actual output path
             job = session.get(Job, job_id)
             if job and job.output_path:
-                # Convert URL path to filesystem path
-                if job.output_path.startswith("/projects/"):
-                    file_path = os.path.join(os.path.dirname(__file__), job.output_path.lstrip("/"))
-                else:
-                    file_path = os.path.join(GENERATED_DIR, os.path.basename(job.output_path))
+                # Require project-scoped paths
+                if not job.output_path.startswith("/projects/"):
+                    logger.warning(f"Skipping job {job_id} in render - uses legacy path format")
+                    continue
+                
+                file_path = os.path.join(os.path.dirname(__file__), job.output_path.lstrip("/"))
                 
                 if os.path.exists(file_path) and file_path.endswith(".mp4"):
                     input_files.append(file_path)
@@ -1176,10 +1143,11 @@ async def get_project_images(project_id: str):
         return results
 
 @app.post("/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str):
+async def cancel_job_v2(job_id: str):
     """Cancel a running job."""
     from worker import active_jobs, update_job_db
     if job_id in active_jobs:
+        active_jobs[job_id]["cancelled"] = True  # This flag is what the worker checks!
         active_jobs[job_id]["status"] = "cancelling"
         active_jobs[job_id]["status_message"] = "Cancelling..."
         return {"status": "cancelling"}

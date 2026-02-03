@@ -351,9 +351,9 @@ class FluxInpainter:
                 return None, None
             
             # MPS memory optimization: limit reference images
-            if self.device == "mps" and len(pil_images) > 2:
-                logger.warning(f"MPS memory limit: reducing from {len(pil_images)} to 2 reference images")
-                pil_images = pil_images[:2]
+            if self.device == "mps" and len(pil_images) > 3:
+                logger.warning(f"MPS memory limit: reducing from {len(pil_images)} to 3 reference images")
+                pil_images = pil_images[:3]
             
             # Preprocess images (resize and normalize)
             scale = 10  # Time offset scale from flux2
