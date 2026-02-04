@@ -1,10 +1,144 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
 // import type { StoryElement } from '../../stores/timelineStore';
 import { Plus, Trash2, Wand2, Image as ImageIcon, X } from 'lucide-react';
 
+interface ElementCardProps {
+    el: any;
+    generating: boolean;
+    project: any;
+    onGenerate: (id: string, promptOverride?: string, guidanceOverride?: number, enableAeOverride?: boolean) => void;
+    onCancel: (id: string) => void;
+    onDelete: (id: string) => void;
+    onEdit: (el: any) => void;
+    onPreview: (url: string) => void;
+}
+
+const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, onEdit, onPreview }: ElementCardProps) => {
+    const [guidance, setGuidance] = useState(2.0);
+    const [enableAe, setEnableAe] = useState(false);
+
+    return (
+        <div className="bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-white/20 transition-all cursor-pointer group relative">
+            {/* Visual Header */}
+            <div
+                className="aspect-video bg-black/50 relative group-hover:bg-black/40 transition-colors"
+                onClick={(e) => {
+                    if (el.image_path) {
+                        e.stopPropagation();
+                        const src = el.image_path.startsWith('http')
+                            ? el.image_path
+                            : `http://localhost:8000${el.image_path.startsWith('/') ? '' : '/'}${el.image_path}`;
+                        onPreview(src);
+                    }
+                }}
+            >
+                {el.image_path ? (
+                    <img
+                        src={el.image_path.startsWith('http') ? el.image_path : `http://localhost:8000${el.image_path.startsWith('/') ? '' : '/'}${el.image_path}`}
+                        alt={el.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                            if (el.image_path && !el.image_path.startsWith('http')) {
+                                const filename = el.image_path.split('/').pop();
+                                const fallbackSrc = `http://localhost:8000/projects/${project?.id}/assets/${filename}`;
+                                if ((e.target as HTMLImageElement).src !== fallbackSrc) {
+                                    (e.target as HTMLImageElement).src = fallbackSrc;
+                                }
+                            }
+                        }}
+                    />
+                ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-white/20 gap-2">
+                        <ImageIcon size={32} />
+                        <span className="text-xs font-medium">No Visual</span>
+                    </div>
+                )}
+
+                {/* Loading Overlay */}
+                {generating && (
+                    <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-20 backdrop-blur-sm">
+                        <div className="w-6 h-6 border-2 border-milimo-500 border-t-transparent rounded-full animate-spin mb-2" />
+                        <span className="text-[10px] text-milimo-500 font-bold uppercase tracking-wider animate-pulse mb-2">Generating...</span>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onCancel(el.id); }}
+                            className="px-2 py-1 bg-red-500/20 hover:bg-red-500/40 text-red-500 text-[10px] font-bold rounded border border-red-500/50 transition-colors"
+                        >
+                            CANCEL
+                        </button>
+                    </div>
+                )}
+
+                {/* Overlay Actions */}
+                {!generating && (
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 backdrop-blur-sm p-4">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onGenerate(el.id, undefined, guidance, enableAe); }}
+                            className="p-2 px-4 bg-milimo-500 text-black rounded-lg hover:bg-milimo-400 transition-transform hover:scale-105 shadow-xl font-bold flex items-center gap-2"
+                            title="Generate Visual (High Quality)"
+                        >
+                            <Wand2 size={18} /> Generate Visual
+                        </button>
+
+                        {/* Quick Guidance Slider */}
+                        <div
+                            className="bg-black/80 rounded px-2 py-1 flex items-center gap-2 mt-2"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <span className="text-[10px] text-white/50 uppercase font-bold">Guidance: {guidance.toFixed(1)}</span>
+                            <input
+                                type="range"
+                                min="1.0" max="5.0" step="0.5"
+                                value={guidance}
+                                className="w-16 accent-milimo-500 h-1 cursor-pointer"
+                                onChange={(e) => setGuidance(parseFloat(e.target.value))}
+                            />
+                        </div>
+
+
+                        {/* NativeAE Toggle */}
+                        <div
+                            className="bg-black/80 rounded px-2 py-1 flex items-center gap-2 cursor-pointer border border-white/5 hover:border-white/20 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); setEnableAe(!enableAe); }}
+                        >
+                            <div className={`w-3 h-3 rounded-full ${enableAe ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-gray-600'}`} />
+                            <span className={`text-[10px] font-bold uppercase transition-colors ${enableAe ? 'text-white' : 'text-white/40'}`}>NativeAE</span>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Content */}
+            <div className="p-5">
+                <div className="flex items-start justify-between mb-2">
+                    <div>
+                        <h3 className="text-xl font-bold text-white group-hover:text-milimo-400 transition-colors" role="button" onClick={() => onEdit(el)}>{el.name}</h3>
+                        <span className="text-xs font-mono text-milimo-500 bg-milimo-500/10 px-2 py-0.5 rounded">{el.triggerWord}</span>
+                    </div>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-white/30 border border-white/10 px-2 py-1 rounded-full">
+                        {el.type}
+                    </span>
+                </div>
+                <p className="text-sm text-white/60 line-clamp-3 leading-relaxed">
+                    {el.description}
+                </p>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="px-5 pb-5 pt-0 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(el.id); }}
+                    className="text-red-500/50 hover:text-red-500 transition-colors p-2"
+                >
+                    <Trash2 size={16} />
+                </button>
+            </div>
+        </div>
+    );
+};
+
 export const ElementsView = () => {
-    const { project, elements, fetchElements, createElement, deleteElement, generateVisual, generatingElementIds } = useTimelineStore();
+    const { project, elements, fetchElements, createElement, deleteElement, generateVisual, generatingElementIds, cancelElementGeneration } = useTimelineStore();
     // const [selectedElement, setSelectedElement] = useState<StoryElement | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null); // For Lightbox
@@ -71,10 +205,7 @@ export const ElementsView = () => {
         setEditingId(null);
     };
 
-    const handleGenerateVisual = async (e: React.MouseEvent, elementId: string) => {
-        e.stopPropagation();
-        await generateVisual(elementId);
-    };
+
 
     return (
         <div className="absolute inset-0 bg-[#050505] p-8 overflow-y-auto">
@@ -158,94 +289,17 @@ export const ElementsView = () => {
 
                     {/* Element Cards */}
                     {elements.map((el) => (
-                        <div
+                        <ElementCard
                             key={el.id}
-                            // onClick={() => setSelectedElement(el)}
-                            className="bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-white/20 transition-all cursor-pointer group relative"
-                        >
-                            {/* Visual Header */}
-                            <div
-                                className="aspect-video bg-black/50 relative group-hover:bg-black/40 transition-colors"
-                                onClick={(e) => {
-                                    if (el.image_path) {
-                                        e.stopPropagation();
-                                        // Construct full URL
-                                        const src = el.image_path.startsWith('http')
-                                            ? el.image_path
-                                            : `http://localhost:8000${el.image_path.startsWith('/') ? '' : '/'}${el.image_path}`;
-                                        setPreviewImage(src);
-                                    }
-                                }}
-                            >
-                                {el.image_path ? (
-                                    <img
-                                        src={el.image_path.startsWith('http') ? el.image_path : `http://localhost:8000${el.image_path.startsWith('/') ? '' : '/'}${el.image_path}`}
-                                        alt={el.name}
-                                        className="w-full h-full object-cover"
-                                        onError={(e) => {
-                                            // Fallback for old paths if needed
-                                            if (el.image_path && !el.image_path.startsWith('http')) {
-                                                // Try legacy assets path
-                                                const filename = el.image_path.split('/').pop();
-                                                (e.target as HTMLImageElement).src = `http://localhost:8000/projects/${project?.id}/assets/${filename}`;
-                                            }
-                                        }}
-                                    />
-                                ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center text-white/20 gap-2">
-                                        <ImageIcon size={32} />
-                                        <span className="text-xs font-medium">No Visual</span>
-                                    </div>
-                                )}
-
-                                {/* Loading Overlay */}
-                                {generatingElementIds[el.id] && (
-                                    <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-20 backdrop-blur-sm">
-                                        <div className="w-6 h-6 border-2 border-milimo-500 border-t-transparent rounded-full animate-spin mb-2" />
-                                        <span className="text-[10px] text-milimo-500 font-bold uppercase tracking-wider animate-pulse">Generating...</span>
-                                    </div>
-                                )}
-
-                                {/* Overlay Actions */}
-                                {!generatingElementIds[el.id] && (
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 backdrop-blur-sm">
-                                        <button
-                                            onClick={(e) => handleGenerateVisual(e, el.id)}
-                                            className="p-2 bg-milimo-500 text-black rounded-lg hover:bg-milimo-400 transition-transform hover:scale-105 shadow-xl"
-                                            title="Generate Visual (High Quality)"
-                                        >
-                                            <Wand2 size={20} />
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Content */}
-                            <div className="p-5">
-                                <div className="flex items-start justify-between mb-2">
-                                    <div>
-                                        <h3 className="text-xl font-bold text-white group-hover:text-milimo-400 transition-colors" role="button" onClick={() => startEdit(el)}>{el.name}</h3>
-                                        <span className="text-xs font-mono text-milimo-500 bg-milimo-500/10 px-2 py-0.5 rounded">{el.triggerWord}</span>
-                                    </div>
-                                    <span className="text-[10px] uppercase font-bold tracking-wider text-white/30 border border-white/10 px-2 py-1 rounded-full">
-                                        {el.type}
-                                    </span>
-                                </div>
-                                <p className="text-sm text-white/60 line-clamp-3 leading-relaxed">
-                                    {el.description}
-                                </p>
-                            </div>
-
-                            {/* Footer Actions */}
-                            <div className="px-5 pb-5 pt-0 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); deleteElement(el.id); }}
-                                    className="text-red-500/50 hover:text-red-500 transition-colors p-2"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                        </div>
+                            el={el}
+                            generating={!!generatingElementIds[el.id]}
+                            project={project}
+                            onGenerate={generateVisual}
+                            onDelete={deleteElement}
+                            onCancel={cancelElementGeneration}
+                            onEdit={startEdit}
+                            onPreview={setPreviewImage}
+                        />
                     ))}
                 </div>
             </div>

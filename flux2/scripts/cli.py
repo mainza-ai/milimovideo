@@ -33,7 +33,7 @@ class Config:
     width: int = 1360
     height: int = 768
     num_steps: int = 50
-    guidance: float = 4.0
+    guidance: float = 2.0
     input_images: List[Path] = field(default_factory=list)
     match_image_size: Optional[int] = None  # Index of input_images to match size from
     upsample_prompt_mode: Literal["none", "local", "openrouter"] = "none"

@@ -39,7 +39,9 @@ def setup_paths():
     if LTX_CORE_DIR not in sys.path:
         sys.path.append(LTX_CORE_DIR)
     if LTX_PIPELINES_DIR not in sys.path:
-        sys.path.append(LTX_PIPELINES_DIR)
+        sys.path.insert(0, LTX_PIPELINES_DIR)
+    if LTX_CORE_DIR not in sys.path:
+        sys.path.insert(0, LTX_CORE_DIR)
 
 # Ensure directories exist
 os.makedirs(PROJECTS_DIR, exist_ok=True)

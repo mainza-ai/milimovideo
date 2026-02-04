@@ -102,16 +102,16 @@ export const MediaLibrary = () => {
         fetchHistory();
     }, [tab, assetRefreshVersion]);
 
-    const requestDelete = (e: React.MouseEvent, filename: string) => {
+    const requestDelete = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        setDeletingAssetId(filename);
+        setDeletingAssetId(id);
     };
 
     const confirmDelete = async () => {
         if (!deletingAssetId) return;
         try {
-            await fetch(`http://localhost:8000/upload/${deletingAssetId}`, { method: 'DELETE' });
-            setAssets(prev => prev.filter(a => a.filename !== deletingAssetId));
+            await fetch(`http://localhost:8000/assets/${deletingAssetId}`, { method: 'DELETE' });
+            setAssets(prev => prev.filter(a => a.id !== deletingAssetId));
         } catch (e) { console.error(e); }
         setDeletingAssetId(null);
     };
@@ -189,9 +189,8 @@ export const MediaLibrary = () => {
                                         {asset.type === 'image' ? <ImageIcon size={10} className="text-white/70" /> : <Film size={10} className="text-white/70" />}
                                     </div>
 
-                                    {/* Delete Button */}
                                     <button
-                                        onClick={(e) => requestDelete(e, asset.filename)}
+                                        onClick={(e) => requestDelete(e, asset.id)}
                                         className="absolute top-1 right-1 bg-red-500/80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
                                     >
                                         <Trash2 size={10} className="text-white" />

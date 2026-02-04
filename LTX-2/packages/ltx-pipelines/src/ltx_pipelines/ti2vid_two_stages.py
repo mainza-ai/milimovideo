@@ -100,6 +100,7 @@ class TI2VidTwoStagesPipeline:
         enhance_prompt: bool = False,
         callback_on_step_end: Callable | None = None,
     ) -> tuple[Iterator[torch.Tensor], torch.Tensor, LatentState]:
+        logging.info("DEBUG: TI2VidTwoStagesPipeline.__call__ START")
         assert_resolution(height=height, width=width, is_two_stage=True)
         # ... (setup code skipped, see diff) ...
         # (imports inside function to avoid circular dep if needed, or assume global)
@@ -315,6 +316,7 @@ class TI2VidTwoStagesPipeline:
         )
 
         # Return LatentState for chaining
+        logging.info(f"DEBUG: TI2VidTwoStagesPipeline.__call__ END. Returning: Video type={type(decoded_video)}")
         return decoded_video, decoded_audio, video_state.latent
 
 

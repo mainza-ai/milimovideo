@@ -73,7 +73,7 @@ class InpaintingManager:
             
             # Run Inference
             # This is synchronous and blocking, but running in BackgroundTasks so acceptable for MVP
-            result = flux_inpainter.inpaint(image, mask, prompt)
+            result = flux_inpainter.inpaint(image, mask, prompt, guidance=2.0, enable_ae=True, enable_true_cfg=False)
             
             # Save result in projects folder if possible, else temp
             # Try to derive project path from image path if it follows convention

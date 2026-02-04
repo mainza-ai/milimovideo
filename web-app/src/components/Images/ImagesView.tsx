@@ -14,7 +14,7 @@ interface GeneratedImage {
 }
 
 export const ImagesView = () => {
-    const { project, addToast, elements, fetchElements } = useTimelineStore();
+    const { project, addToast, elements, fetchElements, triggerAssetRefresh } = useTimelineStore();
     const [images, setImages] = useState<GeneratedImage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
@@ -25,9 +25,11 @@ export const ImagesView = () => {
     const [width, setWidth] = useState(1024);
     const [height, setHeight] = useState(1024);
     const [steps, setSteps] = useState(25);
-    const [guidance, setGuidance] = useState(3.5);
+    const [guidance, setGuidance] = useState(2.0);
     const [seed, setSeed] = useState<string>(""); // user input as string, send as int or null
     const [selectedReferences, setSelectedReferences] = useState<string[]>([]); // IP-Adapter element IDs
+    const [enableAE, setEnableAE] = useState(true);
+    const [enableTrueCFG, setEnableTrueCFG] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusMsg, setStatusMsg] = useState("");
     const [currentJobId, setCurrentJobId] = useState<string | null>(null);
@@ -50,8 +52,75 @@ export const ImagesView = () => {
         if (project.id) {
             fetchImages();
             fetchElements(project.id);
+            checkActiveJobs();
         }
     }, [project.id]);
+
+    const checkActiveJobs = async () => {
+        try {
+            const res = await fetch(`http://localhost:8000/projects/${project.id}/active_jobs`);
+            if (res.ok) {
+                const jobs = await res.json();
+                // Find first active image job
+                const activeJob = jobs.find((j: any) => j.type === 'image' && (j.status === 'processing' || j.status === 'pending'));
+                if (activeJob) {
+                    console.log("Resuming active job:", activeJob.job_id);
+                    startPolling(activeJob.job_id);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to check active jobs", e);
+        }
+    };
+
+    const startPolling = (jobId: string) => {
+        setCurrentJobId(jobId);
+        setIsLoading(true);
+        // If we don't have status message yet, use a default
+        // But the first poll will fix it soon.
+
+        const poll = async () => {
+            const statusRes = await fetch(`http://localhost:8000/status/${jobId}`);
+            if (statusRes.ok) {
+                const job = await statusRes.json();
+                if (job.status === 'completed') {
+                    setIsLoading(false);
+                    setCurrentJobId(null);
+                    addToast("Image Ready!", "success");
+                    triggerAssetRefresh();
+
+                    // Refresh images
+                    const res = await fetch(`http://localhost:8000/projects/${project.id}/images`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setImages(data);
+                        const newImage = data.find((img: any) => img.id === job.asset_id);
+                        if (newImage) setSelectedImage(newImage);
+                    }
+                    return;
+                } else if (job.status === 'failed' || job.status === 'cancelled') {
+                    setIsLoading(false);
+                    setCurrentJobId(null);
+                    addToast(job.status === 'failed' ? `Failed: ${job.error_message}` : "Cancelled", job.status === 'failed' ? "error" : "info");
+                    return;
+                } else {
+                    if (job.progress !== undefined) setProgress(job.progress);
+                    if (job.status_message) setStatusMsg(job.status_message);
+                    setTimeout(poll, 1000);
+                }
+            } else {
+                // Job might be gone from memory if server restart, check DB logic handling in status endpoint handles it?
+                // The status endpoint checks DB too. If 404, stop polling.
+                if (statusRes.status === 404) {
+                    setIsLoading(false);
+                    setCurrentJobId(null);
+                } else {
+                    setTimeout(poll, 1000);
+                }
+            }
+        };
+        poll();
+    };
 
     const fetchImages = async () => {
         try {
@@ -107,7 +176,9 @@ export const ImagesView = () => {
                 num_inference_steps: steps,
                 guidance_scale: guidance,
                 seed: seed ? parseInt(seed) : null,
-                reference_images: selectedReferences
+                reference_images: selectedReferences,
+                enable_ae: enableAE,
+                enable_true_cfg: enableTrueCFG
             };
 
             // 1. Trigger Async Job
@@ -122,55 +193,7 @@ export const ImagesView = () => {
 
             setCurrentJobId(job_id);
             addToast("Generation Started...", "info");
-
-            // 2. Poll for Completion
-            // Note: In a real app we'd use useInterval or a proper hook, but here a simple loop works for MVP.
-            const poll = async () => {
-                const statusRes = await fetch(`http://localhost:8000/status/${job_id}`);
-                // Note: We need a generic GET /jobs/{id} endpoint or listen to SSE events.
-                // Currently server.py has no generic GET /jobs/{id}.
-                // BUT we have SSE. Let's use the event log if possible OR we need to add GET /jobs/{id}.
-                // Actually, I can add GET /jobs/{id} to server.py quickly if it's missing.
-                // Or I can assume I should add it.
-                // Wait, I missed adding GET /jobs/{id} in server.py!
-                // I will add polling logic here assuming the endpoint exists (I will add it next).
-
-                if (statusRes.ok) {
-                    const job = await statusRes.json();
-                    // job status: processing, completed, failed
-                    if (job.status === 'completed') {
-                        setIsLoading(false);
-                        setCurrentJobId(null);
-                        addToast("Image Ready!", "success");
-
-                        // Fetch images inline to avoid stale closure issues
-                        const res = await fetch(`http://localhost:8000/projects/${project.id}/images`);
-                        if (res.ok) {
-                            const data = await res.json();
-                            setImages(data);
-                            // Find and select the newly created image
-                            const newImage = data.find((img: any) => img.id === job.asset_id);
-                            if (newImage) {
-                                setSelectedImage(newImage);
-                            }
-                        }
-                        return;
-                    } else if (job.status === 'failed' || job.status === 'cancelled') {
-                        setIsLoading(false);
-                        setCurrentJobId(null);
-                        addToast(job.status === 'failed' ? `Failed: ${job.error_message}` : "Cancelled", job.status === 'failed' ? "error" : "info");
-                        return;
-                    } else {
-                        // Update Progress
-                        if (job.progress !== undefined) setProgress(job.progress);
-                        if (job.status_message) setStatusMsg(job.status_message);
-                    }
-                }
-
-                setTimeout(poll, 1000);
-            };
-
-            poll();
+            startPolling(job_id);
 
         } catch (e) {
             console.error(e);
@@ -185,9 +208,12 @@ export const ImagesView = () => {
         setWidth(1024);
         setHeight(1024);
         setSteps(25);
-        setGuidance(3.5);
+        setGuidance(2.0);
+        setSeed("");
         setSeed("");
         setSelectedReferences([]);
+        setEnableAE(true);
+        setEnableTrueCFG(false);
         setSelectedImage(null);
         addToast("Reset to defaults", "info");
     };
@@ -223,9 +249,13 @@ export const ImagesView = () => {
                                             if (meta.seed) setSeed(meta.seed.toString());
                                             if (meta.steps) setSteps(meta.steps);
                                             if (meta.guidance) setGuidance(meta.guidance);
+                                            if (meta.seed) setSeed(meta.seed.toString());
+                                            if (meta.steps) setSteps(meta.steps);
+                                            if (meta.guidance) setGuidance(meta.guidance);
                                             if (meta.reference_elements && meta.reference_elements.length > 0) {
                                                 setSelectedReferences(meta.reference_elements || []);
                                             }
+                                            // Optional: Restore toggle state if saved in meta (future improvement)
                                         } catch (e) {
                                             console.error("Failed to parse image metadata", e);
                                         }
@@ -368,6 +398,35 @@ export const ImagesView = () => {
                             <label className="text-[10px] uppercase text-white/40">Guidance</label>
                             <input type="number" step={0.1} value={guidance} onChange={e => setGuidance(parseFloat(e.target.value))} className="w-full bg-white/5 border border-white/10 rounded p-1.5 text-xs" />
                         </div>
+                    </div>
+
+                    {/* Toggles */}
+                    <div className="space-y-3 pt-2 border-t border-white/5">
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={enableAE}
+                                onChange={e => setEnableAE(e.target.checked)}
+                                className="w-4 h-4 rounded border-white/20 bg-white/5 checked:bg-milimo-500 text-black focus:ring-milimo-500/50"
+                            />
+                            <div className="flex flex-col">
+                                <span className="text-xs font-semibold text-white/80 group-hover:text-white">Use Native AE</span>
+                                <span className="text-[10px] text-white/30">Better quality (ae.safetensors)</span>
+                            </div>
+                        </label>
+
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={enableTrueCFG}
+                                onChange={e => setEnableTrueCFG(e.target.checked)}
+                                className="w-4 h-4 rounded border-white/20 bg-white/5 checked:bg-milimo-500 text-black focus:ring-milimo-500/50"
+                            />
+                            <div className="flex flex-col">
+                                <span className="text-xs font-semibold text-white/80 group-hover:text-white">Enable True CFG (Slower)</span>
+                                <span className="text-[10px] text-white/30">Supports Negatives. Slider = CFG Scale.</span>
+                            </div>
+                        </label>
                     </div>
 
                     <div className="space-y-1">

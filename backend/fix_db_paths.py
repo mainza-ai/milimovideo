@@ -119,26 +119,27 @@ def fix_paths():
             new_shots = []
             for shot in project.shots:
                 # Check video_url and thumbnail_url
-                if shot.get("video_url") and shot["video_url"].startswith("/generated/"):
+                # Check video_url and thumbnail_url attributes
+                if shot.video_url and shot.video_url.startswith("/generated/"):
                      # Fix it
-                     filename = os.path.basename(shot["video_url"])
+                     filename = os.path.basename(shot.video_url)
                      new_url = f"/projects/{project.id}/generated/{filename}"
-                     print(f"Fixing Shot Video URL {shot.get('id')}: {shot['video_url']} -> {new_url}")
-                     shot["video_url"] = new_url
+                     print(f"Fixing Shot Video URL {shot.id}: {shot.video_url} -> {new_url}")
+                     shot.video_url = new_url
                      shots_changed = True
                 
-                if shot.get("thumbnail_url") and shot["thumbnail_url"].startswith("http"):
+                if shot.thumbnail_url and shot.thumbnail_url.startswith("http"):
                     # Check if path inside is legacy
-                    if "/generated/" in shot["thumbnail_url"] and "/projects/" in shot["thumbnail_url"]:
+                    if "/generated/" in shot.thumbnail_url and "/projects/" in shot.thumbnail_url:
                          # It is: .../projects/{id}/generated/... -> .../projects/{id}/thumbnails/...
                          # Try to fix if file exists in thumbnails
-                         parts = shot["thumbnail_url"].split("/")
+                         parts = shot.thumbnail_url.split("/")
                          if "generated" in parts:
                              idx = parts.index("generated")
                              parts[idx] = "thumbnails"
                              new_url = "/".join(parts)
-                             print(f"Fixing Shot Thumb URL {shot.get('id')}: generated -> thumbnails")
-                             shot["thumbnail_url"] = new_url
+                             print(f"Fixing Shot Thumb URL {shot.id}: generated -> thumbnails")
+                             shot.thumbnail_url = new_url
                              shots_changed = True
                 
                 new_shots.append(shot)

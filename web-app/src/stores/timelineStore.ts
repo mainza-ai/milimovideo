@@ -207,11 +207,12 @@ interface TimelineState {
 
     // Elements
     elements: StoryElement[];
-    generatingElementIds: Record<string, boolean>; // New: Track status per element
+    generatingElementIds: Record<string, string>; // Maps elementId -> jobId (or "true" for legacy/optimistic)
     fetchElements: (projectId: string) => Promise<void>;
     createElement: (projectId: string, data: Partial<StoryElement>) => Promise<void>;
     deleteElement: (elementId: string) => Promise<void>;
-    generateVisual: (elementId: string, promptOverride?: string) => Promise<void>;
+    generateVisual: (elementId: string, promptOverride?: string, guidanceOverride?: number, enableAeOverride?: boolean) => Promise<void>;
+    cancelElementGeneration: (elementId: string) => Promise<void>;
 
     // View Mode
     viewMode: 'timeline' | 'elements' | 'storyboard' | 'images';
@@ -272,7 +273,7 @@ export const useTimelineStore = create<TimelineState>()(
 
                 // Elements
                 elements: [],
-                generatingElementIds: {},
+                generatingElementIds: {}, // Maps elementId -> jobId
 
                 setProject: (p) => set({ project: p }),
 
@@ -487,7 +488,8 @@ export const useTimelineStore = create<TimelineState>()(
                                     strength: t.strength
                                 })),
                                 last_job_id: s.lastJobId,
-                                thumbnail_url: s.thumbnailUrl
+                                thumbnail_url: s.thumbnailUrl,
+                                video_url: s.videoUrl
                             }))
                         };
 
@@ -653,38 +655,90 @@ export const useTimelineStore = create<TimelineState>()(
                     } catch (e) { console.error(e); }
                 },
 
-                generateVisual: async (elementId, promptOverride) => {
+                generateVisual: async (elementId, promptOverride, guidanceOverride = 2.0, enableAeOverride = false) => {
                     const { addToast, fetchElements, project } = get();
 
-                    // Set loading state
-                    set(state => ({
-                        generatingElementIds: { ...state.generatingElementIds, [elementId]: true }
-                    }));
-
-                    addToast("Generating Visual... This may take a minute.", "info");
+                    addToast("Queuing Visual Generation...", "info");
                     try {
                         const res = await fetch(`http://localhost:8000/elements/${elementId}/visualize`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ prompt_override: promptOverride })
+                            body: JSON.stringify({
+                                prompt_override: promptOverride,
+                                guidance_scale: guidanceOverride,
+                                enable_ae: enableAeOverride
+                            })
                         });
 
                         if (!res.ok) throw new Error("Generation failed");
 
-                        await res.json();
-                        addToast("Visual Generated!", "success");
-                        // Refresh elements to get the new image_path
-                        await fetchElements(project.id);
+                        const data = await res.json();
+                        const jobId = data.job_id;
+
+                        // Set loading state with Job ID
+                        set(state => ({
+                            generatingElementIds: { ...state.generatingElementIds, [elementId]: jobId }
+                        }));
+                        addToast("Generation Queued", "success");
+
+                        // Start Polling 
+                        const poll = async () => {
+                            try {
+                                const statusRes = await fetch(`http://localhost:8000/status/${jobId}`);
+                                if (!statusRes.ok) return; // Retry?
+                                const status = await statusRes.json();
+
+                                if (status.status === 'completed') {
+                                    addToast("Visual Generated!", "success");
+                                    await fetchElements(project.id);
+                                    // Clear loading
+                                    set(state => {
+                                        const newMap = { ...state.generatingElementIds };
+                                        delete newMap[elementId];
+                                        return { generatingElementIds: newMap };
+                                    });
+                                } else if (status.status === 'failed' || status.status === 'cancelled') {
+                                    addToast(`Generation ${status.status}: ${status.status_message || ''}`, "error");
+                                    set(state => {
+                                        const newMap = { ...state.generatingElementIds };
+                                        delete newMap[elementId];
+                                        return { generatingElementIds: newMap };
+                                    });
+                                } else {
+                                    // Still running
+                                    setTimeout(poll, 1000);
+                                }
+                            } catch (e) {
+                                console.error("Poll error", e);
+                                // Don't clear immediately on poll error, retry mostly?
+                                setTimeout(poll, 2000);
+                            }
+                        };
+                        poll();
+
                     } catch (e) {
                         console.error(e);
-                        addToast("Failed to generate visual", "error");
-                    } finally {
-                        // Clear loading state
+                        addToast("Failed to queue visual", "error");
                         set(state => {
                             const newMap = { ...state.generatingElementIds };
                             delete newMap[elementId];
                             return { generatingElementIds: newMap };
                         });
+                    }
+                },
+
+                cancelElementGeneration: async (elementId) => {
+                    const { generatingElementIds, addToast } = get();
+                    const jobId = generatingElementIds[elementId];
+                    if (!jobId || jobId === "true") return; // Can't cancel if no ID
+
+                    try {
+                        await fetch(`http://localhost:8000/jobs/${jobId}/cancel`, { method: 'POST' });
+                        addToast("Cancelling generation...", "info");
+                        // The poller will catch the 'cancelled' status and clean up
+                    } catch (e) {
+                        console.error(e);
+                        addToast("Failed to cancel", "error");
                     }
                 },
 
