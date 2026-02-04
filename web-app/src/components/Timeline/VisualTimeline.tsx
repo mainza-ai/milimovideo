@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Play, Pause, Plus, SkipBack } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -11,12 +11,40 @@ interface Track {
     name: string;
 }
 
+// Auto-Save Hook
+const useAutoSave = (project: any, saveProject: () => Promise<void>) => {
+    const timeoutRef = useRef<any>(null);
+    const lastSavedState = useRef<string>(JSON.stringify(project));
+
+    useEffect(() => {
+        const currentStr = JSON.stringify(project);
+        if (currentStr === lastSavedState.current) return;
+
+        if (timeoutRef.current) clearTimeout(timeoutRef.current);
+
+        timeoutRef.current = setTimeout(async () => {
+            console.log("Auto-Saving Project...");
+            await saveProject();
+            lastSavedState.current = JSON.stringify(project);
+        }, 2000); // 2s debounce
+
+        return () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        };
+    }, [project, saveProject]);
+};
+
+
 export const VisualTimeline = () => {
     const {
         project, selectedShotId, selectShot,
         isPlaying, setIsPlaying, reorderShots, addShot,
-        currentTime, setCurrentTime
+        currentTime, setCurrentTime,
+        saveProject
     } = useTimelineStore();
+
+    useAutoSave(project, saveProject);
+
     const [zoom, setZoom] = useState(20); // pixels per second
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
@@ -96,12 +124,26 @@ export const VisualTimeline = () => {
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
-        const data = e.dataTransfer.getData('application/json');
-        if (!data) return;
+
+        let data = e.dataTransfer.getData('application/milimo-element');
+        let asset: any = null;
+
+        if (data) {
+            asset = JSON.parse(data);
+            // Element logic
+            if (asset.image_path) {
+                asset.url = asset.image_path;
+                asset.type = 'image';
+                asset.filename = asset.name; // Use name as filename for prompt
+            }
+        } else {
+            data = e.dataTransfer.getData('application/json');
+            if (data) asset = JSON.parse(data);
+        }
+
+        if (!asset) return;
 
         try {
-            const asset = JSON.parse(data);
-
             // Create new shot
             addShot();
 
@@ -233,6 +275,75 @@ export const VisualTimeline = () => {
                                             style={{
                                                 left: clip.start * zoom,
                                                 width: clip.duration * zoom,
+                                            }}
+                                            onDragOver={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                e.dataTransfer.dropEffect = 'copy';
+                                                // Highlight effect? (handled by hover classes possibly, or add specific state)
+                                                e.currentTarget.style.borderColor = '#22c55e'; // Green highlight
+                                            }}
+                                            onDragLeave={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                e.currentTarget.style.borderColor = isSelected ? '#22c55e' : 'rgba(255,255,255,0.1)';
+                                            }}
+                                            onDrop={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                e.currentTarget.style.borderColor = isSelected ? '#22c55e' : 'rgba(255,255,255,0.1)';
+
+                                                const data = e.dataTransfer.getData('application/milimo-element'); // Try element first
+                                                let asset: any = null;
+
+                                                if (data) {
+                                                    asset = JSON.parse(data);
+                                                    // Element needs image_path to be conditioning
+                                                    if (!asset.image_path) {
+                                                        console.warn("Element has no visual");
+                                                        return;
+                                                    }
+                                                    asset.url = asset.image_path;
+                                                    asset.type = 'image'; // Elements are images for conditioning
+                                                } else {
+                                                    // Try generic JSON (from Images tab?)
+                                                    const generic = e.dataTransfer.getData('application/json');
+                                                    if (generic) asset = JSON.parse(generic);
+                                                }
+
+                                                if (!asset) return;
+
+                                                // Calculate Frame Index
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                const offsetX = e.clientX - rect.left;
+                                                const pct = offsetX / rect.width;
+                                                const frameIndex = Math.floor(pct * (clip.shot.numFrames - 1));
+
+                                                console.log(`Dropped asset ${asset.filename || asset.name} @ frame ${frameIndex}`);
+
+                                                const { addConditioningToShot, patchShot } = useTimelineStore.getState();
+
+                                                const item: any = {
+                                                    type: asset.type === 'video' ? 'video' : 'image',
+                                                    path: asset.url,
+                                                    frameIndex: frameIndex,
+                                                    strength: 1.0
+                                                };
+
+                                                // 1. Local Update
+                                                addConditioningToShot(clip.id, item);
+
+                                                // 2. Persist (Patch)
+                                                // We need the UPDATED timeline to send to backend? 
+                                                // Or backend patch merges? No, it usually replaces the field.
+                                                // So we construct the new timeline array.
+                                                const newTimeline = [...clip.shot.timeline, item]; // Approximation (doesn't have ID yet, but store added one)
+                                                // Actually store's addConditioningToShot generated an ID. 
+                                                // We should ideally get the updated shot from store.
+                                                // But `patchShot` sends JSON.
+                                                // Let's rely on the fact that `item` is what we added.
+                                                // Backend expects list of dicts.
+                                                patchShot(clip.id, { timeline: newTimeline });
                                             }}
                                             whileDrag={{ scale: 1.02, zIndex: 100, boxShadow: "0 10px 20px rgba(0,0,0,0.5)" }}
                                         >

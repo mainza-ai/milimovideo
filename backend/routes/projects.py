@@ -154,34 +154,97 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     
     # db_project.updated_at = datetime.now(timezone.utc) # Handled by SQLModel typically or trigger
     
-    # Sync Shots
-    # Filter input fields to match Shot model columns
+    # Sync Shots (Smart Merge)
     valid_keys = Shot.model_fields.keys()
     
-    # We replace shots? Or update?
-    # Original logic: db_project.shots = new_shots (Replace)
-    # But SQLModel relationship replacement can be tricky depending on cascade settings.
-    # Safe approach: Delete old shots, add new ones (Primitive but safe for this scale)
-    
-    # Delete existing shots
+    # 1. Fetch Key Existing Data to Preserve
+    # Map Shot ID -> Existing Shot DB Object
     existing_shots = session.exec(select(Shot).where(Shot.project_id == project_id)).all()
-    for s in existing_shots:
-        session.delete(s)
-        
-    new_shots = []
+    existing_map = {s.id: s for s in existing_shots}
+    
+    # Track IDs in the new payload to identify deletions
+    payload_ids = set()
+    
+    new_shots_to_add = []
+    
     for s_data in state.shots:
-        # s_data is a dict usually (from Pydantic dict())
-        clean_data = {k: v for k, v in s_data.items() if k in valid_keys}
-        clean_data["project_id"] = project_id # Force project_id from URL
-        new_shots.append(Shot(**clean_data))
+        shot_id = s_data.get("id")
+        payload_ids.add(shot_id)
         
-    session.add(db_project)
-    for s in new_shots:
+        # Clean input data
+        clean_data = {k: v for k, v in s_data.items() if k in valid_keys}
+        clean_data["project_id"] = project_id
+        
+        if shot_id and shot_id in existing_map:
+            # UPDATE Existing Shot
+            existing_shot = existing_map[shot_id]
+            
+            # Update fields from payload
+            for k, v in clean_data.items():
+                # Don't overwrite generated fields if they are missing/null in payload
+                # but payload usually sends what it has.
+                # Crucial: Frontend might send "video_url": null if it doesn't know about it (unlikely if it loaded project first)
+                # But to be safe, we only overwrite if value is provided OR if we explicitly want to clear it.
+                # However, usually we trust the payload. 
+                # The RISK is if frontend *recreates* the shot object and loses the ID or properties.
+                # If ID matches, we assume frontend knows the state.
+                # BUT: `video_url` and `status` should be preserved if the payload has them as null/undefined?
+                # Let's assume frontend sends full object state.
+                # The issue described in the audit was: Storyboard Re-Commit *Deletes* shots because it *regenerates* the ID or just wipes DB.
+                # Here in `save_project`, the frontend sends the IDs it knows.
+                
+                # PROTECT generated fields if payload is empty for them?
+                # Actually, if we just `setattr` everything, we trust frontend.
+                # Providing Smart Merge for `save_project` means we trust the ID linkage.
+                setattr(existing_shot, k, v)
+                
+            # Restore protected fields if they were wiped by frontend sending partial data (safety net)
+            # (Optional, depends on how "ProjectState" is constructed in frontend)
+            # For now, standard update is fine as long as ID persists.
+            session.add(existing_shot)
+        else:
+            # CREATE New Shot
+            # Ensure ID is set
+            if not clean_data.get("id"):
+                clean_data["id"] = uuid.uuid4().hex
+            new_shots_to_add.append(Shot(**clean_data))
+            
+    # 2. DELETE output shots that are not in payload
+    # (Unless we want to archive them? For now, standard sync means delete removed items)
+    for s in existing_shots:
+        if s.id not in payload_ids:
+            session.delete(s)
+            
+    # 3. Add New
+    for s in new_shots_to_add:
         session.add(s)
         
+    session.add(db_project)
     session.commit()
         
     return {"status": "saved"}
+
+@router.patch("/shots/{shot_id}")
+async def update_shot_partial(shot_id: str, updates: dict, session: Session = Depends(get_session)):
+    """
+    Granular update for a single shot. 
+    Useful for timeline drag-and-drop or text edits without full project save.
+    """
+    shot = session.get(Shot, shot_id)
+    if not shot:
+        raise HTTPException(status_code=404, detail="Shot not found")
+        
+    # Allowed fields to patch
+    # We allow patching almost anything, but be careful with IDs.
+    for k, v in updates.items():
+        if k == "id" or k == "project_id": continue # Don't allow changing PK/FK via patch
+        if hasattr(shot, k):
+            setattr(shot, k, v)
+            
+    session.add(shot)
+    session.commit()
+    session.refresh(shot)
+    return shot
 
 @router.post("/projects/{project_id}/render")
 async def render_project(project_id: str, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):

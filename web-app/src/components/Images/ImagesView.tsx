@@ -237,6 +237,19 @@ export const ImagesView = () => {
                         {images.map(img => (
                             <div
                                 key={img.id}
+                                draggable
+                                onDragStart={(e) => {
+                                    const data = {
+                                        id: img.id,
+                                        url: `http://localhost:8000${img.url}`,
+                                        path: img.path,
+                                        filename: img.filename,
+                                        type: 'image',
+                                        thumbnail: `http://localhost:8000${img.url}`
+                                    };
+                                    e.dataTransfer.setData('application/json', JSON.stringify(data));
+                                    e.dataTransfer.effectAllowed = 'copy';
+                                }}
                                 onClick={() => {
                                     setSelectedImage(img);
                                     if (img.meta_json) {

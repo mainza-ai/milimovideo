@@ -164,6 +164,7 @@ interface TimelineState {
     setProject: (p: Project) => void;
     addShot: () => void;
     updateShot: (id: string, updates: Partial<Shot>) => void;
+    patchShot: (id: string, updates: Partial<Shot>) => Promise<void>;
     reorderShots: (fromIndex: number, toIndex: number) => void;
     deleteShot: (id: string) => void;
     selectShot: (id: string | null) => void;
@@ -321,6 +322,41 @@ export const useTimelineStore = create<TimelineState>()(
                         shots: state.project.shots.map(s => s.id === id ? { ...s, ...updates } : s)
                     }
                 })),
+
+                patchShot: async (id, updates) => {
+                    const { updateShot, addToast } = get();
+                    // 1. Optimistic Update
+                    updateShot(id, updates);
+
+                    try {
+                        // 2. Map camelCase to snake_case for Backend
+                        const snakeUpdates: any = {};
+                        for (const [k, v] of Object.entries(updates)) {
+                            if (k === 'negativePrompt') snakeUpdates['negative_prompt'] = v;
+                            else if (k === 'numFrames') snakeUpdates['num_frames'] = v;
+                            else if (k === 'cfgScale') snakeUpdates['cfg_scale'] = v;
+                            else if (k === 'enhancePrompt') snakeUpdates['enhance_prompt'] = v;
+                            else if (k === 'lastJobId') snakeUpdates['last_job_id'] = v;
+                            else if (k === 'videoUrl') snakeUpdates['video_url'] = v;
+                            else if (k === 'thumbnailUrl') snakeUpdates['thumbnail_url'] = v;
+                            else if (k === 'pipelineOverride') snakeUpdates['pipeline_override'] = v;
+                            else if (k === 'timeline') continue; // Complex object, skip simple patch for now or handle separately
+                            else snakeUpdates[k] = v;
+                        }
+
+                        // 3. Send Network Request
+                        await fetch(`http://localhost:8000/shots/${id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(snakeUpdates)
+                        });
+
+                    } catch (e) {
+                        console.error("Patch failed", e);
+                        addToast("Failed to save changes", "error");
+                        // Revert? (Complex without previous state, let's assume reliability for now)
+                    }
+                },
 
                 reorderShots: (fromIndex, toIndex) => set((state) => {
                     const shots = [...state.project.shots];

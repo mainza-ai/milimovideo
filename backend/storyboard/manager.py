@@ -162,7 +162,7 @@ class StoryboardManager:
         # But the plan says we do it here (or via ElementManager).
         
         from managers.element_manager import element_manager
-        enriched_prompt = element_manager.inject_elements_into_prompt(shot.action, shot.project_id)
+        enriched_prompt, element_visuals = element_manager.inject_elements_into_prompt(shot.action, shot.project_id)
         
         if prev_shot:
             # Contextual Prompting
@@ -171,6 +171,7 @@ class StoryboardManager:
             enriched_prompt = f"{context} {enriched_prompt}"
             
         config["prompt"] = enriched_prompt
+        config["element_images"] = element_visuals
         
         return config
 

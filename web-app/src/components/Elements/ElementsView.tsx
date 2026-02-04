@@ -19,7 +19,22 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
     const [enableAe, setEnableAe] = useState(false);
 
     return (
-        <div className="bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-white/20 transition-all cursor-pointer group relative">
+        <div
+            className="bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-white/20 transition-all cursor-pointer group relative hover:shadow-lg hover:shadow-milimo-500/10 hover:-translate-y-1"
+            draggable
+            onDragStart={(e) => {
+                const data = {
+                    id: el.id,
+                    name: el.name,
+                    triggerWord: el.triggerWord,
+                    image_path: el.image_path,
+                    type: el.type,
+                    dragType: 'milimo-element'
+                };
+                e.dataTransfer.setData('application/milimo-element', JSON.stringify(data));
+                e.dataTransfer.effectAllowed = 'copy';
+            }}
+        >
             {/* Visual Header */}
             <div
                 className="aspect-video bg-black/50 relative group-hover:bg-black/40 transition-colors"
