@@ -137,22 +137,23 @@ Milimo uses a specialized environment for LTX-2 and Flux.
         ```
     2.  **Download Model**:
         Download `sam3.pt` (or `sam3_large.pth`) from [ModelScope](https://www.modelscope.cn/models/facebook/sam3/files) or [HuggingFace](https://huggingface.co/facebook/sam3).
-    3.  Place it in: `backend/models/sam3_large.pth`
+    3.  Place it in: `backend/models/sam3/sam3.pt` (ensure the directory exists)
 
 ### 3. Running the Studio
 
 **1. Start the Backend API**:
 ```bash
-source milimov/bin/activate
-cd backend
-python server.py
+./run_backend.sh
 ```
 
-**2. Start the Web Interface**:
+**2. Start the SAM 3 Service (Optional, for Magic Masking)**:
 ```bash
-cd web-app
-npm install
-npm run dev
+./run_sam.sh
+```
+
+**3. Start the Web Interface**:
+```bash
+./run_frontend.sh
 ```
 
 Visit **`http://localhost:5173`** to enter the studio.
@@ -179,4 +180,3 @@ Visit **`http://localhost:5173`** to enter the studio.
 ## 📜 License
 
 This project is licensed under the Apache 2.0 License.
-Based on [LTX-2](https://github.com/Lightricks/LTX-2) by Lightricks.

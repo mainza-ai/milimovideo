@@ -28,7 +28,7 @@ export const ImagesView = () => {
     const [guidance, setGuidance] = useState(2.0);
     const [seed, setSeed] = useState<string>(""); // user input as string, send as int or null
     const [selectedReferences, setSelectedReferences] = useState<string[]>([]); // IP-Adapter element IDs
-    const [enableAE, setEnableAE] = useState(true);
+    const [enableAE, setEnableAE] = useState(false);
     const [enableTrueCFG, setEnableTrueCFG] = useState(false);
     const [progress, setProgress] = useState(0);
     const [statusMsg, setStatusMsg] = useState("");
@@ -212,7 +212,7 @@ export const ImagesView = () => {
         setSeed("");
         setSeed("");
         setSelectedReferences([]);
-        setEnableAE(true);
+        setEnableAE(false);
         setEnableTrueCFG(false);
         setSelectedImage(null);
         addToast("Reset to defaults", "info");

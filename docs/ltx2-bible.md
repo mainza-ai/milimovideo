@@ -372,3 +372,30 @@ The system enforces a strict "Creative Assistant" persona via system prompts fou
 - **AdaLN**: Adaptive Layer Normalization.
 - **IC-LoRA**: In-Context LoRA (Video-to-Video). Uses a reference video as a condition to guide the generation process.
 - **Thinking Token**: A special learnable token in the Gemma text encoder connector that bridges text embeddings with the video/audio latent space.
+
+---
+
+## 15. Milimo System Integration
+
+### 15.1 Pipeline Orchestration (`backend/tasks/video.py`)
+Milimo does not use the `ltx-pipelines` directly via CLI. Instead, it wraps them in a stateful `generate_video_task` managed by `ModelManager`.
+
+**Pipeline Selection Logic**:
+1.  **Video Conditioning**: If the timeline contains video clips, `ICLoraPipeline` (In-Context LoRA) is selected.
+2.  **Keyframe Interpolation**: If start (0) and end (N) keyframes are present, `KeyframeInterpolationPipeline` is selected.
+3.  **Standard T2V/I2V**: Otherwise, `TI2VidTwoStagesPipeline` is used.
+4.  **Single Frame**: If `num_frames=1`, the task delegates to **Flux 2** (`flux_inpainter`) for higher quality static image generation.
+
+### 15.2 Quantum Alignment (Latent Handoff)
+Implemented in `backend/tasks/chained.py`, this is Milimo's solution for infinite video extension ("Smart Continue").
+*   **Mechanism**: Instead of using pixel-based Image-to-Video (which degrades quality over time), Milimo passes the **Last Latent Tensor** from Chunk N as the input conditioning for Chunk N+1.
+*   **Logic**:
+    1.  Extracts the last $K$ latent slices from the previous generation.
+    2.  Passes them to the pipeline (custom `previous_latent_tensor` argument).
+    3.  **Trimming**: The model regenerates these $K$ frames as "context". The system trims the first $K \times 8$ pixel frames from the output video to ensure perfect motion continuity without "skip-back" artifacts.
+*   **Prompt Continuity**: Uses **Gemma 3** as a "Virtual Director" to rewrite the prompt for the next chunk based on the previous context, ensuring narrative consistency.
+
+### 15.3 Hardware Optimizations (MPS)
+*   **Tiling**: Milimo strictly enforces `TilingConfig.default()` (256px spatial tiles, 32 frame temporal tiles) on Apple Silicon.
+*   **BFloat16**: Unlike Flux (which needs float32 hacks), LTX-2 runs fully in `bfloat16` on MPS.
+*   **Cleanup**: Aggressive garbage collection (`gc.collect()` + `empty_cache()`) is performed between every chunk in a chained generation.

@@ -68,7 +68,7 @@ app.mount("/generated", StaticFiles(directory=legacy_generated_dir), name="gener
 # Event Manager Endpoint
 @app.get("/events")
 async def events(request: Request):
-    return await event_manager.endpoint(request)
+    return await event_manager.subscribe(request)
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=config.API_PORT, reload=True)

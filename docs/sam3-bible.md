@@ -142,3 +142,37 @@ Check `FindQuery.is_exhaustive`. If training on sparse datasets, ensure you aren
 -   **FindQuery**: The fundamental data unit.
 -   **Masklet**: Temporal mask sequence.
 -   **Neck**: Feature Pyramid Network connecting backbone to decoder.
+
+---
+
+## 11. Milimo System Integration
+
+### 11.1 Microservice Architecture (`sam3/start_sam_server.py`)
+Unlike Flux and LTX-2 which run in the main backend process, SAM 3 runs as a **standalone microservice** on port **8001**.
+*   **Reasoning**: Separation of concerns and environment isolation (Conda environments). SAM 3 often requires different dependency versions than LTX/Flux.
+*   **Startup**: Launched via `run_sam.sh` -> `python sam3/start_sam_server.py`.
+
+### 11.2 API Contract
+The service exposes a lightweight FastAPI endpoint designed for interactive segmentation.
+
+**`POST /predict/mask`**
+*   **Input (Multipart)**:
+    *   `image`: The raw image file (bytes).
+    *   `points`: JSON string of coordinate arrays `[[x, y], [x, y]]`.
+    *   `labels`: JSON string of point labels `[1, 0]` (1=Foreground, 0=Background).
+    *   `multimask`: Boolean (default `False`).
+*   **Output**:
+    *   Returns a **binary PNG image** of the mask.
+*   **Logic**:
+    1.  Loads image into `sam_model.inst_interactive_predictor`.
+    2.  Calls `predictor.predict(point_coords=..., point_labels=...)`.
+    3.  Selects the best mask (highest IoU) if `multimask=False`.
+    4.  Encodes result as PNG stream.
+
+### 11.3 Client Integration (`backend/managers/inpainting_manager.py`)
+The main backend communicates with SAM 3 via HTTP requests.
+*   **Flow**:
+    1.  User clicks/draws on the UI -> Frontend sends points to Backend.
+    2.  `InpaintingManager` saves the source image temporarily.
+    3.  It constructs a `POST` request to `http://localhost:8001/predict/mask`.
+    4.  The received PNG mask is saved to the filesystem (`valid_mask_path`) and then passed to **Flux 2** for inpainting.

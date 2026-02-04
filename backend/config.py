@@ -15,7 +15,7 @@ LTX_PIPELINES_DIR = os.path.join(LTX_DIR, "packages/ltx-pipelines/src")
 # Model Paths (Can be updated to point to specific weights)
 MODELS_DIR = os.path.join(BACKEND_DIR, "models")
 FLUX_WEIGHTS_PATH = os.path.join(MODELS_DIR, "flux2") # Updated path to directory
-SAM_WEIGHTS_PATH = os.path.join(MODELS_DIR, "sam3.pt")
+SAM_WEIGHTS_PATH = os.path.join(MODELS_DIR, "sam3", "sam3.pt")
 
 # IP-Adapter Paths (Visual Conditioning)
 FLUX_IP_ADAPTER_PATH = os.path.join(MODELS_DIR, "flux-ip-adapter.safetensors") # Placeholder

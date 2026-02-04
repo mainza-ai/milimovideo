@@ -21,21 +21,10 @@ def update_job_progress(job_id: str, progress: int, message: str = None):
             active_jobs[job_id]["status_message"] = message
     
     # Fire and forget async broadcast (requires running loop or handling)
-    # Since this is called from sync code in callbacks, we might need a helper.
-    # But event_manager.broadcast is async. 
-    # Calling code usually handles the loop (e.g. video.py calls this from sync callback).
-    # We can't await properly here if not in async context.
-    # BUT, the listener expects broadcast.
-    # We will rely on the caller to handle broadcast if they can, OR we rely on a poller.
-    # Original worker.py had `run_coroutine_threadsafe` inside the callback.
-    # We will let the caller handle broadcast invocation if they are async, 
-    # but for sync callbacks, we might need to skip broadcast here and rely on memory + polling?
-    # NO: The UI needs events.
-    # We'll import asyncio and try to schedule it if loop exists.
     import asyncio
     try:
         loop = asyncio.get_running_loop()
-        loop.create_task(broadcast_progress(job_id, progress, "processing"))
+        loop.create_task(broadcast_progress(job_id, progress, "processing", message))
     except:
         pass # No loop, can't broadcast
 
@@ -47,7 +36,8 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
             job = session.get(Job, job_id)
             if job:
                 job.status = status
-                job.params_json = job.params_json
+                # Force JSON string update if needed, but usually SQLModel handles explicit fields.
+                # job.params_json = job.params_json 
                 if output_path: 
                     job.output_path = output_path
                 if error: 
@@ -88,8 +78,11 @@ async def broadcast_log(job_id: str, message: str):
     logger.info(f"[{job_id}] {message}")
     await event_manager.broadcast("log", {"job_id": job_id, "message": message})
     
-async def broadcast_progress(job_id: str, progress: int, status: str = "processing"):
-    await event_manager.broadcast("progress", {"job_id": job_id, "progress": progress, "status": status})
+async def broadcast_progress(job_id: str, progress: int, status: str = "processing", message: str = None):
+    data = {"job_id": job_id, "progress": progress, "status": status}
+    if message:
+        data["message"] = message
+    await event_manager.broadcast("progress", data)
 
 def resolve_element_image_path(image_path: str) -> str | None:
     """Resolve element image_path (web URL format) to absolute filesystem path.

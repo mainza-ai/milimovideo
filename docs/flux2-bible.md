@@ -214,3 +214,32 @@ The `Config` dataclass in `cli.py` defines runtime parameters:
 - **Latent Space**: A compressed representation of the image data, produced by the Autoencoder, where the diffusion process actually takes place (Latent Diffusion).
 - **Distillation**: A process of training a smaller or faster student model (e.g., [klein]) to mimick the behavior of a larger or slower teacher model (e.g., [dev]), often reducing the number of required inference steps.
 - **CFG (Classifier-Free Guidance)**: A technique to improve sample quality and prompt adherence by interpolating between conditional (prompted) and unconditional (empty prompt) noise predictions.
+
+---
+
+## 13. Milimo System Integration
+
+### 13.1 The Wrapper (`backend/models/flux_wrapper.py`)
+Milimo does not call `scripts/cli.py` directly. Instead, it uses a custom stateful wrapper `FluxInpainter` (singleton `flux_inpainter`) that persists the model in VRAM (or RAM) to avoid reloading penalties.
+
+**Key Features of `FluxInpainter`**:
+*   **State Management**: Tracks loaded models (Flow, AE, T5/Clip) and unloads them only when necessary (e.g., switching AE modes).
+*   **MPS Stability Hacks**:
+    *   **VAE Decode**: On Apple Silicon (MPS), VAE decoding in `bfloat16` or `float16` yields black images. The wrapper forces the decoding step to occur on **CPU in float32**.
+    *   **Transformer Stability**: Forces `float32` for the main Flow Transformer on MPS to prevent NaNs, despite the performance cost.
+*   **Sequential "True" CFG**:
+    *   Flux 2 natively uses "Guidance Distillation" (a single slider) and often ignores negative prompts.
+    *   Milimo implements a custom `denoise_inpaint` loop that manually calculates `pred_cond` (Positive) and `pred_uncond` (Negative) and blends them: `pred = pred_uncond + cfg_scale * (pred_cond - pred_uncond)`.
+    *   This re-enables standard Negative Prompting behavior at the cost of 2x inference time.
+
+### 13.2 IP-Adapter Integration
+Milimo adds Image-Prompting capability to Flux 2 via a custom IP-Adapter implementation in `load_ip_adapter`.
+*   **Encoder**: Uses `openai/clip-vit-large-patch14`.
+*   **Projector**: A custom `ImageProjModel` (Linear -> Norm) that maps CLIP embeddings (1024 dim) to Flux hidden states (4096 dim).
+*   **Injection**: Image tokens are concatenated to the input sequence during the `denoise` loop.
+
+### 13.3 In-Painting Workflow
+Managed by `backend/managers/inpainting_manager.py`:
+1.  **Mask Generation**: Calls the SAM 3 Microservice (`POST /predict/mask`) to get a segmentation mask from user points.
+2.  **Inference**: Calls `flux_inpainter.inpaint` with the image and mask.
+3.  **Denoising**: The wrapper uses a RePaint-like strategy, blending noised original latents with generated latents at each step (masked areas are generated, unmasked are preserved).
