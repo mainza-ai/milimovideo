@@ -38,6 +38,10 @@ class Shot(SQLModel, table=True):
     scene_id: Optional[str] = Field(default=None, index=True) # Optional link to Scene
     project_id: str = Field(index=True, foreign_key="project.id") # Redundant but useful for queries
     index: Optional[int] = None
+    track_index: int = Field(default=0) # 0=Main, 1=Overlay, 2=Audio?
+    start_frame: int = Field(default=0) # Absolute start time (frames) for Non-Linear tracks
+    trim_in: int = Field(default=0) # Trim from start (frames)
+    trim_out: int = Field(default=0) # Trim from end (frames)
     
     project: Optional[Project] = Relationship(back_populates="shots")
     

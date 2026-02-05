@@ -36,6 +36,8 @@ class ProjectState(BaseModel):
     resolution_h: int = 512
     fps: int = 25
     seed: int = 42
+    created_at: Optional[float] = None
+    updated_at: Optional[float] = None
 
 class CreateProjectRequest(BaseModel):
     name: str

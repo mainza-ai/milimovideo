@@ -1,31 +1,28 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Play, Pause, Plus, SkipBack } from 'lucide-react';
-import { clsx } from 'clsx';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { Play, Pause, SkipBack, Scissors } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
-
-// Types for Timeline (Internal view models)
-interface Track {
-    id: number;
-    type: 'video' | 'audio';
-    name: string;
-}
+import { TimelineTrack } from './TimelineTrack';
+import { TimeDisplay } from './TimeDisplay';
+import { PlaybackEngine } from '../Player/PlaybackEngine';
+import { Playhead } from './Playhead';
 
 // Auto-Save Hook
 const useAutoSave = (project: any, saveProject: () => Promise<void>) => {
     const timeoutRef = useRef<any>(null);
-    const lastSavedState = useRef<string>(JSON.stringify(project));
+
 
     useEffect(() => {
-        const currentStr = JSON.stringify(project);
-        if (currentStr === lastSavedState.current) return;
+        // Debounce auto-save on any project change.
+        // We skip the expensive JSON.stringify(project) check here.
+        // If the project reference changed, we assume it's worth resetting the timer.
+        // The actual saveProject implementation can handle "no changes" if it wants,
+        // or we just accept a cheap PUT every 2s during editing.
 
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
         timeoutRef.current = setTimeout(async () => {
             console.log("Auto-Saving Project...");
             await saveProject();
-            lastSavedState.current = JSON.stringify(project);
         }, 2000); // 2s debounce
 
         return () => {
@@ -34,379 +31,388 @@ const useAutoSave = (project: any, saveProject: () => Promise<void>) => {
     }, [project, saveProject]);
 };
 
+const TRACKS = [
+    { id: 0, type: 'video' as const, name: 'V1 (Main)' },
+    { id: 1, type: 'video' as const, name: 'V2 (Overlay)' },
+    { id: 2, type: 'audio' as const, name: 'A1 (Audio)' },
+];
 
 export const VisualTimeline = () => {
-    const {
-        project, selectedShotId, selectShot,
-        isPlaying, setIsPlaying, reorderShots, addShot,
-        currentTime, setCurrentTime,
-        saveProject
-    } = useTimelineStore();
+    const project = useTimelineStore(state => state.project);
+    const selectedShotId = useTimelineStore(state => state.selectedShotId);
+    const isPlaying = useTimelineStore(state => state.isPlaying);
+    const setIsPlaying = useTimelineStore(state => state.setIsPlaying);
+    const setCurrentTime = useTimelineStore(state => state.setCurrentTime);
+    const saveProject = useTimelineStore(state => state.saveProject);
+    const splitShot = useTimelineStore(state => state.splitShot);
+    const transientDuration = useTimelineStore(state => state.transientDuration);
 
     useAutoSave(project, saveProject);
 
     const [zoom, setZoom] = useState(20); // pixels per second
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [snapLines, setSnapLines] = useState<number[]>([]);
 
-    // Convert linear shots list to timeline clips on Track 0
-    // We assume shots are sequential for now.
+    // Convert linear shots list to timeline clips
     const clips = useMemo(() => {
-        let currentTime = 0;
+        let v1Time = 0;
         return project.shots.map(shot => {
-            const duration = shot.numFrames / (project.fps || 25);
+            const rawDuration = (shot.numFrames - (shot.trimIn || 0) - (shot.trimOut || 0));
+            const duration = Math.max(1, rawDuration) / (project.fps || 25);
+            const trackIndex = shot.trackIndex || 0;
+            const start = trackIndex === 0
+                ? v1Time
+                : Math.max(0, (shot.startFrame || 0) / (project.fps || 25)); // Clamp start time to 0 for free tracks
+
+            if (trackIndex === 0) {
+                v1Time += duration;
+            }
+
             const clip = {
                 id: shot.id,
-                start: currentTime,
+                start: start,
                 duration: duration,
-                track: 0,
+                track: trackIndex,
                 name: shot.prompt || 'Untitled Shot',
-                thumbnail: shot.thumbnailUrl, // Use static thumbnail if available
-                shot: shot // Keep ref
+                thumbnail: shot.thumbnailUrl,
+                shot: shot
             };
-            currentTime += duration;
             return clip;
         });
     }, [project.shots, project.fps]);
 
     const totalDuration = clips.reduce((acc, c) => Math.max(acc, c.start + c.duration), 0);
-    const tracks: Track[] = [
-        { id: 0, type: 'video', name: 'V1 (Main)' },
-        // { id: 1, type: 'video', name: 'V2 (Overlay)' }, // Future
-    ];
+
+    // Effective Duration (Project or Temporary Drag expansion)
+    const effectiveDuration = Math.max(totalDuration, transientDuration || 0);
+
+
+    // TRACKS moved outside component
 
     // Helpers
-    const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
-        const s = Math.floor(seconds % 60);
-        const f = Math.floor((seconds % 1) * (project.fps || 25));
-        return `${m}:${s.toString().padStart(2, '0')}:${f.toString().padStart(2, '0')}`;
-    };
 
-    const handleSeek = (e: React.MouseEvent) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const scrollLeft = e.currentTarget.scrollLeft;
-        const x = e.clientX - rect.left + scrollLeft;
-        const time = Math.max(0, x / zoom);
-        setCurrentTime(time);
-    };
+    // Global handlers
+    const handleDragClipEnd = useCallback((id: string, newStartFrame: number, trackIndex: number, action?: any) => {
+        const { project } = useTimelineStore.getState();
+        // clips is available in component scope and is a dependency
 
-    const handleDragEnd = (clip: any, info: any) => {
-        const movePx = info.offset.x;
-        // Ignore clicks/small moves
-        if (Math.abs(movePx) < 5) return;
+        const fps = project.fps || 25;
+        // Wait, clips is computed in VisualTimeline and passed to Track.
+        // If we use getState(), we get Raw Shots.
+        // But the logic below uses `clips` (the computed view).
 
-        const myIndex = clips.findIndex(c => c.id === clip.id);
-        if (myIndex === -1) return;
+        // CORRECTION: We need to pass `clips` to the dependency array.
+        // BUT `clips` changes when `project` changes.
+        // If `clips` changes, the callback changes.
+        // If callback changes, `TimelineTrack` re-renders.
+        // If `TimelineTrack` re-renders, `TimelineClip` re-renders.
 
-        const newX = clip.start * zoom + movePx;
-        const myNewCenter = newX + (clip.duration * zoom) / 2;
+        // HOWEVER: During drag, `clips` SHOULD BE STABLE unless we are updating the store 60fps.
+        // The issue is `TimelineClip` calls `useTimelineStore.getState().setTransientDuration()`.
+        // This causes `VisualTimeline` to re-render.
+        // `clips` uses `useMemo(() => ..., [project.shots])`.
+        // `transientDuration` does NOT affect `clips` array reference.
+        // SO `clips` is stable.
 
-        // Calculate the new index by comparing against other clips
-        const otherClips = clips.filter(c => c.id !== clip.id);
-        let newIndex = 0;
+        // THEREFORE: If we wrap logic in useCallback with `[clips, project.fps]`, it should be stable during transient drag.
 
-        for (const c of otherClips) {
-            const cCenter = (c.start + c.duration / 2) * zoom;
-            if (myNewCenter > cCenter) {
-                newIndex++;
+        // Let's verify:
+        // `handleDragClipEnd` is called on DRAG END. Not during drag.
+        // So it doesn't matter if it changes?
+        // WAIT. `TimelineClip` receives `onDragEnd={handleDragClipEnd}`.
+        // If `VisualTimeline` re-renders (due to transientDuration), and `handleDragClipEnd` is re-created,
+        // then `TimelineClip` sees a new prop, so it re-renders.
+
+        // So we MUST memoize `handleDragClipEnd`.
+        // `clips` is stable during drag (transientDuration change doesn't change project.shots).
+        // `zoom` changes? No.
+
+        // Refactoring to use internal logic or standard refs if needed?
+        // No, standard useCallback should work if `clips` is stable.
+
+
+
+        if (action?.type === 'resize-start') {
+            const clip = clips.find(c => c.id === id);
+            if (!clip) return;
+            const deltaSeconds = action.deltaX / zoom;
+            const deltaFrames = Math.round(deltaSeconds * fps);
+
+            // Limit: trimIn cannot exceed duration or be < 0
+            // But trimIn + trimOut must be < numFrames
+            const currentTrimIn = clip.shot.trimIn || 0;
+            const maxTrimIn = (clip.shot.numFrames || 0) - (clip.shot.trimOut || 0) - 25; // Keep 1s min?
+            const newTrimIn = Math.min(Math.max(0, currentTrimIn + deltaFrames), maxTrimIn);
+
+            // Also need to adjust startFrame if not magnetic V1
+            const updates: any = { trimIn: newTrimIn };
+            if (trackIndex > 0) {
+                // For Free Track, if we trim start IN (positive delta), visual start moves RIGHT
+                // So startFrame increases
+                // But wait, user dragged Handle. 
+                // If dragging handle RIGHT, we are cutting the start. Content starts later.
+                // Visual Block Start moves RIGHT.
+                // So StartFrame += Delta.
+                const currentStart = clip.shot.startFrame || 0;
+                const newStart = currentStart + deltaFrames;
+                updates.startFrame = Math.max(0, newStart);
             }
+
+            useTimelineStore.getState().patchShot(id, updates);
+            return;
         }
 
-        if (newIndex !== myIndex) {
-            reorderShots(myIndex, newIndex);
+        if (action?.type === 'resize-end') {
+            const clip = clips.find(c => c.id === id);
+            if (!clip) return;
+            const deltaSeconds = action.deltaX / zoom;
+            const deltaFrames = Math.round(deltaSeconds * fps);
+
+            // Dragging Right Handle RIGHT (positive) -> Less TrimOut (Longer)
+            // Wait, Right handle controls duration.
+            // visual ends = start + duration.
+            // Dragging Right Handle changes duration.
+            // If delta > 0, we are extending. TrimOut decreases.
+
+            const currentTrimOut = clip.shot.trimOut || 0;
+            // newTrimOut = currentTrimOut - deltaFrames
+            // Ensure trimOut >= 0
+            // Also user might want to LOOP? For now just limit to 0 trimOut (full length)
+
+            const newTrimOut = Math.max(0, currentTrimOut - deltaFrames);
+
+            // If we hit 0, we can't extend further unless we loop (feature for later)
+            // Or if we generated more frames?
+
+            useTimelineStore.getState().patchShot(id, { trimOut: newTrimOut });
+            return;
         }
-    };
 
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
-    };
+        if (trackIndex === 0) {
+            // V1 Reorder Logic
+            const v1Clips = clips.filter(c => c.track === 0).sort((a, b) => a.start - b.start);
+            const myIndex = v1Clips.findIndex(c => c.id === id);
+            if (myIndex === -1) return;
 
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
+            // Calculate new center based on dragged position
+            const newStartTime = newStartFrame / (project.fps || 25);
+            const me = v1Clips[myIndex];
+            const myDuration = me.duration;
+            const myNewCenter = newStartTime + (myDuration / 2);
 
-        let data = e.dataTransfer.getData('application/milimo-element');
-        let asset: any = null;
+            let newIndex = 0;
+            const otherClips = v1Clips.filter(c => c.id !== id);
 
-        if (data) {
-            asset = JSON.parse(data);
-            // Element logic
-            if (asset.image_path) {
-                asset.url = asset.image_path;
-                asset.type = 'image';
-                asset.filename = asset.name; // Use name as filename for prompt
+            for (const c of otherClips) {
+                const cCenter = c.start + (c.duration / 2);
+                if (myNewCenter > cCenter) {
+                    newIndex++;
+                }
             }
+
+            if (newIndex !== myIndex) {
+                // Connected Clips Logic: Move attached V2/A1 clips
+                const movedClip = v1Clips[myIndex];
+
+                const v2a1Clips = clips.filter(c => c.track > 0);
+
+                // Helper to find dominant V1 clip for a free clip
+                const getParentV1 = (freeClip: any) => {
+                    const center = freeClip.start + (freeClip.duration / 2);
+                    return v1Clips.find(v1 => center >= v1.start && center < (v1.start + v1.duration));
+                };
+
+                // Calculate shifts
+                // Ideally we simulate the new state to know exact time differences
+                // But for simple "Magnetic" feel, we can just apply delta.
+
+                // Simplify: Just reorder V1 first. 
+                // The issue is if we reorder V1, the V2 clips don't move automatically.
+                // We need to valid "Before" and "After" times for detecting the delta.
+                // This is complex to do purely client-side without re-running the layout engine.
+
+                // Alternative: Just reorder. User manually moves audio.
+                // BUT user requested "Magnetic Behaviors".
+
+                // Let's iterate and find clips attached to the MOVED clip.
+                const connectedClips = v2a1Clips.filter(c => getParentV1(c)?.id === movedClip.id);
+
+                // Calculate where the MOVED clip ends up.
+                // Sum of durations of clips before newIndex
+                let newStart = 0;
+                // v1Clips is sorted by old position.
+                // We construct the NEW order.
+                const newOrder = [...v1Clips];
+                newOrder.splice(myIndex, 1);
+                newOrder.splice(newIndex, 0, movedClip);
+
+                // Find new start of movedClip
+                for (let i = 0; i < newIndex; i++) {
+                    newStart += newOrder[i].duration;
+                }
+
+                const delta = newStart - movedClip.start;
+
+                // Apply delta to connected clips
+                connectedClips.forEach(c => {
+                    const newFrame = Math.round((c.start + delta) * fps);
+                    useTimelineStore.getState().moveShotToValues(c.id, c.track, newFrame);
+                });
+
+                useTimelineStore.getState().reorderShots(myIndex, newIndex);
+            }
+
         } else {
-            data = e.dataTransfer.getData('application/json');
-            if (data) asset = JSON.parse(data);
+            useTimelineStore.getState().moveShotToValues(id, trackIndex, Math.max(0, newStartFrame));
         }
+    }, [clips, project.fps, zoom]); // project.fps is stable. zoom is needed for calc? Ah, deltaX uses zoom.
 
-        if (!asset) return;
+    const handleSeek = useCallback((e: React.MouseEvent) => {
+        // Only seek if clicking on the ruler area or background, 
+        // Component clicks usually propagate unless stopped.
+        if ((e.target as HTMLElement).closest('.clip-content')) return;
 
-        try {
-            // Create new shot
-            addShot();
+        // Since we are clicking inside scrollContainerRef, offset X is e.nativeEvent.offsetX if using raw,
+        // but let's be safe with rects.
+        const rect = e.currentTarget.getBoundingClientRect();
+        // We need to account that this handler is on the Container which scrolls.
+        // e.clientX is viewport X.
+        // rect.left is viewport left of container (0 usually for sidebar)
+        // scrollLeft is scroll.
+        // const x = e.clientX - rect.left + e.currentTarget.scrollLeft - 128; // 128 is offset for Sidebar width if it's included in scroll?
+        // Wait, sidebar is sticky? 
+        // Layout: Sidebar (128px) | Track Content (Flex 1)
+        // The click listener should be on the Track Content area mostly? 
 
-            // Get the new shot (it's auto-selected by addShot)
-            const { selectedShotId, updateShot, addConditioningToShot } = useTimelineStore.getState();
-            if (!selectedShotId) return;
+        // Let's refine seek logic:
+        // Ruler click is best. Background click is okay.
 
-            // Configure shot
-            updateShot(selectedShotId, {
-                prompt: `Shot using ${asset.filename}`,
-                numFrames: asset.type === 'video' ? 121 : 49, // Default duration
-                videoUrl: asset.url, // Preview the asset immediately
-                thumbnailUrl: asset.thumbnail || (asset.type === 'image' ? asset.url : undefined) // Set thumbnail
-            });
+        // Simplified:
+        // We attach click to the "Tracks Container".
+        // It has sticky sidebar. 
+        // If click is on sidebar, ignore.
+        if (e.clientX < (rect.left + 128)) return;
 
-            // Add conditioning
-            const item: any = {
-                type: asset.type === 'video' ? 'video' : 'image',
-                path: asset.url,
-                frameIndex: 0,
-                strength: 1.0
-            };
-            addConditioningToShot(selectedShotId, item);
+        const scrollLeft = e.currentTarget.scrollLeft;
+        const relativeX = e.clientX - rect.left - 128 + scrollLeft;
+        // -128 because the sidebar is visually there but 'sticky'.
+        // Ideally we separate scroll container for timeline only.
+        // Current CSS: Sidebar is "sticky left-0".
 
-        } catch (err) {
-            console.error("Drop failed", err);
-        }
+        const time = Math.max(0, relativeX / zoom);
+        useTimelineStore.getState().setCurrentTime(time);
+    }, [zoom]);
+
+    // Zoom & Pan
+    useEffect(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const handleWheel = (e: WheelEvent) => {
+            // Ctrl/Cmd + Wheel = Zoom
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1; // Out : In
+                setZoom(z => Math.min(Math.max(z * delta, 5), 300));
+            }
+            // Default behavior handles Vertical/Horizontal scroll
+        };
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        return () => container.removeEventListener('wheel', handleWheel);
+    }, []);
+
+    const handleSplit = async () => {
+        if (!selectedShotId) return;
+        const clip = clips.find(c => c.id === selectedShotId);
+        if (!clip) return;
+        const relativeTime = useTimelineStore.getState().currentTime - clip.start;
+        if (relativeTime <= 0 || relativeTime >= clip.duration) return;
+        const fps = project.fps || 25;
+        const splitFrame = Math.round(relativeTime * fps);
+        await splitShot(selectedShotId, splitFrame);
     };
 
     return (
-        <div
-            className="flex flex-col h-full bg-[#0a0a0a] border-t border-white/5 select-none"
-            onDragOver={handleDragOver}
-            onDrop={handleDrop}
-        >
+        <div className="flex flex-col h-full bg-[#0a0a0a] border-t border-white/5 select-none text-white">
+            <PlaybackEngine />
             {/* Toolbar */}
-            <div className="h-10 flex items-center px-4 border-b border-white/5 bg-white/5 justify-between shrink-0">
+            <div className="h-10 flex items-center px-4 border-b border-white/5 bg-white/5 justify-between shrink-0 z-30 relative">
                 <div className="flex items-center gap-4">
-                    <button
-                        onClick={() => {
-                            setCurrentTime(0);
-                            if (scrollContainerRef.current) {
-                                scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
-                            }
-                        }}
-                        className="text-white hover:text-milimo-400 focus:outline-none"
-                        title="Reset Playhead"
-                    >
+                    <button onClick={() => { setCurrentTime(0); scrollContainerRef.current?.scrollTo({ left: 0 }); }} className="text-white hover:text-milimo-400">
                         <SkipBack size={16} fill="currentColor" />
                     </button>
-                    <button
-                        onClick={() => setIsPlaying(!isPlaying)}
-                        className="text-white hover:text-milimo-400 focus:outline-none"
-                    >
+                    <button onClick={() => setIsPlaying(!isPlaying)} className="text-white hover:text-milimo-400">
                         {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
                     </button>
-
-                    <button
-                        onClick={addShot}
-                        className="flex items-center gap-1.5 px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-[10px] font-medium transition-colors"
-                    >
-                        <Plus size={12} />
-                        Add Shot
-                    </button>
-
-                    <div className="text-xs font-mono text-milimo-300">
-                        {formatTime(currentTime)} / {formatTime(totalDuration)}
-                    </div>
+                    <TimeDisplay projectFps={project.fps} totalDuration={totalDuration} />
                 </div>
-
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-white/40">Zoom</span>
-                    <input
-                        type="range" min="5" max="100"
-                        value={zoom} onChange={(e) => setZoom(parseInt(e.target.value))}
-                        className="w-20 accent-milimo-500 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                    />
+                    <button onClick={handleSplit} className="text-white/50 hover:text-white" disabled={!selectedShotId}>
+                        <Scissors size={14} />
+                    </button>
+                    <input type="range" min="5" max="300" value={zoom} onChange={(e) => setZoom(parseInt(e.target.value))} className="w-20 accent-milimo-500 h-1 bg-white/10 rounded-lg appearance-none cursor-pointer" />
                 </div>
             </div>
 
-            {/* Timeline Area */}
-            <div className="flex-1 flex overflow-hidden relative">
-                {/* Track Headers */}
-                <div className="w-32 bg-[#111] border-r border-white/5 min-w-[128px] z-10 flex flex-col">
-                    {tracks.map(track => (
-                        <div key={track.id} className="h-24 border-b border-white/5 flex items-center px-3 text-xs text-white/50 font-mono tracking-wider">
-                            {track.name}
+            {/* Main Area */}
+            <div
+                ref={scrollContainerRef}
+                className="flex-1 overflow-x-auto overflow-y-auto relative bg-[#0a0a0a] custom-scrollbar"
+                onClick={handleSeek}
+            >
+                {/* Tracks Container */}
+                <div className="min-w-full inline-block pb-32 relative z-10">
+                    {/* Timeline Header Spacer */}
+                    <div className="flex sticky top-0 z-30 bg-[#111] border-b border-white/5 h-6">
+                        <div className="w-32 min-w-[128px] border-r border-white/5 sticky left-0 bg-[#111] z-40"></div>
+                        <div className="flex-1 relative">
+                            {/* Ruler Content */}
+                            {/* ... logic for ruler can stay or be moved. Ideally ruler is top. */}
                         </div>
+                    </div>
+
+                    {TRACKS.map(track => (
+                        <TimelineTrack
+                            key={track.id}
+                            track={track}
+                            clips={clips.filter(c => c.track === track.id)}
+                            zoom={zoom}
+                            projectFps={project.fps || 25}
+                            allClips={clips}
+                            onSnap={setSnapLines}
+                            onDragClipEnd={handleDragClipEnd}
+                        />
                     ))}
                 </div>
 
-                {/* Tracks Container */}
+                {/* Grid Overlay (Z-Index 20 - Above Tracks Background, Below Clips?) 
+                    Actually, if Tracks have transparent BG, this can stay behind.
+                    BUT User wants it "Always Visible". 
+                    If we put it Z-20, it covers Tracks. 
+                    We need pointer-events-none.
+                */}
                 <div
-                    ref={scrollContainerRef}
-                    className="flex-1 overflow-x-auto overflow-y-hidden relative bg-[#0f0f0f] custom-scrollbar cursor-pointer"
-                    onClick={handleSeek}
-                >
-                    {/* Time/Grid Ruler Background */}
+                    className="absolute top-0 bottom-0 left-[128px] pointer-events-none z-20 mix-blend-overlay"
+                    style={{
+                        backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)',
+                        backgroundSize: `${zoom}px 100%`,
+                        width: `${Math.max(effectiveDuration * zoom + 500, 2000)}px`,
+                        height: '100%'
+                    }}
+                />
+
+                {/* Snap Lines Overlay */}
+                {snapLines.map(t => (
                     <div
-                        className="absolute inset-0 pointer-events-none z-0"
-                        style={{
-                            backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
-                            backgroundSize: `${zoom}px 100%`,
-                            width: `${Math.max(totalDuration * zoom + 500, 2000)}px`
-                        }}
+                        key={t}
+                        className="absolute top-0 bottom-0 w-px bg-yellow-400 z-50 pointer-events-none"
+                        style={{ left: 128 + (t * zoom) }}
                     />
+                ))}
 
-                    {/* Track Lanes */}
-                    <div className="relative z-10" style={{ width: `${Math.max(totalDuration * zoom + 500, 2000)}px` }}>
-                        {tracks.map(track => (
-                            <div key={track.id} className="h-24 border-b border-white/5 relative group">
-                                {clips.filter(c => c.track === track.id).map(clip => {
-                                    const isSelected = selectedShotId === clip.id;
-                                    return (
-                                        <motion.div
-                                            key={clip.id}
-                                            drag="x"
-                                            dragMomentum={false}
-                                            dragElastic={0}
-                                            dragConstraints={{ left: -(clip.start * zoom) }}
-                                            onDragEnd={(_, info) => handleDragEnd(clip, info)}
-                                            onClick={(e) => { e.stopPropagation(); selectShot(clip.id); }}
-                                            className={clsx(
-                                                "absolute top-1 bottom-1 rounded-lg border-2 cursor-pointer group bg-[#151515]",
-                                                isSelected
-                                                    ? "border-milimo-500 shadow-lg shadow-milimo-500/20 z-20"
-                                                    : "border-white/10 hover:border-white/30 z-10 opacity-90 hover:opacity-100"
-                                            )}
-                                            style={{
-                                                left: clip.start * zoom,
-                                                width: clip.duration * zoom,
-                                            }}
-                                            onDragOver={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                e.dataTransfer.dropEffect = 'copy';
-                                                // Highlight effect? (handled by hover classes possibly, or add specific state)
-                                                e.currentTarget.style.borderColor = '#22c55e'; // Green highlight
-                                            }}
-                                            onDragLeave={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                e.currentTarget.style.borderColor = isSelected ? '#22c55e' : 'rgba(255,255,255,0.1)';
-                                            }}
-                                            onDrop={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                e.currentTarget.style.borderColor = isSelected ? '#22c55e' : 'rgba(255,255,255,0.1)';
-
-                                                const data = e.dataTransfer.getData('application/milimo-element'); // Try element first
-                                                let asset: any = null;
-
-                                                if (data) {
-                                                    asset = JSON.parse(data);
-                                                    // Element needs image_path to be conditioning
-                                                    if (!asset.image_path) {
-                                                        console.warn("Element has no visual");
-                                                        return;
-                                                    }
-                                                    asset.url = asset.image_path;
-                                                    asset.type = 'image'; // Elements are images for conditioning
-                                                } else {
-                                                    // Try generic JSON (from Images tab?)
-                                                    const generic = e.dataTransfer.getData('application/json');
-                                                    if (generic) asset = JSON.parse(generic);
-                                                }
-
-                                                if (!asset) return;
-
-                                                // Calculate Frame Index
-                                                const rect = e.currentTarget.getBoundingClientRect();
-                                                const offsetX = e.clientX - rect.left;
-                                                const pct = offsetX / rect.width;
-                                                const frameIndex = Math.floor(pct * (clip.shot.numFrames - 1));
-
-                                                console.log(`Dropped asset ${asset.filename || asset.name} @ frame ${frameIndex}`);
-
-                                                const { addConditioningToShot, patchShot } = useTimelineStore.getState();
-
-                                                const item: any = {
-                                                    type: asset.type === 'video' ? 'video' : 'image',
-                                                    path: asset.url,
-                                                    frameIndex: frameIndex,
-                                                    strength: 1.0
-                                                };
-
-                                                // 1. Local Update
-                                                addConditioningToShot(clip.id, item);
-
-                                                // 2. Persist (Patch)
-                                                // We need the UPDATED timeline to send to backend? 
-                                                // Or backend patch merges? No, it usually replaces the field.
-                                                // So we construct the new timeline array.
-                                                const newTimeline = [...clip.shot.timeline, item]; // Approximation (doesn't have ID yet, but store added one)
-                                                // Actually store's addConditioningToShot generated an ID. 
-                                                // We should ideally get the updated shot from store.
-                                                // But `patchShot` sends JSON.
-                                                // Let's rely on the fact that `item` is what we added.
-                                                // Backend expects list of dicts.
-                                                patchShot(clip.id, { timeline: newTimeline });
-                                            }}
-                                            whileDrag={{ scale: 1.02, zIndex: 100, boxShadow: "0 10px 20px rgba(0,0,0,0.5)" }}
-                                        >
-                                            {/* Clip Content (Masked) */}
-                                            <div className="absolute inset-0 overflow-hidden rounded-md bg-zinc-900">
-                                                {/* Clip Content */}
-                                                {clip.thumbnail ? (
-                                                    <img
-                                                        src={clip.thumbnail}
-                                                        className="w-full h-full object-cover opacity-80 pointer-events-none"
-                                                        alt=""
-                                                        onError={(e) => {
-                                                            console.warn("Thumbnail load failed:", clip.thumbnail);
-                                                            // e.currentTarget.style.display = 'none'; // Don't hide completely, maybe show placeholder?
-                                                            // Fallback to clear
-                                                            e.currentTarget.style.opacity = '0';
-                                                        }}
-                                                        onLoad={() => console.log("Thumbnail loaded:", clip.thumbnail)}
-                                                    />
-                                                ) : clip.shot.videoUrl ? (
-                                                    <video src={clip.shot.videoUrl} className="w-full h-full object-cover opacity-60 pointer-events-none" />
-                                                ) : (
-                                                    <div className="w-full h-full bg-gradient-to-br from-white/5 to-transparent flex items-center justify-center">
-                                                        <span className="text-[10px] text-white/30 truncate px-2">{clip.name}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-
-                                            {/* Label */}
-                                            <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-black/50 backdrop-blur rounded text-[9px] text-white/80 font-mono truncate max-w-full z-20 pointer-events-none">
-                                                {clip.shot.numFrames}f
-                                            </div>
-
-                                            {/* Conditioning Markers */}
-                                            <div className="absolute bottom-0 left-0 right-0 h-4 px-1 flex items-end pointer-events-none z-20">
-                                                {clip.shot && clip.shot.timeline.map(item => {
-                                                    const pct = (item.frameIndex / (clip.shot.numFrames - 1 || 1)) * 100;
-                                                    return (
-                                                        <div
-                                                            key={item.id}
-                                                            className="absolute bottom-1 w-3 h-3 rounded-full bg-milimo-500 border border-black shadow-sm transform -translate-x-1/2"
-                                                            style={{ left: `${pct}%` }}
-                                                            title={`${item.type} @ f${item.frameIndex}`}
-                                                        />
-                                                    );
-                                                })}
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Playhead */}
-                    <div
-                        className="absolute top-0 bottom-0 w-px bg-red-500 z-30 pointer-events-none transition-all duration-100 ease-linear"
-                        style={{ left: currentTime * zoom }}
-                    >
-                        <div className="w-3 h-3 bg-red-500 -ml-1.5 transform rotate-45 -mt-1.5 shadow-sm" />
-                    </div>
-                </div>
+                {/* Playhead */}
+                <Playhead zoom={zoom} />
             </div>
-        </div>
+        </div >
     );
 };

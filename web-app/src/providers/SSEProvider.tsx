@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { useTimelineStore } from '../stores/timelineStore';
+import { useShallow } from 'zustand/react/shallow';
 import { pollJobStatus } from '../utils/jobPoller';
 
 interface SSEContextType {
@@ -15,12 +16,13 @@ export const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const [isConnected, setIsConnected] = useState(false);
     const [lastEventTime, setLastEventTime] = useState(0);
     const eventSourceRef = useRef<EventSource | null>(null);
-    const { handleServerEvent, project } = useTimelineStore();
+    const handleServerEvent = useTimelineStore(useShallow(state => state.handleServerEvent));
 
     // Sync active jobs on mount
     useEffect(() => {
         const syncActiveShots = async () => {
             // Check any shot that thinks it is generating
+            const { project } = useTimelineStore.getState();
             const activeShots = project.shots.filter(s => s.isGenerating && s.lastJobId);
             if (activeShots.length > 0) {
                 console.log(`[SSE] Syncing ${activeShots.length} active shots...`);

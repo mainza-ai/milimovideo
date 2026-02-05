@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import List
-from sqlmodel import Session, select
+from sqlmodel import Session, select, SQLModel
 from database import get_session, Project, Shot
 from schemas import CreateProjectRequest, ProjectState
 import uuid
@@ -44,7 +44,9 @@ def create_project(req: CreateProjectRequest, session: Session = Depends(get_ses
         resolution_w=new_project.resolution_w,
         resolution_h=new_project.resolution_h,
         fps=new_project.fps,
-        seed=new_project.seed
+        seed=new_project.seed,
+        created_at=new_project.created_at.timestamp() if new_project.created_at else None,
+        updated_at=new_project.updated_at.timestamp() if new_project.updated_at else None
     )
 
 @router.get("/projects", response_model=List[ProjectState])
@@ -64,7 +66,9 @@ def get_projects(session: Session = Depends(get_session)):
             resolution_w=p.resolution_w,
             resolution_h=p.resolution_h,
             fps=p.fps,
-            seed=p.seed
+            seed=p.seed,
+            created_at=p.created_at.timestamp() if p.created_at else None,
+            updated_at=p.updated_at.timestamp() if p.updated_at else None
         ))
     return results
 
@@ -97,6 +101,10 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
             "status": s.status,
             "image_url": s.thumbnail_url,
             "video_url": s.video_url,
+            "track_index": s.track_index,
+            "start_frame": s.start_frame,
+            "trim_in": s.trim_in,
+            "trim_out": s.trim_out,
             "created_at": s.created_at.isoformat() if s.created_at else None
         })
         
@@ -107,7 +115,9 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
         fps=project.fps,
-        seed=project.seed
+        seed=project.seed,
+        created_at=project.created_at.timestamp() if project.created_at else None,
+        updated_at=project.updated_at.timestamp() if project.updated_at else None
     )
 
 @router.delete("/projects/{project_id}")
@@ -329,5 +339,85 @@ async def get_project_images(project_id: str, session: Session = Depends(get_ses
     statement = select(Asset).where(Asset.project_id == project_id, Asset.type == "image").order_by(Asset.created_at.desc())
     results = session.exec(statement).all()
     return results
+
+
+class SplitShotRequest(SQLModel):
+    split_frame: int # Local frame index in the shot
+
+@router.post("/shots/{shot_id}/split")
+async def split_shot(shot_id: str, req: SplitShotRequest, session: Session = Depends(get_session)):
+    """
+    Split a shot into two at the given local frame index.
+    Adjusts trim_out of original and creates new shot with trim_in.
+    """
+    original_shot = session.get(Shot, shot_id)
+    if not original_shot:
+        raise HTTPException(status_code=404, detail="Shot not found")
+        
+    project = session.get(Project, original_shot.project_id)
+    if not project:
+         raise HTTPException(status_code=404, detail="Project not found")
+
+    # 1. Validate Split Point
+    # Must be > 0 and < (num_frames - trim_in - trim_out)
+    current_duration = original_shot.num_frames - (original_shot.trim_in or 0) - (original_shot.trim_out or 0)
+    
+    if req.split_frame <= 0 or req.split_frame >= current_duration:
+        raise HTTPException(status_code=400, detail="Split point out of bounds")
+        
+    # Absolute frame within the source video
+    absolute_split_frame = (original_shot.trim_in or 0) + req.split_frame
+    
+    # 2. Update Original Shot (Trim Out)
+    # The new trim_out should be such that shot ends at absolute_split_frame
+    # num_frames - trim_out_new = absolute_split_frame
+    # trim_out_new = num_frames - absolute_split_frame
+    
+    old_trim_out = original_shot.trim_out or 0
+    new_trim_out = original_shot.num_frames - absolute_split_frame
+    
+    original_shot.trim_out = new_trim_out
+    session.add(original_shot)
+    
+    # 3. Create New Shot (Copy of Original)
+    new_shot_data = original_shot.model_dump(exclude={"id", "created_at", "updated_at"})
+    new_shot = Shot(**new_shot_data)
+    new_shot.id = uuid.uuid4().hex
+    new_shot.created_at = datetime.utcnow()
+    
+    # 4. Configure New Shot (Trim In)
+    # Starts at absolute_split_frame
+    # trim_in_new = absolute_split_frame
+    new_shot.trim_in = absolute_split_frame
+    new_shot.trim_out = old_trim_out # Resets to original end
+    
+    # 5. Handle Track Positioning
+    if original_shot.track_index == 0:
+        # V1: Magnetic - Insert after original (Update timestamps is implicit in list order, but we track index?)
+        # Current DB doesn't strictly use 'index' column for ordering, usually by created_at or implicit.
+        # But we might need to shift things if we used 'start_frame'.
+        # For V1, start_frame is ignored in rendering.
+        pass
+    else:
+        # V2/A1: Free - Absolute Positioning
+        # New shot starts where the cut happened
+        # Start = Original Start + split_frame (seconds converted to frames?)
+        # Wait, start_frame is absolute project frames.
+        new_shot.start_frame = (original_shot.start_frame or 0) + (req.split_frame) # Shift start
+    
+    session.add(new_shot)
+    
+    # 6. Duplicate timeline/conditioning if necessary?
+    # For now, simplistic copy. Ideally filter conditioning based on time?
+    # TODO: Filter 'timeline' list based on split point (left vs right).
+    
+    session.commit()
+    session.refresh(original_shot)
+    session.refresh(new_shot)
+    
+    return {
+        "original_shot": original_shot,
+        "new_shot": new_shot
+    }
 
 

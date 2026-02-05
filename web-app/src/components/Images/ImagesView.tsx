@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Loader2, Zap, Image as ImageIcon, Wand2 } from 'lucide-react';
 
 interface GeneratedImage {
@@ -14,7 +15,13 @@ interface GeneratedImage {
 }
 
 export const ImagesView = () => {
-    const { project, addToast, elements, fetchElements, triggerAssetRefresh } = useTimelineStore();
+    const { project, addToast, elements, fetchElements, triggerAssetRefresh } = useTimelineStore(useShallow(state => ({
+        project: state.project,
+        addToast: state.addToast,
+        elements: state.elements,
+        fetchElements: state.fetchElements,
+        triggerAssetRefresh: state.triggerAssetRefresh
+    })));
     const [images, setImages] = useState<GeneratedImage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);

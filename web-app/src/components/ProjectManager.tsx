@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTimelineStore } from '../stores/timelineStore';
+import { useShallow } from 'zustand/react/shallow';
 import { X, Plus, FolderOpen, Trash2, Clock, Film } from 'lucide-react';
 import { clsx } from 'clsx';
 
@@ -11,7 +12,12 @@ interface ProjectInfo {
 }
 
 export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
-    const { project: currentProject, loadProject, createNewProject, deleteProject } = useTimelineStore();
+    const { project: currentProject, loadProject, createNewProject, deleteProject } = useTimelineStore(useShallow(state => ({
+        project: state.project,
+        loadProject: state.loadProject,
+        createNewProject: state.createNewProject,
+        deleteProject: state.deleteProject
+    })));
     const [projects, setProjects] = useState<ProjectInfo[]>([]);
 
     // Create Form State

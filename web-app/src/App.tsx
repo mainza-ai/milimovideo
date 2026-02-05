@@ -2,8 +2,10 @@ import { CinematicPlayer } from './components/Player/CinematicPlayer';
 import { Layout } from './components/Layout';
 import { useTimelineStore } from './stores/timelineStore';
 
+import { useShallow } from 'zustand/react/shallow';
+
 function App() {
-  const { toasts } = useTimelineStore();
+  const toasts = useTimelineStore(useShallow(state => state.toasts));
 
   return (
     <>

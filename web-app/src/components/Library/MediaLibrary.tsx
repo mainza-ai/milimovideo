@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { ConditioningItem } from '../../stores/timelineStore';
 import { Upload, Image as ImageIcon, Film, Plus, Trash2 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -17,7 +18,12 @@ interface Asset {
 }
 
 export const MediaLibrary = () => {
-    const { selectedShotId, addConditioningToShot, project } = useTimelineStore();
+    const { selectedShotId, addConditioningToShot, project, assetRefreshVersion } = useTimelineStore(useShallow(state => ({
+        selectedShotId: state.selectedShotId,
+        addConditioningToShot: state.addConditioningToShot,
+        project: state.project,
+        assetRefreshVersion: state.assetRefreshVersion
+    })));
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [tab, setTab] = useState<'project' | 'history'>('history');
@@ -97,7 +103,7 @@ export const MediaLibrary = () => {
     };
 
     // Refresh history when tab changes or refresh triggered
-    const { assetRefreshVersion } = useTimelineStore();
+    // assetRefreshVersion is already destructured above
     useEffect(() => {
         fetchHistory();
     }, [tab, assetRefreshVersion]);
@@ -156,12 +162,12 @@ export const MediaLibrary = () => {
 
                         {/* Grid */}
                         <div className="grid grid-cols-2 gap-2">
-                            {assets.map(asset => (
+                            {assets.map((asset, i) => (
                                 <div
-                                    key={asset.id}
+                                    key={`${asset.id}-${i}`}
                                     draggable
                                     onDragStart={(e) => {
-                                        e.dataTransfer.setData('application/json', JSON.stringify(asset));
+                                        e.dataTransfer.setData('application/milimo-element', JSON.stringify(asset));
                                     }}
                                     onClick={() => handleAssetClick(asset)}
                                     className="relative aspect-square bg-white/5 rounded-lg overflow-hidden border border-white/5 hover:border-milimo-500 cursor-pointer group"

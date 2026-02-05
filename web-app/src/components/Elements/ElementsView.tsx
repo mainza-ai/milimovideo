@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
+import { useShallow } from 'zustand/react/shallow';
 // import type { StoryElement } from '../../stores/timelineStore';
 import { Plus, Trash2, Wand2, Image as ImageIcon, X } from 'lucide-react';
 
@@ -153,7 +154,19 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
 };
 
 export const ElementsView = () => {
-    const { project, elements, fetchElements, createElement, deleteElement, generateVisual, generatingElementIds, cancelElementGeneration } = useTimelineStore();
+    const {
+        project, elements, fetchElements, createElement, deleteElement,
+        generateVisual, generatingElementIds, cancelElementGeneration
+    } = useTimelineStore(useShallow(state => ({
+        project: state.project,
+        elements: state.elements,
+        fetchElements: state.fetchElements,
+        createElement: state.createElement,
+        deleteElement: state.deleteElement,
+        generateVisual: state.generateVisual,
+        generatingElementIds: state.generatingElementIds,
+        cancelElementGeneration: state.cancelElementGeneration
+    })));
     // const [selectedElement, setSelectedElement] = useState<StoryElement | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [previewImage, setPreviewImage] = useState<string | null>(null); // For Lightbox

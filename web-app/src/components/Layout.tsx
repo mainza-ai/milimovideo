@@ -10,8 +10,24 @@ import { useTimelineStore, getLastProjectId } from '../stores/timelineStore';
 import { ProjectManager } from './ProjectManager';
 import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
 
+import { useShallow } from 'zustand/react/shallow';
+
 export const Layout = ({ children }: { children: React.ReactNode }) => {
-    const { project, saveProject, addToast, isPlaying, setIsPlaying, deleteShot, selectedShotId, loadProject, viewMode, setViewMode } = useTimelineStore();
+    const {
+        project, saveProject, addToast, isPlaying, setIsPlaying,
+        deleteShot, selectedShotId, loadProject, viewMode, setViewMode
+    } = useTimelineStore(useShallow(state => ({
+        project: state.project,
+        saveProject: state.saveProject,
+        addToast: state.addToast,
+        isPlaying: state.isPlaying,
+        setIsPlaying: state.setIsPlaying,
+        deleteShot: state.deleteShot,
+        selectedShotId: state.selectedShotId,
+        loadProject: state.loadProject,
+        viewMode: state.viewMode,
+        setViewMode: state.setViewMode
+    })));
     const [showProjects, setShowProjects] = useState(false);
 
     // Access temporal store (zundo)
@@ -51,6 +67,9 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
 
             if (e.code === 'Space') {
                 e.preventDefault();
+                if (!isPlaying) {
+                    setViewMode('timeline');
+                }
                 setIsPlaying(!isPlaying);
             } else if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault();
@@ -215,8 +234,8 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                         )}
                     </div>
 
-                    {/* Bottom: Timeline (Only in Timeline View) */}
-                    {viewMode === 'timeline' && (
+                    {/* Bottom: Timeline (Visible in Timeline, Elements, and Images modes) */}
+                    {(viewMode === 'timeline' || viewMode === 'elements' || viewMode === 'images') && (
                         <div className="h-80 shrink-0 z-10 border-t border-white/5">
                             <VisualTimeline />
                         </div>

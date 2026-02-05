@@ -1,4 +1,5 @@
 import { useTimelineStore } from '../../stores/timelineStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Settings, Play, Trash2 } from 'lucide-react';
 import { useEffect } from 'react';
 import { pollJobStatus } from '../../utils/jobPoller';
@@ -11,7 +12,14 @@ export const InspectorPanel = () => {
     const {
         project, selectedShotId, updateShot, deleteShot,
         addShot, addConditioningToShot
-    } = useTimelineStore();
+    } = useTimelineStore(useShallow(state => ({
+        project: state.project,
+        selectedShotId: state.selectedShotId,
+        updateShot: state.updateShot,
+        deleteShot: state.deleteShot,
+        addShot: state.addShot,
+        addConditioningToShot: state.addConditioningToShot
+    })));
 
     const shot = project.shots.find(s => s.id === selectedShotId);
 

@@ -1,10 +1,17 @@
 import { useTimelineStore } from '../../stores/timelineStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Plus, GripVertical, Image as ImageIcon, Film, Play, Sparkles } from 'lucide-react';
 import { ScriptInput } from './ScriptInput';
 import React from 'react';
 
 export const StoryboardView = () => {
-    const { project, selectShot, selectedShotId, generateShot, loadProject } = useTimelineStore();
+    const { project, selectShot, selectedShotId, generateShot, loadProject } = useTimelineStore(useShallow(state => ({
+        project: state.project,
+        selectShot: state.selectShot,
+        selectedShotId: state.selectedShotId,
+        generateShot: state.generateShot,
+        loadProject: state.loadProject
+    })));
 
     // Polling for active jobs
     React.useEffect(() => {

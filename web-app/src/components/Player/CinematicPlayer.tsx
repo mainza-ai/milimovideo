@@ -1,98 +1,155 @@
 import { useRef, useEffect } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Play, Pause, SkipBack, SkipForward, Maximize, Brush } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { MaskingCanvas } from '../Editor/MaskingCanvas';
 
 export const CinematicPlayer = () => {
-    const project = useTimelineStore(state => state.project);
-    const selectedShotId = useTimelineStore(state => state.selectedShotId);
-    const isPlaying = useTimelineStore(state => state.isPlaying);
-    const setIsPlaying = useTimelineStore(state => state.setIsPlaying);
-    const currentTime = useTimelineStore(state => state.currentTime);
-    const setCurrentTime = useTimelineStore(state => state.setCurrentTime);
+    const {
+        isPlaying, setIsPlaying, currentTime,
+        resolutionW, resolutionH, fps, seed
+    } = useTimelineStore(useShallow(state => ({
+        isPlaying: state.isPlaying,
+        setIsPlaying: state.setIsPlaying,
+        currentTime: state.currentTime,
+        resolutionW: state.project.resolutionW,
+        resolutionH: state.project.resolutionH,
+        fps: state.project.fps,
+        seed: state.project.seed
+    })));
+
+    // Program Monitor Logic: Find the top-most visible shot at currentTime
+    const activeShot = useTimelineStore(useShallow(state => {
+        const time = state.currentTime;
+        const shots = state.project.shots;
+        const fps = state.project.fps || 25;
+
+        // 1. Check V2 (Overlay) - Priority
+        const v2 = shots.find(s => {
+            const track = s.trackIndex ?? 0;
+            if (Number(track) !== 1) return false;
+            const start = (s.startFrame || 0) / fps;
+            // Use trimmed duration
+            const rawDuration = (s.numFrames - (s.trimIn || 0) - (s.trimOut || 0));
+            const duration = Math.max(1, rawDuration) / fps;
+            return time >= start && time < (start + duration);
+        });
+
+        if (v2) {
+            return v2;
+        }
+
+        // 2. Check V1 (Main) - Magnetic Logic using Dynamic Calculation
+        let v1StartTime = 0;
+        for (const shot of shots) {
+            const track = shot.trackIndex ?? 0;
+            if (Number(track) === 0) {
+                const rawDuration = (shot.numFrames - (shot.trimIn || 0) - (shot.trimOut || 0));
+                const duration = Math.max(1, rawDuration) / fps;
+
+                if (time >= v1StartTime && time < (v1StartTime + duration)) {
+                    // Inject calculated startFrame so seeking works correctly
+                    return {
+                        ...shot,
+                        startFrame: v1StartTime * fps
+                    };
+                }
+                v1StartTime += duration;
+            }
+        }
+
+        return undefined;
+    }));
 
     const videoRef = useRef<HTMLVideoElement>(null);
 
-    const selectedShot = project.shots.find(s => s.id === selectedShotId);
-    const isGenerating = selectedShot?.isGenerating;
-    const progress = selectedShot?.progress || 0;
+    const isGenerating = activeShot?.isGenerating;
+    const progress = activeShot?.progress || 0;
 
     // Auto-load video when shot changes
     useEffect(() => {
-        if (videoRef.current && selectedShot?.videoUrl) {
-            videoRef.current.src = selectedShot.videoUrl.startsWith('http')
-                ? selectedShot.videoUrl
-                : `http://localhost:8000${selectedShot.videoUrl}`;
-            videoRef.current.load();
-            if (isPlaying) videoRef.current.play();
+        if (videoRef.current && activeShot?.videoUrl) {
+            const currentSrc = videoRef.current.src;
+            const newSrc = activeShot.videoUrl.startsWith('http')
+                ? activeShot.videoUrl
+                : `http://localhost:8000${activeShot.videoUrl}`;
+
+            // Only reload if src changed to avoid stutter
+            if (currentSrc !== newSrc && !currentSrc.endsWith(activeShot.videoUrl)) {
+                videoRef.current.src = newSrc;
+                videoRef.current.load();
+                if (isPlaying) videoRef.current.play();
+            }
         }
-    }, [selectedShot?.videoUrl]);
+    }, [activeShot?.id, activeShot?.videoUrl]);
 
     // Sync play state
     useEffect(() => {
         if (!videoRef.current) return;
-        if (isPlaying) videoRef.current.play();
-        else videoRef.current.pause();
+        if (isPlaying) {
+            videoRef.current.play().catch(() => { });
+        } else {
+            videoRef.current.pause();
+        }
     }, [isPlaying]);
 
     // Sync time (Seek when playhead moves)
     useEffect(() => {
-        if (!videoRef.current || !selectedShot) return;
+        if (!videoRef.current || !activeShot) return;
 
-        const startTime = useTimelineStore.getState().getShotStartTime(selectedShot.id);
-        const localTime = currentTime - startTime;
+        // Calculate local time for the shot
+        // Local = Global - ShotStart + TrimIn
+        const startTime = (activeShot.startFrame || 0) / (fps || 25);
+        const trimIn = (activeShot.trimIn || 0) / (fps || 25);
 
-        // Only seek if the difference is significant (to avoid fighting normal playback)
-        // or if we are paused (scrubbing)
-        // 0.2s threshold is usually safe enough for 24fps
-        if (Math.abs(videoRef.current.currentTime - localTime) > 0.2) {
-            // Check if localTime is valid for this clip
-            if (localTime >= 0 && localTime <= videoRef.current.duration) {
+        const localTime = (currentTime - startTime) + trimIn;
+
+        // Only seek if the difference is significant
+        if (Math.abs(videoRef.current.currentTime - localTime) > 0.25) {
+            // Force seek even if duration represents infinity or is not ready yet
+            // Browsers handle this safely (buffering if needed)
+            if (localTime >= 0) {
                 videoRef.current.currentTime = localTime;
-            } else if (localTime < 0) {
+            } else {
                 videoRef.current.currentTime = 0;
             }
         }
-    }, [currentTime, selectedShot]);
+    }, [currentTime, activeShot]); // activeShot included to handle cuts
 
     return (
         <div className="flex-1 bg-black relative flex flex-col items-center justify-center overflow-hidden group">
             {/* Main Video Surface */}
             <div className="relative aspect-video max-h-full max-w-full shadow-2xl bg-[#050505] w-full flex items-center justify-center">
 
-                {selectedShot ? (
-                    selectedShot.videoUrl ? (
+                {activeShot ? (
+                    activeShot.videoUrl ? (
                         (() => {
-                            const isImage = selectedShot.videoUrl.match(/\.(jpg|jpeg|png|webp)$/i);
+                            const isImage = activeShot.videoUrl.match(/\.(jpg|jpeg|png|webp)$/i);
                             return isImage ? (
                                 <img
-                                    src={selectedShot.videoUrl.startsWith('http')
-                                        ? selectedShot.videoUrl
-                                        : `http://localhost:8000${selectedShot.videoUrl}`}
+                                    src={activeShot.videoUrl.startsWith('http')
+                                        ? activeShot.videoUrl
+                                        : `http://localhost:8000${activeShot.videoUrl}`}
                                     className="w-full h-full object-contain"
                                     alt="Generated Shot"
                                 />
                             ) : (
                                 <video
+                                    key={activeShot.id}
                                     ref={videoRef}
                                     className="w-full h-full object-contain"
                                     playsInline
-                                    onTimeUpdate={(e) => {
-                                        const startTime = useTimelineStore.getState().getShotStartTime(selectedShot.id);
-                                        setCurrentTime(startTime + e.currentTarget.currentTime);
-                                    }}
-                                    onEnded={() => {
-                                        const { project, selectShot, setIsPlaying } = useTimelineStore.getState();
-                                        const currentIndex = project.shots.findIndex(s => s.id === selectedShot.id);
-                                        if (currentIndex < project.shots.length - 1) {
-                                            // Play next
-                                            selectShot(project.shots[currentIndex + 1].id);
-                                        } else {
-                                            setIsPlaying(false);
-                                        }
-                                    }}
+                                    loop={false}
+                                    muted={false} // Ensure it's not muted unless track is muted (handled by volume usually)
                                     onClick={() => setIsPlaying(!isPlaying)}
+                                    onLoadedMetadata={(e) => {
+                                        // Ensure we seek to correct start immediately on load
+                                        const startTime = (activeShot.startFrame || 0) / (fps || 25);
+                                        const trimIn = (activeShot.trimIn || 0) / (fps || 25);
+                                        const t = (useTimelineStore.getState().currentTime - startTime) + trimIn;
+                                        if (t > 0) e.currentTarget.currentTime = t;
+                                    }}
                                 />
                             );
                         })()
@@ -106,15 +163,15 @@ export const CinematicPlayer = () => {
                     )
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-white/10 text-sm font-mono uppercase tracking-widest">
-                        No Shot Selected
+                        Project Preview
                     </div>
                 )}
 
                 {/* HUD Overlay (Cinema Mode) */}
                 <div className="absolute top-4 left-4 flex gap-4 text-[10px] font-mono text-white/50 bg-black/50 px-3 py-1 rounded backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                    <span>{project.resolutionW}x{project.resolutionH}</span>
-                    <span>{project.fps} FPS</span>
-                    <span>SEED: {selectedShot?.seed || project.seed}</span>
+                    <span>{resolutionW}x{resolutionH}</span>
+                    <span>{fps} FPS</span>
+                    <span>SEED: {activeShot?.seed || seed}</span>
                 </div>
 
                 {/* Overlay: Generation Animation - Shows ON TOP of everything if generating */}
@@ -159,19 +216,19 @@ export const CinematicPlayer = () => {
                                     <span className="opacity-30">|</span>
                                     <span>{progress}%</span>
                                 </div>
-                                {selectedShot?.etaSeconds && selectedShot.etaSeconds > 0 && (
+                                {activeShot?.etaSeconds && activeShot.etaSeconds > 0 && (
                                     <div className="text-[10px] text-milimo-500/80 font-mono animate-pulse">
-                                        EST. {Math.floor(selectedShot.etaSeconds / 60)}:{(selectedShot.etaSeconds % 60).toString().padStart(2, '0')}
+                                        EST. {Math.floor(activeShot.etaSeconds / 60)}:{(activeShot.etaSeconds % 60).toString().padStart(2, '0')}
                                     </div>
                                 )}
                             </div>
 
                             {/* Job Parameters Stats */}
                             <div className="grid grid-cols-2 gap-x-8 gap-y-1 mt-6 text-[9px] font-mono text-white/30 uppercase tracking-widest text-left border-t border-white/5 pt-4">
-                                <div className="flex justify-between gap-4"><span>Res</span> <span className="text-white/60">{selectedShot.width}x{selectedShot.height}</span></div>
-                                <div className="flex justify-between gap-4"><span>FPS</span> <span className="text-white/60">{selectedShot.fps || project.fps}</span></div>
-                                <div className="flex justify-between gap-4"><span>Frames</span> <span className="text-white/60">{selectedShot.numFrames}</span></div>
-                                <div className="flex justify-between gap-4"><span>Seed</span> <span className="text-white/60">{selectedShot.seed}</span></div>
+                                <div className="flex justify-between gap-4"><span>Res</span> <span className="text-white/60">{activeShot.width}x{activeShot.height}</span></div>
+                                <div className="flex justify-between gap-4"><span>FPS</span> <span className="text-white/60">{activeShot.fps || fps}</span></div>
+                                <div className="flex justify-between gap-4"><span>Frames</span> <span className="text-white/60">{activeShot.numFrames}</span></div>
+                                <div className="flex justify-between gap-4"><span>Seed</span> <span className="text-white/60">{activeShot.seed}</span></div>
                             </div>
                         </div>
 
@@ -222,13 +279,13 @@ export const CinematicPlayer = () => {
             </motion.div>
 
             {/* Masking Overlay */}
-            {useTimelineStore(state => state.isEditing) && videoRef.current && (
+            {useTimelineStore(state => state.isEditing) && videoRef.current && activeShot && (
                 <MaskingCanvas
                     width={videoRef.current.videoWidth || 1280}
                     height={videoRef.current.videoHeight || 720}
                     onCancel={() => useTimelineStore.getState().setEditing(false)}
                     onSave={async (maskDataUrl) => {
-                        if (!selectedShot || !videoRef.current) return;
+                        if (!activeShot || !videoRef.current) return;
 
                         // 1. Capture current frame
                         const canvas = document.createElement('canvas');
@@ -240,12 +297,12 @@ export const CinematicPlayer = () => {
                         }
                         const frameDataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
-                        // 2. Get Prompt
-                        const prompt = window.prompt("Describe what to generate in the masked area:", selectedShot.prompt);
+                        // 2. Get Prompt - Use active shot logic
+                        const prompt = window.prompt("Describe what to generate in the masked area:", activeShot.prompt);
                         if (!prompt) return;
 
                         // 3. Trigger Store Action
-                        await useTimelineStore.getState().inpaintShot(selectedShot.id, frameDataUrl, maskDataUrl, prompt);
+                        await useTimelineStore.getState().inpaintShot(activeShot.id, frameDataUrl, maskDataUrl, prompt);
 
                         useTimelineStore.getState().setEditing(false);
                     }}

@@ -21,7 +21,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 def upload_file(
     file: UploadFile = File(...), 
     project_id: Optional[str] = Form(None),
-    type: Optional[str] = Form("general") # general, element, reference
+    type: Optional[str] = Form("general"), # general, element, reference
+    session: Session = Depends(get_session)
 ):
     upload_target_dir = UPLOAD_DIR
     
@@ -46,22 +47,32 @@ def upload_file(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
         
-    # Return URL
+    # Create DB Record
+    from database import Asset
+    from datetime import datetime, timezone
+    
+    # Calculate access URL
     if project_id:
-        # /projects/{id}/assets/{type}/{filename}
-        # But our static mount is /projects pointing to PROJECTS_DIR.
-        # PROJECTS_DIR/{id}/...
-        # So URL is /projects/{id}/assets/{type}/{filename}
-        # Mapping `assets/general` -> just assets?
-        # Let's match the directory structure created above.
         folder_name = "general"
         if type == "element": folder_name = "elements"
         if type == "reference": folder_name = "references"
-        
-        return {"url": f"/projects/{project_id}/assets/{folder_name}/{filename}"}
+        access_url = f"/projects/{project_id}/assets/{folder_name}/{filename}"
     else:
-        # Legacy /uploads
-        return {"url": f"/uploads/{filename}"}
+        access_url = f"/uploads/{filename}"
+
+    new_asset = Asset(
+        id=uuid.uuid4().hex,
+        project_id=project_id,
+        type="image" if file.content_type.startswith("image") else "video",
+        url=access_url,
+        path=file_path,
+        filename=filename, # Original or safe filename? using the one on disk
+        created_at=datetime.now(timezone.utc)
+    )
+    session.add(new_asset)
+    session.commit()
+
+    return {"url": access_url, "asset_id": new_asset.id, "type": new_asset.type, "filename": new_asset.filename, "access_path": file_path}
 
 @router.post("/shot/{job_id}/last-frame")
 async def get_shot_last_frame(job_id: str, session: Session = Depends(get_session)):
