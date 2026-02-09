@@ -35,17 +35,22 @@ export const TimelineTrack = memo(({ track, clips, zoom, projectFps, allClips, o
 
         if (trackState.locked) return;
 
-        const data = e.dataTransfer.getData('application/milimo-element');
+        const data = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('application/milimo-element');
         let asset: any = null;
         if (data) {
-            asset = JSON.parse(data);
-            if (asset.image_path) {
-                asset.url = asset.image_path;
-                asset.type = 'image';
-                asset.filename = asset.name;
-            }
-            if (track.type === 'audio' && !asset.type) {
-                asset.type = 'audio';
+            try {
+                asset = JSON.parse(data);
+                // Normalization for inconsistent sources
+                if (asset.image_path) {
+                    asset.url = asset.image_path;
+                    asset.type = 'image';
+                    asset.filename = asset.name;
+                }
+                if (track.type === 'audio' && !asset.type) {
+                    asset.type = 'audio';
+                }
+            } catch (err) {
+                console.error("Failed to parse drop data", err);
             }
         }
 

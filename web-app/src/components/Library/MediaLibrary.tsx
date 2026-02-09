@@ -167,7 +167,16 @@ export const MediaLibrary = () => {
                                     key={`${asset.id}-${i}`}
                                     draggable
                                     onDragStart={(e) => {
-                                        e.dataTransfer.setData('application/milimo-element', JSON.stringify(asset));
+                                        const data = {
+                                            id: asset.id,
+                                            url: asset.url,
+                                            path: asset.path,
+                                            filename: asset.filename,
+                                            type: asset.type,
+                                            thumbnail: asset.thumbnail || asset.url // Use URL if thumbnail missing
+                                        };
+                                        e.dataTransfer.setData('application/json', JSON.stringify(data));
+                                        e.dataTransfer.effectAllowed = 'copy';
                                     }}
                                     onClick={() => handleAssetClick(asset)}
                                     className="relative aspect-square bg-white/5 rounded-lg overflow-hidden border border-white/5 hover:border-milimo-500 cursor-pointer group"

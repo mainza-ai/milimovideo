@@ -1,6 +1,7 @@
 import logging
 from typing import Callable
 from collections.abc import Iterator
+from dataclasses import replace
 
 import torch
 
@@ -98,6 +99,7 @@ class TI2VidTwoStagesPipeline:
         previous_latent_tensor: torch.Tensor | None = None, # New: Latent Handoff
         tiling_config: TilingConfig | None = None,
         enhance_prompt: bool = False,
+        upscale: bool = True,
         callback_on_step_end: Callable | None = None,
     ) -> tuple[Iterator[torch.Tensor], torch.Tensor, LatentState]:
         logging.info("DEBUG: TI2VidTwoStagesPipeline.__call__ START")
@@ -273,36 +275,40 @@ class TI2VidTwoStagesPipeline:
         cleanup_memory()
 
         # Stage 3: Temporal Upsample (Optional)
-        # If the model ledger has a temporal upsampler, apply it.
-        try:
-            temporal_upsampler = self.stage_2_model_ledger.temporal_upsampler()
-            logging.info("Applying Temporal Upsample (Stage 3)...")
-            
-            # Upsample
-            time_upscaled_latent = upsample_video(
-                latent=video_state.latent,
-                video_encoder=video_encoder,
-                upsampler=temporal_upsampler,
-            )
-            
-            video_state = replace(video_state, latent=time_upscaled_latent)
-            
-            # Since we doubled frames, we should ideally double the audio length?
-            # Or assume audio is matching in length.
-            # LTX-2 output audio is latent-based.
-            # The current pipeline logic for audio is often independent or matching video length.
-            # We will just proceed with the upscaled video latent.
-            
-            synchronize_device()
-            del temporal_upsampler
-            cleanup_memory()
-            
-        except ValueError:
-            # No temporal upsampler configured, continue.
-            pass
-        except Exception as e:
-            logging.warning(f"Temporal Upsample Failed: {e}. proceed with Stage 2 output.")
-            pass
+        # If the model ledger has a temporal upsampler AND upscale is requested, apply it.
+        if upscale:
+            try:
+                temporal_upsampler = self.stage_2_model_ledger.temporal_upsampler()
+                logging.info("Applying Temporal Upsample (Stage 3)...")
+                
+                # Upsample
+                time_upscaled_latent = upsample_video(
+                    latent=video_state.latent,
+                    video_encoder=video_encoder,
+                    upsampler=temporal_upsampler,
+                )
+                
+                video_state = replace(video_state, latent=time_upscaled_latent)
+                
+                # Audio handling (if present)
+                if audio_state.latent is not None:
+                    # For LTX-2, audio might not be upsampled the same way, 
+                    # but we keep the logic consistent if audio upsampler exists (rare)
+                    pass
+                
+                synchronize_device()
+                del temporal_upsampler
+                cleanup_memory()
+
+            except ValueError:
+                # No temporal upsampler configured, continue.
+                logging.info("Stage 3 Skipped: No temporal upsampler found in ledger.")
+                pass
+            except Exception as e:
+                logging.warning(f"Temporal Upsample Failed: {e}. proceed with Stage 2 output.")
+                pass
+        else:
+            logging.info("Stage 3 Skipped: Upscale disabled by user.")
         
         # Final cleanup for video encoder before decode
         del video_encoder 

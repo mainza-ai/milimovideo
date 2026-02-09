@@ -56,12 +56,13 @@ def get_project_active_jobs(project_id: str):
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str, session: Session = Depends(get_session)):
     """Cancel a running or pending job."""
+    logger.info(f"Received cancellation request for job {job_id}")
     # 1. Active Memory Cancel
     if job_id in active_jobs:
         active_jobs[job_id]["cancelled"] = True
         active_jobs[job_id]["status"] = "cancelling"
         active_jobs[job_id]["status_message"] = "Cancelling..."
-        update_job_db(job_id, "cancelled") # Sync DB immediately
+        # update_job_db(job_id, "cancelled") # Don't sync DB yet; let worker see flag first!
         return {"status": "cancelling"}
     
     # 2. Pending DB Cancel (if not yet picked up by worker)

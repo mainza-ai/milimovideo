@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
-import { Loader2, Zap, Image as ImageIcon, Wand2 } from 'lucide-react';
+import { Loader2, Zap, Image as ImageIcon, Wand2, Upload, X } from 'lucide-react';
+
 
 interface GeneratedImage {
     id: string;
@@ -40,6 +41,9 @@ export const ImagesView = () => {
     const [progress, setProgress] = useState(0);
     const [statusMsg, setStatusMsg] = useState("");
     const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+    const [uploadedRef, setUploadedRef] = useState<string | null>(null);
+    const [uploadedRefUrl, setUploadedRefUrl] = useState<string | null>(null);
+
 
     const handleCancel = async () => {
         if (!currentJobId) return;
@@ -52,6 +56,78 @@ export const ImagesView = () => {
             setCurrentJobId(null);
         } catch (e) {
             console.error("Cancel failed", e);
+        }
+    };
+
+    const handleDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 1. Try JSON (Internal Asset)
+        const jsonData = e.dataTransfer.getData('application/json');
+        if (jsonData) {
+            try {
+                const data = JSON.parse(jsonData);
+                if (data.type === 'image' && data.url) {
+                    setUploadedRef(data.path); // Use internal path if available
+                    setUploadedRefUrl(data.url);
+                    addToast("Reference set from library", "success");
+                    return;
+                }
+            } catch (e) { console.error("Drop JSON parse failed", e); }
+        }
+
+        // 2. Try File (External)
+        const file = e.dataTransfer.files?.[0];
+        if (file && project.id) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('project_id', project.id);
+            formData.append('type', 'reference');
+
+            try {
+                const res = await fetch('http://localhost:8000/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setUploadedRef(data.access_path);
+                    setUploadedRefUrl(data.url);
+                    addToast("Reference uploaded", "success");
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    };
+
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !project.id) return;
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('project_id', project.id);
+        formData.append('type', 'reference');
+
+        try {
+            const res = await fetch('http://localhost:8000/upload', {
+                method: 'POST',
+                body: formData
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setUploadedRef(data.access_path);
+                setUploadedRefUrl(data.url);
+                addToast("Reference uploaded", "success");
+            } else {
+                addToast("Upload failed", "error");
+            }
+        } catch (err) {
+            console.error(err);
+            addToast("Upload error", "error");
         }
     };
 
@@ -183,8 +259,9 @@ export const ImagesView = () => {
                 num_inference_steps: steps,
                 guidance_scale: guidance,
                 seed: seed ? parseInt(seed) : null,
-                reference_images: selectedReferences,
+                reference_images: [...selectedReferences, ...(uploadedRef ? [uploadedRef] : [])],
                 enable_ae: enableAE,
+
                 enable_true_cfg: enableTrueCFG
             };
 
@@ -221,8 +298,12 @@ export const ImagesView = () => {
         setSelectedReferences([]);
         setEnableAE(false);
         setEnableTrueCFG(false);
+        setEnableTrueCFG(false);
         setSelectedImage(null);
+        setUploadedRef(null);
+        setUploadedRefUrl(null);
         addToast("Reset to defaults", "info");
+
     };
 
     return (
@@ -362,7 +443,37 @@ export const ImagesView = () => {
                             value={negativePrompt}
                             onChange={e => setNegativePrompt(e.target.value)}
                         />
+
                     </div>
+
+                    {/* Reference Image Upload */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-semibold text-white/50 uppercase">Reference Image</label>
+                        <div className="flex gap-2">
+                            <label
+                                className="flex-1 cursor-pointer bg-black/20 border border-white/10 hover:border-white/30 rounded-lg p-3 flex flex-col items-center justify-center gap-2 transition-colors relative dashed-border"
+                                onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
+                                onDrop={handleDrop}
+                            >
+                                <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                                <Upload size={16} className="text-white/70" />
+                                <span className="text-[10px] text-white/50">Upload or Drop Image</span>
+                            </label>
+
+                            {uploadedRefUrl && (
+                                <div className="relative w-20 aspect-square rounded overflow-hidden border border-white/20 group">
+                                    <img src={uploadedRefUrl.startsWith('http') ? uploadedRefUrl : `http://localhost:8000${uploadedRefUrl}`} className="w-full h-full object-cover" />
+                                    <button
+                                        onClick={() => { setUploadedRef(null); setUploadedRefUrl(null); }}
+                                        className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-red-400 transition-opacity"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
 
                     {/* Image Ref (IP-Adapter) */}
                     <div className="space-y-2">

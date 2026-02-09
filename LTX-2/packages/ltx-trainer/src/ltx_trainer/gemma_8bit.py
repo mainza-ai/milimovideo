@@ -71,7 +71,7 @@ def load_8bit_gemma(
         gemma_model = Gemma3ForConditionalGeneration.from_pretrained(
             gemma_path,
             quantization_config=quantization_config,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="auto",
             local_files_only=True,
         )

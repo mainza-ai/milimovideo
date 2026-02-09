@@ -62,6 +62,7 @@ class Shot(SQLModel, table=True):
     enhance_prompt: bool = True
     upscale: bool = False
     pipeline_override: str = "auto"
+    auto_continue: bool = Field(default=False)
     
     # Generation State
     prompt_enhanced: Optional[str] = None # Legacy field

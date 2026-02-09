@@ -86,6 +86,11 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     start_frame: s.startFrame,
                     trim_in: s.trimIn,
                     trim_out: s.trimOut,
+                    auto_continue: s.autoContinue,
+                    scene_id: s.sceneId,
+                    action: s.action,
+                    dialogue: s.dialogue,
+                    character: s.character,
                     timeline: s.timeline.map(t => ({
                         type: t.type,
                         path: t.path,
@@ -95,6 +100,12 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     last_job_id: s.lastJobId,
                     thumbnail_url: s.thumbnailUrl,
                     video_url: s.videoUrl
+                })),
+                scenes: (project.scenes || []).map(sc => ({
+                    id: sc.id,
+                    index: sc.index,
+                    name: sc.name,
+                    script_content: sc.scriptContent
                 }))
             };
 
@@ -185,6 +196,11 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     startFrame: s.start_frame || 0,
                     trimIn: s.trim_in || 0,
                     trimOut: s.trim_out || 0,
+                    autoContinue: s.auto_continue,
+                    sceneId: s.scene_id,
+                    action: s.action,
+                    dialogue: s.dialogue,
+                    character: s.character,
                     timeline: (s.timeline || []).map((t: any) => ({
                         id: uuidv4(), // Generate temporary UI IDs
                         type: t.type,
@@ -196,6 +212,13 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     videoUrl: s.video_url ? getAssetUrl(s.video_url) : undefined,  // Use DB value
                     thumbnailUrl: getAssetUrl(s.thumbnail_url),
                     enhancedPromptResult: s.enhanced_prompt_result // Map from backend
+                })),
+                scenes: (data.scenes || []).map((sc: any) => ({
+                    id: sc.id,
+                    index: sc.index,
+                    name: sc.name,
+                    scriptContent: sc.script_content,
+                    shots: [] // Will be populated by store if needed, or we rely on ID link
                 }))
             };
 

@@ -515,15 +515,23 @@ def clean_response(text: str) -> str:
     # NEW: Aggressive Markdown Artifact Cleaning
     # Removes **Next Shot Prompt:**, ## Prompt:, etc.
     cleaned_text = re.sub(r'(?i)^\s*[\#\*]+\s*(Next Shot Prompt|Prompt|Response|Output)[:\*]*\s*', '', cleaned_text)
+
+    # REMOVE: " --" artifact which appeared in logs
+    cleaned_text = re.sub(r'^\s*--\s*', '', cleaned_text)
+
+    # REMOVE: "/imagine" artifact (Midjourney style)
+    cleaned_text = re.sub(r'(?i)^\s*/imagine\s*', '', cleaned_text)
     
+    # Strip "Audio:", "Visual:", "Scene:" prefixes that the model might generate due to the new complex prompt
+    # Note: We ALLOW "Style:" as it is part of the official prompt format.
+    cleaned_text = re.sub(r'(?i)^(Audio|Visual Description|Visual|Scene|Sound)[:\s\-]+', '', cleaned_text).strip()
+
     # Strip leading punctuation/whitespace BUT preserve valid starters like "Style:" or alphanumeric
     # Only strip leading junk characters (quotes, colons not followed by text, etc.)
     # Don't strip if it starts with a word like "Style:"
     if cleaned_text and not cleaned_text[0].isalpha():
-        # Check if it looks like "Style:" or similar valid prefix
-        if not re.match(r'^[A-Za-z]+:', cleaned_text):
-            while cleaned_text and not cleaned_text[0].isalnum():
-                cleaned_text = cleaned_text[1:].strip()
+         while cleaned_text and not cleaned_text[0].isalnum():
+             cleaned_text = cleaned_text[1:].strip()
     text = cleaned_text
     
     # Capitalize first letter if lowercase
@@ -546,15 +554,22 @@ def generate_enhanced_prompt(
     
     # Custom system prompt for image generation
     # Strict instruction to return ONLY the prompt
-    image_system_prompt = (
-        "You are an expert image description assistant. Your task is to enhance the user's prompt to create a detailed, "
-        "vivid, and artistic description suitable for high-quality text-to-image generation.\n\n"
-        "GUIDELINES:\n"
-        "- Focus on visual details: lighting, texture, composition, color palette, and style.\n"
-        "- Do not mention video elements (camera movement, sound, duration, sequence).\n"
-        "- Keep the description static and evocative.\n"
-        "- CRITICAL: Output ONLY the enhanced prompt. Do not begin with 'Here is...', 'Okay...', or include any markdown explanations.\n"
-        "- The output should be a single paragraph."
+    # Custom system prompt for video generation (not static image)
+    # Encourages motion, style matching, and cinematic description
+    VIDEO_AWARE_SYSTEM_PROMPT = (
+        "You are a Creative Assistant writing concise, action-focused image-to-video prompts. "
+        "Given an image (first frame) and user Raw Input Prompt, generate a prompt to guide video generation from that image.\n\n"
+        "#### Guidelines:\n"
+        "- Follow user Raw Input Prompt: Include all requested motion, actions, camera movements, audio, and details. If in conflict with the image, prioritize user request while maintaining visual consistency.\n"
+        "- Describe only changes from the image: Don't reiterate established visual details. Inaccurate descriptions may cause scene cuts.\n"
+        "- Active language: Use present-progressive verbs ('is walking,' 'speaking'). If no action specified, describe natural movements.\n"
+        "- Chronological flow: Use temporal connectors ('as,' 'then,' 'while').\n"
+        "- Speech (only when requested): Provide exact words in quotes with character's visual/voice characteristics (e.g., \"The tall man speaks in a low, gravelly voice\"). If general conversation mentioned without text, generate contextual quoted dialogue. (i.e., \"The man is talking\" input -> the output should include exact spoken words, like: \"The man is talking in an excited voice saying: 'You won't believe what I just saw!'\")\n"
+        "- Style: Include visual style at beginning: \"Style: <style>, <rest of prompt>.\" If unclear, omit to avoid conflicts.\n"
+        "- Visual and audio formatting: Describe complete soundscape throughout the prompt alongside actions.\n"
+        "- Restrained language: Avoid dramatic terms. Use mild, natural, understated phrasing.\n"
+        "- Formatting: Single concise paragraph. No titles or markdown.\n"
+        "- Output ONLY the complete prompt text, formatted as requested."
     )
 
     image = None
@@ -567,13 +582,15 @@ def generate_enhanced_prompt(
         image = torch.tensor(image)
         image = resize_aspect_ratio_preserving(image, image_long_side).to(torch.uint8)
         
-        # Prefer provided system_prompt, then image_system_prompt if is_image, else None
-        eff_sys_prompt = system_prompt if system_prompt else (image_system_prompt if is_image else None)
+        # Prefer provided system_prompt, then VIDEO_AWARE_SYSTEM_PROMPT if is_image (actually video generation mode flag), else None
+        eff_sys_prompt = system_prompt if system_prompt else (VIDEO_AWARE_SYSTEM_PROMPT if not is_image else None)
         
         prompt = text_encoder.enhance_i2v(prompt, image, seed=seed, system_prompt=eff_sys_prompt)
     else:
-        # Prefer provided system_prompt, then image_system_prompt if is_image, else None
-        eff_sys_prompt = system_prompt if system_prompt else (image_system_prompt if is_image else None)
+        # Prefer provided system_prompt, then VIDEO_AWARE_SYSTEM_PROMPT if not is_image (video mode), else None
+        # Note: calling it 'is_image' is confusing. It usually means 'single frame generation'.
+        # If is_image is False, we are generating video, so we WANT the video prompt.
+        eff_sys_prompt = system_prompt if system_prompt else (VIDEO_AWARE_SYSTEM_PROMPT if not is_image else None)
         
         prompt = text_encoder.enhance_t2v(prompt, seed=seed, system_prompt=eff_sys_prompt)
         

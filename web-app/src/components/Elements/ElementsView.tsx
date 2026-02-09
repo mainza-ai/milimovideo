@@ -32,7 +32,7 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
                     type: el.type,
                     dragType: 'milimo-element'
                 };
-                e.dataTransfer.setData('application/milimo-element', JSON.stringify(data));
+                e.dataTransfer.setData('application/json', JSON.stringify(data));
                 e.dataTransfer.effectAllowed = 'copy';
             }}
         >

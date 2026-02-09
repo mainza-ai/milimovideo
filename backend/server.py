@@ -28,7 +28,8 @@ os.makedirs(legacy_upload_dir, exist_ok=True)
 os.makedirs(legacy_generated_dir, exist_ok=True)
 
 # Imports after config setup
-from database import init_db
+from database import init_db, engine, Job
+from sqlmodel import Session, select
 from routes import router as api_router
 from events import event_manager
 
@@ -41,10 +42,36 @@ async def lifespan(app: FastAPI):
     # Initialize Model Manager (Lazy load, but we can warm up if needed)
     # from model_engine import manager
     
+    # Capture main loop for thread-safe operations in tasks
+    import job_utils
+    import asyncio
+    job_utils.global_loop = asyncio.get_running_loop()
+    
+    # Startup Cleanup: Fail any jobs that were 'processing' when server died
+    try:
+        with Session(engine) as session:
+            zombie_jobs = session.exec(select(Job).where(Job.status == "processing")).all()
+            if zombie_jobs:
+                logger.warning(f"Found {len(zombie_jobs)} zombie jobs from previous run. Marking as failed.")
+                for job in zombie_jobs:
+                    job.status = "failed"
+                    job.error_message = "Server Restarted (Zombie Job)"
+                    session.add(job)
+                session.commit()
+    except Exception as e:
+        logger.error(f"Startup cleanup failed: {e}")
+    
     yield
     
     # Shutdown
     logger.info("Shutting down...")
+    
+    # Signal threads to stop
+    count = job_utils.cancel_all_jobs()
+    if count > 0:
+        logger.info(f"Waiting for {count} jobs to cancel...")
+        # Give threads a chance to hit the cancellation check
+        await asyncio.sleep(2.0)
 
 app = FastAPI(lifespan=lifespan)
 

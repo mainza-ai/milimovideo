@@ -37,6 +37,15 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         num_inference_steps = params.get("num_inference_steps", 40)
         cfg_scale = params.get("cfg_scale", 2.0)
         enhance_prompt = params.get("enhance_prompt", True)
+        upscale = params.get("upscale", False) # Default to OFF as requested
+        
+        # Auto-Negative Prompting: Structural Injection
+        # We append these terms to ensuring the model avoids non-visual artifacts
+        auto_negative = ", text, watermark, copyright, fuzzy, low resolution, audio, sound, voice, speech, caption"
+        if negative_prompt:
+             negative_prompt += auto_negative
+        else:
+             negative_prompt = auto_negative.strip(", ")
         
         input_images = params.get("images", [])
         
@@ -54,6 +63,14 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 try:
                     path, idx, strength = item
                     logger.info(f"Processing item: path='{path}', idx={idx}, strength={strength}")
+                    
+                    # Handle Full URLs
+                    if isinstance(path, str) and (path.startswith("http://") or path.startswith("https://")):
+                        from urllib.parse import urlparse, unquote
+                        parsed = urlparse(path)
+                        path = unquote(parsed.path)
+                        logger.info(f"Parsed URL to path: {path}")
+                    
                     if isinstance(path, str) and path.startswith("/projects"):
                         abs_path = os.path.join(base_dir, "projects", path.lstrip("/projects/").lstrip("/"))
                         # Better fix: strip /projects/ then join with PROJECTS_DIR
@@ -152,9 +169,8 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             
             def _run_flux():
                  def flux_callback(step, total):
-                     if job_id in active_jobs:
-                         active_jobs[job_id]["progress"] = int((step / total) * 100)
-                         active_jobs[job_id]["status_message"] = f"Generating Image ({step}/{total})"
+                     progress = int((step / total) * 100)
+                     update_job_progress(job_id, progress, f"Generating Image ({step}/{total})")
 
                  img = flux_inpainter.generate_image(
                      prompt=prompt,
@@ -196,11 +212,61 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     status_message="Flux Image Ready"
                 )
                 
+                # Create Asset Record for Gallery
+                try:
+                    import json
+                    from database import Asset
+                    from datetime import datetime
+                    
+                    # Construct metadata for re-use
+                    meta = {
+                        "prompt": prompt,
+                        "negative_prompt": params.get("negative_prompt", ""),
+                        "seed": params.get("seed"),
+                        "steps": params.get("num_inference_steps"),
+                        "guidance": params.get("cfg_scale", params.get("guidance_scale")),
+                        "width": width,
+                        "height": height,
+                        "reference_elements": params.get("reference_images", []) # If available
+                    }
+                    
+                    with Session(engine) as asset_session:
+                        new_asset = Asset(
+                            project_id=project_id,
+                            type="image",
+                            path=out_path,
+                            url=web_url,
+                            filename=out_filename,
+                            width=width,
+                            height=height,
+                            meta_json=json.dumps(meta),
+                            created_at=datetime.utcnow()
+                        )
+                        asset_session.add(new_asset)
+                        asset_session.commit()
+                        
+                        # Sync ID so frontend polling finds the asset immediately (ImagesView looks for job.asset_id potentially?)
+                        # Actually ImagesView polling looks for 'completed' status, then re-fetches gallery. 
+                        # But wait, ImagesView polling said: 
+                        # if (job.status === 'completed') { ... const newImage = data.find((img: any) => img.id === job.asset_id); }
+                        # So we should update the JOB with the asset_id if possible, or simple rely on url/filename match.
+                        # Job table doesn't have asset_id column in database.py view.
+                        # ImagesView seems to expect asset_id in job status?
+                        # Let's check ImagesView lines 104: const newImage = data.find((img: any) => img.id === job.asset_id);
+                        # If job doesn't have asset_id, it won't highlight, but gallery will rely on refetch.
+                        # We can't easily add asset_id to Job model without migration.
+                        # Frontend logic: setImages(data); const newImage = data.find...
+                        # If we can't pass asset_id, frontend just won't select it automatically. acceptable.
+                        pass
+                except Exception as e_asset:
+                    logger.error(f"Failed to create Asset record: {e_asset}")
+
                 await event_manager.broadcast("complete", {
                     "job_id": job_id, 
                     "url": web_url,
                     "type": "image",
-                    "thumbnail_url": web_thumb
+                    "thumbnail_url": web_thumb,
+                    "asset_id": new_asset.id if 'new_asset' in locals() else None 
                 })
                 return
                 
@@ -218,6 +284,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             tiling_config = TilingConfig.default()
         
         def cancellation_check(step_idx, total_steps, *args):
+            import time
+            # Yield GIL to allow main thread to handle HTTP requests (like cancel)
+            time.sleep(0.01)
+            
             gen_percent = (step_idx + 1) / total_steps
             global_percent = 10 + int(gen_percent * 80)
             update_job_progress(job_id, global_percent, f"Generating ({step_idx + 1}/{total_steps})")
@@ -236,29 +306,14 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     try: 
                         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
                         is_image_mode = (num_frames == 1)
+                        # Use the new optimized video prompt from helpers.py
                         sys_prompt = None
-                        if not is_image_mode:
-                             sys_prompt = (
-                                "You are an expert Prompt Engineer for the LTX-2 Video Generation model. "
-                                "Your task: REWRITE the user's goal into a COMPLETE, standalone, "
-                                "detailed cinematic prompt for a 4-second video clip.\n\n"
-                                "CRITICAL INSTRUCTIONS:\n"
-                                "- Generate a COMPLETE prompt from scratch. DO NOT continue or append to the input.\n"
-                                "- Start your output with 'Style:' followed by the visual style.\n"
-                                "- Describe the scene, characters, actions, and audio in a single paragraph.\n"
-                                "- Use active language: Present progressive verbs (is walking, is speaking).\n"
-                                "- Include audio layer: Describe sounds alongside actions.\n"
-                                "- DO NOT output fragments that start mid-sentence.\n"
-                                "- DO NOT include any prefixes like 'Here is...', explanations, or markdown.\n"
-                                "- Output ONLY the complete prompt text, nothing else.\n"
-                             )
-                             enhancement_input = f"User Goal: {prompt}"
-
+                        
                         image_for_gemma = None
                         if input_images and not is_inferred_start_frame:
                             image_for_gemma = input_images[0][0]
 
-                        effective_prompt = enhancement_input if sys_prompt else prompt
+                        effective_prompt = prompt
                         
                         run_prompt = generate_enhanced_prompt(
                             text_encoder, 
@@ -266,9 +321,12 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             image_path=image_for_gemma,
                             seed=seed,
                             is_image=is_image_mode,
-                            system_prompt=sys_prompt
+                            system_prompt=None # Use default video prompt in helpers
                         )
                         update_job_db(job_id, "processing", enhanced_prompt=run_prompt)
+                        # Explicitly broadcast the enhanced prompt so frontend picks it up immediately
+                        # Use update_job_progress for thread-safety
+                        update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=run_prompt)
                         del text_encoder
                         cleanup_memory()
                     except Exception as e:
@@ -314,6 +372,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     images=input_images,
                     tiling_config=tiling_config,
                     enhance_prompt=False, # We already enhanced it manually
+                    upscale=upscale,
                     callback_on_step_end=cancellation_check
                 )
             elif pipeline_type == "ic_lora":

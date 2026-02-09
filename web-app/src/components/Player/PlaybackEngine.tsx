@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { GlobalAudioManager } from '../../utils/GlobalAudioManager';
+import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 export const PlaybackEngine = () => {
     const project = useTimelineStore(state => state.project);
@@ -30,17 +31,20 @@ export const PlaybackEngine = () => {
 
                 nextTime = currentTime + dt;
 
-                // Check End of Project
-                const maxDuration = project.shots.reduce((acc, s) => {
-                    const start = (s.startFrame || 0) / (project.fps || 25);
-                    const dur = s.numFrames / (project.fps || 25);
-                    return Math.max(acc, start + dur);
-                }, 0);
+                // Check End of Project using centralized layout logic
+                // Avoid re-computing every frame if possible, but project changes rarely during playback?
+                // Actually project state changes on every seek/edit.
+                // Ideally this is memoized outside the loop, but loop closes over project state from getState().
+
+                // We can compute maxDuration from the current state efficiently.
+                // Or better, store it in the store? 
+                // For now, let's just compute it. It's fast (hundreds of items max).
+                // Check End of Project using centralized layout logic
+                const clips = computeTimelineLayout(project);
+                const maxDuration = clips.reduce((acc, c) => Math.max(acc, c.end), 0);
 
                 if (nextTime >= maxDuration + 0.1) {
                     useTimelineStore.getState().setIsPlaying(false);
-                    // Stop exactly at end, or maybe maxDuration? 
-                    // Let's keep nextTime logic but ensure we stop.
                 }
 
                 setCurrentTime(nextTime);

@@ -11,22 +11,51 @@ logger = logging.getLogger(__name__)
 
 # Cancellation tracking
 # job_id -> {'cancelled': bool}
+# job_id -> {'cancelled': bool}
 active_jobs: Dict[str, Dict[str, Any]] = {}
 
-def update_job_progress(job_id: str, progress: int, message: str = None):
+def cancel_all_jobs() -> int:
+    """Marks all active jobs as cancelled to stop background threads."""
+    count = 0
+    # Copy keys to avoid size change issues during iteration
+    for job_id in list(active_jobs.keys()):
+        if not active_jobs[job_id].get("cancelled"):
+            active_jobs[job_id]["cancelled"] = True
+            active_jobs[job_id]["status"] = "cancelling"
+            logger.warning(f"Shutdown: Flagged job {job_id} for cancellation")
+            count += 1
+    return count
+
+# Global loop reference for thread-safe broadcasting
+global_loop: Optional[Any] = None
+
+def update_job_progress(job_id: str, progress: int, message: str = None, **kwargs):
     """Updates in-memory state and broadcasts progress."""
     if job_id in active_jobs:
         active_jobs[job_id]["progress"] = progress
         if message:
             active_jobs[job_id]["status_message"] = message
     
-    # Fire and forget async broadcast (requires running loop or handling)
+    # Thread-safe broadcast
     import asyncio
+    global global_loop
+    
     try:
+        # First try getting the running loop (works if called from async function)
         loop = asyncio.get_running_loop()
-        loop.create_task(broadcast_progress(job_id, progress, "processing", message))
-    except:
-        pass # No loop, can't broadcast
+        loop.create_task(broadcast_progress(job_id, progress, "processing", message, **kwargs))
+    except RuntimeError:
+        # We are likely in a thread (ThreadPoolExecutor)
+        # Use the captured global loop
+        if global_loop and global_loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                broadcast_progress(job_id, progress, "processing", message, **kwargs),
+                global_loop
+            )
+        else:
+            logger.warning(f"Could not broadcast progress for {job_id}: No event loop available")
+    except Exception as e:
+        logger.error(f"Broadcast failed: {e}")
 
 
 def update_job_db(job_id: str, status: str, output_path: str = None, error: str = None, enhanced_prompt: str = None, status_message: str = None, actual_frames: int = None, thumbnail_path: str = None):
@@ -52,6 +81,9 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
                     job.thumbnail_path = thumbnail_path
                 if status in ["completed", "failed", "cancelled"]:
                     job.completed_at = datetime.now(timezone.utc)
+                    # CLEANUP: Remove from active_jobs so status endpoint falls back to DB
+                    if job_id in active_jobs:
+                        del active_jobs[job_id]
                 session.add(job)
                 session.commit()
     except Exception as e:
@@ -78,10 +110,11 @@ async def broadcast_log(job_id: str, message: str):
     logger.info(f"[{job_id}] {message}")
     await event_manager.broadcast("log", {"job_id": job_id, "message": message})
     
-async def broadcast_progress(job_id: str, progress: int, status: str = "processing", message: str = None):
+async def broadcast_progress(job_id: str, progress: int, status: str = "processing", message: str = None, **kwargs):
     data = {"job_id": job_id, "progress": progress, "status": status}
     if message:
         data["message"] = message
+    data.update(kwargs)
     await event_manager.broadcast("progress", data)
 
 def resolve_element_image_path(image_path: str) -> str | None:

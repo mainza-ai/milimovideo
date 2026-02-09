@@ -13,6 +13,9 @@ export const createServerSlice: StateCreator<TimelineState, [], [], ServerSlice>
                     progress: data.progress,
                     isGenerating: true
                 };
+                if (data.enhanced_prompt) {
+                    updates.enhancedPromptResult = data.enhanced_prompt;
+                }
                 if (data.message) updates.statusMessage = data.message;
                 if (data.status) updates.statusMessage = data.status === 'processing' ? (data.message || 'Processing...') : data.status;
                 updateShot(shot.id, updates);

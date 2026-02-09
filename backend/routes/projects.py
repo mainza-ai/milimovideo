@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import List
 from sqlmodel import Session, select, SQLModel
-from database import get_session, Project, Shot
+from database import get_session, Project, Shot, Scene
 from schemas import CreateProjectRequest, ProjectState
 import uuid
 import os
@@ -79,6 +79,17 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Project not found")
     
     # Load shots
+    # Load scenes
+    scenes = session.exec(select(Scene).where(Scene.project_id == project_id).order_by(Scene.index)).all()
+    scenes_data = []
+    for sc in scenes:
+        scenes_data.append({
+            "id": sc.id,
+            "index": sc.index,
+            "name": sc.name,
+            "script_content": sc.script_content
+        })
+
     shots = session.exec(select(Shot).where(Shot.project_id == project_id).order_by(Shot.created_at)).all()
     
     shots_data = []
@@ -97,7 +108,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
             "enhance_prompt": s.enhance_prompt,
             "upscale": s.upscale,
             "pipeline_override": s.pipeline_override,
-            "auto_continue": False,
+            "auto_continue": s.auto_continue,
             "status": s.status,
             "image_url": s.thumbnail_url,
             "video_url": s.video_url,
@@ -105,6 +116,10 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
             "start_frame": s.start_frame,
             "trim_in": s.trim_in,
             "trim_out": s.trim_out,
+            "scene_id": s.scene_id,
+            "action": s.action,
+            "dialogue": s.dialogue,
+            "character": s.character,
             "created_at": s.created_at.isoformat() if s.created_at else None
         })
         
@@ -112,6 +127,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         id=project.id,
         name=project.name,
         shots=shots_data,
+        scenes=scenes_data,
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
         fps=project.fps,
@@ -131,6 +147,9 @@ def delete_project(project_id: str, session: Session = Depends(get_session)):
     shots = session.exec(select(Shot).where(Shot.project_id == project_id)).all()
     for s in shots:
         session.delete(s)
+    scenes = session.exec(select(Scene).where(Scene.project_id == project_id)).all()
+    for sc in scenes:
+        session.delete(sc)
     session.delete(project)
     session.commit()
     
@@ -165,6 +184,46 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     # db_project.updated_at = datetime.now(timezone.utc) # Handled by SQLModel typically or trigger
     
     # Sync Shots (Smart Merge)
+    # Sync Scenes
+    existing_scenes = session.exec(select(Scene).where(Scene.project_id == project_id)).all()
+    existing_scene_map = {sc.id: sc for sc in existing_scenes}
+    scene_payload_ids = set()
+    scenes_to_add = []
+
+    for sc_data in state.scenes:
+        sc_id = sc_data.get("id")
+        if not sc_id:
+             sc_id = uuid.uuid4().hex
+             sc_data["id"] = sc_id
+        
+        scene_payload_ids.add(sc_id)
+        
+        if sc_id in existing_scene_map:
+             existing_scene = existing_scene_map[sc_id]
+             existing_scene.name = sc_data["name"]
+             existing_scene.index = sc_data.get("index", 0)
+             existing_scene.script_content = sc_data.get("script_content")
+             session.add(existing_scene)
+        else:
+             new_scene = Scene(
+                 id=sc_id,
+                 project_id=project_id,
+                 name=sc_data["name"],
+                 index=sc_data.get("index", 0),
+                 script_content=sc_data.get("script_content")
+             )
+             scenes_to_add.append(new_scene)
+             
+    # Delete removed scenes
+    for sc in existing_scenes:
+        if sc.id not in scene_payload_ids:
+            session.delete(sc)
+            
+    for sc in scenes_to_add:
+        session.add(sc)
+
+
+    # Sync Shots (Smart Merge)
     valid_keys = Shot.model_fields.keys()
     
     # 1. Fetch Key Existing Data to Preserve
@@ -191,26 +250,8 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
             
             # Update fields from payload
             for k, v in clean_data.items():
-                # Don't overwrite generated fields if they are missing/null in payload
-                # but payload usually sends what it has.
-                # Crucial: Frontend might send "video_url": null if it doesn't know about it (unlikely if it loaded project first)
-                # But to be safe, we only overwrite if value is provided OR if we explicitly want to clear it.
-                # However, usually we trust the payload. 
-                # The RISK is if frontend *recreates* the shot object and loses the ID or properties.
-                # If ID matches, we assume frontend knows the state.
-                # BUT: `video_url` and `status` should be preserved if the payload has them as null/undefined?
-                # Let's assume frontend sends full object state.
-                # The issue described in the audit was: Storyboard Re-Commit *Deletes* shots because it *regenerates* the ID or just wipes DB.
-                # Here in `save_project`, the frontend sends the IDs it knows.
-                
-                # PROTECT generated fields if payload is empty for them?
-                # Actually, if we just `setattr` everything, we trust frontend.
-                # Providing Smart Merge for `save_project` means we trust the ID linkage.
                 setattr(existing_shot, k, v)
                 
-            # Restore protected fields if they were wiped by frontend sending partial data (safety net)
-            # (Optional, depends on how "ProjectState" is constructed in frontend)
-            # For now, standard update is fine as long as ID persists.
             session.add(existing_shot)
         else:
             # CREATE New Shot

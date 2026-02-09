@@ -49,7 +49,12 @@ async def generate_image_task(job_id: str, params: dict):
         # Flux 2 Logic
         from models.flux_wrapper import flux_inpainter
         
+        
+        # Merge sources: element_images (legacy/injected) + reference_images (API)
         element_images = params.get("element_images", [])
+        if "reference_images" in params and params["reference_images"]:
+            element_images.extend(params["reference_images"])
+
 
         # ... (lines 46-118 skipped for brevity in thought, but tool needs contiguous replacement or careful split)
         # Actually, I should use 2 chunks or just one if close enough. 

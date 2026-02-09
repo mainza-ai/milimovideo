@@ -22,6 +22,11 @@ class ShotConfig(BaseModel):
     upscale: bool = True
     pipeline_override: Optional[str] = "auto"
     auto_continue: bool = False
+    # Storyboard
+    scene_id: Optional[str] = None
+    action: Optional[str] = None
+    dialogue: Optional[str] = None
+    character: Optional[str] = None
     timeline: List[TimelineItem] = []
 
 class GenerateAdvancedRequest(BaseModel):
@@ -32,6 +37,7 @@ class ProjectState(BaseModel):
     id: str
     name: str
     shots: List[dict]
+    scenes: List[dict] = []
     resolution_w: int = 768
     resolution_h: int = 512
     fps: int = 25

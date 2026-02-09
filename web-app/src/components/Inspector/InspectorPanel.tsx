@@ -106,7 +106,7 @@ export const InspectorPanel = () => {
     const handleCancel = async () => {
         if (!shot?.lastJobId) return;
         try {
-            await fetch(`http://localhost:8000/cancel/${shot.lastJobId}`, { method: 'POST' });
+            await fetch(`http://localhost:8000/jobs/${shot.lastJobId}/cancel`, { method: 'POST' });
             updateShot(shot.id, { isGenerating: false, progress: 0 });
         } catch (e) { console.error(e); }
     };

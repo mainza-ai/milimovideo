@@ -46,6 +46,7 @@ class FluxAEWrapper:
                 ae_path if os.path.isdir(ae_path) else os.path.dirname(ae_path),
                 torch_dtype=dtype
             ).to(device)
+
         except Exception:
             # Try single file if likely
             if ae_path.endswith(".safetensors"):
@@ -53,6 +54,7 @@ class FluxAEWrapper:
                     ae_path,
                     torch_dtype=dtype
                 ).to(device)
+
             else:
                 raise
                 
@@ -242,7 +244,7 @@ class FluxInpainter:
             logger.info(f"Loading Image Encoder: {encoder_name}")
             
             self.image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-                encoder_name, torch_dtype=self.dtype
+                encoder_name, dtype=self.dtype
             ).to(self.device)
             self.image_processor = CLIPImageProcessor.from_pretrained(encoder_name)
             

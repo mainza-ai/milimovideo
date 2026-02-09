@@ -31,7 +31,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             // Defaults
             cfgScale: 3.0,
             enhancePrompt: true,
-            upscale: true,
+            upscale: false,
             pipelineOverride: 'auto',
             trackIndex: 0,
             trimIn: 0,
@@ -77,7 +77,9 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 else if (k === 'startFrame') snakeUpdates['start_frame'] = v;
                 else if (k === 'trimIn') snakeUpdates['trim_in'] = v;
                 else if (k === 'trimOut') snakeUpdates['trim_out'] = v;
-                else if (k === 'timeline') continue; // Complex object, skip simple patch for now or handle separately
+                else if (k === 'autoContinue') snakeUpdates['auto_continue'] = v;
+                else if (k === 'sceneId') snakeUpdates['scene_id'] = v;
+                // Simple fields that match but better be explicit or just fall through if key is same (action, dialogue, character are same)
                 else snakeUpdates[k] = v;
             }
 

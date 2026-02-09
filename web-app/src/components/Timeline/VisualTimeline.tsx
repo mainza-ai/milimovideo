@@ -5,6 +5,7 @@ import { TimelineTrack } from './TimelineTrack';
 import { TimeDisplay } from './TimeDisplay';
 import { PlaybackEngine } from '../Player/PlaybackEngine';
 import { Playhead } from './Playhead';
+import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 // Auto-Save Hook
 const useAutoSave = (project: any, saveProject: () => Promise<void>) => {
@@ -53,33 +54,10 @@ export const VisualTimeline = () => {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [snapLines, setSnapLines] = useState<number[]>([]);
 
-    // Convert linear shots list to timeline clips
+    // Convert linear shots list to timeline clips using centralized utility
     const clips = useMemo(() => {
-        let v1Time = 0;
-        return project.shots.map(shot => {
-            const rawDuration = (shot.numFrames - (shot.trimIn || 0) - (shot.trimOut || 0));
-            const duration = Math.max(1, rawDuration) / (project.fps || 25);
-            const trackIndex = shot.trackIndex || 0;
-            const start = trackIndex === 0
-                ? v1Time
-                : Math.max(0, (shot.startFrame || 0) / (project.fps || 25)); // Clamp start time to 0 for free tracks
-
-            if (trackIndex === 0) {
-                v1Time += duration;
-            }
-
-            const clip = {
-                id: shot.id,
-                start: start,
-                duration: duration,
-                track: trackIndex,
-                name: shot.prompt || 'Untitled Shot',
-                thumbnail: shot.thumbnailUrl,
-                shot: shot
-            };
-            return clip;
-        });
-    }, [project.shots, project.fps]);
+        return computeTimelineLayout(project);
+    }, [project]);
 
     const totalDuration = clips.reduce((acc, c) => Math.max(acc, c.start + c.duration), 0);
 
