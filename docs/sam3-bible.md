@@ -1,178 +1,198 @@
-# SAM 3: Segment Anything with Concepts - Project Documentation
+# SAM 3 Repository Documentation
 
 ## 1. Executive Summary
-SAM 3 (Segment Anything Model 3) is a foundation model for promptable segmentation in images and videos. Developed by Meta Superintelligence Labs, it extends the capabilities of SAM 2 by introducing "Concept" understanding and a fully autonomous Agentic workflow.
 
-**Core Problem**: Traditional segmentation models struggle with open-vocabulary concepts (e.g., distinguishing "player in white" from "player in red"), maintaining identity across video frames, and reasoning about complex queries that require multi-step verification.
-**Solution**: SAM 3 creates a unified architecture that:
-1.  **Understands Concepts**: Recognizes 270K+ unique concepts via a custom BPE-based text encoder ([VETextEncoder](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/text_encoder_ve.py#255-331)).
-2.  **Autonomous Reasoning**: Features a built-in "Agent" that uses a Multimodal LLM to iteratively prompt the segmentation model, verify results, and self-correct.
-3.  **Video Tracking**: Tracks objects across frames with temporal memory, using "Masklets" to persist identity.
-4.  **Unified Architecture**: Uses a [TwoWayTransformer](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/sam/transformer.py#17-108) with Rotary Positional Embeddings (RoPE) and a [Sam3DualViTDetNeck](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/necks.py#14-127) for multi-scale feature fusion.
+SAM 3 (Segment Anything Model 3) is Meta's state-of-the-art segmentation system, designed to provide **promptable, zero-shot segmentation** of arbitrary objects in images and video. Given an image and one or more point prompts (clicks indicating foreground/background), SAM 3 produces a high-quality binary mask of the selected object.
+
+SAM 3 extends its predecessor (SAM 2) with:
+- **Improved Concept Understanding**: Better at segmenting ambiguous or complex objects.
+- **Agentic Workflow Support**: Designed for integration into automated pipelines.
+- **Instance-Level Interactivity**: Built-in predictor for interactive segmentation.
+
+Milimo integrates SAM 3 as a **standalone microservice** running on its own port, called by the main backend for mask generation during inpainting workflows.
 
 ## 2. System Architecture Overview
-The system follows a monolithic deep learning architecture pattern extended with an Agentic outer loop.
 
-### 2.1 Major Subsystems
--   **Vision Backbone**: A Vision Transformer (ViT) processing images into high-dimensional embeddings.
--   **Neck**: [Sam3DualViTDetNeck](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/necks.py#14-127). Adapts SimpleFPN from ViTDet, processing features at scales (4.0, 2.0, 1.0, 0.5) to feed the decoder.
--   **Text Encoder** ([VETextEncoder](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/text_encoder_ve.py#255-331)): A lightweight transformer (12 layers, 512 width) using a custom BPE tokenizer. It employs `LayerScale` for training stability and projects features to the model's dimension.
--   **Two-Way Transformer**: The core interaction engine. It consists of:
-    -   **Self-Attention**: Sparse inputs (points/boxes) attend to themselves.
-    -   **Cross-Attention (Token-to-Image)**: Prompts query the image features.
-    -   **Cross-Attention (Image-to-Token)**: Image features update based on prompts.
-    -   **RoPE**: Rotary Positional Embeddings applied to queries and keys for precise relative positioning.
--   **Mask Decoder**: Predicts segmentation masks from transformer embeddings. It outputs:
-    -   **Masks**: The pixel-wise segmentation.
-    -   **IoU Scores**: Predicted quality of the mask.
-    -   **Object Scores**: Probability that the object exists (presence detection).
--   **The Agent**: An outer loop utilizing an MLLM (e.g., Qwen) to "drive" SAM 3, verifying masks via visual inspection tools ([viz.py](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/agent/viz.py)).
+### Architectural Style
+SAM 3 uses an encoder-decoder architecture:
 
-## 3. Repository Structure
+1.  **Image Encoder**: A Vision Transformer (ViT) that processes the input image into dense feature embeddings.
+2.  **Prompt Encoder**: Encodes sparse prompts (points, boxes, text) into the same embedding space.
+3.  **Mask Decoder**: A lightweight transformer that takes encoded image features + prompt embeddings and outputs segmentation masks.
+
+### Key Capabilities
+- **Zero-Shot**: Segments objects it was never specifically trained on.
+- **Multi-Mask Output**: Can return multiple candidate masks ranked by confidence.
+- **Point Prompting**: Single or multiple foreground/background clicks.
+- **Box Prompting**: Bounding box around target region.
+- **Instance Interactivity**: The `inst_interactive_predictor` provides a session-based API where the image is set once, then multiple prediction calls share cached features.
+
+## 3. Core Concepts
+
+- **Promptable Segmentation**: Unlike traditional semantic segmentation (which requires fixed classes), SAM takes spatial prompts (points/boxes) and segments whatever is at that location.
+- **Foreground/Background Labels**: Points are labeled `1` (foreground = include) or `0` (background = exclude). Multiple points can refine the selection.
+- **Multi-Mask vs Single-Mask**: When `multimask_output=True`, SAM returns 3 candidate masks (whole object, part, subpart). When `False`, returns the single best mask.
+
+## 4. Model Architecture Details
+
+| Component | Details |
+|---|---|
+| **Image Encoder** | Vision Transformer (ViT-H or similar variant) |
+| **Mask Decoder** | Lightweight transformer decoder |
+| **Parameters** | ~636M (base), varies by variant |
+| **Input** | RGB image (any resolution, internally resized) |
+| **Output** | Binary mask(s) `[N, H, W]` where N ∈ {1, 3} |
+
+## 5. Milimo Integration
+
+### 5.1 Architecture: Dedicated Microservice
+
+SAM 3 runs as a separate FastAPI server, isolated from the main Milimo backend:
+
 ```
-.
-├── sam3/                   # Core Python Package
-│   ├── agent/              # Autonomous Agent Logic (MLLM + SAM Loop)
-│   ├── model/              # Neural Network Definitions
-│   │   ├── sam3_image.py   # Grounding & Segmentation Logic
-│   │   ├── sam3_tracker_base.py # Base Video Tracking Logic
-│   │   ├── necks.py        # FPN / Feature Fusion
-│   │   ├── geometry_encoders.py # Prompt encoding (box->point, RoPE)
-│   │   ├── memory.py       # Video Memory Bank Implementation
-│   │   ├── tokenizer_ve.py # Custom BPE Tokenizer
-│   │   ├── sam/            # Core SAM Transformer & Decoder
-│   │   │   ├── transformer.py  # TwoWayTransformer with RoPE
-│   │   │   └── mask_decoder.py # Mask Prediction Heads
-│   │   └── ...
-│   ├── train/              # Training Infrastructure
-│   │   ├── loss/           # Loss Functions (Focal, Dice, IoU)
-│   │   ├── data/           # Datasets (Sam3ImageDataset)
-│   │   └── trainer.py      # Main DDP Loop
-│   ├── eval/               # Evaluation Tools (YTVIS, COCO)
-│   └── perflib/            # Compilation Utilities
-└── ...
+┌──────────────────────────────────────────────┐
+│ Milimo Backend (port 8000)                    │
+│   └─ InpaintingManager                        │
+│       └─ HTTP POST → localhost:8001           │
+├──────────────────────────────────────────────┤
+│ SAM 3 Microservice (port 8001)                │
+│   ├─ /health          → Status check          │
+│   └─ /predict/mask    → Segmentation          │
+└──────────────────────────────────────────────┘
 ```
 
-## 4. Deep Dive: Core Concepts & Algorithms
+**Rationale**: SAM 3 has different dependency trees and memory profiles from LTX-2/Flux. Running it in a separate process prevents model conflicts and allows independent scaling/restart.
 
-### 4.1 Stability & Dynamic Multimask
-SAM 3 introduces a stability mechanism in `MaskDecoder._dynamic_multimask_via_stability`. rather than blindly trusting the primary mask output, it calculates a **Stability Score**:
-$$ \text{Stability} = \frac{\text{Area}(M > 0.05)}{\text{Area}(M > -0.05)} $$
-If the primary mask is unstable (score < threshold), the model dynamically falls back to the "One-to-Many" (multimask) outputs, selecting the one with the highest predicted IoU.
+### 5.2 Microservice Implementation (`sam3/start_sam_server.py`)
 
-### 4.2 The "FindQuery" Paradigm
-Training is structured around [FindQuery](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/train/data/sam3_image_dataset.py#58-89) objects ([sam3_image_dataset.py](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/train/data/sam3_image_dataset.py)). Instead of standard annotations, each sample is a query:
--   **Query Text**: "Find the red cup."
--   **Exhaustivity**: Flags (`is_exhaustive`, `is_pixel_exhaustive`) tell the loss function whether to penalize the model for missing *other* similar objects.
+**Server**: FastAPI with `uvicorn`, bound to `0.0.0.0:8001`.
 
-### 4.3 Two-Way Transformer Details
-Implemented in [sam3/sam/transformer.py](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/sam/transformer.py).
--   **Sparse-to-Dense**: Point embeddings (sparse) attend to Image embeddings (dense).
--   **Dense-to-Sparse**: Image embeddings attend back to Point embeddings.
+**Lifespan Startup**:
+1.  Append current directory and parent to `sys.path` for import resolution.
+2.  Import `build_sam3_image_model` from `sam3` package.
+3.  **Device Selection**: `cuda` → `mps` → `cpu` (automatic detection).
+4.  **Checkpoint Loading**: Loads from `<project_root>/backend/models/sam3.pt`.
+5.  `enable_inst_interactivity=True` — activates the `inst_interactive_predictor` for session-based prediction.
+6.  Model moved to device and set to `.eval()` mode.
+7.  On shutdown: `sam_model = None` (GC handles cleanup).
 
-## 5. Agentic Workflow
-The agent ([agent_core.py](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/agent/agent_core.py)) implements a **Generate-Verify-Refine** loop:
-1.  **Plan**: MLLM decides which tool to use (`segment_phrase`).
-2.  **Act**: SAM 3 generates masks.
-3.  **Verify**: The agent uses `visualize` to crop and zoom into each mask. It feeds these crops back to the MLLM.
-4.  **Refine**: If the MLLM rejects a mask ("This is a shadow, not a car"), the mask is discarded.
+**Endpoints**:
 
-## 6. Data & Control Flow
+#### `GET /health`
+```json
+{"status": "running", "model_loaded": true}
+```
+Returns model availability. Useful for readiness probes.
 
-### 6.1 Training Data Pipeline
-1.  [Sam3ImageDataset](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/train/data/sam3_image_dataset.py#437-529) loads an image and JSON annotations.
-2.  It constructs `FindQueries` (e.g., positive queries for present objects, negative queries for absent ones).
-3.  [Sam3LossWrapper](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/train/loss/sam3_loss.py#37-204) computes Focal, Dice, and IoU losses.
+#### `POST /predict/mask`
+**Request** (multipart form):
+| Field | Type | Description |
+|---|---|---|
+| `image` | `UploadFile` | Source image (PNG/JPEG) |
+| `points` | `str` (JSON) | List of `[x, y]` coordinate pairs |
+| `labels` | `str` (JSON) | List of labels (`1`=foreground, `0`=background). Default: `[1]` |
+| `multimask` | `bool` | Whether to return 3 candidate masks. Default: `false` |
 
-### 6.2 Inference Flow
-1.  **User**: "Segment the runner."
-2.  **Text Encoder**: Embeds "runner" -> $E_{text}$.
-3.  **Vision Encoder**: Embeds Image -> $E_{img}$.
-4.  **Neck**: Fuses features (4x, 2x, 1x) -> $F_{multi}$.
-5.  **Prompt Encoder**: Fuses $E_{text}$ with $F_{multi}$.
-6.  **Decoder**: Predicts 3 masks (Whole person, Upper body, Face).
-7.  **Selection**: `Stability Score` heuristic picks the best mask.
-8.  **Tracking (Video)**: Mask is encoded into Memory Bank; [Sam3TrackerBase](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/sam3_tracker_base.py#26-1175) propagates it to next frame.
+**Processing Flow**:
+1.  Read uploaded image → PIL → numpy array (RGB).
+2.  Parse `points` JSON → `np.array`, reshape to `(N, 2)` if needed.
+3.  Parse `labels` JSON → `np.array`, handle scalar case.
+4.  `predictor.set_image(np_image)` — encodes image features (cached for multiple predictions).
+5.  `predictor.predict(point_coords, point_labels, multimask_output)` → `(masks, scores, logits)`.
+6.  Extract best mask (`masks[0]`).
+7.  Convert to binary PIL Image: `(mask * 255).astype(uint8)`.
+8.  Return as `StreamingResponse` with `image/png` MIME type.
 
-## 7. Deep Implementation Notes
+**Response**: Binary PNG image (single channel, 0/255 values).
 
-### 7.1 Text Tokenization ([tokenizer_ve.py](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/tokenizer_ve.py))
--   **Type**: Custom Byte-Pair Encoding (BPE), identical to CLIP.
--   **Vocabulary**: Loaded from [assets/bpe_simple_vocab_16e6.txt.gz](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/assets/bpe_simple_vocab_16e6.txt.gz).
--   **Context Length**: Hardcoded to `77` tokens.
--   **Special Tokens**: `<start_of_text>`, `<end_of_text>`.
--   **Cleaning**: Uses `ftfy` to fix unicode and `html.unescape`.
+**Error Handling**:
+- 503 if model not loaded (checkpoint missing).
+- 400 if points/labels JSON is malformed.
+- 500 for prediction errors (with traceback in server log).
 
-### 7.2 Memory Module ([memory.py](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/memory.py))
-Used for video tracking.
--   **Downsampler**: [SimpleMaskDownSampler](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/memory.py#21-81). Progressively reduces mask resolution using strided convolutions (stride 4^levels).
--   **Fusion**: [SimpleFuser](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/memory.py#142-158) combines visual features with downsampled masks before storing them in the memory bank.
+### 5.3 Client Integration (`backend/managers/inpainting_manager.py`)
 
-### 7.3 Geometry Encoders & Position Encoding
--   **Prompt Class**: Unified wrapping of boxes, points, and masks.
--   **Box Encoding**: Boxes are converted to Top-Left/Bottom-Right point pairs or encoded via RoI Align.
--   **Sine PosEnc**: [PositionEmbeddingSine](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/position_encoding.py#12-127) (temp=10000) creates fixed sinusoidal embeddings. It includes specialized [encode_boxes](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/position_encoding.py#73-78) and [encode_points](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/position_encoding.py#81-89) methods to generate high-freq spatial signatures for prompts.
+**Class**: `InpaintingManager` (singleton `inpainting_manager`)
 
-### 7.4 Sam3TrackerBase ([sam3_tracker_base.py](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/sam3_tracker_base.py))
--   **Memory Management**: Manages a FIFO buffer of past frame features.
--   **Compilation**: Explicitly calls `sam3.perflib.compile.compile_wrapper` on backbone, memory encoder, and mask decoder to enable `torch.compile` optimizations (max-autotune).
--   **Scores**: Uses `NO_OBJ_SCORE = -1024.0` as a sentinel for missing objects.
+**Configuration**:
+- `self.sam_url = f"http://localhost:{config.SAM_SERVICE_PORT}"` (default port `8001`).
 
-### 7.5 Evaluation ([eval/ytvis_eval.py](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/eval/ytvis_eval.py))
--   **Metric**: 3D Space-Time IoU.
--   **Logic**: [iou_masklets](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/eval/ytvis_eval.py#117-142) computes $\sum(\text{Inter}) / \sum(\text{Union})$ across all frames.
--   **Sync**: [YTVISResultsWriter](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/eval/ytvis_eval.py#160-412) handles multi-GPU synchronization, deduplicating predictions based on [(video_id, category_id)](file:///Users/mck/Desktop/sam3-orginal-repo-do-not-modify/sam3/model/utils/misc.py#18-21) tuples to avoid double-counting in distributed dataloaders.
+#### `get_mask_from_sam(image_path, points)`
+1.  Validates image exists on filesystem.
+2.  Opens image as binary for multipart upload.
+3.  Sends `POST {sam_url}/predict/mask` with:
+    -   `files={"image": file_handle}`.
+    -   `data={"points": str(points), "multimask": "false"}`.
+4.  On 200 response:
+    -   Saves mask PNG alongside source image: `{basename}_mask_{uuid6}.png`.
+    -   Returns absolute path to saved mask.
+5.  On failure: Logs error, returns `None`.
 
-## 8. Configuration & Environment Variables
--   **Hydra**: Primary config system.
--   **Trainer**:
-    -   `normalization`: Global vs Local loss normalization.
-    -   `normalize_by_valid_object_num`: Critical for balancing loss batches with few vs many objects.
+#### `process_inpaint(job_id, image_path, mask_path, prompt)`
+1.  Opens source image as RGB, mask as grayscale (`"L"`).
+2.  Calls `flux_inpainter.inpaint(image, mask, prompt, guidance=2.0, enable_ae=True, enable_true_cfg=False)`.
+3.  **Output Location Logic**:
+    -   Derives output dir from source image path.
+    -   If source is in `assets/` → redirects output to `generated/`.
+    -   Saves as `inpaint_{job_id}.jpg`.
+4.  Returns output path.
 
-## 9. Debugging & Maintenance Guide
-### Compilation Issues
-Use `sam3.perflib.compile.shape_logging_wrapper` to detect if variable input shapes are causing `torch.compile` to re-trigger.
+### 5.4 End-to-End Inpainting Flow
 
-### Loss Spikes
-Check `FindQuery.is_exhaustive`. If training on sparse datasets, ensure you aren't penalizing the model for "missing" unannotated objects (set `is_exhaustive=False`).
+```
+User clicks on image in UI
+        │
+        ▼
+Frontend sends click coordinates (points)
+        │
+        ▼
+Backend: InpaintingManager.get_mask_from_sam()
+        │ POST /predict/mask
+        ▼
+SAM 3 Microservice: Returns binary mask PNG
+        │
+        ▼
+Backend: Saves mask to filesystem
+        │
+        ▼
+Backend: InpaintingManager.process_inpaint()
+        │ flux_inpainter.inpaint()
+        ▼
+Flux 2: RePaint-style inpainting with mask
+        │
+        ▼
+Output: inpaint_{job_id}.jpg saved to project
+        │
+        ▼
+SSE broadcast to frontend → UI refreshes
+```
 
-## 10. Glossary
--   **RoPE**: Rotary Positional Embeddings.
--   **O2O / O2M**: One-to-One vs One-to-Many predictions.
--   **FindQuery**: The fundamental data unit.
--   **Masklet**: Temporal mask sequence.
--   **Neck**: Feature Pyramid Network connecting backbone to decoder.
+### 5.5 Weight Path & Configuration
 
----
+| Config | Value | Description |
+|---|---|---|
+| Checkpoint | `<project_root>/backend/models/sam3.pt` | SAM 3 model weights |
+| Port | `config.SAM_SERVICE_PORT` (default `8001`) | Microservice port |
+| Device | Auto-detected: `cuda` > `mps` > `cpu` | Inference device |
 
-## 11. Milimo System Integration
+### 5.6 CORS Configuration
 
-### 11.1 Microservice Architecture (`sam3/start_sam_server.py`)
-Unlike Flux and LTX-2 which run in the main backend process, SAM 3 runs as a **standalone microservice** on port **8001**.
-*   **Reasoning**: Separation of concerns and environment isolation (Conda environments). SAM 3 often requires different dependency versions than LTX/Flux.
-*   **Startup**: Launched via `run_sam.sh` -> `python sam3/start_sam_server.py`.
+The SAM 3 microservice allows **all origins** (`allow_origins=["*"]`). This is acceptable because:
+1.  It only listens on `localhost`.
+2.  It is never exposed to the internet in production.
+3.  The main backend is the only client.
 
-### 11.2 API Contract
-The service exposes a lightweight FastAPI endpoint designed for interactive segmentation.
+## 6. Debugging & Maintenance Guide
 
-**`POST /predict/mask`**
-*   **Input (Multipart)**:
-    *   `image`: The raw image file (bytes).
-    *   `points`: JSON string of coordinate arrays `[[x, y], [x, y]]`.
-    *   `labels`: JSON string of point labels `[1, 0]` (1=Foreground, 0=Background).
-    *   `multimask`: Boolean (default `False`).
-*   **Output**:
-    *   Returns a **binary PNG image** of the mask.
-*   **Logic**:
-    1.  Loads image into `sam_model.inst_interactive_predictor`.
-    2.  Calls `predictor.predict(point_coords=..., point_labels=...)`.
-    3.  Selects the best mask (highest IoU) if `multimask=False`.
-    4.  Encodes result as PNG stream.
+- **Model Not Loading**: Check that `backend/models/sam3.pt` exists. The server will start but `/predict/mask` will return 503 errors.
+- **Connection Refused**: Ensure the SAM server is running on port 8001 before starting the main backend. Check `python sam3/start_sam_server.py`.
+- **Mask Quality Issues**: Try adding background points (`label=0`) to exclude regions. SAM 3's single-point segmentation can be ambiguous.
+- **Memory**: The SAM model stays resident. On shared-GPU systems, this may compete with Flux/LTX for VRAM. Consider `/health` monitoring.
+- **Import Issues**: The server manipulates `sys.path` to find the `sam3` package. If the directory structure changes, update the path logic in `start_sam_server.py`.
 
-### 11.3 Client Integration (`backend/managers/inpainting_manager.py`)
-The main backend communicates with SAM 3 via HTTP requests.
-*   **Flow**:
-    1.  User clicks/draws on the UI -> Frontend sends points to Backend.
-    2.  `InpaintingManager` saves the source image temporarily.
-    3.  It constructs a `POST` request to `http://localhost:8001/predict/mask`.
-    4.  The received PNG mask is saved to the filesystem (`valid_mask_path`) and then passed to **Flux 2** for inpainting.
+## 7. Glossary
+
+- **Zero-Shot Segmentation**: The ability to segment arbitrary objects without class-specific training. The model generalizes from its large-scale pretraining.
+- **Instance Interactivity**: A session-based prediction mode where image features are computed once and cached, allowing multiple fast prediction calls with different prompts on the same image.
+- **Promptable Segmentation**: A paradigm where the model takes spatial prompts (points, boxes) as input to determine what to segment, rather than relying on fixed semantic classes.
+- **Multi-Mask Output**: Returning multiple candidate masks at different granularity levels (whole object, part, subpart), allowing the caller to choose the most appropriate level.

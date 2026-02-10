@@ -106,6 +106,7 @@ The system follows a modular, inference-focused pipeline architecture:
 **Key Features**:
 -   **Latent Normalization**: The `AutoEncoder` class includes a specific `BatchNorm2d` layer (`self.bn`) used to normalize latents to zero-mean/unit-variance before they enter the flow model. This acts as a fixed pre-processing step separate from the core Encoder/Decoder weights.
 -   **Architecture**: Standard ResNet-based Encoder/Decoder with `ch_mult=[1, 2, 4, 4]`, resulting in a high compression factor.
+
 #### `system_messages.py`
 **Purpose**: Stores the system prompts that govern the behavior of auxiliary LLMs (upsamplers and safety filters).
 **Key Components**:
@@ -219,27 +220,169 @@ The `Config` dataclass in `cli.py` defines runtime parameters:
 
 ## 13. Milimo System Integration
 
-### 13.1 The Wrapper (`backend/models/flux_wrapper.py`)
-Milimo does not call `scripts/cli.py` directly. Instead, it uses a custom stateful wrapper `FluxInpainter` (singleton `flux_inpainter`) that persists the model in VRAM (or RAM) to avoid reloading penalties.
+### 13.1 Integration Architecture
 
-**Key Features of `FluxInpainter`**:
-*   **State Management**: Tracks loaded models (Flow, AE, T5/Clip) and unloads them only when necessary (e.g., switching AE modes).
-*   **MPS Stability Hacks**:
-    *   **VAE Decode**: On Apple Silicon (MPS), VAE decoding in `bfloat16` or `float16` yields black images. The wrapper forces the decoding step to occur on **CPU in float32**.
-    *   **Transformer Stability**: Forces `float32` for the main Flow Transformer on MPS to prevent NaNs, despite the performance cost.
-*   **Sequential "True" CFG**:
-    *   Flux 2 natively uses "Guidance Distillation" (a single slider) and often ignores negative prompts.
-    *   Milimo implements a custom `denoise_inpaint` loop that manually calculates `pred_cond` (Positive) and `pred_uncond` (Negative) and blends them: `pred = pred_uncond + cfg_scale * (pred_cond - pred_uncond)`.
-    *   This re-enables standard Negative Prompting behavior at the cost of 2x inference time.
+Milimo does **not** call `scripts/cli.py` directly. It uses two custom wrapper layers:
 
-### 13.2 IP-Adapter Integration
-Milimo adds Image-Prompting capability to Flux 2 via a custom IP-Adapter implementation in `load_ip_adapter`.
-*   **Encoder**: Uses `openai/clip-vit-large-patch14`.
-*   **Projector**: A custom `ImageProjModel` (Linear -> Norm) that maps CLIP embeddings (1024 dim) to Flux hidden states (4096 dim).
-*   **Injection**: Image tokens are concatenated to the input sequence during the `denoise` loop.
+1.  **`FluxInpainter`** (`backend/models/flux_wrapper.py`) — Stateful singleton (`flux_inpainter`) that persists the Klein 9B model and AE in memory.
+2.  **`FluxAEWrapper`** (`backend/models/flux_wrapper.py`) — Fallback VAE wrapper using `diffusers.AutoencoderKL` when the native `ae.safetensors` is unavailable.
+3.  **Task Dispatchers**:
+    -   `tasks/image.py` → `generate_image_task()` — Standalone image generation (ImagesView panel).
+    -   `tasks/video.py` → Single-frame delegation when `num_frames == 1` (inline Flux call within video pipeline).
 
-### 13.3 In-Painting Workflow
-Managed by `backend/managers/inpainting_manager.py`:
-1.  **Mask Generation**: Calls the SAM 3 Microservice (`POST /predict/mask`) to get a segmentation mask from user points.
-2.  **Inference**: Calls `flux_inpainter.inpaint` with the image and mask.
-3.  **Denoising**: The wrapper uses a RePaint-like strategy, blending noised original latents with generated latents at each step (masked areas are generated, unmasked are preserved).
+### 13.2 The Wrapper (`FluxInpainter`)
+
+**Class**: `FluxInpainter` (singleton `flux_inpainter`, auto-initialized)
+
+**State Management**:
+| Field | Purpose |
+|---|---|
+| `model` | Loaded `Flux2` flow model |
+| `ae` | Native `AutoEncoder` or `FluxAEWrapper` |
+| `text_encoder` | `Qwen3Embedder` (Klein) |
+| `model_loaded: bool` | Tracks load state |
+| `using_native_ae: bool` | Tracks which AE variant is loaded |
+| `last_ae_enable_request: bool` | Toggle memo for AE hot-swap |
+| `image_encoder` | CLIP ViT-L/14 for IP-Adapter |
+| `ip_adapter_projector` | `ImageProjModel` (Linear→Norm) |
+| `ip_adapter_loaded: bool` | Tracks IP-Adapter load state |
+
+**AE Hot-Swap Logic** (`load_model(enable_ae=True)`):
+-   If `enable_ae=True` AND `ae.safetensors` exists → Loads native `AutoEncoder` (supports `encode_image_refs` for reference conditioning).
+-   If `enable_ae=False` OR native file missing → Falls back to `FluxAEWrapper` (uses `diffusers.AutoencoderKL`).
+-   If `enable_ae` toggle changes from a previous call → **Full model reload** (unloads everything first).
+
+**MPS Stability Hacks**:
+| Issue | Fix | Location |
+|---|---|---|
+| VAE Decode → black images (bf16/fp16) | Force CPU + float32 for decode step only | `FluxAEWrapper.decode()` |
+| Transformer NaNs (bf16) | Force **float32** for entire flow model | `FluxInpainter.__init__` → `self.dtype = torch.float32` |
+| MPS memory fragmentation | `gc.collect()` + `torch.mps.empty_cache()` before denoising | `generate_image()` |
+| Reference image OOM | Limit to 3 refs, cap pixels at 768² | `get_reference_embeds()` |
+
+**`generate_image()` Full Signature**:
+```python
+def generate_image(
+    self,
+    prompt: str,
+    width: int = 1024,
+    height: int = 1024,
+    guidance: float = 2.0,          # Internal guidance vector strength
+    num_inference_steps: int = 25,
+    seed: int = None,
+    ip_adapter_images: list = None, # Paths to reference images
+    negative_prompt: str = None,
+    callback = None,                # Step progress callback
+    enable_ae: bool = True,         # Toggle Native vs Diffusers AE
+    enable_true_cfg: bool = False   # Toggle Sequential CFG
+) -> Image.Image
+```
+
+### 13.3 Sequential "True" CFG
+
+Flux 2 natively uses **Guided Distillation** (a single scalar `guidance` vector) and typically ignores negative prompts. Milimo re-enables standard Negative Prompting via a custom double-pass loop:
+
+**`denoise_inpaint()` method** — replaces the standard `sampling.denoise()`:
+1.  **Pass 1 (Unconditional)**: Model forward with empty/negative text → `pred_uncond` (IP-Adapter tokens **stripped** in this pass).
+2.  **Pass 2 (Conditional)**: Model forward with positive text + IP-Adapter tokens → `pred_cond`.
+3.  **CFG Blend**: `pred = pred_uncond + cfg_scale × (pred_cond - pred_uncond)`.
+
+**Toggle Behavior**:
+| `enable_true_cfg` | `cfg_scale` | Negative Prompt | 2× Inference Time |
+|---|---|---|---|
+| `False` (default) | `1.0` (disabled) | **Ignored** | No |
+| `True` | `2.0` (fixed safe) | Active | Yes |
+
+### 13.4 Reference Image Conditioning (Native Autoencoder)
+
+**`get_reference_embeds()`** — Encodes reference images into the flux2 temporal embedding space:
+1.  Load PIL images from paths.
+2.  Cap pixel count (768² on MPS, 2024² single / 1024² multi on CUDA).
+3.  Center-crop to multiple of 16.
+4.  Normalize to `[-1, 1]`, encode through `self.ae.encode()`.
+5.  Assign temporal offsets: `t_off = scale + scale * t` (scale=10) — separates refs from target in position embedding space.
+6.  Process via `listed_prc_img()` to get `(ref_tokens, ref_ids)`.
+7.  Concatenate all reference tokens along sequence dimension.
+8.  During denoising, concatenate `img_cond_seq` to model input: `model_input = cat(x, img_cond_seq)`.
+
+### 13.5 IP-Adapter Integration
+
+**`load_ip_adapter()`**:
+-   **Encoder**: `openai/clip-vit-large-patch14` (`CLIPVisionModelWithProjection`).
+-   **Projector**: Custom `ImageProjModel`:
+    -   `Linear(1024, 4 × 4096)` → reshape → `LayerNorm(4096)`.
+    -   Maps CLIP embeddings (1024 dim) to 4 Flux hidden-state tokens (4096 dim each).
+-   **Weights**: Loaded from `config.FLUX_IP_ADAPTER_PATH` (safetensors).
+-   **Injection**: Image tokens are concatenated to the input sequence during the `denoise_inpaint` loop.
+
+### 13.6 In-Painting Workflow
+
+**`FluxInpainter.inpaint()` method** — Full RePaint-style inpainting:
+1.  Resize image/mask to multiple of 16.
+2.  Encode image → latents (`x_orig`) via `ae.encode()`.
+3.  Flatten mask → downscale to latent-size `(H/16, W/16)` → reshape to `(1, L, 1)`.
+4.  Initialize `x` with pure noise.
+5.  During each denoising step:
+    -   Predict update direction.
+    -   **RePaint blend**: `x_pred = mask × x_pred + (1 - mask) × x_known`.
+    -   Where `x_known = t_prev × noise + (1 - t_prev) × x_orig`.
+6.  Decode result via `ae.decode()`.
+
+**Orchestration** (`backend/managers/inpainting_manager.py`):
+1.  User clicks on the UI → Frontend sends points to Backend.
+2.  `InpaintingManager.get_mask_from_sam()` → `POST http://localhost:8001/predict/mask` (SAM 3 microservice).
+3.  Received PNG mask saved to filesystem.
+4.  `InpaintingManager.process_inpaint()` → `flux_inpainter.inpaint(image, mask, prompt, guidance=2.0, enable_ae=True, enable_true_cfg=False)`.
+5.  Result saved to `projects/{id}/generated/inpaint_{job_id}.jpg`.
+
+### 13.7 Image Generation Task (`tasks/image.py`)
+
+**`generate_image_task()`** — The standalone image generation endpoint (ImagesView panel):
+
+**Element Resolution Pipeline**:
+1.  Merge `element_images` (legacy) + `reference_images` (API) sources.
+2.  For each item:
+    -   If it looks like a UUID (not path/URL) → Lookup `Element` in DB → `resolve_element_image_path(el.image_path)`.
+    -   If path starts with `/projects` → Resolve to absolute via `config.PROJECTS_DIR`.
+    -   If element has `trigger_word` not already in prompt → append to prompt.
+3.  **Implicit Trigger Scan**: Query all project elements, check if `trigger_word` exists in prompt → auto-add reference image.
+4.  Call `flux_inpainter.generate_image(...)` with all resolved paths as `ip_adapter_images`.
+5.  Save output as JPG (quality=95) + thumbnail (¼ size).
+6.  Create `Asset` record in DB with generation metadata.
+7.  Broadcast SSE `complete` event with `asset_id` for frontend auto-selection.
+
+**Cancellation**: The `flux_callback` checks `active_jobs[job_id].cancelled` at every step and raises `RuntimeError("Cancelled by user")`.
+
+### 13.8 Single-Frame Delegation (Video Pipeline)
+
+When `tasks/video.py` detects `num_frames == 1`:
+1.  Imports `flux_inpainter` from `models.flux_wrapper`.
+2.  Calls `flux_inpainter.generate_image()` directly (bypasses LTX-2 entirely).
+3.  Saves as JPG, creates `Asset` record, broadcasts SSE `complete` event with `type: "image"`.
+4.  This delegation occurs **inside** `generate_standard_video_task`, before any LTX pipeline is invoked.
+
+### 13.9 Weight Paths & Configuration
+
+Configured in `config.py`:
+| Config Key | Value | Description |
+|---|---|---|
+| `FLUX_WEIGHTS_PATH` | `<PROJECT_ROOT>/backend/models/flux2` | Root dir for all Flux weights |
+| `FLUX_IP_ADAPTER_PATH` | `<FLUX_WEIGHTS_PATH>/ip-adapter.safetensors` | IP-Adapter projector weights |
+
+**Environment Variables set dynamically** (in `load_model()`):
+-   `KLEIN_9B_MODEL_PATH` → `flux-2-klein-9b.safetensors`
+-   `AE_MODEL_PATH` → `ae.safetensors` (if native)
+-   `QWEN3_8B_PATH` → `text_encoder/`
+-   `QWEN3_8B_TOKENIZER_PATH` → `tokenizer/`
+
+**Expected directory layout**:
+```
+backend/models/flux2/
+├── flux-2-klein-9b.safetensors    # Flow Model (9B params)
+├── ae.safetensors                  # Native AutoEncoder (preferred)
+├── vae/                            # Diffusers AE fallback
+│   └── config.json
+├── text_encoder/                   # Qwen 3 (8B)
+├── tokenizer/                      # Qwen Tokenizer
+└── ip-adapter.safetensors          # IP-Adapter Projector
+```

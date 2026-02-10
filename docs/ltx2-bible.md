@@ -1,401 +1,331 @@
-# LTX-2 System Documentation
+# LTX-2 Repository Documentation
 
 ## 1. Executive Summary
 
-**System Name**: LTX-2 Audio-Video Generation System
+LTX-2 (Lightricks Text-to-eXperience 2) is a **joint video and audio generation system** that generates synchronized audiovisual content from text prompts. It uses a **19-billion-parameter Dual-Stream Transformer** that processes video and audio tokens in parallel within a unified latent space.
 
-**Description**:
-LTX-2 is a state-of-the-art, DiT (Diffusion Transformer) based foundation model designed for simultaneous generation of high-fidelity video and synchronized audio. Unlike distinct pipelines that generate video then audio (or vice versa), LTX-2 models both modalities jointly using an asymmetric dual-stream transformer architecture.
+The system supports:
+- **Text-to-Video (T2V)** with optional audio generation.
+- **Image-to-Video (I2V)** using input images as conditioning frames.
+- **IC-LoRA** integration for subject consistency (concept injection).
+- **Keyframe Interpolation** between start/end frames.
+- **Temporal and Spatial Upsampling** for resolution enhancement.
+- **Chained (Autoregressive) Generation** for videos exceeding the 121-frame context window.
 
-**Core Capabilities**:
-- **Joint Generation**: Synthesizes synchronized video (14B params) and audio (5B params).
-- **Multi-Stage Inference**: Supports fast distilled inference and high-quality two-stage generation with upsampling.
-- **Fine-tuning**: Comprehensive training suite for LoRA, full fine-tuning, and IC-LoRA (video-to-video).
-- **Conditioning**: Supports text-to-video, image-to-video, and video-to-video workflows.
-
-**Intended Users**:
-- AI Researchers advancing multimodal generative models.
-- ML Engineers deploying high-fidelity video generation services.
-- Creative Professionals requiring fine-grained control over video content creation.
+The Milimo system integrates LTX-2 as its primary video generation engine through the `ModelManager` singleton and custom task dispatchers.
 
 ## 2. System Architecture Overview
 
-**Architectural Style**: Monorepo with modular packages.
-- **Core (ltx-core)**: Foundation models, diffusion components (schedulers, guiders), and base logic.
-- **Inference (ltx-pipelines)**: High-level orchestration of generation workflows.
-- **Training (ltx-trainer)**: Tools for model fine-tuning and adaptation.
+### Architectural Style
+LTX-2 follows a multi-stage generative pipeline:
 
-**Key Components**:
-1.  **Dual-Stream Transformer**: The heart of the system. An asymmetric transformer with bidirectional cross-attention between a Video Stream (14B parameters, 3D RoPE) and an Audio Stream (5B parameters, 1D RoPE).
-2.  **Gemma 3 Text Encoder**: Uses a frozen LLM (Gemma 3) with a learnable "Thinking Token" connector to generate separate semantic embeddings for video and audio.
-3.  **Variational Autoencoders (VAEs)**:
-    - **Video VAE**: Spatiotemporal compression of pixel data to latents.
-    - **Audio VAE**: Compresses mel-spectrograms to latents.
-4.  **Vocoder**: Converts audio latents/spectrograms back to waveforms.
-5.  **Upsampler**: A spatial upsampler model used in two-stage pipelines to increase resolution (e.g., from 384p to 768p).
+1.  **Encoding Phase**: Text → Gemma 3 embeddings; Reference images → VAE latents.
+2.  **Latent Diffusion Phase**: A Dual-Stream Transformer denoises latent noise into video + audio latent representations.
+3.  **Decoding Phase**: Latents → pixels/audio waveforms via separate VAE decoders.
+4.  **Upsampling Phase (Optional)**: Spatial (×2) and/or Temporal (×2) upsamplers enhance final output.
 
-**Runtime Environment**:
-- **Language**: Python 3.10+
-- **Framework**: PyTorch
-- **Package Manager**: `uv` (recommended) or `pip`
-- **Hardware**: NVIDIA GPUs (80GB+ VRAM recommended for training, scaling down for inference with FP8/Quantization).
+### Major Subsystems
+- **Dual-Stream Transformer (19B)**: The backbone of the system. Processes video and audio tokens in separate FFN streams but with shared attention, ensuring synchronization.
+- **Gemma 3 (Text Encoder)**: Google's Gemma language model variant providing rich text representations.
+- **Video VAE**: Handles compression of video frames into and out of the latent space.
+- **Audio VAE**: Handles audio waveform compression.
+- **Distilled LoRA (384)**: A rank-384 LoRA that enables few-step generation (~8 steps) from the distilled checkpoint.
+- **Spatial Upsampler (×2)**: Post-generation resolution doubler.
+- **Temporal Upsampler (×2)**: Doubles framerate of generated video.
+
+### Runtime Environment
+- **Languages**: Python 3.10+
+- **Frameworks**: PyTorch, SafeTensors, HuggingFace Transformers.
+- **Hardware**: CUDA GPUs (H100 class for optimal performance). Apple Silicon MPS supported with dtype workarounds.
 
 ## 3. Repository Structure
 
-The repository is organized as a Python monorepo using `uv` workspaces.
-
-```text
-/
+```
+LTX-2/
 ├── packages/
-│   ├── ltx-core/          # Foundational modeling code
-│   │   ├── src/ltx_core/
-│   │   │   ├── components/  # Diffusion building blocks (Schedulers, Guiders)
-│   │   │   ├── conditioning/ # Input conditioning logic
-│   │   │   ├── guidance/    # Perturbation logic (STG)
-│   │   │   ├── loader/      # Checkpoint loading & LoRA fusion
-│   │   │   ├── model/       # PyTorch Model Definitions (Transformer, VAEs)
-│   │   │   └── text_encoders/ # Gemma 3 integration
-│   ├── ltx-pipelines/     # Inference workflows
-│   │   ├── src/ltx_pipelines/
-│   │   │   ├── ti2vid_two_stages.py  # Production T2V/I2V pipeline
-│   │   │   ├── ti2vid_one_stage.py   # Reference pipeline
-│   │   │   ├── ic_lora.py            # Video-to-Video pipeline
-│   │   │   └── distiled.py           # Fast inference pipeline
-│   ├── ltx-trainer/       # Training framework
-│   │   ├── src/ltx_trainer/
-│   │   │   ├── trainer.py     # Main training loop
-│   │   │   └── training_strategies/ # LoRA, Full Finetune, etc.
-│   │   ├── configs/       # Training YAML configs
-│   │   └── scripts/       # Training entry points
-├── README.md              # Project entry point
-├── pyproject.toml         # Root workspace config
-└── uv.lock                # Dependency lockfile
+│   ├── ltx-core/             # Core model and loader definitions
+│   │   └── src/ltx_core/
+│   │       └── loader.py     # SafeTensor loading, LoRA merge, registry
+│   ├── ltx-pipelines/        # Generator pipeline implementations
+│   │   └── src/ltx_pipelines/
+│   │       ├── ti2vid_two_stages.py  # Text/Image → Video (primary)
+│   │       ├── ic_lora.py            # IC-LoRA concept injection
+│   │       └── keyframe_interpolation.py # Start→End interpolation
+│   └── ltx-training/        # Training scripts (not used at inference)
+├── media/                    # Sample outputs
+├── models/                   # Weight storage
+│   ├── checkpoints/          # *.safetensors main model weights
+│   ├── upscalers/            # Spatial/Temporal upsampler weights
+│   └── text_encoders/gemma3/ # Gemma 3 text encoder weights
+└── README.md
 ```
 
 ## 4. Core Concepts & Design Philosophy
 
-**Asymmetry**: The model acknowledges that video is informationally denser than audio. It allocates ~3x more parameters to the video stream while maintaining tight synchronization via cross-attention.
+- **Dual-Stream Architecture**: Unlike single-stream diffusion models, LTX-2 maintains separate FFN pathways for video and audio tokens but uses **shared self-attention** across both streams. This ensures audiovisual temporal alignment without explicit synchronization.
+- **Flow Matching + Distillation**: Uses rectified flow matching for training, then a rank-384 LoRA distillation to reduce inference from ~50 steps to ~8 steps.
+- **Two-Stage Pipeline**: The primary `TI2VidTwoStagesPipeline` runs:
+  - **Stage 1 (Generation)**: Full Transformer denoising at low latent resolution.
+  - **Stage 2 (Upsampling)**: Spatial (×2) and optionally Temporal (×2) upsampling on the decoded output.
+- **Image Conditioning**: Input images are encoded into the video VAE latent space and injected as temporal conditioning points. The model attends to these latents during denoising.
 
-**Latent Diffusion**: All generation happens in a compressed latent space to ensure computational efficiency.
+## 5. Pipeline Types
 
-**Modular Diffusion**:
-- **Schedulers**: Control the noise schedule (Linear, Cosine, LTX2-specific).
-- **Guiders**: Encapsulate logic for CFG (Classifier-Free Guidance) and STG (Spatio-Temporal Guidance).
-- **Noisers**: Manage noise injection.
-- This decoupling allows easy experimentation with different sampling strategies without rewriting the model loop.
+### 5.1 `TI2VidTwoStagesPipeline`
+**Purpose**: The workhorse pipeline for text-to-video and image-conditioned video generation.
 
-**Two-Stage Generation**:
-- **Stage 1 (Generation)**: Creates the content structure at lower resolution.
-- **Stage 2 (Refine & Upscale)**: Upscales the latent and refines details, often using a distilled model or specialized LoRA for sharpness.
+**Parameters**:
+- `prompt`: Text description.
+- `width`, `height`: Output resolution (before upsampling).
+- `num_frames`: Target frame count (max 121 per chunk).
+- `num_images_cond`: List of `(path, frame_idx, strength)` tuples for conditioning.
+- `seed`: Reproducibility seed.
+- `guidance_scale`: CFG-like scale (typically 1.0 for distilled).
 
-## 5. Detailed Module & File Documentation
+### 5.2 `ICLoraPipeline`
+**Purpose**: Concept injection via IC-LoRA. Maintains identity/style consistency of subjects across generations.
 
-### 5.1 `ltx-core` Package
-*Location: `packages/ltx-core/`*
-*Purpose: Foundational library containing model definitions and shared components.*
+**Key difference from TI2Vid**: Takes dedicated `loras` argument pointing to IC-LoRA weight files. Does not use the distilled LoRA.
 
-#### Core Model Components
-- **`src/ltx_core/model/transformer/model.py`**:
-    - **Class `LTXModel`**: The main PyTorch module. Initializes the Video and Audio streams, embedding handling, and the stack of `BasicAVTransformerBlock`. Handles the forward pass involving patchification, transformer execution, and unpatchification.
-    - **Class `X0Model`**: A wrapper that converts model "velocity" predictions into denoised "X0" predictions (latents).
+### 5.3 `KeyframeInterpolationPipeline`
+**Purpose**: Given start and end frame images, generates a smooth video transition between them.
 
-- **`src/ltx_core/model/transformer/transformer.py`**:
-    - **Class `BasicAVTransformerBlock`**: accessible unit of the transformer. Contains:
-        1. Self-Attention (Video & Audio independent)
-        2. Text Cross-Attention (Conditioning)
-        3. A↔V Cross-Attention (Syncs modalities using 1D temporal RoPE)
-        4. Feed-Forward Networks (FFN)
+**Parameters**: Similar to TI2Vid but requires exactly 2 conditioning images (frame 0 → start, frame N → end).
 
-- **`src/ltx_core/components/schedulers.py`**:
-    - **Class `LTX2Scheduler`**: The default scheduler. Implements a sigma schedule that shifts based on token count (resolution dependent) and stretches to a terminal value.
-    - **Class `LinearQuadraticScheduler`**: Hybrid schedule (linear start, quadratic tail).
+## 6. Model & Checkpoint Variants
 
-- **`src/ltx_core/components/guiders.py`**:
-    - **Class `MultiModalGuider`**: Sophisticated guider that combines:
-        - `cfg_scale`: Text adherence.
-        - `stg_scale`: Spatio-Temporal Guidance (perturbation-based structure preservation).
-        - `modality_scale`: Audio-Video sync enforcement.
-    - **Class `CFGGuider`**: Standard `(cond - uncond) * scale` logic.
+| Checkpoint | Size | Precision | MPS Compatible |
+|---|---|---|---|
+| `ltx-2-19b-distilled.safetensors` | Full BF16 | bfloat16/float32 | ✅ (with float32 cast) |
+| `ltx-2-19b-distilled-fp8.safetensors` | Quantized FP8 | float8_e4m3fn | ❌ (requires CUDA) |
+| `ltx-2-19b-distilled-lora-384.safetensors` | LoRA rank-384 | — | ✅ |
+| `ltx-2-spatial-upscaler-x2-1.0.safetensors` | Spatial ×2 | — | ✅ |
+| `ltx-2-temporal-upscaler-x2-1.0.safetensors` | Temporal ×2 | — | ✅ |
 
-### 5.2 `ltx-pipelines` Package
-*Location: `packages/ltx-pipelines/`*
-*Purpose: User-facing generation workflows.*
+**Auto-Selection Logic** (in `ModelManager.get_model_paths()`):
+1.  Priority: Full precision (`ltx-2-19b-distilled.safetensors`).
+2.  Fallback: FP8 (`ltx-2-19b-distilled-fp8.safetensors`).
 
-#### Pipelines
-- **`src/ltx_pipelines/ti2vid_two_stages.py`**:
-    - **Class `TI2VidTwoStagesPipeline`**: The standard high-quality pipeline.
-        - **Step 1**: Generates 1/2 resolution video using `LTX2Scheduler` and `MultiModalGuider`.
-        - **Step 2**: Upscales latents using `spatial_upsampler`, then denoises using a Distilled LoRA at high resolution for sharpness.
-    - **Function `__call__`**: Entry point accepting `prompt`, `images` (for I2V), and guidance params.
+## 7. Data Flow
 
-- **`src/ltx_pipelines/utils/helpers.py`**:
-    - **Function `euler_denoising_loop`**: The core loop iterating over sigma steps. Calls the denoise function (model + guider) and steps the latent state.
-    - **Function `gradient_estimating_euler_denoising_loop`**: An optimized loop using velocity gradient estimation to reduce step count (e.g., from 40 to 20).
-
-### 5.3 `ltx-trainer` Package
-*Location: `packages/ltx-trainer/`*
-*Purpose: Fine-tuning and training.*
-
-#### Core Training Logic
-- **`src/ltx_trainer/trainer.py`**:
-    - **Class `LtxvTrainer`**: Manages the training lifecycle.
-        - Handles `Accelerate` setup (DDP/FSDP).
-        - Manages checkpoints (loading `safetensors`, saving).
-        - Runs the training loop: Fetch batch -> Forward -> Loss -> Backward -> Optimizer Step.
-        - Runs validation sampling periodically (generating videos to track progress).
-
-- **`src/ltx_trainer/config.py`**:
-    - Defines the `LtxTrainerConfig` Pydantic model, mapping directly to the YAML configuration files.
-
-- **`src/ltx_trainer/training_strategies/`**:
-    - Contains logic for different training modes (e.g., standard LoRA vs. IC-LoRA).
-    
-    - **`ltx-trainer/docs/configuration-reference.md`**:
-        - A critical reference file detailing all valid YAML configuration options.
-        - **Important**: It details the `target_modules` for LoRA training, differentiating between video-only (`attn1`, `ff`), audio-only (`audio_attn1`, `audio_ff`), and cross-modal (`audio_to_video_attn`) modules.
-
-#### CLI Tools & Scripts (`packages/ltx-trainer/scripts/`)
-- **`process_dataset.py`**:
-    - **Purpose**: Pre-computes latents and text embeddings to accelerate training.
-    - **Features**:
-        - Supports resolution bucketing (e.g., `768x768x49`).
-        - Handles reference videos for IC-LoRA (scaling them down if needed).
-        - Can decode latents back to video for verification.
-    - **Usage**: `python scripts/process_dataset.py dataset.json ...`
-
-- **`process_captions.py`**:
-    - **Purpose**: Specialized script for cleaning and embedding text captions.
-    - **Features**:
-        - Automatic LLM prefix removal (e.g., "In this video...").
-        - Supports batch processing (batch size 1 for now due to Gemma tokenizer limitations).
-    - **Usage**: `python scripts/process_captions.py dataset.json ...`
-
-- **`inference.py`**:
-    - **Purpose**: The main entry point for CLI-based generation.
-    - **Modes**:
-        - **T2V**: Text-to-Video (default).
-        - **I2V**: Image-to-Video (`--condition-image`).
-        - **V2V**: Video-to-Video (`--reference-video`).
-        - **V2V+I2V**: Combined mode.
-    - **Key Args**: `--stg-scale` (Structure guidance), `--stg-mode` (audio-video or video only), `--skip-audio`.
-
-## 6. Data Flow & Control Flow
-
-### Inference Data Flow (Two-Stage Pipeline)
-
-1.  **Input**: User provides `Prompt` ("A cat jumping"), `Image` (Optional start frame), and Config (Resolution, Steps).
-2.  **Text Encoding**:
-    - Prompt passed to `GemmaTextEncoder`.
-    - Returns `VideoContext` (4096 dim) and `AudioContext` (2048 dim) embeddings.
-3.  **Latent Initialization**:
-    - Random Gaussian noise created for Video (`[B, C, F, H/32, W/32]`) and Audio.
-    - If Image provided: Image is encoded via VAE -> replaces the first noise frame (latent replacement).
-4.  **Stage 1 Denoising (Low Res)**:
-    - Loop `t` from 1.0 to 0.0:
-        - `Model(Latent_t, Context)` -> `Velocity`.
-        - `Guider` modifies `Velocity` (CFG/STG).
-        - `Stepper` computes `Latent_{t-1}`.
-5.  **Upscaling**:
-    - Stage 1 Output Latents -> `SpatialUpsampler` -> 2x Resolution Latents.
-6.  **Stage 2 Denoising (High Res)**:
-    - Loop with fewer steps (e.g., 8-10) using Distilled LoRA.
-    - Refines details.
-7.  **Decoding**:
-    - Video Latents -> `VideoVAE Decoder` -> MP4 frames.
-    - Audio Latents -> `AudioVAE Decoder` -> Spectrogram -> `Vocoder` -> WAV.
-8.  **Output**: Combined video file.
-
-## 7. Configuration & Environment Variables
-
-**Training Configuration**:
-- Uses YAML files (e.g., `configs/ltx2_av_lora.yaml`).
-- **Key Params**:
-    - `model.model_path`: Path to base checkpoint.
-    - `lora.rank`: LoRA adapter size (e.g., 64).
-    - `optimization.batch_size`: Per-device batch size.
-    - `optimization.learning_rate`: e.g., 0.0001.
-    - **LoRA Target Modules**:
-        - **Video-Only**: `["attn1.to_k", "attn1.to_q", "attn1.to_v", "attn1.to_out.0", "ff.net.0.proj", "ff.net.2"]`
-        - **Audio-Video Shared**: `["to_k", "to_q", "to_v", "to_out.0"]` (matches all attention branches including cross-modal).
-
-**Inference Configuration**:
-- Typically passed via CLI args or Python Class `init`.
-- **Environment Variables**:
-    - `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`: Vital for memory management on fragmentation-prone workloads.
-
-## 8. External Integrations
-
-- **Gemma 3**: Critical dependency for text understanding. The repo assumes a local copy or HuggingFace hub download of Gemma 3.
-- **HuggingFace Hub**: For model weights and dataset interaction.
-- **W&B (Weights & Biases)**: Integrated for training experiment tracking (loss curves, validation samples).
-
-## 9. Extension & Customization Guide
-
-### Adding a New Scheduler
-1. Implement `SchedulerProtocol` in `ltx-core/components/protocols.py`.
-2. Add your class to `ltx-core/components/schedulers.py`.
-3. Register it in the pipeline or config.
-
-### Customizing Training
-1. Create a new strategy in `ltx-trainer/training_strategies/`.
-2. Inherit from `BaseTrainingStrategy`.
-3. Implement `computer_loss()` and `prepare_training_inputs()`.
-
-## 10. Debugging & Maintenance Guide
-
-**Common Failure Points**:
-- **OOM (Out of Memory)**:
-    - *Fix*: Enable `fp8transformer=True`, reduce batch size, or use `PYTORCH_CUDA_ALLOC_CONF`.
-- **Resolution Mismatch**:
-    - *Fix*: Ensure H/W are divisible by 32 (One-Stage) or 64 (Two-Stage). `assert_resolution` in helpers enforces this.
-- **Missing Weights**:
-    - *Fix*: Ensure all parts (VAE, Upscaler, Gemma) are downloaded.
-
-**Testing**:
-- Uses `pytest`. Run `uv run pytest` from root.
-
-## 11. Known Risks, Limitations & Technical Debt
-
-- **Monorepo Complexity**: Dependencies between packages are managed via `uv`. Mixing `pip install` with `uv sync` can break the environment.
-- **Memory Hungry**: Full fine-tuning requires significant VRAM (80GB+). Consumer cards are limited to LoRA/Quantized training.
-- **Inference Speed**: Two-stage generation is slow. Use `DistilledPipeline` for speed-critical apps.
-- **Gemma dependency**: heavily relies on specific Gemma implementation; upgrades to Gemma might break the text encoder connector.
-
-## 12. Deep Dive: Internal Mechanics
-
-### 12.1 Prompt Engineering & System Prompts
-The system enforces a strict "Creative Assistant" persona via system prompts found in `packages/ltx-core/src/ltx_core/text_encoders/gemma/encoders/prompts/`.
-- **Guidelines**:
-    - Use present-progressive verbs ("is walking").
-    - Audio descriptions must be integrated chronologically ("Ambient cafe sounds fill the space").
-    - **Forbidden**: Non-visual senses (smell, taste), dramatic/exaggerated terms ("blinding light").
-    - **Format**: `Style: <style>, <rest of prompt>.`
-
-### 12.2 Conditioning Internals
-- **Keyframe Conditioning** is implemented in `KeyframeCond` (`ltx_core/conditioning/types/keyframe_cond.py`).
-    - It works by **masking**: A `denoise_mask` is created where the keyframe pixels are set to `1.0 - strength`.
-    - This effectively locks the keyframe pixels during the diffusion process based on the strength parameter.
-
-### 12.3 Spatial Upsampler
-- Located in `packages/ltx-core/src/ltx_core/model/upsampler/spatial_rational_resampler.py`.
-- Uses a **Rational Resampling** strategy:
-    - **Upsample**: Learned `PixelShuffle` (e.g., scale 2.0).
-    - **Downsample**: Fixed stride-based `BlurDownsample` for anti-aliasing.
-    - Supports specific rational scales: 0.75, 1.5, 2.0, 4.0.
-
-### 12.4 Guidance & STG
-- **STG (Spatio-Temporal Guidance)** works by selectively **skipping attention mechanisms** in specific blocks.
-- Defined in `perturbations.py`, types include:
-    - `SKIP_A2V_CROSS_ATTN`: Decouples audio influence on video.
-    - `SKIP_VIDEO_SELF_ATTN`: Breaks temporal/spatial coherence to guide structure.
-- This "perturbation" creates a negative signal that the model steers away from (similar to CFG's unconditional negative signal).
-
-### 12.5 Advanced LoRA Fusion
-- **Float8 Support**: The loader (`fuse_loras.py`) includes custom Triton kernels (`fused_add_round_kernel`) to handle `float8` weights efficiently.
-- **Fusion Logic**: New weights are calculated as `Base + (LoRA_B @ LoRA_A) * Scale`. The system handles precision casting automatically to avoid degradation.
-
-### 12.6 Pipeline Architecture & Model Ledger
-- **Model Ledger** (`ltx_pipelines/utils/model_ledger.py`):
-    - Acts as a **central factory** for all model components.
-    - **No Caching**: Models are instantiated on-demand to manage GPU memory aggressively.
-    - Handles LoRA composition via `with_loras()`, creating lightweight copies of the ledger with new adapter configurations.
-- **Keyframe Interpolation**:
-    - Implemented in `keyframe_interpolation.py`.
-    - **Two-Stage Process**: 
-        1. Generates low-res video conditioned on keyframes. 
-        2. Upscales and refines using a generic `upsample_video` and a second denoising loop.
-
-## 13. Super Deep Dive: Internal Mechanics & Algorithms
-
-### 13.1 Mathematical Implementation Details
-- **LTX2Scheduler Math** (`schedulers.py`):
-    - Uses a **token-dependent shifting** mechanism.
-    - Formula: `sigma_shift = (tokens) * mm + b` where `mm` and `b` are derived from base/max anchors (1024, 4096).
-    - **Stretching**: The final schedule is stretched to force the last sigma to match a `terminal` value (default 0.1), preventing the model from generating pure noise at the end.
-- **Attention Hierarchy** (`attention.py`):
-    - The system dynamically selects the best available attention implementation:
-        1.  **FlashAttention3**: Highest priority, if installed.
-        2.  **xFormers**: Memory-efficient attention, if FA3 is missing.
-        3.  **PyTorch**: Standard `scaled_dot_product_attention` as fallback.
-
-### 13.2 VAE Tiling & Sampling Internals
-- **Trapezoidal Blending** (`tiling.py`):
-    - Tiling is not just a hard cut. It uses **1D trapezoidal masks** with linear ramps (`linspace`) for feathering.
-    - For N-dimensional tensors, 1D masks are broadcast and multiplied to create a smooth N-D blending window.
-- **Sampling Tricks** (`sampling.py`):
-    - `SpaceToDepthDownsample`: When stride is 2, it duplicates the first frame (`x[:, :, :1, :, :]`) before concatenation. This padding preserves **causal temporal consistency**.
-
-### 13.3 Transformer Components
-- **3D RoPE** (`rope.py`):
-    - Implements **3D Rotary Positional Embeddings** to handle (Time, Height, Width) dimensions simultaneously.
-    - Supports two modes:
-        1.  `INTERLEAVED`: Standard rotary application.
-        2.  `SPLIT`: Splits dimensions for specific optimizations.
-    - **Frequency Grid**: Pre-computes and caches frequency grids to avoid re-calculation overhead (`lru_cache`).
-- **AdaLN-Single** (`adaln.py`):
-    - Based on **PixArt-Alpha** architecture (`AdaLayerNormSingle`).
-    - Uses a combined **Timestep + Size Embedding** approach. The timestep embedding is projected and then fused with resolution/aspect-ratio embeddings to condition the normalization layers.
-
-### 13.4 Training Strategy Differentiation
-- **Timestep Sampling** (`timestep_samplers.py`):
-    - **Shifted Logit-Normal**: The diffusion noise schedule is *not* static. It shifts based on the sequence length (total tokens).
-    - **Formula**: The mean shift is linearly interpolated between `min_shift` (0.95 at 1024 tokens) and `max_shift` (2.05 at 4096 tokens). This allows the model to adapt its noise distribution for higher-resolution training.
-- **Validation** (`validation_sampler.py`):
-    - **Mini-Inference Engine**: The trainer includes a full (albeit simplified) inference pipeline for validation.
-    - **Tiled Decoding**: Supports `TiledDecodingConfig` to split large generated latents into temporal/spatial tiles during validation decoding, essential for validating 4K/long-context generation on limited VRAM.
-
-### 13.5 Data Processing Logic
-- **Resolution Bucketing** (`process_videos.py`):
-    - Standard noise application.
-    - **Conditioning Tokens**: First-frame conditioning tokens are *not* noised. They are also explicitly **masked out of the loss** (`video_loss_mask = ~conditioning_mask`).
-- **Video-to-Video (IC-LoRA)** (`video_to_video.py`):
-    - **Concatenation**: Reference latents (clean) are concatenated with Target latents (noisy) along the temporal dimension.
-    - **Reference Masking**: The *entire* reference portion of the sequence has `loss_mask = False`. The model sees the reference but is never penalized for predicting it.
-    - **Downscaling**: The system automatically infers reference downscaling factors from the first batch and enforces consistency.
-
-### 13.6 Data Processing Logic
-- **Resolution Bucketing** (`process_videos.py`):
-    - Uses a specific **Lexicographic Sort** to assign videos to buckets:
-        1.  **Minimize Aspect Ratio Diff**: (log-scale) Primary factor.
-        2.  **Maximize Frame Count**: Prefer buckets that use more of the video's temporal information.
-        3.  **Maximize Spatial Area**: Prefer higher resolutions.
-- **Tiled Encoding**:
-    - Hardcoded `latent_channels = 128` in `tiled_encode_video`.
-    - Manually splits tensors, encodes chips, and blends them using the `tiling` logic described above.
-
-## 14. Glossary
-
-- **DiT**: Diffusion Transformer.
-- **RoPE**: Rotary Positional Embeddings (3D for video, 1D for audio).
-- **STG**: Spatio-Temporal Guidance (perturbation-based guidance).
-- **VAE**: Variational Autoencoder.
-- **AdaLN**: Adaptive Layer Normalization.
-- **IC-LoRA**: In-Context LoRA (Video-to-Video). Uses a reference video as a condition to guide the generation process.
-- **Thinking Token**: A special learnable token in the Gemma text encoder connector that bridges text embeddings with the video/audio latent space.
+### Standard Generation (`TI2VidTwoStagesPipeline`)
+1.  **Text Encoding**: `prompt` → Gemma 3 → text embeddings.
+2.  **Image Conditioning**: Input images → Video VAE encode → latents → injected at specified frame indices.
+3.  **Noise Initialization**: Random latent of shape `(B, C, T, H, W)`.
+4.  **Stage 1 (Denoising)**: 8 steps (distilled) through Dual-Stream Transformer.
+5.  **Stage 1 Decode**: Latents → Video VAE decode → pixel frames.
+6.  **Stage 2 (Spatial Upsample)**: ×2 spatial resolution enhancement.
+7.  **Stage 2 (Temporal Upsample, optional)**: ×2 framerate doubling.
+8.  **Output**: Video file (MP4 via `moviepy` or `ffmpeg`).
 
 ---
 
-## 15. Milimo System Integration
+## 8. Milimo System Integration
 
-### 15.1 Pipeline Orchestration (`backend/tasks/video.py`)
-Milimo does not use the `ltx-pipelines` directly via CLI. Instead, it wraps them in a stateful `generate_video_task` managed by `ModelManager`.
+### 8.1 Integration Architecture
 
-**Pipeline Selection Logic**:
-1.  **Video Conditioning**: If the timeline contains video clips, `ICLoraPipeline` (In-Context LoRA) is selected.
-2.  **Keyframe Interpolation**: If start (0) and end (N) keyframes are present, `KeyframeInterpolationPipeline` is selected.
-3.  **Standard T2V/I2V**: Otherwise, `TI2VidTwoStagesPipeline` is used.
-4.  **Single Frame**: If `num_frames=1`, the task delegates to **Flux 2** (`flux_inpainter`) for higher quality static image generation.
+Milimo integrates LTX-2 through three layers:
 
-### 15.2 Quantum Alignment (Latent Handoff)
-Implemented in `backend/tasks/chained.py`, this is Milimo's solution for infinite video extension ("Smart Continue").
-*   **Mechanism**: Instead of using pixel-based Image-to-Video (which degrades quality over time), Milimo passes the **Last Latent Tensor** from Chunk N as the input conditioning for Chunk N+1.
-*   **Logic**:
-    1.  Extracts the last $K$ latent slices from the previous generation.
-    2.  Passes them to the pipeline (custom `previous_latent_tensor` argument).
-    3.  **Trimming**: The model regenerates these $K$ frames as "context". The system trims the first $K \times 8$ pixel frames from the output video to ensure perfect motion continuity without "skip-back" artifacts.
-*   **Prompt Continuity**: Uses **Gemma 3** as a "Virtual Director" to rewrite the prompt for the next chunk based on the previous context, ensuring narrative consistency.
+```
+┌────────────────────────────────────────────────┐
+│ Frontend (React)                                │
+│   └─ Generate Button → POST /api/generate       │
+├────────────────────────────────────────────────┤
+│ server.py → BackgroundTasks                     │
+│   └─ generate_video_task()                      │
+├────────────────────────────────────────────────┤
+│ tasks/video.py → Pipeline Selection             │
+│   ├─ Standard Path → TI2Vid / ICLora / Keyframe │
+│   └─ Chained Path → tasks/chained.py            │
+├────────────────────────────────────────────────┤
+│ model_engine.py → ModelManager (Singleton)      │
+│   └─ Loads/caches pipeline instances            │
+├────────────────────────────────────────────────┤
+│ LTX-2 Pipelines (ltx_pipelines/*)              │
+└────────────────────────────────────────────────┘
+```
 
-### 15.3 Hardware Optimizations (MPS)
-*   **Tiling**: Milimo strictly enforces `TilingConfig.default()` (256px spatial tiles, 32 frame temporal tiles) on Apple Silicon.
-*   **BFloat16**: Unlike Flux (which needs float32 hacks), LTX-2 runs fully in `bfloat16` on MPS.
-*   **Cleanup**: Aggressive garbage collection (`gc.collect()` + `empty_cache()`) is performed between every chunk in a chained generation.
+### 8.2 `ModelManager` (Singleton)
+
+**File**: `backend/model_engine.py`  
+**Instance**: `manager` (module-level singleton)
+
+**Responsibilities**:
+- **Pipeline Lifecycle**: Loads exactly one pipeline at a time. If the requested type matches the cached type, reuses it. Otherwise, unloads the old pipeline (with `gc.collect()` + `torch.mps.empty_cache()` or `torch.cuda.empty_cache()`) and loads the new one.
+- **Checkpoint Selection**: Auto-detects best available checkpoint (full > FP8).
+- **MPS Compatibility**: Disables FP8 transformer on MPS (`fp8transformer=False`).
+- **MPS VAE Fix**: After loading, forces `pipeline.vae` to `float32` to prevent black video frames.
+
+**Pipeline Construction Args**:
+```python
+TI2VidTwoStagesPipeline(
+    checkpoint_path=paths["checkpoint_path"],
+    distilled_lora=distilled_lora_objs,        # LoRA rank-384
+    spatial_upsampler_path=paths["spatial_upsampler_path"],
+    temporal_upsampler_path=paths["temporal_upsampler_path"],
+    gemma_root=paths["gemma_root"],
+    loras=loras,                                # User-specified LoRAs
+    device=device,                              # "cuda" / "mps" / "cpu"
+    fp8transformer=fp8                          # False on MPS
+)
+```
+
+### 8.3 Pipeline Selection Logic (`tasks/video.py`)
+
+**`generate_video_task()`** orchestrates the entire flow:
+
+1.  **Auto-Detection** (when `pipeline_type == "advanced"` or `"auto"`):
+    -   If timeline has **2+ conditioning images at different frames** → `"keyframe"`.
+    -   If timeline has **IC-LoRA elements** → `"ic_lora"`.
+    -   Default → `"ti2vid"`.
+
+2.  **Chained Delegation**:
+    -   If `pipeline_type == "ti2vid"` AND `num_frames > 121` → delegates to `generate_chained_video_task()`.
+
+3.  **Single-Frame Shortcut**:
+    -   If `num_frames == 1` → bypasses LTX-2 entirely, calls `flux_inpainter.generate_image()` from Flux 2.
+
+### 8.4 Prompt Enhancement
+
+**`generate_enhanced_prompt()`** (in `tasks/video.py`):
+1.  Uses the **Gemma 3 text encoder** already loaded by the LTX-2 pipeline.
+2.  If an input image is available, it captures a visual description from the image.
+3.  Enhances the user prompt into a cinematically detailed description.
+4.  Returns the enhanced prompt for use in generation.
+
+### 8.5 Input Image Path Resolution
+
+**Critical Logic** (in `generate_standard_video_task()`):
+Timeline images arrive from the frontend as URLs (e.g., `http://localhost:5173/projects/abc/assets/my image.png`). The backend resolves them:
+
+1.  **URL Detection**: If path starts with `http://` or `https://`:
+    -   Parse with `urlparse` → extract `parsed.path`.
+    -   **URL-decode** with `unquote(parsed.path)` (handles spaces `%20`, special chars).
+2.  **Project Path Resolution**: If path starts with `/projects`:
+    -   Strip prefix, join with `config.PROJECTS_DIR` to get absolute path.
+3.  **Validation**: Check `os.path.exists()` on resolved path.
+
+### 8.6 Chained (Autoregressive) Generation
+
+**File**: `backend/tasks/chained.py`  
+**Function**: `generate_chained_video_task()`
+
+This is Milimo's "Smart Continue" feature for videos longer than 121 frames.
+
+#### Chunk Calculation (via `StoryboardManager`):
+```python
+chunk_size = 121
+overlap_frames = 24
+effective_step = chunk_size - overlap_frames  # = 97
+additional = ceil((total_frames - chunk_size) / effective_step)
+total_chunks = 1 + additional
+```
+
+**Example**: 300 frames → `1 + ceil((300-121)/97)` = `1 + 2` = **3 chunks**.
+
+#### Per-Chunk Loop:
+For each chunk `i`:
+1.  **Configuration Prep** (`StoryboardManager.prepare_next_chunk()`):
+    -   Chunk 0: Uses the original prompt and any user-specified conditioning images.
+    -   Chunk 1+: Extracts last frame of previous chunk (via `ffmpeg -sseof -0.1`) as conditioning at frame 0.
+2.  **LTX-2 Generation**: Standard `TI2VidTwoStagesPipeline` call with 121 frames.
+3.  **Cancellation Check**: After each chunk, checks `active_jobs[job_id]["cancelled"]`.
+4.  **Progress Broadcasting**: SSE updates with per-chunk progress (`chunk {i}/{total}`).
+
+#### Latent Handoff ("Quantum Alignment"):
+
+The core mechanism for maintaining motion continuity between chunks:
+
+1.  **Capture**: After each chunk's Stage 1 denoising, the full latent tensor is captured (`last_chunk_latent`).
+2.  **Alignment Math**:
+    -   `requested_pixel_overlap` = 24 frames.
+    -   `latent_slice_count = ceil((requested_pixel_overlap - 1) / 8) + 1` — aligns pixel overlap to the latent grid (1 latent = 8 pixels in temporal dimension).
+    -   `effective_overlap_pixels = (latent_slice_count - 1) × 8 + 1` — the actual overlap in pixel space after alignment.
+    -   `frames_to_trim = effective_overlap_pixels` — exact number of decoded frames to trim from subsequent chunks.
+3.  **Slicing**: `conditioning_latent_tensor = last_chunk_latent[:, :, start_slice:, :, :]` — the tail of the previous chunk's latent tensor.
+4.  **Injection**: The sliced latent is passed to LTX-2 as a conditioning input, seeding the start of the next chunk with the end of the previous chunk.
+5.  **Why "Quantum"**: The latent grid quantizes continuous pixel space. Overlap must be aligned to this grid to avoid discontinuities. Misaligned overlaps cause "frozen anchor" artifacts where the overlap region appears static.
+
+#### Overlap Trimming & Video Stitching:
+1.  For chunk `i > 0`: Trim exactly `frames_to_trim` frames from the **start** of the decoded video.
+2.  Trimming is done via **ffmpeg**:
+    ```
+    ffmpeg -i chunk.mp4 -ss <trim_seconds> -c copy trimmed_chunk.mp4
+    ```
+    Where `trim_seconds = frames_to_trim / fps`.
+3.  All trimmed chunks are concatenated using ffmpeg concat (file-list method or filter concat).
+
+### 8.7 The `StoryboardManager`
+
+**File**: `backend/storyboard/manager.py`
+
+Orchestrates multi-chunk generation with narrative awareness.
+
+**Dual Modes**:
+1.  **Worker/Generation Mode**: Initialized with `(job_id, prompt, params, output_dir)`. Tracks chunk state during chained generation.
+2.  **Server/Prep Mode**: Initialized with just `output_dir` for shot-based storyboard workflows.
+
+**Key Methods**:
+| Method | Purpose |
+|---|---|
+| `get_total_chunks()` | Calculates required chunks from `num_frames`, `chunk_size` (121), `overlap_frames` (24) |
+| `prepare_next_chunk(chunk_idx, last_chunk_output)` | Returns `{prompt, images}` for next chunk. Extracts last frame via ffmpeg for conditioning |
+| `commit_chunk(chunk_idx, path, prompt)` | Registers completed chunk in `StoryboardState.chunks` |
+| `prepare_shot_generation(shot_id, session)` | For storyboard mode: resolves Shot→Scene→previous shot chain, enriches prompt via `element_manager` |
+| `cleanup()` | Stub for artifact cleanup |
+
+**Shot-based Prompt Enrichment** (`prepare_shot_generation`):
+1.  Loads `Shot` from DB.
+2.  Finds previous shot in same scene (`Shot.index - 1`).
+3.  If previous shot is completed → extracts last frame as conditioning.
+4.  Injects narrative context: `"Following the previous shot where {prev_shot.action}. {enriched_prompt}"`.
+5.  Resolves project `Element` trigger words via `element_manager.inject_elements_into_prompt()`.
+
+### 8.8 MPS Compatibility Summary
+
+| Component | Issue | Fix |
+|---|---|---|
+| **Transformer** | `bfloat16` causes `MPSNDArrayMatrixMultiplication` error | Pipeline forces `float32` on MPS (via `fp8transformer=False` + loader casts) |
+| **VAE** | `bfloat16` decode → black frames | `ModelManager` forces `pipeline.vae.to(dtype=torch.float32)` after load |
+| **FP8 Checkpoint** | FP8 quantization unsupported on MPS | Auto-selects full-precision checkpoint instead |
+| **Memory Management** | MPS fragmentation causes OOM mid-generation | `gc.collect()` + `torch.mps.empty_cache()` on pipeline swap |
+
+### 8.9 Video Output & Persistence
+
+After generation completes:
+1.  Video saved to `projects/{project_id}/generated/{job_id}.mp4`.
+2.  Thumbnail extracted (first frame) → `projects/{project_id}/thumbnails/{job_id}.jpg`.
+3.  `Shot` record updated in DB: `video_url`, `thumbnail_url`, `actual_frames`, `status="completed"`.
+4.  `Job` record updated: `status="completed"`, `output_path`, `thumbnail_path`.
+5.  SSE broadcast: `{"type": "complete", "job_id": ..., "url": ..., "thumbnail_url": ...}`.
+
+### 8.10 Weight Paths & Configuration
+
+Configured in `config.py` and `model_engine.py`:
+
+| Config | Path Pattern | Description |
+|---|---|---|
+| `config.LTX_DIR` | `<PROJECT_ROOT>/LTX-2` | Root of LTX-2 repo |
+| Checkpoint | `LTX-2/models/checkpoints/ltx-2-19b-distilled.safetensors` | Main model weights |
+| Distilled LoRA | `LTX-2/models/checkpoints/ltx-2-19b-distilled-lora-384.safetensors` | Few-step LoRA |
+| Spatial Upsampler | `LTX-2/models/upscalers/ltx-2-spatial-upscaler-x2-1.0.safetensors` | ×2 spatial |
+| Temporal Upsampler | `LTX-2/models/upscalers/ltx-2-temporal-upscaler-x2-1.0.safetensors` | ×2 temporal |
+| Gemma 3 | `LTX-2/models/text_encoders/gemma3/` | Text encoder weights |
+| IP-Adapter | `config.FLUX_IP_ADAPTER_PATH` | Flux IP-Adapter (cross-referenced from Flux config) |
+
+## 9. Debugging & Maintenance Guide
+
+- **Black Video Output**: Usually a VAE dtype issue on MPS. Verify `pipeline.vae.dtype == torch.float32`.
+- **Frozen Frames in Chained Video**: Quantum alignment mismatch. Check `latent_slice_count` math and ensure `frames_to_trim` matches actual decoded overlap.
+- **OOM During Generation**: Reduce resolution or switch to FP8 checkpoint (CUDA only). On MPS, the system auto-caps to full-precision.
+- **Pipeline Not Switching**: The `ModelManager` caches the pipeline type. If the pipeline type string doesn't match exactly (`"ti2vid"` vs `"TI2Vid"`), a stale pipeline may be reused.
+- **Audio Not Generated**: Audio generation is conditional on the pipeline supporting it and the user requesting it. Check pipeline args.
+
+## 10. Glossary
+
+- **Dual-Stream Transformer**: Architecture where video and audio tokens have separate Feed-Forward Networks but share the Self-Attention mechanism, enforcing temporal synchronization.
+- **Distilled LoRA**: A Low-Rank Adaptation module trained to approximate the behavior of a multi-step model in fewer steps (8 vs 50).
+- **Flow Matching**: Training paradigm where the model learns the vector field that transports noise to data along straight paths.
+- **Quantum Alignment**: Milimo-specific term for the process of aligning pixel-space overlap to the latent grid to ensure smooth handoff between chained video chunks.
+- **IC-LoRA (Image Conditioning LoRA)**: A LoRA variant that embeds a specific visual concept (person, character, object) into the model for consistent reproduction.
+- **Two-Stage Pipeline**: First stage generates at low resolution, second stage upsamples spatially and/or temporally.
