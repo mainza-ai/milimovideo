@@ -194,7 +194,7 @@ def encode_video(
 
     _, height, width, _ = first_chunk.shape
 
-    container = av.open(output_path, mode="w")
+    container = av.open(output_path, mode="w", options={"movflags": "+faststart"})
     stream = container.add_stream("libx264", rate=int(fps))
     stream.width = width
     stream.height = height

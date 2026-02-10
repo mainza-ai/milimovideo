@@ -590,6 +590,12 @@ class SequenceGeometryEncoder(nn.Module):
         points_embed = None
         n_points, bs = points.shape[:2]
 
+        # Guard: if there are no points (e.g. text-only prompt with dummy geometric prompt),
+        # skip encoding entirely. MPS crashes on grid_sample with empty tensors.
+        if n_points == 0:
+            empty_embed = torch.zeros(0, bs, self.d_model, device=points.device, dtype=points.dtype)
+            return empty_embed, points_mask
+
         if self.points_direct_project is not None:
             proj = self.points_direct_project(points)
             assert points_embed is None
@@ -645,7 +651,8 @@ class SequenceGeometryEncoder(nn.Module):
             # We need to denormalize, and convert to [x, y, x, y]
             boxes_xyxy = box_cxcywh_to_xyxy(boxes)
             scale = torch.tensor([W, H, W, H], dtype=boxes_xyxy.dtype)
-            scale = scale.pin_memory().to(device=boxes_xyxy.device, non_blocking=True)
+            # pin_memory() is CUDA-only; use direct .to() for MPS compatibility
+            scale = scale.to(device=boxes_xyxy.device)
             scale = scale.view(1, 1, 4)
             boxes_xyxy = boxes_xyxy * scale
             sampled = torchvision.ops.roi_align(

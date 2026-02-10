@@ -1,12 +1,25 @@
 import { useEffect, useRef } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { GlobalAudioManager } from '../../utils/GlobalAudioManager';
-import { computeTimelineLayout } from '../../utils/timelineUtils';
+import { computeTimelineLayout, type TimelineClip } from '../../utils/timelineUtils';
 
 export const PlaybackEngine = () => {
     const project = useTimelineStore(state => state.project);
     const rafRef = useRef<number | null>(null);
     const lastTimeRef = useRef<number>(0);
+
+    // Cache the timeline layout and max duration to avoid recomputation every frame.
+    // Only recompute when project.shots changes (not every rAF tick).
+    const cachedLayoutRef = useRef<{ clips: TimelineClip[]; maxDuration: number }>({
+        clips: [],
+        maxDuration: 0,
+    });
+
+    useEffect(() => {
+        const clips = computeTimelineLayout(project);
+        const maxDuration = clips.reduce((acc, c) => Math.max(acc, c.end), 0);
+        cachedLayoutRef.current = { clips, maxDuration };
+    }, [project.shots, project.fps]);
 
     // 1. Sync Audio Assets with Global Manager
     useEffect(() => {
@@ -31,17 +44,8 @@ export const PlaybackEngine = () => {
 
                 nextTime = currentTime + dt;
 
-                // Check End of Project using centralized layout logic
-                // Avoid re-computing every frame if possible, but project changes rarely during playback?
-                // Actually project state changes on every seek/edit.
-                // Ideally this is memoized outside the loop, but loop closes over project state from getState().
-
-                // We can compute maxDuration from the current state efficiently.
-                // Or better, store it in the store? 
-                // For now, let's just compute it. It's fast (hundreds of items max).
-                // Check End of Project using centralized layout logic
-                const clips = computeTimelineLayout(project);
-                const maxDuration = clips.reduce((acc, c) => Math.max(acc, c.end), 0);
+                // Use cached layout for end-of-project check (no allocation per frame)
+                const { maxDuration } = cachedLayoutRef.current;
 
                 if (nextTime >= maxDuration + 0.1) {
                     useTimelineStore.getState().setIsPlaying(false);
@@ -72,13 +76,10 @@ export const PlaybackEngine = () => {
 
         return () => {
             if (rafRef.current) cancelAnimationFrame(rafRef.current);
-            // On unmount, usually we pause? 
-            // Or if we are just hot-reloading?
-            // Safer to pause all audio to avoid ghosts if this component dies.
+            // Pause all audio to avoid ghosts if this component dies.
             GlobalAudioManager.getInstance().stopAll();
         };
     }, []);
 
     return null; // Headless
 };
-

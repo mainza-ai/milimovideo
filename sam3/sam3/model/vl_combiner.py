@@ -150,13 +150,17 @@ class SAM3VLBackbone(nn.Module):
             # They'll be used later for output alignment
             text_to_encode += additional_text
 
-        sdpa_context = sdpa_kernel(
-            [
+        # MPS only supports MATH backend; CUDA can use all three
+        if device is not None and "mps" in str(device):
+            backends = [SDPBackend.MATH]
+        else:
+            backends = [
                 SDPBackend.MATH,
                 SDPBackend.EFFICIENT_ATTENTION,
                 SDPBackend.FLASH_ATTENTION,
             ]
-        )
+
+        sdpa_context = sdpa_kernel(backends)
 
         with sdpa_context:
             text_attention_mask, text_memory, text_embeds = self.language_backbone(

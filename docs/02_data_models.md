@@ -93,7 +93,7 @@ erDiagram
     Job {
         string id PK "job_XXXXXXXX"
         string project_id FK "nullable"
-        string type "generation"
+        string type "generation | inpaint"
         string status "pending | processing | completed | failed | cancelled"
         int progress "0-100"
         datetime created_at
@@ -197,6 +197,7 @@ classDiagram
     class InpaintRequest {
         +str image_path
         +str mask_path
+        +str text_mask
         +str points
         +str prompt
     }
@@ -220,7 +221,7 @@ classDiagram
 | `GenerateAdvancedRequest` | `POST /generate_advanced` | `generate_video_task()` → delegates to standard or chained | LTX-2 (or Flux 2 if `num_frames==1`) |
 | `GenerateImageRequest` | `POST /generate_image` | `generate_image_task()` | Flux 2 Klein 9B via `FluxInpainter` |
 | `ElementVisualizeRequest` | `POST /elements/{id}/visualize` | `generate_visual_task()` | Flux 2 Klein 9B via `FluxInpainter` |
-| `InpaintRequest` | `POST /edit/inpaint` | `process_inpaint()` | SAM 3 (mask) → Flux 2 (RePaint) |
+| `InpaintRequest` | `POST /edit/inpaint` | `process_inpaint()` | SAM 3 (mask via point/text) → Flux 2 (RePaint). Creates `Job` DB record for status polling. |
 
 ### Key Default Values
 
@@ -363,6 +364,7 @@ backend/
 │   │   ├── text_encoder/       # Qwen 3 (8B)
 │   │   ├── tokenizer/          # Qwen Tokenizer
 │   │   └── ip-adapter.safetensors
-│   └── sam3.pt                 # SAM 3 checkpoint
+│   └── sam3/                   # SAM 3 checkpoint directory
+│       └── sam3.pt             # SAM 3 model weights (~3.4GB)
 └── milimovideo.db             # SQLite database
 ```

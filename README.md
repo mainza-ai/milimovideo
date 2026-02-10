@@ -20,7 +20,7 @@
 Unlike simple "prompt-to-video" interfaces, Milimo is a full **Non-Linear Editor (NLE)** that combines:
 *   **LTX-2 19B** — Dual-stream transformer for cinematic video generation (text-to-video, image-to-video, keyframe interpolation).
 *   **Flux 2 Klein 9B** — High-fidelity image synthesis with IP-Adapter reference conditioning and RePaint inpainting.
-*   **SAM 3** — Zero-shot object segmentation via a standalone microservice.
+*   **SAM 3** — Text-prompted segmentation, click-to-segment, and video object tracking via standalone microservice.
 *   **Gemma 3** — Intelligent prompt enhancement and narrative direction.
 
 ## ✨ Key Features
@@ -51,8 +51,10 @@ A fully functional timeline built for the AI workflow.
 
 ### ✂️ In-Painting & Intelligent Editing
 Professional-grade retouching powered by the SAM 3 → Flux 2 pipeline.
-- **Flux RePaint Inpainting**: Select any frame, mask an area, and use natural language to add or remove elements. Uses iterative mask-blended denoising for seamless edits.
-- **SAM 3 Integration**: One-click object masking via standalone microservice (port 8001). No manual roto-scoping.
+- **Flux RePaint Inpainting**: Select any frame, mask an area, and use natural language to add or remove elements. Uses iterative mask-blended denoising with real-time SSE progress. Inpaint jobs are persisted to the database for reliable status polling via `/status/{job_id}`.
+- **SAM 3 Text-Prompted Segmentation**: Describe what to segment ("a person", "the sky") — SAM 3 finds all matching objects with bounding boxes and confidence scores.
+- **Click-to-Segment**: Click on objects in the video frame for instant SAM 3-powered mask generation. No manual roto-scoping.
+- **Video Object Tracking**: Select an object on one frame → SAM 3 tracks it across every frame of the video, bidirectionally. Full UI via `TrackingPanel` with session lifecycle management (start → prompt → propagate → navigate results).
 - **AE Hot-Swap**: Toggle between native AutoEncoder (supports reference conditioning) and diffusers AE fallback via the `enable_ae` flag.
 - **True CFG Mode**: Optional double-pass negative prompting for Flux 2 (2× inference time, disabled by default).
 
@@ -79,7 +81,7 @@ Milimo Video is built on a modern, robust stack:
 | **Backend** | FastAPI (Python 3.10+), SQLModel/SQLAlchemy (SQLite), SSE via `sse-starlette` |
 | **Video AI** | LTX-2 19B Dual-Stream Transformer — 3 pipelines + chained generation |
 | **Image AI** | Flux 2 Klein 9B (`FluxInpainter`) — IP-Adapter, True CFG, RePaint inpainting |
-| **Segmentation** | SAM 3 Microservice (port 8001) — `build_sam3_image_model` |
+| **Segmentation** | SAM 3 Microservice (port 8001) — `Sam3Processor` (text/box), `inst_interactive_predictor` (click), `Sam3VideoPredictor` (tracking, MPS/CUDA/CPU) |
 | **Prompt AI** | Gemma 3 (via LTX-2 text encoder) — cinematic prompt enhancement |
 | **Processing** | FFmpeg — thumbnails, frame extraction, overlap trimming, concat |
 
@@ -89,6 +91,8 @@ Designed for Apple Silicon with CUDA as primary target:
 - VAE decode CPU-offloaded on MPS (prevents black output)
 - Transformer forced to float32 dtype on MPS
 - Memory managed via `gc.collect()` + `torch.mps.empty_cache()`
+- SAM 3 Video Predictor: device auto-detection (CUDA → MPS → CPU), guarded `torch.cuda.*` calls
+- `PYTORCH_ENABLE_MPS_FALLBACK=1` for SAM 3 ops not yet on MPS
 
 ### Documentation
 See the [`docs/`](docs/) directory for comprehensive technical documentation:
@@ -157,18 +161,18 @@ Milimo uses a specialized environment for LTX-2 and Flux.
     └── ip-adapter.safetensors         # IP-Adapter weights (CLIP ViT-L projection)
     ```
 
-4.  **SAM 3 Setup (In-Painting Helper)**:
+4.  **SAM 3 Setup (Segmentation & Tracking)**:
     The SAM 3 service runs in a separate environment (`sam3_env`).
     1.  Create environment:
         ```bash
         conda create -n sam3_env python=3.12
         conda activate sam3_env
         pip install -e sam3
-        pip install fastapi uvicorn python-multipart psutil pycocotools
+        pip install fastapi uvicorn python-multipart psutil pycocotools huggingface_hub
         ```
     2.  **Download Model**:
-        Download `sam3.pt` from [ModelScope](https://www.modelscope.cn/models/facebook/sam3/files) or [HuggingFace](https://huggingface.co/facebook/sam3).
-    3.  Place it in: `backend/models/sam3.pt`
+        Download the SAM 3 checkpoint from [HuggingFace](https://huggingface.co/facebook/sam3) (auto-downloads on first start if missing).
+    3.  Place it in: `backend/models/sam3/sam3.pt`
 
 ### 3. Running the Studio
 
@@ -177,7 +181,7 @@ Milimo uses a specialized environment for LTX-2 and Flux.
 ./run_backend.sh
 ```
 
-**2. Start the SAM 3 Service** (port 8001, optional — for magic masking):
+**2. Start the SAM 3 Service** (port 8001, optional — for segmentation, masking & tracking):
 ```bash
 ./run_sam.sh
 ```
@@ -201,6 +205,8 @@ Visit **`http://localhost:5173`** to enter the studio.
 | **S / Cmd + S** | Save Project |
 | **Delete / Backspace** | Remove selected shot |
 | **Drag & Drop** | Import images/videos onto timeline |
+| **✏️ Edit icon** | Toggle masking/inpainting mode |
+| **⌖ Crosshair icon** | Toggle video object tracking mode |
 
 ---
 

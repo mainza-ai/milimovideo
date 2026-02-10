@@ -40,6 +40,7 @@ graph TD
     subgraph "Domain Managers"
         elem_mgr[managers/element_manager.py]
         inp_mgr[managers/inpainting_manager.py]
+        track_mgr[managers/tracking_manager.py]
         flux_wrapper[models/flux_wrapper.py]
         sb_mgr[storyboard/manager.py]
         script_parser[services/script_parser.py]
@@ -80,6 +81,8 @@ graph TD
     r_elements --> database
     r_elements --> elem_mgr
     r_elements --> inp_mgr
+    r_elements --> track_mgr
+    r_elements --> job_utils
 
     r_storyboard --> database
     r_storyboard --> script_parser
@@ -117,6 +120,10 @@ graph TD
     inp_mgr --> config
     inp_mgr --> flux_wrapper
     inp_mgr --> database
+    inp_mgr --> job_utils
+    inp_mgr --> events
+
+    track_mgr --> config
 
     %% Model Engine
     model_engine --> config
@@ -177,6 +184,8 @@ graph TD
     subgraph "Player Components"
         cinPlayer[CinematicPlayer.tsx]
         playbackEng[PlaybackEngine.tsx]
+        trackPanel[TrackingPanel.tsx]
+        maskCanvas[MaskingCanvas.tsx]
     end
 
     subgraph "Timeline Components"
@@ -237,6 +246,10 @@ graph TD
     %% Player
     cinPlayer --> store
     cinPlayer --> playbackEng
+    cinPlayer --> trackPanel
+    cinPlayer --> maskCanvas
+    trackPanel --> fe_config
+    maskCanvas --> fe_config
     playbackEng --> store
     playbackEng --> globalAudio
     playbackEng --> timelineUtils
@@ -303,7 +316,7 @@ graph TD
 | Max Fan-In (most imported) | `config.py` (12) | `timelineStore.ts` (20+) |
 | Max Fan-Out (most imports) | `tasks/video.py` (8) | `Layout.tsx` (9+) |
 | Circular Dependencies | None | None |
-| Singleton Instances | `ModelManager`, `FluxInpainter`, `ElementManager`, `InpaintingManager`, `ScriptParser`, `EventManager` | `GlobalAudioManager` |
+| Singleton Instances | `ModelManager`, `FluxInpainter`, `ElementManager`, `InpaintingManager`, `ScriptParser`, `EventManager` | `GlobalAudioManager` (Web Audio API) |
 
 ### Backend Singleton Inventory
 | Singleton | File | Scope | Description |
@@ -311,7 +324,8 @@ graph TD
 | `manager` | `model_engine.py` | Module-level | LTX-2 pipeline lifecycle. One pipeline at a time. |
 | `flux_inpainter` | `models/flux_wrapper.py` | Module-level | Flux 2 Klein 9B model. Persistent in memory. |
 | `element_manager` | `managers/element_manager.py` | Module-level | Element CRUD + trigger word injection |
-| `inpainting_manager` | `managers/inpainting_manager.py` | Module-level | SAM HTTP client + Flux inpaint delegation |
+| `inpainting_manager` | `managers/inpainting_manager.py` | Module-level | SAM HTTP client (point, text, detect) + Flux inpaint delegation |
+| `tracking_manager` | `managers/tracking_manager.py` | Module-level | SAM video tracking HTTP client (session lifecycle + propagation) |
 | `script_parser` | `services/script_parser.py` | Module-level | Screenplay text parser |
 | `event_manager` | `events.py` | Module-level | SSE broadcast to all connected clients |
 
@@ -341,8 +355,14 @@ graph TD
 | POST | `/elements/{project_id}` | elements | `create_element` |
 | DELETE | `/elements/{element_id}` | elements | `delete_element` |
 | POST | `/elements/{element_id}/visualize` | elements | `visualize_element` → Flux 2 |
-| POST | `/edit/segment` | elements | `segment_image` → SAM 3 |
+| POST | `/edit/segment` | elements | `segment_preview` → SAM 3 `/predict/mask` (point/box) |
+| POST | `/edit/detect` | elements | `detect_objects` → SAM 3 `/detect` (text) |
+| POST | `/edit/segment-text` | elements | `segment_text` → SAM 3 `/segment/text` |
 | POST | `/edit/inpaint` | elements | `inpaint_image` → SAM 3 + Flux 2 |
+| POST | `/track/start` | elements | `track_start` → SAM 3 video tracking |
+| POST | `/track/prompt` | elements | `track_add_prompt` → SAM 3 add prompt |
+| POST | `/track/propagate` | elements | `track_propagate` → SAM 3 propagation |
+| POST | `/track/stop` | elements | `track_stop` → SAM 3 close session |
 | POST | `/projects/{id}/storyboard/parse` | storyboard | `parse_script` |
 | POST | `/projects/{id}/storyboard/commit` | storyboard | `commit_storyboard` |
 | GET | `/projects/{id}/storyboard` | storyboard | `get_storyboard` |

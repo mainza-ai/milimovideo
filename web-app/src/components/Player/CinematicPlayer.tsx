@@ -1,9 +1,10 @@
 import { useRef, useEffect, useMemo, useState, memo, forwardRef } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
-import { Play, Pause, SkipBack, SkipForward, Maximize, Brush } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Maximize, Brush, Crosshair } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { MaskingCanvas } from '../Editor/MaskingCanvas';
+import { TrackingPanel } from '../Editor/TrackingPanel';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 // --- Sub-Components ---
@@ -13,6 +14,8 @@ import { computeTimelineLayout } from '../../utils/timelineUtils';
 const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: boolean; fps: number }>(({ shot, isPlaying, fps }, ref) => {
     // Internal ref for local logic
     const internalRef = useRef<HTMLVideoElement>(null);
+    const lastDriftCheckRef = useRef<number>(0);
+    const userInteractedRef = useRef<boolean>(false);
 
     // Merge forwarded ref with internal ref
     const setRef = (el: HTMLVideoElement | null) => {
@@ -20,6 +23,30 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
         if (typeof ref === 'function') ref(el);
         else if (ref) (ref as any).current = el;
     };
+
+    // Safari Autoplay Policy: Start muted, unmute on first user interaction
+    useEffect(() => {
+        const handleUserGesture = () => {
+            userInteractedRef.current = true;
+            if (internalRef.current && internalRef.current.muted) {
+                internalRef.current.muted = false;
+            }
+            // Clean up after first interaction
+            document.removeEventListener('click', handleUserGesture);
+            document.removeEventListener('keydown', handleUserGesture);
+            document.removeEventListener('touchstart', handleUserGesture);
+        };
+
+        document.addEventListener('click', handleUserGesture);
+        document.addEventListener('keydown', handleUserGesture);
+        document.addEventListener('touchstart', handleUserGesture);
+
+        return () => {
+            document.removeEventListener('click', handleUserGesture);
+            document.removeEventListener('keydown', handleUserGesture);
+            document.removeEventListener('touchstart', handleUserGesture);
+        };
+    }, []);
 
     // Auto-load
     useEffect(() => {
@@ -29,7 +56,15 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
             if (currentSrc !== newSrc && !currentSrc.endsWith(shot.videoUrl)) {
                 internalRef.current.src = newSrc;
                 internalRef.current.load();
-                if (isPlaying) internalRef.current.play().catch(() => { });
+                if (isPlaying) {
+                    internalRef.current.play().catch((e) => {
+                        // Safari: If autoplay blocked, ensure muted and retry
+                        if (e.name === 'NotAllowedError' && internalRef.current) {
+                            internalRef.current.muted = true;
+                            internalRef.current.play().catch(() => { });
+                        }
+                    });
+                }
             }
         }
     }, [shot?.id, shot?.videoUrl]);
@@ -37,14 +72,29 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
     // Sync Play State
     useEffect(() => {
         if (!internalRef.current) return;
-        if (isPlaying) internalRef.current.play().catch(() => { });
-        else internalRef.current.pause();
+        if (isPlaying) {
+            internalRef.current.play().catch((e) => {
+                // Safari: If autoplay is blocked, retry muted
+                if (e.name === 'NotAllowedError' && internalRef.current) {
+                    internalRef.current.muted = true;
+                    internalRef.current.play().catch(() => { });
+                }
+            });
+        } else {
+            internalRef.current.pause();
+        }
     }, [isPlaying]);
 
-    // Drift Correction (Headless Subscription)
+    // Drift Correction (Headless Subscription) — Throttled for Safari performance
     useEffect(() => {
         const unsub = useTimelineStore.subscribe((state) => {
             if (!internalRef.current || !shot) return;
+
+            // Throttle: Only check drift every 250ms to avoid overwhelming Safari's decoder
+            const now = performance.now();
+            if (now - lastDriftCheckRef.current < 250) return;
+            lastDriftCheckRef.current = now;
+
             const currentTime = state.currentTime;
 
             // Calculate local time
@@ -52,10 +102,16 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
             const trimIn = (shot.trimIn || 0) / fps;
             const localTime = (currentTime - startTime) + trimIn;
 
-            // Drift Check (0.25s tolerance)
-            if (Math.abs(internalRef.current.currentTime - localTime) > 0.25) {
-                // Determine if we need to seek
-                internalRef.current.currentTime = Math.max(0, localTime);
+            // Drift Check (0.3s tolerance — relaxed for Safari)
+            const drift = Math.abs(internalRef.current.currentTime - localTime);
+            if (drift > 0.3) {
+                const seekTo = Math.max(0, localTime);
+                // Use fastSeek when available (Safari supports it, cheaper than .currentTime)
+                if ('fastSeek' in internalRef.current && typeof internalRef.current.fastSeek === 'function') {
+                    internalRef.current.fastSeek(seekTo);
+                } else {
+                    internalRef.current.currentTime = seekTo;
+                }
             }
         });
         return unsub;
@@ -70,6 +126,7 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
             <img
                 src={shot.videoUrl.startsWith('http') ? shot.videoUrl : `http://localhost:8000${shot.videoUrl}`}
                 className="w-full h-full object-contain"
+                crossOrigin="anonymous"
                 alt="Generated Shot"
             />
         );
@@ -79,9 +136,11 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
         <video
             ref={setRef}
             className="w-full h-full object-contain"
+            crossOrigin="anonymous"
             playsInline
             loop={false}
-            muted={false}
+            muted={true}
+            preload="metadata"
             onClick={() => useTimelineStore.getState().setIsPlaying(!isPlaying)}
         />
     );
@@ -159,7 +218,7 @@ const LoadingOverlay = memo(({ isGenerating, progress, etaSeconds, width, height
 });
 
 // 4. Controls Bar
-const ControlsBar = memo(({ isPlaying, isEditing, onTogglePlay, onToggleEdit }: any) => (
+const ControlsBar = memo(({ isPlaying, isEditing, isTracking, onTogglePlay, onToggleEdit, onToggleTracking }: any) => (
     <motion.div
         initial={{ y: 50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -185,9 +244,17 @@ const ControlsBar = memo(({ isPlaying, isEditing, onTogglePlay, onToggleEdit }: 
         <button
             onClick={onToggleEdit}
             className={`transition-colors ${isEditing ? 'text-milimo-500' : 'text-white/50 hover:text-white'}`}
-            title="Toggle Edit Mode"
+            title="Toggle Edit Mode (Inpainting)"
         >
             <Brush size={18} />
+        </button>
+
+        <button
+            onClick={onToggleTracking}
+            className={`transition-colors ${isTracking ? 'text-cyan-400' : 'text-white/50 hover:text-white'}`}
+            title="Toggle Object Tracking"
+        >
+            <Crosshair size={18} />
         </button>
 
         <button className="text-white/50 hover:text-white transition-colors">
@@ -209,6 +276,9 @@ export const CinematicPlayer = () => {
         seed: state.project.seed,
         shots: state.project.shots
     })));
+
+    // Tracking mode state (local — not in store since it's view-only)
+    const [isTracking, setIsTracking] = useState(false);
 
     // 2. Compute Derived Schedule (Memoized)
     // This creates a flat list of visible regions for all tracks, prioritized.
@@ -252,7 +322,12 @@ export const CinematicPlayer = () => {
             // Update state only if changed
             setActiveShot((prev: any) => {
                 if (!prev && !found) return null;
-                if (prev && found && prev.id === found.id) return prev; // Stable reference
+                if (prev && found
+                    && prev.id === found.id
+                    && prev.videoUrl === found.videoUrl
+                    && prev.thumbnailUrl === found.thumbnailUrl
+                    && prev.isGenerating === found.isGenerating
+                ) return prev; // Stable reference — only skip if content matches too
                 return found;
             });
         });
@@ -317,6 +392,7 @@ export const CinematicPlayer = () => {
                     <MaskingCanvas
                         width={resolutionW}
                         height={resolutionH}
+                        videoRef={videoRef}
                         onCancel={() => setEditing(false)}
                         onSave={async (maskDataUrl) => {
                             if (!videoRef.current) return;
@@ -337,13 +413,26 @@ export const CinematicPlayer = () => {
                         }}
                     />
                 )}
+
+                {/* Tracking Overlay */}
+                {isTracking && activeShot && activeShot.videoUrl && (
+                    <TrackingPanel
+                        videoPath={activeShot.videoUrl}
+                        videoRef={videoRef}
+                        containerWidth={resolutionW}
+                        containerHeight={resolutionH}
+                        onClose={() => setIsTracking(false)}
+                    />
+                )}
             </div>
 
             <ControlsBar
                 isPlaying={isPlaying}
                 isEditing={isEditing}
+                isTracking={isTracking}
                 onTogglePlay={() => setIsPlaying(!isPlaying)}
-                onToggleEdit={() => setEditing(!isEditing)}
+                onToggleEdit={() => { setEditing(!isEditing); if (!isEditing) setIsTracking(false); }}
+                onToggleTracking={() => { setIsTracking(!isTracking); if (!isTracking) setEditing(false); }}
             />
         </div>
     );

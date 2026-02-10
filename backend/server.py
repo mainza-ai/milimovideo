@@ -1,9 +1,11 @@
 import sys
 import os
 import logging
+import mimetypes
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -87,12 +89,99 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
 )
 
 # Include Routers (Must be before static mounts to avoid shadowing)
 app.include_router(api_router)
 
-# Static Mounts - CRITICAL: Preserve these for external compatibility
+# --- Safari-Compatible Media Serving (Range Requests) ---
+# Safari REQUIRES HTTP Range requests (206 Partial Content) for <video>/<audio> playback.
+# FastAPI's StaticFiles doesn't always handle Range headers properly for media.
+# This endpoint intercepts media file requests and serves them with full Range support.
+MEDIA_EXTENSIONS = {'.mp4', '.webm', '.mp3', '.wav', '.ogg', '.m4a', '.aac'}
+MEDIA_DIRS = {
+    "/projects": config.PROJECTS_DIR,
+    "/uploads": legacy_upload_dir,
+    "/generated": legacy_generated_dir,
+}
+
+@app.get("/projects/{file_path:path}")
+@app.get("/uploads/{file_path:path}")
+@app.get("/generated/{file_path:path}")
+async def serve_media(request: Request, file_path: str):
+    """Serve media files with HTTP Range request support for Safari."""
+    # Determine which base directory to use from the route
+    route_prefix = request.url.path.split('/')[1]  # 'projects', 'uploads', or 'generated'
+    base_dir = MEDIA_DIRS.get(f"/{route_prefix}")
+    if not base_dir:
+        return Response(status_code=404)
+
+    full_path = os.path.join(base_dir, file_path)
+    full_path = os.path.normpath(full_path)
+
+    # Security: Prevent path traversal
+    if not full_path.startswith(os.path.normpath(base_dir)):
+        return Response(status_code=403)
+
+    if not os.path.isfile(full_path):
+        return Response(status_code=404)
+
+    # Determine content type
+    content_type, _ = mimetypes.guess_type(full_path)
+    if not content_type:
+        content_type = "application/octet-stream"
+
+    file_size = os.path.getsize(full_path)
+    range_header = request.headers.get("range")
+
+    if range_header:
+        # Parse Range header: "bytes=start-end"
+        range_spec = range_header.strip().lower()
+        if range_spec.startswith("bytes="):
+            range_spec = range_spec[6:]
+            parts = range_spec.split("-")
+            start = int(parts[0]) if parts[0] else 0
+            end = int(parts[1]) if parts[1] else file_size - 1
+
+            # Clamp to valid range
+            start = max(0, start)
+            end = min(end, file_size - 1)
+            content_length = end - start + 1
+
+            with open(full_path, "rb") as f:
+                f.seek(start)
+                data = f.read(content_length)
+
+            return Response(
+                content=data,
+                status_code=206,
+                headers={
+                    "Content-Type": content_type,
+                    "Content-Range": f"bytes {start}-{end}/{file_size}",
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": str(content_length),
+                    "Cache-Control": "public, max-age=3600",
+                },
+            )
+
+    # No Range header — serve full file with Accept-Ranges hint
+    with open(full_path, "rb") as f:
+        data = f.read()
+
+    return Response(
+        content=data,
+        status_code=200,
+        headers={
+            "Content-Type": content_type,
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+            "Cache-Control": "public, max-age=3600",
+        },
+    )
+
+# Static Mounts - Fallback for non-media files (HTML, images, etc.)
+# Note: The media endpoint above takes priority for matching paths due to route precedence.
 app.mount("/projects", StaticFiles(directory=config.PROJECTS_DIR), name="projects")
 app.mount("/uploads", StaticFiles(directory=legacy_upload_dir), name="uploads")
 app.mount("/generated", StaticFiles(directory=legacy_generated_dir), name="generated") # Legacy

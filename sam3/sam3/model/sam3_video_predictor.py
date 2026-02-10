@@ -35,9 +35,22 @@ class Sam3VideoPredictor:
         async_loading_frames=False,
         video_loader_type="cv2",
         apply_temporal_disambiguation: bool = True,
+        device: Optional[str] = None,
     ):
         self.async_loading_frames = async_loading_frames
         self.video_loader_type = video_loader_type
+
+        # Resolve device: explicit param > CUDA > MPS > CPU
+        if device is None:
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = "cpu"
+        self.device = torch.device(device)
+        logger.info(f"Sam3VideoPredictor using device: {self.device}")
+
         from sam3.model_builder import build_sam3_video_model
 
         self.model = (
@@ -49,7 +62,7 @@ class Sam3VideoPredictor:
                 strict_state_dict_loading=strict_state_dict_loading,
                 apply_temporal_disambiguation=apply_temporal_disambiguation,
             )
-            .cuda()
+            .to(self.device)
             .eval()
         )
 
@@ -266,21 +279,33 @@ class Sam3VideoPredictor:
             f"'{session_id}' ({session['state']['num_frames']} frames)"
             for session_id, session in self._ALL_INFERENCE_STATES.items()
         ]
+        # GPU memory stats only available on CUDA
+        if torch.cuda.is_available():
+            mem_str = (
+                f", GPU memory: "
+                f"{torch.cuda.memory_allocated() // 1024**2} MiB used and "
+                f"{torch.cuda.memory_reserved() // 1024**2} MiB reserved"
+                f" (max over time: {torch.cuda.max_memory_allocated() // 1024**2} MiB used "
+                f"and {torch.cuda.max_memory_reserved() // 1024**2} MiB reserved)"
+            )
+        else:
+            mem_str = f", device: {getattr(self, 'device', 'unknown')}"
         session_stats_str = (
-            f"live sessions: [{', '.join(live_session_strs)}], GPU memory: "
-            f"{torch.cuda.memory_allocated() // 1024**2} MiB used and "
-            f"{torch.cuda.memory_reserved() // 1024**2} MiB reserved"
-            f" (max over time: {torch.cuda.max_memory_allocated() // 1024**2} MiB used "
-            f"and {torch.cuda.max_memory_reserved() // 1024**2} MiB reserved)"
+            f"live sessions: [{', '.join(live_session_strs)}]{mem_str}"
         )
         return session_stats_str
 
     def _get_torch_and_gpu_properties(self):
         """Get a string for PyTorch and GPU properties (for logging and debugging)."""
-        torch_and_gpu_str = (
-            f"torch: {torch.__version__} with CUDA arch {torch.cuda.get_arch_list()}, "
-            f"GPU device: {torch.cuda.get_device_properties(torch.cuda.current_device())}"
-        )
+        if torch.cuda.is_available():
+            torch_and_gpu_str = (
+                f"torch: {torch.__version__} with CUDA arch {torch.cuda.get_arch_list()}, "
+                f"GPU device: {torch.cuda.get_device_properties(torch.cuda.current_device())}"
+            )
+        else:
+            torch_and_gpu_str = (
+                f"torch: {torch.__version__}, device: {getattr(self, 'device', 'unknown')}"
+            )
         return torch_and_gpu_str
 
     def shutdown(self):

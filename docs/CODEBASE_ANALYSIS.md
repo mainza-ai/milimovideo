@@ -15,7 +15,7 @@ The codebase spans **~55 source files** across two primary subsystems: a 24-file
 |---|---|
 | **[01_system_architecture.md](./01_system_architecture.md)** | Architecture diagrams, component overview, subsystem interactions, and the SAM 3 microservice |
 | **[02_data_models.md](./02_data_models.md)** | ER diagrams for all 6 database tables, Pydantic schemas, TypeScript types, and storage layout |
-| **[03_ai_pipelines.md](./03_ai_pipelines.md)** | LTX-2 (3 pipeline types + chained gen), Flux 2 (FluxInpainter with IP-Adapter, True CFG, RePaint), SAM 3 segmentation |
+| **[03_ai_pipelines.md](./03_ai_pipelines.md)** | LTX-2 (3 pipeline types + chained gen), Flux 2 (FluxInpainter with IP-Adapter, True CFG, RePaint), SAM 3 segmentation & tracking |
 | **[04_frontend_state.md](./04_frontend_state.md)** | Zustand store architecture — 7 slices, 30+ components, optimization strategies |
 | **[05_execution_flow.md](./05_execution_flow.md)** | Sequence diagrams for generation, SSE events, startup, storyboard, chained gen, and inpainting flows |
 | **[06_file_dependency.md](./06_file_dependency.md)** | File dependency graphs for backend and frontend with complete import maps |
@@ -25,7 +25,7 @@ The codebase spans **~55 source files** across two primary subsystems: a 24-file
 |---|---|
 | **[flux2-bible.md](./flux2-bible.md)** | FLUX.2 repository deep-dive: model architecture, sampling, and full Milimo integration analysis |
 | **[ltx2-bible.md](./ltx2-bible.md)** | LTX-2 repository deep-dive: dual-stream transformer, pipeline types, and chained gen with Quantum Alignment |
-| **[sam3-bible.md](./sam3-bible.md)** | SAM 3 repository deep-dive: microservice architecture, endpoint specs, and inpainting workflow |
+| **[sam3-bible.md](./sam3-bible.md)** | SAM 3 deep-dive: Sam3Processor, text/point/box segmentation, video tracking, microservice endpoints |
 
 ## Key Architectural Decisions
 
@@ -46,7 +46,7 @@ Real-time progress uses SSE (`EventManager` → `ServerSlice.handleServerEvent`)
 Scripts are parsed via `ScriptParser` (regex-based screenwriting format) into `Scene` → `Shot` hierarchies, which then map to timeline clips for generation.
 
 ### 6. SAM 3 as Isolated Microservice
-SAM 3 runs on port 8001 as a standalone FastAPI server (`sam3/start_sam_server.py`). The main backend communicates with it via HTTP POST, keeping memory footprints separate and allowing independent restarts.
+SAM 3 runs on port 8001 as a standalone FastAPI server (`sam3/start_sam_server.py`). It supports text-prompted segmentation (`Sam3Processor`), click-to-segment (`inst_interactive_predictor`), and video object tracking (`Sam3VideoPredictor`, lazy-loaded with MPS/CUDA/CPU device auto-detection). The main backend communicates with it via HTTP POST through `InpaintingManager` and `TrackingManager`. Inpaint jobs are persisted as `Job` DB records for status polling via `/status/{job_id}`.
 
 ### 7. MPS-First Development
 The codebase is designed to run on Apple Silicon (MPS) with CUDA as the primary target. Both LTX-2 and Flux 2 wrappers include device-specific hacks:
@@ -67,7 +67,7 @@ The codebase is designed to run on Apple Silicon (MPS) with CUDA as the primary 
 | **Real-time** | Server-Sent Events (SSE via `sse-starlette`) |
 | **Video AI** | LTX-2 (19B Dual-Stream Transformer, three pipelines + chained gen) |
 | **Image AI** | Flux 2 Klein 9B (FluxInpainter with IP-Adapter, True CFG, RePaint inpainting) |
-| **Segmentation AI** | SAM 3 (microservice on port 8001, `inst_interactive_predictor`) |
+| **Segmentation AI** | SAM 3 (microservice on port 8001, `Sam3Processor` + `inst_interactive_predictor` + `Sam3VideoPredictor` with MPS/CUDA/CPU device support) |
 | **Video Processing** | FFmpeg (thumbnails, frame extraction, encoding, overlap trimming, concat) |
 | **Animation** | Framer Motion |
 
@@ -84,6 +84,7 @@ routes/assets.py       routes/elements.py     routes/storyboard.py
 tasks/video.py         tasks/chained.py       tasks/image.py
 managers/element_manager.py
 managers/inpainting_manager.py
+managers/tracking_manager.py
 services/script_parser.py
 storyboard/manager.py
 models/flux_wrapper.py
@@ -91,8 +92,8 @@ models/flux_wrapper.py
 
 ### SAM 3 Microservice (`sam3/`) — 1 entry point
 ```
-start_sam_server.py    # FastAPI on port 8001
-sam3/                  # SAM 3 package (build_sam3_image_model)
+start_sam_server.py    # FastAPI on port 8001 (8 endpoints: health, predict, detect, segment, track)
+sam3/                  # SAM 3 package (build_sam3_image_model, Sam3Processor, Sam3VideoPredictor)
 ```
 
 ### Frontend (`web-app/src/`) — 30+ source files
@@ -101,6 +102,8 @@ App.tsx                config.ts              main.tsx
 components/Layout.tsx  components/Controls.tsx
 components/Player/CinematicPlayer.tsx
 components/Player/PlaybackEngine.tsx
+components/Editor/TrackingPanel.tsx
+components/Editor/MaskingCanvas.tsx
 components/Timeline/VisualTimeline.tsx
 components/Timeline/TimelineTrack.tsx
 components/Timeline/TimelineClip.tsx

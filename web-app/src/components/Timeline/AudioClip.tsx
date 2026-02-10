@@ -48,16 +48,15 @@ export const AudioClip = ({ clip, zoom, color = '#a3e635' }: Props) => {
         const initWaveSurfer = () => {
             if (!containerRef.current || wavesurferRef.current || hasError.current) return;
 
-            // We initially just want it to load. Logic for width comes after load?
-            // actually we can settle on 100% width of container?
-            // No, the container is the inner div. 
-
             const url = clip.shot.videoUrl.startsWith('http')
                 ? clip.shot.videoUrl
                 : `http://localhost:8000${clip.shot.videoUrl}`;
 
+            // Detect Safari for backend selection
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
             try {
-                wavesurferRef.current = WaveSurfer.create({
+                const wsOptions: any = {
                     container: containerRef.current,
                     waveColor: color,
                     progressColor: color,
@@ -66,45 +65,47 @@ export const AudioClip = ({ clip, zoom, color = '#a3e635' }: Props) => {
                     barGap: 1,
                     barRadius: 2,
                     height: 48,
-                    fillParent: true, // It fills the container dimensions
+                    fillParent: true,
                     interact: false,
                     url: url,
                     fetchParams: {
                         mode: 'cors',
-                    }
-                });
+                    },
+                };
+
+                // Safari: Use MediaElement backend for better compatibility
+                if (isSafari) {
+                    wsOptions.backend = 'MediaElement';
+                    wsOptions.mediaControls = false;
+                }
+
+                wavesurferRef.current = WaveSurfer.create(wsOptions);
 
                 wavesurferRef.current.on('error', (err) => {
                     console.warn("WaveSurfer error", err);
                     hasError.current = true;
                 });
 
-                // When ready, we can check duration and set width of container?
+                // When ready, we can check duration and set width of container
                 wavesurferRef.current.on('ready', (duration) => {
-                    // Update container width to match duration * zoom
                     if (containerRef.current) {
                         const fullWidth = duration * zoom;
                         containerRef.current.style.width = `${fullWidth}px`;
-                        // And we need to re-render wavesurfer to fill the new width?
-                        // verify logic.
                     }
                 });
-
-                // OR we can rely on React render cycle if we store duration?
             } catch (e) {
                 console.error("Failed to create WaveSurfer", e);
                 hasError.current = true;
             }
         };
 
-        // Actually, let's just init immediately if we can, or simplified check.
         requestAnimationFrame(initWaveSurfer);
 
         return () => {
             wavesurferRef.current?.destroy();
             wavesurferRef.current = null;
         };
-    }, [clip.id, clip.shot?.videoUrl, color]); // Removed zoom dependency to prevent re-init on zoom
+    }, [clip.id, clip.shot?.videoUrl, color]);
 
 
     // Update width and position whenever zoom or trim changes

@@ -23,16 +23,25 @@ export const createServerSlice: StateCreator<TimelineState, [], [], ServerSlice>
         } else if (type === 'complete') {
             const shot = project.shots.find(s => s.lastJobId === data.job_id);
             if (shot) {
-                updateShot(shot.id, {
+                const isInpaint = data.type === 'inpaint';
+                const updates: any = {
                     isGenerating: false,
                     progress: 100,
-                    videoUrl: getAssetUrl(data.url),
-                    thumbnailUrl: getAssetUrl(data.thumbnail_url),
-                    numFrames: data.actual_frames || shot.numFrames,
                     statusMessage: "Complete"
-                });
+                };
+                // Video gen produces a video URL; inpaint produces only a thumbnail/image
+                if (data.url) {
+                    updates.videoUrl = getAssetUrl(data.url);
+                }
+                if (data.thumbnail_url) {
+                    updates.thumbnailUrl = getAssetUrl(data.thumbnail_url);
+                }
+                if (data.actual_frames) {
+                    updates.numFrames = data.actual_frames;
+                }
+                updateShot(shot.id, updates);
                 triggerAssetRefresh();
-                addToast("Generation Complete", "success");
+                addToast(isInpaint ? "In-Painting Complete" : "Generation Complete", "success");
             }
         } else if (type === 'error') {
             const shot = project.shots.find(s => s.lastJobId === data.job_id);

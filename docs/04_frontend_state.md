@@ -116,7 +116,7 @@ graph TD
 | Event Type | Action |
 |---|---|
 | `progress` | Update shot `progress`, `statusMessage`, `etaSeconds`, `enhancedPromptResult` |
-| `complete` | Set shot `isGenerating=false`, `videoUrl`, `thumbnailUrl`, `progress=100`; trigger `assetRefresh` |
+| `complete` | Set shot `isGenerating=false`, `videoUrl`, `thumbnailUrl`, `progress=100`; trigger `assetRefresh`. Handles both video/image generation and inpainting completions (inpaint events include `type: "inpaint"` and `asset_id`). |
 | `error` | Set shot `isGenerating=false`, show toast |
 | `cancelled` | Set shot `isGenerating=false`, `status="pending"` |
 
@@ -234,25 +234,37 @@ During clip drag operations, `transientDuration` is updated instead of the full 
 ### D. Headless Subscriptions
 `PlaybackEngine` and `VideoSurface` use `useTimelineStore.subscribe()` for non-rendering updates:
 ```typescript
-// VideoSurface: Drift correction without re-renders
+// VideoSurface: Throttled drift correction (Safari-optimized)
 useEffect(() => {
     const unsub = useTimelineStore.subscribe((state) => {
-        // Direct DOM manipulation — no React re-render
-        videoElement.currentTime = computedLocalTime;
+        // Throttle to 250ms — Safari's video decoder can't handle 60fps seeks
+        const now = performance.now();
+        if (now - lastDriftCheckRef.current < 250) return;
+        lastDriftCheckRef.current = now;
+
+        // Drift check with 0.3s tolerance
+        if (drift > 0.3) {
+            // Use fastSeek() on Safari (cheaper than .currentTime)
+            if ('fastSeek' in video) video.fastSeek(seekTo);
+            else video.currentTime = seekTo;
+        }
     });
     return unsub;
 }, []);
 ```
+
+`PlaybackEngine` caches `computeTimelineLayout` in a `useRef`, only recomputing when `project.shots` changes — not every animation frame.
 
 ### E. GPU-Accelerated Layout
 `TimelineClip.tsx` uses `transform: translateX()` for clip positioning (GPU compositing layer) instead of `left` which triggers layout recalculation.
 
 ### F. Memo'd Sub-Components
 `CinematicPlayer` is decomposed into `memo`'d components to prevent cascading re-renders:
-- `VideoSurface` — only re-renders on `shot`/`isPlaying`/`fps` changes
+- `VideoSurface` — only re-renders on `shot`/`isPlaying`/`fps` changes. Starts `muted={true}` for Safari autoplay policy; auto-unmutes on first user gesture via document-level event listeners.
 - `PlayerHUD` — only re-renders on resolution/fps/seed changes
 - `LoadingOverlay` — only re-renders on generation state changes
-- `ControlsBar` — only re-renders on play/edit state changes
+- `ControlsBar` — only re-renders on play/edit/tracking state changes. Includes Crosshair icon for tracking mode toggle.
+- `TrackingPanel` — self-contained session state management (idle/starting/prompting/propagating/done/error), not connected to global store
 
 ## 6. Data Flow: SSE → Store
 

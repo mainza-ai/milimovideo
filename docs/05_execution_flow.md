@@ -72,7 +72,7 @@ sequenceDiagram
 
     LTX-->>Worker: Return video tensor
 
-    Worker->>FFmpeg: encode_video(tensor, output_path)
+    Worker->>FFmpeg: encode_video(tensor, output_path) — libx264 + yuv420p + movflags faststart
     Worker->>FFmpeg: generate_thumbnail(video_path)
     Worker->>Utils: update_job_db(job_id, "completed", output_path, thumbnail_path)
     Worker->>Utils: update_shot_db(shot_id, {video_url, thumbnail_url, status: "completed"})
@@ -138,18 +138,34 @@ sequenceDiagram
     participant SAM as SAM 3 :8001
     participant Flux as FluxInpainter
 
-    UI->>API: POST /edit/segment {image_path, points}
-    API->>InpMgr: get_mask_from_sam(image_path, points)
-    InpMgr->>SAM: POST /predict/mask (multipart: image + points JSON)
-    
-    Note over SAM: predictor.set_image() → predict()
-    SAM-->>InpMgr: Binary PNG mask (StreamingResponse)
+    Note over SAM: Sam3Processor + inst_interactive_predictor
+
+    alt Point-Based Masking
+        UI->>API: POST /edit/segment {image, points}
+        API->>InpMgr: get_mask_from_sam(image_path, points)
+        InpMgr->>SAM: POST /predict/mask (multipart: image + points JSON)
+        Note over SAM: inst_interactive_predictor.predict()
+    else Text-Based Masking
+        UI->>API: POST /edit/segment-text (multipart: image + text + confidence)
+        API->>SAM: Direct proxy: POST /segment/text
+        Note over SAM: Sam3Processor.set_text_prompt()
+    else Multi-Object Detection
+        UI->>API: POST /edit/detect (multipart: image + text + confidence)
+        API->>SAM: Direct proxy: POST /detect
+        Note over SAM: Sam3Processor → masks + bboxes + scores
+    end
+
+    SAM-->>InpMgr: Mask data (PNG or JSON)
     InpMgr->>InpMgr: Save mask as {base}_mask_{uuid6}.png
     InpMgr-->>API: mask_path
     API-->>UI: {mask_path}
 
     UI->>API: POST /edit/inpaint {image_path, mask_path, prompt}
-    API->>InpMgr: process_inpaint(job_id, image_path, mask_path, prompt)
+    API->>API: Create Job DB record (type="inpaint", status="pending")
+    API->>API: Register active_jobs[job_id]
+    API->>InpMgr: BackgroundTasks.add_task(process_inpaint, job_id, ...)
+    API-->>UI: {status: "queued", job_id, mask_path}
+
     InpMgr->>Flux: inpaint(image_RGB, mask_L, prompt, guidance=2.0, enable_ae=True)
     
     Note over Flux: RePaint loop
@@ -160,13 +176,17 @@ sequenceDiagram
         Flux->>Flux: x_pred = x + (t_prev - t_curr) * pred
         Flux->>Flux: x_known = t_prev * noise + (1-t_prev) * x_orig
         Flux->>Flux: x = mask * x_pred + (1-mask) * x_known
+        Flux-->>InpMgr: step_callback(step, total)
+        InpMgr->>InpMgr: update_job_progress(job_id, progress)
+        InpMgr-->>UI: SSE progress event
     end
     Flux->>Flux: Decode latents → image (CPU offload on MPS)
     
     Flux-->>InpMgr: PIL.Image result
     InpMgr->>InpMgr: Save to projects/{id}/generated/inpaint_{job_id}.jpg
-    InpMgr-->>API: output_path
-    API-->>UI: {output_path}
+    InpMgr->>InpMgr: Create Asset DB record
+    InpMgr->>InpMgr: update_job_db(job_id, "completed", output_path, thumbnail_path)
+    InpMgr-->>UI: SSE {type: "complete", job_id, thumbnail_url, type: "inpaint", asset_id}
 ```
 
 ## 4. Chained Generation Sequence
@@ -381,22 +401,28 @@ flowchart TD
     GET --> PLAYING{isPlaying?}
     
     PLAYING -->|Yes| DT[Calculate delta time]
-    DT --> ADVANCE[nextTime = currentTime + dt]
-    ADVANCE --> LAYOUT[computeTimelineLayout]
-    LAYOUT --> MAXDUR[Get maxDuration from clips]
-    MAXDUR --> END_CHECK{nextTime >= maxDuration?}
+    DT --> ADVANCE["nextTime = currentTime + dt"]
+    ADVANCE --> CACHED["Use cached layout from useRef"]
+    CACHED --> MAXDUR["Get maxDuration (precomputed)"]
+    MAXDUR --> END_CHECK{"nextTime >= maxDuration?"}
     END_CHECK -->|Yes| STOP[setIsPlaying false]
     END_CHECK -->|No| UPDATE[setCurrentTime nextTime]
     
     PLAYING -->|No| RESET[Reset lastTimeRef]
 
-    UPDATE --> AUDIO[GlobalAudioManager.tick]
+    UPDATE --> AUDIO["GlobalAudioManager.tick (Web Audio API)"]
     RESET --> AUDIO
     AUDIO --> MUTE{Track muted?}
-    MUTE -->|Yes| VOL0[Set volume 0]
-    MUTE -->|No| VOL1[Set volume 1]
-    VOL0 --> SYNC[Sync audio position]
+    MUTE -->|Yes| VOL0["GainNode.gain = 0"]
+    MUTE -->|No| VOL1["GainNode.gain = 1"]
+    VOL0 --> SYNC["Drift check (0.3s tolerance)"]
     VOL1 --> SYNC
-    SYNC --> RAF
+    SYNC --> RESYNC{"Drift > 0.3s?"}
+    RESYNC -->|Yes| RESTART["Stop + restart AudioBufferSourceNode at offset"]
+    RESYNC -->|No| NOP[Continue playback]
+    RESTART --> RAF
+    NOP --> RAF
     STOP --> RAF
 ```
+
+> **Note:** `computeTimelineLayout` is cached in a `useRef` and only recomputed when `project.shots` changes, not every animation frame. Audio uses `AudioContext` + `AudioBufferSourceNode` (Web Audio API) instead of `HTMLAudioElement` for reliable Safari playback.

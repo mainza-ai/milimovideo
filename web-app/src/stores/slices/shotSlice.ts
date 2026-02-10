@@ -323,10 +323,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
 
             if (!inpaintRes.ok) throw new Error("Inpaint failed");
 
-            await inpaintRes.json();
-            // Backend returns { status: "queued", job_id: ... }
-
-            addToast("In-painting queued successfully", "success");
+            // Fire-and-forget: SSE handles progress + completion via handleServerEvent
+            addToast("In-painting started", "success");
 
         } catch (e) {
             console.error("Inpaint error", e);

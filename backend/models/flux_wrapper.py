@@ -644,7 +644,7 @@ class FluxInpainter:
         if torch.backends.mps.is_available():
             torch.mps.empty_cache()
         logger.info("Flux Model Unloaded")
-    def inpaint(self, image: Image.Image, mask: Image.Image, prompt: str, num_inference_steps: int = 25, guidance: float = 2.0, strength: float = 0.85, seed: int = None, enable_ae: bool = True, enable_true_cfg: bool = False, negative_prompt: str = None) -> Image.Image:
+    def inpaint(self, image: Image.Image, mask: Image.Image, prompt: str, num_inference_steps: int = 25, guidance: float = 2.0, strength: float = 0.85, seed: int = None, enable_ae: bool = True, enable_true_cfg: bool = False, negative_prompt: str = None, step_callback=None) -> Image.Image:
         """
         Public inpainting method.
         strength: How much to destroy original image (0.0 = keep original, 1.0 = full destroy)
@@ -785,6 +785,7 @@ class FluxInpainter:
                     guidance=fixed_internal_guidance,
                     orig_image=x_orig,
                     mask=mask_flat,
+                    callback=step_callback,
                     ctx_uncond=ctx_uncond,
                     ctx_uncond_ids=ctx_uncond_ids,
                     cfg_scale=user_cfg_scale

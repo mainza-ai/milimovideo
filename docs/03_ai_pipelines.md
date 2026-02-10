@@ -55,6 +55,8 @@ classDiagram
     class InpaintingManager {
         +str sam_url
         +get_mask_from_sam(image_path, points) str
+        +get_mask_from_text(image_path, text, confidence) str
+        +detect_objects(image_path, text, confidence) dict
         +process_inpaint(job_id, image_path, mask_path, prompt) str
     }
 
@@ -304,22 +306,35 @@ Used by `InpaintingManager.process_inpaint()`:
 | Memory fragmentation | `gc.collect()` + `torch.mps.empty_cache()` before denoise | `generate_image()` |
 | Reference image OOM | Cap to 3 refs, max 768² pixels on MPS | `get_reference_embeds()` |
 
-## 4. SAM 3 Segmentation
+## 4. SAM 3 Segmentation & Tracking
 
 ```mermaid
 flowchart TD
-    UI[User Click Points] --> PROXY["Route /edit/segment"]
-    PROXY --> INP_MGR["InpaintingManager.get_mask_from_sam()"]
-    INP_MGR -->|"POST multipart"| SAM["SAM 3 Microservice :8001"]
-    
-    subgraph SAM_LOGIC["SAM 3 Processing"]
-        SET[predictor.set_image — encode features]
-        SET --> PREDICT["predictor.predict(points, labels)"]
-        PREDICT --> BEST["Select masks[0] → binary PNG"]
+    subgraph Frontend["Editor UI"]
+        CLICK[Click on frame] --> PPOINT["POST /predict/mask"]
+        TEXT["Type description"] --> PDETECT["POST /detect"]
     end
-    
-    SAM --> MASK[Return Segmentation Mask PNG]
-    MASK --> SAVE_M["Save mask as {base}_mask_{uuid6}.png"]
+
+    subgraph Backend["Milimo Backend :8000"]
+        PPOINT --> INP_MGR["InpaintingManager.get_mask_from_sam()"]
+        PDETECT --> INP_MGR2["InpaintingManager.detect_objects()"]
+        TEXT_MASK["Text Mask Request"] --> INP_MGR3["InpaintingManager.get_mask_from_text()"]
+    end
+
+    subgraph SAM["SAM 3 Microservice :8001"]
+        INP_MGR -->|"POST multipart"| POINT_EP["/predict/mask"]
+        INP_MGR2 -->|"POST multipart"| DETECT_EP["/detect"]
+        INP_MGR3 -->|"POST multipart"| SEGTEXT_EP["/segment/text"]
+
+        POINT_EP --> IIP["inst_interactive_predictor.predict()"]
+        DETECT_EP --> SP["Sam3Processor.set_text_prompt()"]
+        SEGTEXT_EP --> SP
+        SP --> MASKS["Masks + BBoxes + Scores"]
+        IIP --> MASK["Binary Mask PNG"]
+    end
+
+    MASKS --> SAVE_M["Save or return to frontend"]
+    MASK --> SAVE_M
     SAVE_M --> INPAINT["process_inpaint → FluxInpainter.inpaint()"]
     INPAINT --> OUTPUT["projects/{id}/generated/inpaint_{job_id}.jpg"]
 ```
@@ -328,14 +343,35 @@ flowchart TD
 
 | Endpoint | Method | Request | Response |
 |---|---|---|---|
-| `/health` | GET | — | `{"status": "running", "model_loaded": bool}` |
-| `/predict/mask` | POST | `image` (file) + `points` (JSON) + `labels` (JSON) + `multimask` (bool) | Binary PNG (StreamingResponse) |
+| `/health` | GET | — | `{"status": "running", "model_loaded": bool, "processor_ready": bool}` |
+| `/predict/mask` | POST | `image` (file) + `points` (JSON) + `labels` (JSON) + `multimask` (bool) + `boxes` (JSON, optional) | Binary PNG mask, or JSON multi-mask with scores |
+| `/detect` | POST | `image` (file) + `text` (str) + `confidence` (float) | JSON: `{objects: [{mask, bbox, score, label}]}` |
+| `/segment/text` | POST | `image` (file) + `text` (str) + `confidence` (float) | Binary PNG mask (all objects merged) |
+| `/track/start` | POST | `video_path` (str) | `{session_id, status}` |
+| `/track/prompt` | POST | `session_id` + `frame_idx` + `text`/`points`/`boxes` | `{status: "prompt_added"}` |
+| `/track/propagate` | POST | `session_id` + `direction` + `start_frame` + `max_frames` | `{frames: [{frame_idx, masks}]}` |
+| `/track/stop` | POST | `session_id` | `{status: "closed"}` |
 
 **Server Configuration:**
 - Port: `config.SAM_SERVICE_PORT` (default 8001)
-- Model: `backend/models/sam3.pt`
+- Model: `backend/models/sam3/sam3.pt` (~3.4GB, auto-downloads from HuggingFace if missing)
 - Device: auto-detected (`cuda` > `mps` > `cpu`)
-- Startup: `build_sam3_image_model(checkpoint_path, device, enable_inst_interactivity=True)`
+- MPS Fallback: `PYTORCH_ENABLE_MPS_FALLBACK=1` (set in `run_sam.sh`) for ops not yet on MPS
+- Startup: `build_sam3_image_model(checkpoint_path, device, enable_inst_interactivity=True)` + `Sam3Processor`
+- Video predictor: lazy-loaded on first `/track/*` request; `device` is passed to `Sam3VideoPredictor(device=...)` for CUDA/MPS/CPU placement
+- Inpaint job persistence: `POST /edit/inpaint` creates a `Job` DB record; `update_job_db()` called on completion/failure
+
+### 4.1 MPS Compatibility (SAM 3)
+
+| Issue | Fix | Location |
+|---|---|---|
+| `grid_sample` crashes with empty tensors | Early return guard when `n_points == 0` | `geometry_encoders.py:_encode_points` |
+| `pin_memory()` is CUDA-only | Replaced with direct `.to(device=...)` | `geometry_encoders.py:_encode_boxes` |
+| `_assert_async` not implemented on MPS | `PYTORCH_ENABLE_MPS_FALLBACK=1` env var | `run_sam.sh` |
+| FLASH/EFFICIENT SDPA backends unavailable | Restrict to `MATH` backend on MPS | `vl_combiner.py:forward_text` |
+| BFloat16 incompatible with numpy | `.float()` cast before `.numpy()` | `start_sam_server.py:detect_objects` |
+| `Sam3VideoPredictor.__init__()` hardcodes `.cuda()` | Added `device` param; `.to(self.device)` with auto-detect (CUDA → MPS → CPU) | `sam3_video_predictor.py:__init__` |
+| `_get_session_stats()` / `_get_torch_and_gpu_properties()` call `torch.cuda.*` | Guarded behind `torch.cuda.is_available()` | `sam3_video_predictor.py` |
 
 ## 5. Model Management & Memory
 
@@ -381,7 +417,7 @@ When `enable_ae` toggle changes between calls:
 | Flux Diffusers AE | `backend/models/flux2/vae/` |
 | Flux Text Encoder | `backend/models/flux2/text_encoder/` (Qwen 3 8B) |
 | Flux IP-Adapter | `backend/models/flux2/ip-adapter.safetensors` |
-| SAM 3 Checkpoint | `backend/models/sam3.pt` |
+| SAM 3 Checkpoint | `backend/models/sam3/sam3.pt` |
 
 ## 6. Prompt Enhancement
 

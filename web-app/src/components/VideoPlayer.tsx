@@ -6,7 +6,7 @@ export function VideoPlayer({ videoUrl }: VideoPlayerProps) {
     return (
         <div className="w-full aspect-video bg-black/40 rounded-3xl border border-white/10 shadow-2xl relative overflow-hidden group transition-all duration-500 hover:border-milimo-500/30 hover:shadow-milimo-500/20">
             {videoUrl ? (
-                <video src={videoUrl} controls loop className="w-full h-full object-contain" />
+                <video src={videoUrl} controls loop playsInline className="w-full h-full object-contain" />
             ) : (
                 <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-gray-600 font-light flex flex-col items-center gap-4 animate-float">

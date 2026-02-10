@@ -100,9 +100,12 @@ graph TD
         SAM_Svc[FastAPI Server] --> SAM_Model[SAM 3 Model]
         SAM_Svc --> SAM_Health["/health"]
         SAM_Svc --> SAM_Predict["/predict/mask"]
+        SAM_Svc --> SAM_Detect["/detect"]
+        SAM_Svc --> SAM_SegText["/segment/text"]
+        SAM_Svc --> SAM_Track["/track/*"]
     end
 
-    API -->|Static Files| FS[File System]
+    API -->|"Range-Aware Media Serving"| FS[File System]
 ```
 
 ## 3. Core Component Interactions
@@ -114,9 +117,10 @@ graph TD
 | **UI Refresh Sync** | HTTP GET `/status/{job_id}` | One-shot job state recovery on page load via `jobPoller`. |
 | **Worker → LTX-2** | Direct Python Import | `ModelManager` loads LTX-2 pipelines into VRAM. One pipeline cached at a time. |
 | **Worker → Flux 2** | Direct Python Import | `FluxInpainter` singleton (persistent in memory) for image gen + inpainting. |
-| **Backend → SAM** | HTTP REST (port 8001) | Segmentation mask generation via SAM 3 microservice (multipart POST). |
-| **Timeline → Player** | Headless rAF subscription | `PlaybackEngine` drives `currentTime` via `requestAnimationFrame`. `CinematicPlayer` subscribes. |
-| **Playback → Audio** | `GlobalAudioManager` singleton | Manages `HTMLAudioElement` pool, sync/tick pattern. |
+| **Backend → SAM** | HTTP REST (port 8001) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. |
+| **Timeline → Player** | Headless rAF subscription | `PlaybackEngine` drives `currentTime` via `requestAnimationFrame` with cached layout. `CinematicPlayer` subscribes with throttled drift correction (250ms). |
+| **Playback → Audio** | `GlobalAudioManager` singleton | Web Audio API (`AudioContext` + `AudioBufferSourceNode`) for precise cross-browser playback. Buffers decoded upfront; drift tolerance 0.3s. |
+| **Static Media Serving** | HTTP Range Requests | `server.py` serves `.mp4`/`.mp3`/audio files with `206 Partial Content` and `Accept-Ranges: bytes` for Safari compatibility. |
 | **Flux AE Hot-Swap** | Internal | `FluxInpainter` toggles between native AE (supports reference conditioning) and diffusers AE (fallback) based on `enable_ae` flag. |
 
 ## 4. Key Subsystems
@@ -164,10 +168,14 @@ Handles video, image, chained, and inpainting generation.
 | Component | Role |
 |---|---|
 | `CinematicPlayer.tsx` | Container with `VideoSurface`, `PlayerHUD`, `LoadingOverlay`, `ControlsBar` |
-| `VideoSurface` | `memo`'d + `forwardRef` `<video>` element with drift correction |
+| `VideoSurface` | `memo`'d + `forwardRef` `<video>` element. Starts muted for Safari autoplay policy, auto-unmutes on first user gesture. Drift correction throttled to 250ms intervals with `fastSeek()` support. |
+| `PlaybackEngine.tsx` | Headless rAF loop driving `currentTime`. Caches `computeTimelineLayout` in a `useRef` (only recomputes when `project.shots` changes) to eliminate per-frame GC pressure. |
+| `GlobalAudioManager.ts` | Web Audio API singleton — uses `AudioContext` with `AudioBufferSourceNode` for precise, Safari-compatible audio playback. Buffers decoded upfront via `fetch()` + `decodeAudioData()`. Context resumed lazily on first user gesture. |
+| `AudioClip.tsx` | Waveform display via WaveSurfer. Detects Safari at runtime and uses `MediaElement` backend for better compatibility; defaults to `WebAudio` backend on Chrome/other browsers. |
 | `PlayerHUD` | Resolution/FPS/Seed overlay |
 | `LoadingOverlay` | Generation progress display with ambient glow effects |
-| `ControlsBar` | Play/pause, edit mode toggle, fullscreen |
+| `ControlsBar` | Play/pause, edit mode toggle, tracking mode toggle (Crosshair icon), fullscreen |
+| `TrackingPanel.tsx` | Video object tracking UI — session lifecycle (start/prompt/propagate/stop), text/click prompts, mask overlay canvas, frame navigation. Mutually exclusive with edit mode. |
 
 ### E. The Inspector System (Frontend)
 Shot editing panel with sub-components.
@@ -181,11 +189,15 @@ Shot editing panel with sub-components.
 | `NarrativeDirector.tsx` | Action/dialogue/character metadata for storyboard |
 
 ### F. The SAM 3 Microservice
-Isolated segmentation service for inpainting workflows.
+Isolated segmentation and tracking service.
 
 | Component | Role |
 |---|---|
-| `sam3/start_sam_server.py` | FastAPI server (port 8001). Loads SAM 3 at startup with `build_sam3_image_model`. |
-| `GET /health` | Returns `{status, model_loaded}` for readiness probes |
-| `POST /predict/mask` | Accepts image (multipart) + points (JSON) → returns binary PNG mask |
-| `InpaintingManager` | Backend HTTP client — sends image+points to SAM, saves mask, delegates to FluxInpainter for RePaint inpainting |
+| `sam3/start_sam_server.py` | FastAPI server (port 8001). Loads SAM 3 at startup with `build_sam3_image_model` + `Sam3Processor`. Video predictor lazy-loaded with MPS/CUDA/CPU device auto-detection. |
+| `GET /health` | Returns `{status, model_loaded, processor_ready}` for readiness probes |
+| `POST /predict/mask` | Point/box segmentation → binary PNG mask |
+| `POST /detect` | Text-prompted multi-object detection → JSON (masks, bboxes, scores) |
+| `POST /segment/text` | Text → merged binary mask PNG (for inpainting) |
+| `POST /track/*` | Video tracking: `start`, `prompt`, `propagate`, `stop` |
+| `InpaintingManager` | Backend HTTP client — point masks, text masks, object detection |
+| `TrackingManager` | Backend HTTP client — session-based video tracking |

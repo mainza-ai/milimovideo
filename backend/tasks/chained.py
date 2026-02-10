@@ -399,6 +399,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                             "-vf", f"select=gte(n\\,{overlap}),setpts=PTS-STARTPTS",
                             "-af", f"ashowinfo,arealtime,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.1", 
                             "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                            "-movflags", "+faststart",
                             "-r", str(fps),
                             "-y", chunk_output_path
                         ], cwd=output_dir, check=True, stderr=subprocess.DEVNULL)
@@ -434,7 +435,8 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         cmd = ["ffmpeg"] + input_args + [
             "-filter_complex", filter_complex,
             "-map", "[outv]", "-map", "[outa]",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18", # Good quality re-encode
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-movflags", "+faststart",
             "-c:a", "aac", "-b:a", "192k",
             "-y", final_output_path
         ]
@@ -451,6 +453,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 "-filter_complex", filter_complex_v,
                 "-map", "[outv]",
                 "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                "-movflags", "+faststart",
                 "-y", final_output_path
             ]
             subprocess.run(cmd_v, cwd=output_dir, check=True)

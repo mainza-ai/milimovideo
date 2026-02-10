@@ -67,8 +67,19 @@ class ElementVisualizeRequest(BaseModel):
 class InpaintRequest(BaseModel):
     image_path: str
     mask_path: Optional[str] = None
-    points: Optional[str] = None # For SAM
+    points: Optional[str] = None # For SAM point-based
+    text_mask: Optional[str] = None # For SAM text-based segmentation
     prompt: str
+
+class DetectRequest(BaseModel):
+    image_path: str
+    text: str
+    confidence: float = 0.5
+
+class SegmentTextRequest(BaseModel):
+    image_path: str
+    text: str
+    confidence: float = 0.5
 
 class ScriptParseRequest(BaseModel):
     script_text: str
