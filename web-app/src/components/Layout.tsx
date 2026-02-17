@@ -9,6 +9,8 @@ import { ImagesView } from './Images/ImagesView';
 import { useTimelineStore, getLastProjectId } from '../stores/timelineStore';
 import { ProjectManager } from './ProjectManager';
 import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
+import { PanelErrorBoundary } from './ErrorBoundary';
+import { LLMSettings } from './LLMSettings';
 
 import { useShallow } from 'zustand/react/shallow';
 
@@ -65,17 +67,92 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                 return;
             }
 
+            const { currentTime, setCurrentTime } = useTimelineStore.getState();
+            const frameDuration = 1 / (project?.fps || 25);
+
             if (e.code === 'Space') {
                 e.preventDefault();
                 if (!isPlaying) {
                     setViewMode('timeline');
                 }
                 setIsPlaying(!isPlaying);
+
+                // ── Save ──
             } else if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault();
                 saveProject();
+
+                // ── Delete ──
             } else if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (selectedShotId) deleteShot(selectedShotId);
+
+                // ── J/K/L Shuttle ── (standard NLE: J=reverse, K=stop, L=forward)
+            } else if (e.key === 'j' || e.key === 'J') {
+                e.preventDefault();
+                setIsPlaying(false);
+                setCurrentTime(Math.max(0, currentTime - frameDuration * 5));
+
+            } else if (e.key === 'k' || e.key === 'K') {
+                e.preventDefault();
+                setIsPlaying(false);
+
+            } else if (e.key === 'l' || e.key === 'L') {
+                e.preventDefault();
+                if (!isPlaying) {
+                    setViewMode('timeline');
+                    setIsPlaying(true);
+                } else {
+                    setCurrentTime(currentTime + frameDuration * 5);
+                }
+
+                // ── Arrow Keys: Frame-by-Frame ──
+            } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                const jump = e.shiftKey ? frameDuration * 10 : frameDuration;
+                setCurrentTime(Math.max(0, currentTime - jump));
+
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                const jump = e.shiftKey ? frameDuration * 10 : frameDuration;
+                setCurrentTime(currentTime + jump);
+
+                // ── Home/End: Jump to Start/End ──
+            } else if (e.key === 'Home') {
+                e.preventDefault();
+                setCurrentTime(0);
+
+            } else if (e.key === 'End') {
+                e.preventDefault();
+                // Jump to end of last shot
+                const { shots } = useTimelineStore.getState().project;
+                if (shots.length > 0) {
+                    const lastShot = shots[shots.length - 1];
+                    const endTime = (lastShot.numFrames || 121) * frameDuration;
+                    setCurrentTime(endTime);
+                }
+
+                // ── I/O: Mark In/Out (trim selected shot) ──
+            } else if (e.key === 'i' || e.key === 'I') {
+                e.preventDefault();
+                if (selectedShotId) {
+                    const { patchShot } = useTimelineStore.getState();
+                    const shot = useTimelineStore.getState().project.shots.find(s => s.id === selectedShotId);
+                    if (shot) {
+                        const frameIndex = Math.round(currentTime / frameDuration);
+                        patchShot(selectedShotId, { trimIn: Math.max(0, frameIndex) });
+                    }
+                }
+            } else if (e.key === 'o' || e.key === 'O') {
+                e.preventDefault();
+                if (selectedShotId) {
+                    const { patchShot } = useTimelineStore.getState();
+                    const shot = useTimelineStore.getState().project.shots.find(s => s.id === selectedShotId);
+                    if (shot) {
+                        const frameIndex = Math.round(currentTime / frameDuration);
+                        const trimOut = Math.max(0, (shot.numFrames || 121) - frameIndex);
+                        patchShot(selectedShotId, { trimOut });
+                    }
+                }
             }
         };
 
@@ -90,23 +167,19 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
         addToast("Starting Export...", "info");
         try {
             const res = await fetch(`http://localhost:8000/projects/${project.id}/render`, { method: 'POST' });
-            const text = await res.text();
-            let data;
-            try {
-                data = JSON.parse(text);
-            } catch (e) {
-                addToast("Export failed: Server error", "error");
-                return;
-            }
+            const data = await res.json();
 
-            if (data.status === 'completed') {
+            if (data.status === 'rendering') {
+                addToast("Export started — progress will appear via notifications", "info");
+            } else if (data.status === 'completed') {
+                // Legacy fallback (shouldn't happen with new async endpoint)
                 addToast("Export Complete!", "success");
                 window.open(`http://localhost:8000${data.video_url}`, '_blank');
             } else {
-                addToast("Export failed", "error");
+                addToast(`Export failed: ${data.detail || 'Unknown error'}`, "error");
             }
         } catch (e) {
-            addToast("Export failed", "error");
+            addToast("Export failed — could not reach server", "error");
         }
     };
 
@@ -187,6 +260,8 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                         </button>
                     </div>
 
+                    <LLMSettings />
+
                     <div className="flex items-center gap-2 text-[10px] text-white/30 mr-4">
                         <Command size={12} /> <span className="font-mono">S</span> to Save
                     </div>
@@ -207,10 +282,9 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
 
             {/* Workspace Grid */}
             <div className="flex-1 flex overflow-hidden">
-                {/* Left: Library - Hide in Elements view? Or keep? Let's keep for consistency or hide if needing space. */}
-                {/* User asked for Elements to be a main view. Let's hide sidebar in Elements or Storyboard mode for full focus? */}
-                {/* Or keep generic layout. Let's keep Layout consistent for now. */}
-                <MediaLibrary />
+                <PanelErrorBoundary fallbackTitle="Media Library">
+                    <MediaLibrary />
+                </PanelErrorBoundary>
 
                 {/* Center: Stage & Timeline */}
                 <div className="flex-1 flex flex-col min-w-0 bg-[#0f0f0f]">
@@ -219,17 +293,23 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                         {viewMode === 'timeline' && children}
                         {viewMode === 'storyboard' && (
                             <div className="absolute inset-0 z-10 bg-[#050505] w-full h-full">
-                                <StoryboardView />
+                                <PanelErrorBoundary fallbackTitle="Storyboard">
+                                    <StoryboardView />
+                                </PanelErrorBoundary>
                             </div>
                         )}
                         {viewMode === 'elements' && (
                             <div className="absolute inset-0 z-10 bg-[#050505] w-full h-full">
-                                <ElementsView />
+                                <PanelErrorBoundary fallbackTitle="Elements">
+                                    <ElementsView />
+                                </PanelErrorBoundary>
                             </div>
                         )}
                         {viewMode === 'images' && (
                             <div className="absolute inset-0 z-10 bg-[#050505] w-full h-full">
-                                <ImagesView />
+                                <PanelErrorBoundary fallbackTitle="Images">
+                                    <ImagesView />
+                                </PanelErrorBoundary>
                             </div>
                         )}
                     </div>
@@ -237,13 +317,17 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                     {/* Bottom: Timeline (Visible in Timeline, Elements, and Images modes) */}
                     {(viewMode === 'timeline' || viewMode === 'elements' || viewMode === 'images') && (
                         <div className="h-80 shrink-0 z-10 border-t border-white/5">
-                            <VisualTimeline />
+                            <PanelErrorBoundary fallbackTitle="Timeline">
+                                <VisualTimeline />
+                            </PanelErrorBoundary>
                         </div>
                     )}
                 </div>
 
                 {/* Right: Inspector */}
-                <InspectorPanel />
+                <PanelErrorBoundary fallbackTitle="Inspector">
+                    <InspectorPanel />
+                </PanelErrorBoundary>
             </div>
 
             {/* Modals */}

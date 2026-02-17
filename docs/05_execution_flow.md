@@ -337,6 +337,74 @@ sequenceDiagram
     API->>API: Create Job → BackgroundTask(generate_video_task)
 ```
 
+### 6.1 AI Script Analysis Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as ScriptInput (Brain icon)
+    participant Store as TimelineStore
+    participant API as FastAPI
+    participant ME as ModelManager
+    participant Gemma as Gemma 3 Text Encoder
+    participant AIS as ai_storyboard.py
+    participant Parser as ScriptParser (fallback)
+
+    UI->>Store: aiParseScript(scriptText)
+    Store->>API: POST /projects/{id}/storyboard/ai-parse {script_text}
+
+    API->>ME: manager.current_pipeline (check Gemma loaded)
+    
+    alt Gemma Available
+        API->>AIS: ai_parse_script(text, text_encoder)
+        AIS->>AIS: Build chat messages (system + user)
+        AIS->>Gemma: text_encoder._enhance(messages, max_new_tokens=1024)
+        Gemma-->>AIS: Raw JSON text
+        AIS->>AIS: _extract_json() — strip fences, parse JSON
+        AIS->>AIS: _validate_scenes() — normalize shot_types
+        AIS-->>API: List[ParsedScene]
+    else Gemma Not Loaded
+        API->>Parser: script_parser.parse_script(text) — regex fallback
+        Parser-->>API: List[ParsedScene]
+    end
+    
+    API-->>Store: Parsed scenes with shots
+    Store-->>UI: Display AI-analyzed storyboard
+```
+
+### 6.2 Concept Art Thumbnail Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as StoryboardSceneGroup (ImageIcon)
+    participant Store as TimelineStore
+    participant API as FastAPI
+    participant DB as SQLite
+    participant Worker as BackgroundTask
+    participant Flux as FluxInpainter
+
+    UI->>Store: generateThumbnails(shotIds)
+    Store->>API: POST /projects/{id}/storyboard/thumbnails {shot_ids, width=512, height=320}
+
+    loop For each shot without thumbnail_url
+        API->>DB: Create Job (is_thumbnail=True)
+        API->>DB: Update Shot (status=generating, last_job_id)
+        API->>Worker: BackgroundTasks.add_task(generate_image_task)
+    end
+    API-->>Store: {queued: N, skipped: M}
+
+    loop Per thumbnail job
+        Worker->>Flux: generate_image(action_prompt, 512×320)
+        Flux-->>Worker: PIL.Image
+        Worker->>Worker: Save JPG + thumbnail
+        Worker->>DB: Update Shot.thumbnail_url (is_thumbnail path)
+        Worker->>DB: Update Job (completed)
+        Worker-->>UI: SSE {type: "complete", shot_id, thumbnail_url, is_thumbnail: true}
+    end
+
+    Note over UI: ServerSlice matches by shot_id (not lastJobId)
+    UI->>Store: updateShot(shotId, {thumbnailUrl}) — no generation state change
+```
+
 ## 7. Project Save/Load Flow
 
 ```mermaid

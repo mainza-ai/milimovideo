@@ -1,136 +1,122 @@
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
-import { Plus, GripVertical, Image as ImageIcon, Film, Play, Sparkles } from 'lucide-react';
 import { ScriptInput } from './ScriptInput';
-import React from 'react';
+import { StoryboardSceneGroup } from './StoryboardSceneGroup';
+import type { Shot, Scene } from '../../stores/types';
+import { useMemo } from 'react';
+import { Film, Layers, ArrowRightToLine, ChevronDown } from 'lucide-react';
 
 export const StoryboardView = () => {
-    const { project, selectShot, selectedShotId, generateShot, loadProject } = useTimelineStore(useShallow(state => ({
+    const { project, pushStoryboardToTimeline } = useTimelineStore(useShallow(state => ({
         project: state.project,
-        selectShot: state.selectShot,
-        selectedShotId: state.selectedShotId,
-        generateShot: state.generateShot,
-        loadProject: state.loadProject
+        pushStoryboardToTimeline: state.pushStoryboardToTimeline,
     })));
 
-    // Polling for active jobs
-    React.useEffect(() => {
-        const hasActiveJobs = project.shots.some(s => s.statusMessage === 'Generating...' || s.statusMessage === 'Queued...');
+    // Group shots by sceneId into Scene objects
+    const sceneGroups = useMemo(() => {
+        const scenes = project.scenes || [];
+        const shotsByScene = new Map<string, Shot[]>();
 
-        let interval: ReturnType<typeof setInterval>;
-        if (hasActiveJobs) {
-            interval = setInterval(async () => {
-                // Ideally we'd poll specific jobs, but reloading project is safer for now to get full state
-                await loadProject(project.id);
-            }, 3000);
+        // Build scene → shots mapping
+        for (const shot of project.shots) {
+            const key = shot.sceneId || '__unassigned__';
+            if (!shotsByScene.has(key)) shotsByScene.set(key, []);
+            shotsByScene.get(key)!.push(shot);
         }
 
-        return () => clearInterval(interval);
-    }, [project.shots, project.id, loadProject]);
+        // Build scene list with shots attached
+        const result: { scene: Scene; shots: Shot[] }[] = [];
 
-    const handleGenerate = async (e: React.MouseEvent, shotId: string) => {
-        e.stopPropagation();
-        await generateShot(shotId);
-    };
+        for (const scene of scenes) {
+            const sceneShots = shotsByScene.get(scene.id) || [];
+            // Sort by index
+            sceneShots.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+            result.push({ scene, shots: sceneShots });
+            shotsByScene.delete(scene.id);
+        }
+
+        // Handle unassigned shots (shots without a scene)
+        const unassigned = shotsByScene.get('__unassigned__') || [];
+        if (unassigned.length > 0) {
+            result.push({
+                scene: {
+                    id: '__unassigned__',
+                    index: result.length,
+                    name: 'Unassigned Shots',
+                    shots: unassigned,
+                },
+                shots: unassigned,
+            });
+        }
+
+        return result;
+    }, [project.shots, project.scenes]);
+
+    const totalShots = project.shots.length;
+    const totalScenes = sceneGroups.length;
+    const completedShots = project.shots.filter(s => s.videoUrl).length;
 
     return (
         <div className="h-full bg-[#111] p-8 overflow-y-auto custom-scrollbar">
-            <h2 className="text-2xl font-bold text-white mb-6 tracking-tight">Storyboard Engine</h2>
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-white tracking-tight">Storyboard Engine</h2>
+                <div className="flex items-center gap-4">
+                    {completedShots > 0 && (
+                        <button
+                            onClick={pushStoryboardToTimeline}
+                            className="px-4 py-1.5 bg-milimo-500/20 hover:bg-milimo-500/30 text-milimo-400 text-xs font-semibold rounded-lg flex items-center gap-2 transition-colors"
+                        >
+                            <ArrowRightToLine size={14} />
+                            Push to Timeline ({completedShots})
+                        </button>
+                    )}
+                    <div className="flex items-center gap-4 text-xs font-mono text-white/30">
+                        <span className="flex items-center gap-1"><Layers size={12} /> {totalScenes} scenes</span>
+                        <span className="flex items-center gap-1"><Film size={12} /> {totalShots} shots</span>
+                    </div>
+                </div>
+            </div>
 
-            {/* 1. Script Inputs */}
+            {/* Script Input */}
             <ScriptInput />
 
-            <div className="border-t border-white/10 pt-8">
-                <h3 className="text-lg font-bold text-white mb-4">Shot List ({project.shots.length})</h3>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {/* Add New Shot Card (Manual) */}
-                    <button
-                        className="aspect-video bg-white/5 hover:bg-white/10 border-2 border-dashed border-white/10 hover:border-milimo-500/50 rounded-xl flex flex-col items-center justify-center text-white/30 hover:text-white transition-all group"
-                        onClick={() => console.log("Add shot via storyboard")}
-                    >
-                        <div className="w-12 h-12 rounded-full bg-white/5 group-hover:bg-milimo-500 group-hover:text-black flex items-center justify-center mb-2 transition-colors">
-                            <Plus size={24} />
-                        </div>
-                        <span className="text-sm font-medium">Add Manual Shot</span>
-                    </button>
-
-                    {project.shots.map((shot, index) => (
-                        <div
-                            key={shot.id}
-                            onClick={() => selectShot(shot.id)}
-                            className={`relative group bg-[#1a1a1a] rounded-xl overflow-hidden border-2 transition-all cursor-pointer flex flex-col ${shot.id === selectedShotId ? 'border-milimo-500 shadow-xl shadow-milimo-500/10' : 'border-transparent hover:border-white/20'}`}
-                        >
-                            {/* Header / ID */}
-                            <div className="px-3 py-2 flex justify-between items-center bg-black/40 border-b border-white/5">
-                                <span className="text-xs font-mono text-white/40">SHOT {index + 1}</span>
-                                <div className="flex items-center gap-2">
-                                    {/* Status Indicators */}
-                                    {shot.statusMessage && (
-                                        <span className="text-[10px] uppercase font-bold text-milimo-400 animate-pulse">{shot.statusMessage}</span>
-                                    )}
-                                    <GripVertical size={14} className="text-white/20 hover:text-white cursor-grab active:cursor-grabbing" />
-                                </div>
-                            </div>
-
-                            {/* Thumbnail / Content */}
-                            <div className="aspect-video bg-black relative w-full group">
-                                {shot.videoUrl ? (
-                                    shot.videoUrl.match(/\.(jpg|jpeg|png|webp)$/i) ?
-                                        <img src={shot.videoUrl} className="w-full h-full object-cover" />
-                                        : <video src={shot.videoUrl} className="w-full h-full object-cover" controls={false} />
-                                ) : (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-white/10 p-4 text-center">
-                                        <ImageIcon size={32} className="mb-2 opacity-50" />
-                                        <p className="text-[10px] line-clamp-3 opacity-50">{shot.action || shot.prompt}</p>
-                                    </div>
-                                )}
-
-                                {/* Overlay Gradient */}
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-60 pointer-events-none" />
-
-                                {/* Prompt Text Overlay */}
-                                <div className="absolute bottom-2 left-3 right-3 text-xs text-white/90 line-clamp-3 font-medium pointer-events-none drop-shadow-md">
-                                    {shot.character && (
-                                        <span className="block text-[10px] font-bold text-milimo-300 uppercase mb-0.5 tracking-wider">{shot.character}</span>
-                                    )}
-                                    {shot.dialogue ? (
-                                        <span className="italic text-white">"{shot.dialogue}"</span>
-                                    ) : (
-                                        shot.action || shot.prompt
-                                    )}
-                                </div>
-
-                                {/* Hover Action: Generate */}
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
-                                    {!shot.videoUrl && (
-                                        <button
-                                            onClick={(e) => handleGenerate(e, shot.id)}
-                                            className="px-4 py-2 bg-milimo-500 text-black font-bold rounded-lg transform scale-95 group-hover:scale-100 transition-transform flex items-center gap-2"
-                                        >
-                                            <Sparkles size={16} />
-                                            Generate
-                                        </button>
-                                    )}
-                                    {shot.videoUrl && (
-                                        <div className="flex gap-2">
-                                            <button className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"><Play size={20} fill="currentColor" /></button>
-                                            <button className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white" onClick={(e) => handleGenerate(e, shot.id)} title="Regenerate"><Sparkles size={20} /></button>
+            {/* Scene Groups */}
+            <div className="border-t border-white/10 pt-6 mt-2">
+                {sceneGroups.length === 0 ? (
+                    <div className="text-center py-16 text-white/20">
+                        <Layers size={48} className="mx-auto mb-4 opacity-30" />
+                        <p className="text-lg font-medium mb-1">No storyboard yet</p>
+                        <p className="text-sm">Write a script above and click "Analyze Script" to get started.</p>
+                    </div>
+                ) : (
+                    (() => {
+                        let shotOffset = 0;
+                        return sceneGroups.map(({ scene, shots }, groupIdx) => {
+                            const groupOffset = shotOffset;
+                            shotOffset += shots.length;
+                            return (
+                                <div key={scene.id}>
+                                    {/* Scene boundary connector */}
+                                    {groupIdx > 0 && (
+                                        <div className="flex items-center gap-3 py-2 px-4">
+                                            <div className="flex-1 border-t border-dashed border-white/10" />
+                                            <ChevronDown size={12} className="text-white/20" />
+                                            <span className="text-[10px] font-mono text-white/20">
+                                                Scene {groupIdx} → {groupIdx + 1}
+                                            </span>
+                                            <div className="flex-1 border-t border-dashed border-white/10" />
                                         </div>
                                     )}
+                                    <StoryboardSceneGroup
+                                        scene={scene}
+                                        shots={shots}
+                                        shotOffset={groupOffset}
+                                    />
                                 </div>
-                            </div>
-
-                            {/* Footer Stats */}
-                            <div className="px-3 py-2 bg-[#151515] flex justify-between items-center text-[10px] text-white/30 font-mono mt-auto">
-                                <div className="flex gap-2">
-                                    <span className="flex items-center gap-1"><Film size={10} /> {shot.numFrames}f</span>
-                                </div>
-                                <span className="uppercase tracking-wider">{shot.width}x{shot.height}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                            );
+                        });
+                    })()
+                )}
             </div>
         </div>
     );

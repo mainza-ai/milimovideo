@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef, useEffect, memo } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo, memo } from 'react';
 import { motion } from 'framer-motion';
-import { X, Crosshair, Play, Square, RotateCcw, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { X, Crosshair, Play, Square, RotateCcw, ChevronLeft, ChevronRight, Loader2, Download, Trash2, Eye, EyeOff, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { API_BASE_URL } from '../../config';
 
 // ── Types ──
@@ -14,8 +14,8 @@ interface TrackingObject {
 
 interface FrameResult {
     frameIndex: number;
-    masks: Record<number, string>; // obj_id -> base64 mask PNG
-    scores: Record<number, number>;
+    masks: Record<string, string>; // obj_id -> base64 mask PNG
+    scores: Record<string, number>;
 }
 
 interface TrackingPanelProps {
@@ -46,6 +46,7 @@ export const TrackingPanel = memo(({
     const [sessionId, setSessionId] = useState<string | null>(null);
     const [phase, setPhase] = useState<'idle' | 'starting' | 'prompting' | 'propagating' | 'done' | 'error'>('idle');
     const [isPropagating, setIsPropagating] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [statusMsg, setStatusMsg] = useState('');
 
@@ -59,9 +60,13 @@ export const TrackingPanel = memo(({
     const [objects, setObjects] = useState<TrackingObject[]>([]);
     const [frameResults, setFrameResults] = useState<FrameResult[]>([]);
     const [viewingFrame, setViewingFrame] = useState(0);
+    const [fps, setFps] = useState(30.0);
+    const [totalFrames, setTotalFrames] = useState(0);
+    const [keyframeIndices, setKeyframeIndices] = useState<Set<number>>(new Set());
 
     // ── Mask Overlay Canvas ──
     const overlayRef = useRef<HTMLCanvasElement>(null);
+    const rafRef = useRef<number | null>(null);
 
     // ── API Helpers ──
     const apiCall = useCallback(async (endpoint: string, body: any) => {
@@ -77,6 +82,60 @@ export const TrackingPanel = memo(({
         return res.json();
     }, []);
 
+    // ── Load Existing Session (Persistence) ──
+    const loadSession = useCallback(async (sessId: string) => {
+        try {
+            setStatusMsg('Loading saved tracking data...');
+            const result = await apiCall('/edit/track/load', { session_id: sessId, video_path: videoPath });
+
+            if (result.status === 'loaded' && result.frames && result.frames.length > 0) {
+                // Map backend field names (frame_idx) to frontend (frameIndex)
+                const loadedFrames: FrameResult[] = result.frames.map((f: any) => ({
+                    frameIndex: f.frameIndex ?? f.frame_idx ?? f.frame_index ?? 0,
+                    masks: f.masks || {},
+                    scores: f.scores || {},
+                }));
+                setFrameResults(loadedFrames);
+
+                // Reconstruct objects list from the first frame that has objects
+                // Or collect all unique objects across frames
+                const uniqueObjects = new Map<number, TrackingObject>();
+
+                loadedFrames.forEach(f => {
+                    Object.keys(f.masks).forEach((objIdStr) => {
+                        const id = parseInt(objIdStr);
+                        if (!uniqueObjects.has(id)) {
+                            // Try to infer label/color if possible, otherwise default
+                            uniqueObjects.set(id, {
+                                id,
+                                label: `Object ${id}`, // Saved data doesn't explicitly store labels yet, might need to enhance save
+                                color: TRACK_COLORS[id % TRACK_COLORS.length],
+                                visible: true
+                            });
+                        }
+                    });
+                });
+
+                setObjects(Array.from(uniqueObjects.values()));
+                setPhase('done');
+                setStatusMsg(`Loaded ${loadedFrames.length} frames.`);
+
+                // Collect keyframes (frames with user interaction - implied by saved data?)
+                // For now, let's assume if there are objects, it might differ from pure propagation
+                // But simplified: we don't know which frame was user-prompted from loaded data easily without extra metadata.
+                // We'll leave keyframeIndices empty on load or populate if we add metadata later.
+            } else {
+                // If not found, just clear the status message so user knows they can start fresh
+                setStatusMsg('Ready (no saved data found).');
+                // Optional: clear after a moment
+                setTimeout(() => setStatusMsg(''), 2000);
+            }
+        } catch (e) {
+            console.warn('Failed to load session:', e);
+            setStatusMsg(''); // clear infinite loading
+        }
+    }, [apiCall, videoPath]);
+
     // ── Start Session ──
     const startSession = useCallback(async () => {
         setPhase('starting');
@@ -86,14 +145,21 @@ export const TrackingPanel = memo(({
             const result = await apiCall('/track/start', { video_path: videoPath });
             if (result.error) throw new Error(result.error);
             setSessionId(result.session_id);
+            if (result.fps) setFps(result.fps);
+            if (result.num_frames) setTotalFrames(result.num_frames);
             setPhase('prompting');
             setStatusMsg('Session started. Add a prompt to begin tracking.');
+
+            // Attempt to load existing data for this session
+            if (result.session_id) {
+                loadSession(result.session_id);
+            }
         } catch (e: any) {
             setError(e.message);
             setPhase('error');
             setStatusMsg('');
         }
-    }, [videoPath, apiCall]);
+    }, [videoPath, apiCall, loadSession]);
 
     // ── Add Prompt (Text) ──
     const addTextPrompt = useCallback(async () => {
@@ -115,15 +181,33 @@ export const TrackingPanel = memo(({
                 color: TRACK_COLORS[idx % TRACK_COLORS.length],
                 visible: true,
             }));
-            setObjects(prev => [...prev, ...newObjects]);
+
+            setObjects(prev => {
+                // Filter out duplicates if any
+                const existingIds = new Set(prev.map(o => o.id));
+                const uniqueNew = newObjects.filter(o => !existingIds.has(o.id));
+                return [...prev, ...uniqueNew];
+            });
+
+            // Mark this frame as a keyframe
+            setKeyframeIndices(prev => new Set(prev).add(frameIndex));
 
             // Store initial frame result
             if (result.masks) {
-                setFrameResults([{
-                    frameIndex,
-                    masks: result.masks,
-                    scores: result.scores || {},
-                }]);
+                setFrameResults(prev => {
+                    const exists = prev.findIndex(f => f.frameIndex === frameIndex);
+                    const newItem = {
+                        frameIndex,
+                        masks: result.masks,
+                        scores: result.scores || {},
+                    };
+                    if (exists >= 0) {
+                        const copy = [...prev];
+                        copy[exists] = newItem;
+                        return copy;
+                    }
+                    return [...prev, newItem].sort((a, b) => a.frameIndex - b.frameIndex);
+                });
             }
 
             setStatusMsg(`Detected ${newObjects.length} object(s). Ready to propagate.`);
@@ -145,26 +229,71 @@ export const TrackingPanel = memo(({
 
         setStatusMsg('Adding point prompt...');
         try {
+            // When adding a point, we might be refining an existing object OR adding a new one.
+            // For now, let's assume adding a new object unless user selected one (selection logic not here yet).
+            // Pass obj_id=null to let SAM create a new ID, or we could track selectedObjectId.
+
             const result = await apiCall('/track/prompt', {
                 session_id: sessionId,
                 frame_idx: frameIndex,
                 points: [[x, y]],
                 point_labels: [1], // positive click
+                // obj_id: selectedObjectId // Todo: Add object selection to refine
             });
             if (result.error) throw new Error(result.error);
 
-            const newObjects: TrackingObject[] = (result.object_ids || []).map((id: number, idx: number) => ({
-                id,
-                label: `Object ${id}`,
-                color: TRACK_COLORS[(objects.length + idx) % TRACK_COLORS.length],
-                visible: true,
-            }));
-            setObjects(prev => [...prev, ...newObjects]);
-            setStatusMsg(`Point detected ${newObjects.length} object(s).`);
+            // SAM might return multiple IDs if it detected multiple things or we sent multiple points
+            const newObjectIds: number[] = result.object_ids || [];
+
+            setObjects(prev => {
+                const existingIds = new Set(prev.map(o => o.id));
+                const newObjs = newObjectIds
+                    .filter(id => !existingIds.has(id))
+                    .map((id, idx) => ({
+                        id,
+                        label: `Object ${id}`,
+                        color: TRACK_COLORS[(prev.length + idx) % TRACK_COLORS.length],
+                        visible: true,
+                    }));
+                return [...prev, ...newObjs];
+            });
+
+            // Mark this frame as a keyframe
+            setKeyframeIndices(prev => new Set(prev).add(frameIndex));
+
+            // Update frame results for immediate feedback
+            if (result.masks) {
+                setFrameResults(prev => {
+                    const exists = prev.findIndex(f => f.frameIndex === frameIndex);
+                    // Merge new masks with existing ones for this frame if any
+                    let mergedMasks = result.masks;
+                    let mergedScores = result.scores || {};
+
+                    if (exists >= 0) {
+                        mergedMasks = { ...prev[exists].masks, ...result.masks };
+                        mergedScores = { ...prev[exists].scores, ...(result.scores || {}) };
+                    }
+
+                    const newItem = {
+                        frameIndex,
+                        masks: mergedMasks,
+                        scores: mergedScores,
+                    };
+
+                    if (exists >= 0) {
+                        const copy = [...prev];
+                        copy[exists] = newItem;
+                        return copy;
+                    }
+                    return [...prev, newItem].sort((a, b) => a.frameIndex - b.frameIndex);
+                });
+            }
+
+            setStatusMsg(`Point detected. Object(s): ${newObjectIds.join(', ')}`);
         } catch (e: any) {
             setError(e.message);
         }
-    }, [sessionId, promptMode, phase, frameIndex, objects.length, apiCall]);
+    }, [sessionId, promptMode, phase, frameIndex, apiCall]);
 
     // ── Propagate ──
     const propagate = useCallback(async () => {
@@ -181,13 +310,17 @@ export const TrackingPanel = memo(({
             });
             if (result.error) throw new Error(result.error);
 
-            // Parse frame results
+            // Parse frame results — map backend field names to frontend
             const frames: FrameResult[] = (result.frames || []).map((f: any) => ({
-                frameIndex: f.frame_index,
+                frameIndex: f.frameIndex ?? f.frame_idx ?? f.frame_index ?? 0,
                 masks: f.masks || {},
                 scores: f.scores || {},
             }));
             setFrameResults(frames);
+            if (frames.length > 0) {
+                const maxFrame = Math.max(...frames.map(f => f.frameIndex));
+                if (maxFrame + 1 > totalFrames) setTotalFrames(maxFrame + 1);
+            }
             setPhase('done');
             setStatusMsg(`Tracking complete — ${frames.length} frames processed.`);
         } catch (e: any) {
@@ -199,10 +332,105 @@ export const TrackingPanel = memo(({
         }
     }, [sessionId, direction, frameIndex, apiCall]);
 
+    // ── Export Masks ──
+    const exportMasks = useCallback(async () => {
+        if (!sessionId || frameResults.length === 0) return;
+        setIsExporting(true);
+        setStatusMsg('Saving masks to disk...');
+        try {
+            // Send entire frameResults to backend to save
+            const result = await apiCall('/edit/track/save', {
+                session_id: sessionId,
+                video_path: videoPath,
+                frames: frameResults.map(f => ({
+                    frame_idx: f.frameIndex,
+                    masks: f.masks,
+                    scores: f.scores,
+                    num_objects: Object.keys(f.masks).length
+                }))
+            });
+            if (result.error) throw new Error(result.error);
+            setStatusMsg(`Saved ${result.count} masks to ${result.path}`);
+            // Optional: Auto-dismiss success message after 3s
+            setTimeout(() => setStatusMsg('Export/Save complete.'), 3000);
+        } catch (e: any) {
+            setError(e.message);
+            setStatusMsg('Export failed');
+        } finally {
+            setIsExporting(false);
+        }
+    }, [sessionId, frameResults, apiCall]);
+
+    // ── Remove Object ──
+    const removeObject = useCallback(async (objId: number) => {
+        if (!sessionId) return;
+        try {
+            setStatusMsg(`Removing object ${objId}...`);
+            const result = await apiCall('/track/remove', {
+                session_id: sessionId,
+                obj_id: objId
+            });
+            if (result.error) throw new Error(result.error);
+
+            // Update local state
+            setObjects(prev => prev.filter(o => o.id !== objId));
+            setFrameResults(prev => prev.map(f => {
+                const newMasks = { ...f.masks };
+                delete newMasks[objId];
+                const newScores = { ...f.scores };
+                delete newScores[objId];
+                return {
+                    ...f,
+                    masks: newMasks,
+                    scores: newScores
+                };
+            }));
+
+            setStatusMsg(`Object ${objId} removed.`);
+            setTimeout(() => setStatusMsg(''), 2000);
+        } catch (e: any) {
+            setError(e.message);
+            setStatusMsg('Failed to remove object');
+        }
+    }, [sessionId, apiCall]);
+
+    // ── Toggle Visibility ──
+    const toggleVisibility = useCallback((objId: number) => {
+        setObjects(prev => prev.map(o =>
+            o.id === objId ? { ...o, visible: !o.visible } : o
+        ));
+    }, []);
+
+    // ── Keyframe Navigation ──
+    const jumpToKeyframe = useCallback((d: 'prev' | 'next') => {
+        const sorted = Array.from(keyframeIndices).sort((a, b) => a - b);
+        if (sorted.length === 0) return;
+
+        let target = -1;
+        if (d === 'prev') {
+            // Find largest keyframe < current
+            target = sorted.reverse().find(k => k < viewingFrame) ?? -1;
+        } else {
+            // Find smallest keyframe > current
+            target = sorted.find(k => k > viewingFrame) ?? -1;
+        }
+
+        if (target !== -1) {
+            setViewingFrame(target);
+            setFrameIndex(target);
+        }
+    }, [keyframeIndices, viewingFrame]);
+
     // ── Stop Session ──
     const stopSession = useCallback(async () => {
         if (sessionId) {
             try {
+                // We don't strictly *need* to stop the session on backend if we want persistence,
+                // but freeing GPU memory is good. Maybe we rely on LRU eviction or explicit close?
+                // For now, let's NOT call stop when just closing panel if we want to resume?
+                // Actually user said "when I close and reopen tracking panel everything is gone".
+                // So we want to Reload data.
+                // Stopping releases GPU resources, which is safer. We'll rely on /edit/track/load to restore state.
                 await apiCall('/track/stop', { session_id: sessionId });
             } catch { /* best effort */ }
         }
@@ -220,6 +448,60 @@ export const TrackingPanel = memo(({
         onClose();
     }, [stopSession, onClose]);
 
+    // ── Sync with Video Playback ──
+    useEffect(() => {
+        // Poll video time to update viewingFrame
+        const updateFrameFromVideo = () => {
+            if (_videoRef.current && !_videoRef.current.paused) {
+                const currentTime = _videoRef.current.currentTime;
+                // Assuming 24 or 30 fps? 
+                // Backend usually knows, but let's estimate or define a constant.
+                // Ideally this comes from metadata. Defaulting to 25 or 30 is risky.
+                // Let's assume 25 for now as a common denominator or try to get it.
+                // Better: use ratio if we know total duration and total frames? 
+                // We know frameResults max index.
+
+                // Use the fps returned from backend, default to 30 if not set yet
+                const currentFps = fps || 30.0;
+                const frame = Math.floor(currentTime * currentFps);
+                setViewingFrame(frame);
+            }
+            rafRef.current = requestAnimationFrame(updateFrameFromVideo);
+        };
+
+        rafRef.current = requestAnimationFrame(updateFrameFromVideo);
+
+        return () => {
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        };
+    }, [_videoRef]);
+
+    // Also sync when dragging slider/seeking (handled by video controls usually, 
+    // but we can listen to 'timeupdate' on video ref if we attached it properly).
+    useEffect(() => {
+        const vid = _videoRef.current;
+        if (!vid) return;
+
+        const onTimeUpdate = () => {
+            const currentFps = fps || 30.0;
+            const frame = Math.floor(vid.currentTime * currentFps);
+            setViewingFrame(frame);
+        };
+
+        vid.addEventListener('timeupdate', onTimeUpdate);
+        return () => vid.removeEventListener('timeupdate', onTimeUpdate);
+    }, [_videoRef, fps]);
+
+    // Keep internal frameIndex synced too if user scrubs?
+    // Maybe separation of "viewingFrame" (playback) vs "frameIndex" (prompting) is good.
+
+    // ── O(1) Frame Lookup Map ──
+    const frameMap = useMemo(() => {
+        const map = new Map<number, FrameResult>();
+        frameResults.forEach(f => map.set(f.frameIndex, f));
+        return map;
+    }, [frameResults]);
+
     // ── Draw Mask Overlay ──
     useEffect(() => {
         const canvas = overlayRef.current;
@@ -230,43 +512,75 @@ export const TrackingPanel = memo(({
         if (!ctx) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const currentFrame = frameResults.find(f => f.frameIndex === viewingFrame);
+        const currentFrame = frameMap.get(viewingFrame);
         if (!currentFrame) return;
 
-        objects.forEach(obj => {
-            if (!obj.visible) return;
-            const maskB64 = currentFrame.masks[obj.id];
-            if (!maskB64) return;
+        // Collect visible objects that have masks for this frame
+        const visibleObjects = objects.filter(obj => obj.visible && currentFrame.masks[obj.id]);
+        if (visibleObjects.length === 0) return;
 
-            const img = new Image();
-            img.onload = () => {
-                ctx.globalAlpha = 0.35;
-                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                ctx.globalCompositeOperation = 'source-in';
-                ctx.fillStyle = obj.color;
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.globalAlpha = 1.0;
-            };
-            img.src = `data:image/png;base64,${maskB64}`;
+        // Load all mask images in parallel, then draw them
+        const loadPromises = visibleObjects.map(obj => {
+            return new Promise<{ obj: TrackingObject; img: HTMLImageElement }>((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve({ obj, img });
+                img.onerror = () => resolve({ obj, img }); // Skip broken masks gracefully
+                img.src = `data:image/png;base64,${currentFrame.masks[obj.id]}`;
+            });
         });
-    }, [frameResults, viewingFrame, objects, containerWidth, containerHeight]);
+
+        let cancelled = false;
+        Promise.all(loadPromises).then(results => {
+            if (cancelled) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            results.forEach(({ obj, img }) => {
+                if (!img.naturalWidth) return; // Skip failed loads
+
+                // Use an offscreen canvas to colorize each mask independently
+                const offscreen = document.createElement('canvas');
+                offscreen.width = canvas.width;
+                offscreen.height = canvas.height;
+                const offCtx = offscreen.getContext('2d');
+                if (!offCtx) return;
+
+                // Draw the grayscale mask
+                offCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                // Colorize: fill with the object color, but only where mask pixels exist
+                offCtx.globalCompositeOperation = 'source-in';
+                offCtx.fillStyle = obj.color;
+                offCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw the colored mask onto the main canvas with transparency
+                ctx.globalAlpha = 0.4;
+                ctx.drawImage(offscreen, 0, 0);
+            });
+
+            ctx.globalAlpha = 1.0;
+        });
+
+        return () => { cancelled = true; };
+    }, [frameMap, viewingFrame, objects, containerWidth, containerHeight]);
 
     // ── Auto-start session on mount ──
     useEffect(() => {
         if (phase === 'idle' && videoPath) {
             startSession();
         }
-    }, []);
+    }, [videoPath]); // Dependency on videoPath to restart if it changes
 
     // ── Frame navigation ──
     const navigateFrame = useCallback((delta: number) => {
         setViewingFrame(prev => {
             const next = prev + delta;
-            if (next < 0 || next >= frameResults.length) return prev;
+            if (next < 0) return 0;
+            // Allow going beyond processed frames for prompting?
             return next;
         });
-    }, [frameResults.length]);
+        // Also update the prompting frame index
+        setFrameIndex(prev => Math.max(0, prev + delta));
+    }, []);
 
     // ── Render ──
     return (
@@ -419,6 +733,12 @@ export const TrackingPanel = memo(({
                                 key={obj.id}
                                 className="flex items-center gap-2 px-2 py-1.5 bg-white/5 rounded-lg"
                             >
+                                <button
+                                    onClick={() => toggleVisibility(obj.id)}
+                                    className="text-white/40 hover:text-white transition-colors"
+                                >
+                                    {obj.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                </button>
                                 <div
                                     className="w-3 h-3 rounded-full flex-shrink-0"
                                     style={{ backgroundColor: obj.color }}
@@ -429,6 +749,13 @@ export const TrackingPanel = memo(({
                                 <span className="text-[9px] text-white/30 font-mono">
                                     #{obj.id}
                                 </span>
+                                <button
+                                    onClick={() => removeObject(obj.id)}
+                                    className="text-white/20 hover:text-red-400 transition-colors ml-1"
+                                    title="Remove Object"
+                                >
+                                    <Trash2 size={12} />
+                                </button>
                             </div>
                         ))}
                     </div>
@@ -445,8 +772,15 @@ export const TrackingPanel = memo(({
                             >
                                 <ChevronLeft size={16} />
                             </button>
-                            <span className="text-[10px] text-white/50 font-mono">
-                                Frame {viewingFrame + 1} / {frameResults.length}
+                            <span className="text-[10px] text-white/50 font-mono flex items-center gap-2">
+                                <span className="flex gap-0.5">
+                                    <button onClick={() => jumpToKeyframe('prev')} disabled={keyframeIndices.size === 0} className="hover:text-white disabled:opacity-30"><ChevronsLeft size={12} /></button>
+                                    <button onClick={() => jumpToKeyframe('next')} disabled={keyframeIndices.size === 0} className="hover:text-white disabled:opacity-30"><ChevronsRight size={12} /></button>
+                                </span>
+                                Frame {viewingFrame + 1}{totalFrames > 0 ? ` / ${totalFrames}` : (frameResults.length > 0 ? ` / ${frameResults.length}` : '')}
+                                {keyframeIndices.has(viewingFrame) && (
+                                    <div className="w-1.5 h-1.5 rounded-full bg-yellow-400" title="Keyframe (User Prompt)" />
+                                )}
                             </span>
                             <button
                                 onClick={() => navigateFrame(1)}
@@ -473,6 +807,15 @@ export const TrackingPanel = memo(({
                     >
                         <Square size={12} /> Close
                     </button>
+                    {frameResults.length > 0 && (
+                        <button
+                            onClick={exportMasks}
+                            disabled={isExporting}
+                            className="flex-1 py-2 bg-blue-500/20 text-blue-400 font-bold text-xs rounded-lg hover:bg-blue-500/30 disabled:opacity-30 transition-all flex items-center justify-center gap-1"
+                        >
+                            {isExporting ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />} Export
+                        </button>
+                    )}
                 </div>
             </motion.div>
         </div>

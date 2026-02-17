@@ -3,7 +3,10 @@ import shutil
 import logging
 import subprocess
 from typing import Optional
+from urllib.parse import urlparse, unquote
 import config
+
+logger = logging.getLogger(__name__)
 
 # Use centralized config for base directory to ensure consistency
 # This replaces the specific __file__ based logic in worker.py and server.py
@@ -44,7 +47,7 @@ def generate_thumbnail(video_path: str) -> Optional[str]:
         ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return thumb_path
     except Exception as e:
-        # logger.error(f"Thumb gen failed: {e}") # Logger not available here yet, need to pass it or rely on caller
+        logger.warning(f"Thumb gen failed at 0.5s: {e}")
         # Try at 0s if 0.5s failed (e.g. video too short)
         try:
             subprocess.run([
@@ -54,11 +57,15 @@ def generate_thumbnail(video_path: str) -> Optional[str]:
         except:
             return None
 
-def resolve_path(p: str):
+def resolve_path(p: str) -> str:
     """
     Resolves a path that might be a URL to a local filesystem path.
-    e.g. http://localhost:8000/uploads/file.png -> /abs/path/to/uploads/file.png
-            /uploads/file.png -> /abs/path/to/uploads/file.png
+    Handles:
+      - Full URLs: http://localhost:8000/projects/id/generated/file.mp4
+      - Project paths: /projects/{id}/generated/file.mp4
+      - Legacy paths: /uploads/file.png, /generated/file.mp4
+      - Absolute paths: returned as-is
+      - URL-encoded characters: %20 → space, etc.
     """
     if not p:
         return p
@@ -66,22 +73,36 @@ def resolve_path(p: str):
     
     base_dir = get_base_dir()
 
-    # Handle full URLs first
-    if "localhost" in p or "127.0.0.1" in p:
-        if "/uploads/" in p:
-            filename = p.split("/uploads/")[-1]
-            return os.path.join(base_dir, "uploads", filename)
-        if "/generated/" in p:
-            filename = p.split("/generated/")[-1]
-            return os.path.join(base_dir, "generated", filename)
+    # Strip full URL to just the path component
+    if p.startswith("http://") or p.startswith("https://"):
+        parsed = urlparse(p)
+        p = unquote(parsed.path)  # URL-decode the path
+    else:
+        p = unquote(p)  # URL-decode even relative paths
     
-    # Handle relative URL paths (starting with /uploads or /generated)
+    # Already an absolute filesystem path
+    if os.path.isabs(p) and not p.startswith("/projects/") and not p.startswith("/uploads/") and not p.startswith("/generated/"):
+        return p
+
+    # --- Project paths: /projects/{project_id}/... ---
+    if p.startswith("/projects/"):
+        relative = p[len("/projects/"):]  # Safe prefix removal (not lstrip!)
+        full_path = os.path.join(config.PROJECTS_DIR, relative)
+        if os.path.exists(full_path):
+            return full_path
+        # Return even if not found — let caller handle missing file
+        logger.debug(f"resolve_path: /projects/ path resolved to {full_path} (exists={os.path.exists(full_path)})")
+        return full_path
+
+    # --- Legacy paths: /uploads/... ---
     if p.startswith("/uploads/"):
-        filename = p.split("/uploads/")[-1]
+        filename = p[len("/uploads/"):]
         return os.path.join(base_dir, "uploads", filename)
-        
+
+    # --- Legacy paths: /generated/... ---
     if p.startswith("/generated/"):
-        filename = p.split("/generated/")[-1]
+        filename = p[len("/generated/"):]
         return os.path.join(base_dir, "generated", filename)
-        
+
+    # Fallback — return as-is
     return p

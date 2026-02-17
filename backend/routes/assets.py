@@ -98,7 +98,7 @@ async def get_shot_last_frame(job_id: str, session: Session = Depends(get_sessio
     # config.PROJECTS_DIR is absolute.
     # job.output_path looks like /projects/ID/generated/foo.mp4
     
-    rel_path = job.output_path.lstrip("/projects/")
+    rel_path = job.output_path.removeprefix("/projects/")
     video_path = os.path.join(config.PROJECTS_DIR, rel_path)
     
     # Check if it's an image (single frame generation)
@@ -334,7 +334,7 @@ async def delete_upload(filename: str, session: Session = Depends(get_session)):
         # Resolve absolute path from URL
         file_path = job.output_path
         if file_path and file_path.startswith("/projects/"):
-            rel = file_path.lstrip("/projects/") # Or safe slice
+            rel = file_path.removeprefix("/projects/")
             # Safer slice
             rel = file_path[len("/projects/"):]
             file_path = os.path.join(config.PROJECTS_DIR, rel)

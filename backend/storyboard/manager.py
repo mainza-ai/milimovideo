@@ -4,6 +4,7 @@ import shutil
 import subprocess
 from typing import Optional, Any
 from sqlmodel import select
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +36,9 @@ class StoryboardManager:
         else:
             self.artifacts_dir = None
 
-        # Chaining Configuration
-        self.chunk_size = 121
-        self.overlap_frames = 24 
+        # Chaining Configuration — centralized in config.py
+        self.chunk_size = config.DEFAULT_NUM_FRAMES
+        self.overlap_frames = config.DEFAULT_OVERLAP_FRAMES
         
         # State
         self.state = StoryboardState()
@@ -45,7 +46,7 @@ class StoryboardManager:
 
     def get_total_chunks(self) -> int:
         """Calculate number of chunks needed."""
-        total_frames = self.params.get("num_frames", 121)
+        total_frames = self.params.get("num_frames", config.DEFAULT_NUM_FRAMES)
         if total_frames <= self.chunk_size:
             return 1
             
@@ -60,30 +61,61 @@ class StoryboardManager:
     async def prepare_next_chunk(self, chunk_idx, last_chunk_output, text_encoder=None) -> dict:
         """
         Prepare params for the next chunk.
-        If chunk > 0, extract last frame of previous chunk and use as conditioning.
+        If chunk > 0, extract last frame of previous chunk and use as conditioning,
+        and optionally enhance the prompt for narrative continuation.
         """
         logger.info(f"Preparing chunk {chunk_idx}...")
         
         base_prompt = self.state.global_prompt or self.prompt
         
-        config = {
+        chunk_config = {
             "prompt": base_prompt,
             "images": [] # Conditioning
         }
         
         if chunk_idx > 0 and last_chunk_output:
             # Extract last frame for overlap conditioning
-            last_frame = self._get_last_frame_local(last_chunk_output, f"chunk_{chunk_idx-1}")
+            last_frame = self._extract_last_frame(last_chunk_output, f"chunk_{chunk_idx-1}")
             if last_frame:
                  # (path, frame_idx, strength)
                  # LTX conditioning at frame 0
-                 config["images"] = [(last_frame, 0, 1.0)]
+                 chunk_config["images"] = [(last_frame, 0, 1.0)]
                  logger.info(f"Conditioned chunk {chunk_idx} on {last_frame}")
             else:
                 logger.warning(f"Failed to get condition frame for chunk {chunk_idx}")
+            
+            # Narrative continuation via LLM (enhance prompt for this chunk)
+            try:
+                from llm import enhance_prompt as llm_enhance
                 
-        # Optional: Mutate prompt based on chunk index or LLM (omitted for speed)
-        return config
+                director_prompt = (
+                    "You are a Film Director continuing a video scene. "
+                    "Given the Global Story Goal, write the next 4 seconds of action. "
+                    "Maintain visual continuity, character identity, and narrative flow. "
+                    "Specify camera movement, lighting, and atmosphere. "
+                    "Output ONLY the prompt. Single paragraph."
+                )
+                continuation_input = (
+                    f"Global Story Goal: {base_prompt}. "
+                    f"This is chunk {chunk_idx + 1} of a continuous video. "
+                    f"Continue the action from where the previous chunk left off."
+                )
+                
+                enhanced = llm_enhance(
+                    prompt=continuation_input,
+                    system_prompt=director_prompt,
+                    is_video=True,
+                    text_encoder=text_encoder,
+                    image_path=last_frame if last_frame else None,
+                    seed=self.params.get("seed", 42),
+                )
+                if enhanced and enhanced != continuation_input:
+                    chunk_config["prompt"] = enhanced
+                    logger.info(f"Chunk {chunk_idx} enhanced prompt: {enhanced[:80]}...")
+            except Exception as e:
+                logger.warning(f"Chunk {chunk_idx} narrative enhancement failed: {e}")
+                
+        return chunk_config
 
     async def commit_chunk(self, chunk_idx, path, prompt):
         """Register completed chunk."""
@@ -94,18 +126,20 @@ class StoryboardManager:
         })
         logger.info(f"Committed chunk {chunk_idx}: {path}")
 
-    def _get_last_frame_local(self, video_path: str, shot_id: str) -> Optional[str]:
-        """Local helper to extract last frame (avoiding self._get_last_frame conflict)."""
-        if not self.artifacts_dir: return None
+    def _extract_last_frame(self, video_path: str, shot_id: str) -> Optional[str]:
+        """Extract last frame of video to artifacts dir using FFmpeg."""
+        if not self.artifacts_dir:
+            return None
         try:
             filename = f"{shot_id}_last.png"
             out_path = os.path.join(self.artifacts_dir, filename)
             
-            if os.path.exists(out_path): return out_path
+            if os.path.exists(out_path):
+                return out_path
                 
             cmd = [
                 "ffmpeg", "-y",
-                "-sseof", "-0.1", 
+                "-sseof", "-0.1",  # Seek to last 0.1 sec
                 "-i", video_path,
                 "-vsync", "0",
                 "-q:v", "2",
@@ -132,7 +166,7 @@ class StoryboardManager:
         logger.info(f"Preparing generation for Shot {shot.index} (Scene {shot.scene_id})")
         
         # 1. Base Params
-        config = {
+        shot_config = {
             "prompt": shot.action, # Start with base action
             "images": []
         }
@@ -147,59 +181,36 @@ class StoryboardManager:
         
         if prev_shot and prev_shot.video_url and prev_shot.status == "completed":
              # Extract last frame
-             last_frame_path = self._get_last_frame(prev_shot.video_url, prev_shot.id)
+             last_frame_path = self._extract_last_frame(prev_shot.video_url, prev_shot.id)
              if last_frame_path:
                  # Add as conditioning
                  # LTX-2 conditioning format: (path, frame_idx, strength)
                  # We simply condition the START of the new shot with the END of the old one.
-                 config["images"] = [(last_frame_path, 0, 1.0)] 
+                 shot_config["images"] = [(last_frame_path, 0, 1.0)] 
                  logger.info(f"Conditioning on Shot {prev_shot.index} last frame.")
              else:
                  logger.warning(f"Could not extract frame from previous shot {prev_shot.id}")
         
         # 3. Prompt Enhancement (Narrative Flow)
-        # We can implement prompt enhancement here or let the worker do it.
-        # But the plan says we do it here (or via ElementManager).
-        
         from managers.element_manager import element_manager
         enriched_prompt, element_visuals = element_manager.inject_elements_into_prompt(shot.action, shot.project_id)
         
         if prev_shot:
             # Contextual Prompting
-            # "Previous action was [prev_action]. Now, [current_action]."
             context = f"Following the previous shot where {prev_shot.action}. "
             enriched_prompt = f"{context} {enriched_prompt}"
             
-        config["prompt"] = enriched_prompt
-        config["element_images"] = element_visuals
+        shot_config["prompt"] = enriched_prompt
+        shot_config["element_images"] = element_visuals
         
-        return config
-
-    def _get_last_frame(self, video_path: str, shot_id: str) -> Optional[str]:
-        """Extract last frame of video to artifacts dir."""
-        try:
-            filename = f"{shot_id}_last.png"
-            out_path = os.path.join(self.artifacts_dir, filename)
-            
-            if os.path.exists(out_path):
-                return out_path
-                
-            cmd = [
-                "ffmpeg", "-y",
-                "-sseof", "-0.1", # Seek to last 0.1 sec
-                "-i", video_path,
-                "-vsync", "0",
-                "-q:v", "2",
-                "-update", "1",
-                out_path
-            ]
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-            return out_path
-        except Exception as e:
-            logger.error(f"Failed to extract last frame: {e}")
-            return None
+        return shot_config
 
     def cleanup(self):
         """Cleanup temporary files."""
-        # TODO: Implement granular cleanup if needed
-        pass
+        if self.artifacts_dir and os.path.exists(self.artifacts_dir):
+            try:
+                shutil.rmtree(self.artifacts_dir)
+                logger.info(f"Cleaned up artifacts: {self.artifacts_dir}")
+            except Exception as e:
+                logger.warning(f"Cleanup failed: {e}")
+

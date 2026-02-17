@@ -1,6 +1,7 @@
 import sys
 import os
 import logging
+import logging.handlers
 import mimetypes
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -11,14 +12,41 @@ import uvicorn
 
 import config
 
-# Setup Logging
+# ── Structured Logging Setup ──────────────────────────────────────
+# File handler: JSON-structured for machine parsing
+# Console handler: Human-readable for development
+
+class StructuredFormatter(logging.Formatter):
+    """JSON-structured log formatter for production log files."""
+    def format(self, record):
+        import json, time
+        log_entry = {
+            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "logger": record.name,
+            "level": record.levelname,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info and record.exc_info[0]:
+            log_entry["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_entry)
+
+# File handler: structured JSON (rotating, max 10MB, keep 3 backups)
+file_handler = logging.handlers.RotatingFileHandler(
+    "server.log", maxBytes=10*1024*1024, backupCount=3
+)
+file_handler.setFormatter(StructuredFormatter())
+file_handler.setLevel(logging.INFO)
+
+# Console handler: human-readable  
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+))
+console_handler.setLevel(logging.INFO)
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("server.log"),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=[file_handler, console_handler]
 )
 logger = logging.getLogger(__name__)
 
@@ -77,20 +105,36 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS
+# CORS - Belt and suspenders approach:
+# 1. CORSMiddleware handles preflight OPTIONS and standard API responses
+# 2. Raw HTTP middleware guarantees CORS headers on ALL responses (incl. errors, static files)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8000",
-        "http://127.0.0.1:8000"
-    ],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
 )
+
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    """Guarantee CORS headers on every response, including errors."""
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD",
+                "Access-Control-Allow-Headers": "Range, Content-Type, Authorization",
+                "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
+                "Access-Control-Max-Age": "86400",
+            },
+        )
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Expose-Headers"] = "Content-Range, Accept-Ranges, Content-Length"
+    return response
 
 # Include Routers (Must be before static mounts to avoid shadowing)
 app.include_router(api_router)
@@ -104,6 +148,13 @@ MEDIA_DIRS = {
     "/projects": config.PROJECTS_DIR,
     "/uploads": legacy_upload_dir,
     "/generated": legacy_generated_dir,
+}
+
+CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, OPTIONS, HEAD",
+    "Access-Control-Allow-Headers": "Range, Content-Type",
+    "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
 }
 
 @app.get("/projects/{file_path:path}")
@@ -157,6 +208,7 @@ async def serve_media(request: Request, file_path: str):
                 content=data,
                 status_code=206,
                 headers={
+                    **CORS_HEADERS,
                     "Content-Type": content_type,
                     "Content-Range": f"bytes {start}-{end}/{file_size}",
                     "Accept-Ranges": "bytes",
@@ -173,6 +225,7 @@ async def serve_media(request: Request, file_path: str):
         content=data,
         status_code=200,
         headers={
+            **CORS_HEADERS,
             "Content-Type": content_type,
             "Accept-Ranges": "bytes",
             "Content-Length": str(file_size),

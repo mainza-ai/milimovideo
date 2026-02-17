@@ -1,0 +1,16 @@
+{
+  "session_id": "curl_test_session",
+  "total_frames": 1,
+  "frames": {
+    "10": {
+      "num_objects": 1,
+      "objects": [
+        {
+          "id": "1",
+          "score": 1.0,
+          "file": "frame_00010_obj_1.png"
+        }
+      ]
+    }
+  }
+}

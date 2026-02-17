@@ -204,12 +204,56 @@ classDiagram
 
     class ScriptParseRequest {
         +str script_text
+        +str parse_mode = "auto"
+    }
+
+    class StoryboardShotData {
+        +str action
+        +str dialogue
+        +str character
+        +str shot_type
+    }
+
+    class StoryboardSceneData {
+        +str name = "Scene 1"
+        +str content
+        +List~StoryboardShotData~ shots
     }
 
     class CommitStoryboardRequest {
-        +List~dict~ scenes
+        +List~StoryboardSceneData~ scenes
     }
 
+    class ReorderShotsRequest {
+        +str scene_id
+        +List~str~ shot_ids
+    }
+
+    class AddShotRequest {
+        +str scene_id
+        +str action = "A cinematic shot..."
+        +str dialogue
+        +str character
+        +str shot_type = "medium"
+    }
+
+    class BatchGenerateRequest {
+        +List~str~ shot_ids
+    }
+
+    class UpdateSceneRequest {
+        +str name
+    }
+
+    class BatchThumbnailRequest {
+        +List~str~ shot_ids
+        +int width = 512
+        +int height = 320
+        +bool force = False
+    }
+
+    CommitStoryboardRequest --> StoryboardSceneData
+    StoryboardSceneData --> StoryboardShotData
     GenerateAdvancedRequest --> ShotConfig
     ShotConfig --> TimelineItem
 ```
@@ -222,6 +266,11 @@ classDiagram
 | `GenerateImageRequest` | `POST /generate_image` | `generate_image_task()` | Flux 2 Klein 9B via `FluxInpainter` |
 | `ElementVisualizeRequest` | `POST /elements/{id}/visualize` | `generate_visual_task()` | Flux 2 Klein 9B via `FluxInpainter` |
 | `InpaintRequest` | `POST /edit/inpaint` | `process_inpaint()` | SAM 3 (mask via point/text) → Flux 2 (RePaint). Creates `Job` DB record for status polling. |
+| `ScriptParseRequest` | `POST /projects/{id}/script/parse` | `script_parser.parse_script()` | None (regex) |
+| `ScriptParseRequest` | `POST /projects/{id}/storyboard/ai-parse` | `ai_parse_script()` | Gemma 3 (via LTX-2 text encoder) |
+| `CommitStoryboardRequest` | `POST /projects/{id}/storyboard/commit` | Smart merge (direct DB) | None |
+| `BatchThumbnailRequest` | `POST /projects/{id}/storyboard/thumbnails` | `generate_image_task()` | Flux 2 (`is_thumbnail=True`) |
+| `BatchGenerateRequest` | `POST /projects/{id}/storyboard/batch-generate` | `generate_video_task()` | LTX-2 |
 
 ### Key Default Values
 

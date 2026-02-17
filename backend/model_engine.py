@@ -82,6 +82,10 @@ class ModelManager:
             
             logger.info(f"Loading LTX-2 Pipeline: {pipeline_type}...")
             
+            # Unload conflicting models (e.g., Flux) before loading LTX
+            from memory_manager import memory_manager
+            memory_manager.prepare_for("video")
+            
             paths = self.get_model_paths()
             
             # Check device

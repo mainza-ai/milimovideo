@@ -795,6 +795,28 @@ def build_sam3_video_model(
             print(f"Unexpected keys: {unexpected_keys}")
 
     model.to(device=device)
+
+    # MPS does not support bfloat16 in linear layers — convert any remaining
+    # bfloat16 parameters/buffers to float32 when MPS is available.
+    # Note: even if current device is "cpu", the model may be moved to MPS
+    # later by Sam3VideoPredictor, so we must convert bfloat16 → float32 now.
+    _is_mps_env = (
+        str(device) == "mps"
+        or (hasattr(torch.backends, "mps") and torch.backends.mps.is_available())
+    )
+    if _is_mps_env:
+        _converted = 0
+        for param in model.parameters():
+            if param.dtype == torch.bfloat16:
+                param.data = param.data.to(torch.float32)
+                _converted += 1
+        for buf in model.buffers():
+            if buf.dtype == torch.bfloat16:
+                buf.data = buf.data.to(torch.float32)
+                _converted += 1
+        if _converted > 0:
+            print(f"[model_builder] Converted {_converted} bfloat16 params/buffers to float32 for MPS")
+
     return model
 
 

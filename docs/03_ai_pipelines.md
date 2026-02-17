@@ -375,6 +375,45 @@ flowchart TD
 
 ## 5. Model Management & Memory
 
+### Central Memory Manager (`memory_manager.py`)
+
+On Apple Silicon with unified memory, GPU models share the same physical RAM. The `MemoryManager` enforces mutual exclusion between heavy models to prevent OOM:
+
+```mermaid
+flowchart TD
+    subgraph Slots["Memory Slots"]
+        VIDEO["video — LTX-2 (~76GB)"]
+        IMAGE["image — Flux 2 (~36GB)"]
+        LLM["llm — Ollama (variable)"]
+    end
+
+    subgraph Rules["Conflict Rules"]
+        R1["video ↔ image: mutually exclusive"]
+        R2["llm: managed via Ollama keep_alive API"]
+    end
+
+    PREPARE["memory_manager.prepare_for(slot)"] --> CHECK{Conflicts?}
+    CHECK -->|Yes| UNLOAD["Unload conflicting slot"]
+    CHECK -->|No| LOAD["Proceed to load"]
+    UNLOAD --> FLUSH["gc.collect() + mps.empty_cache()"]
+    FLUSH --> LOAD
+```
+
+**Slot lifecycle:**
+- `model_engine.py` calls `prepare_for("video")` before loading any LTX pipeline → unloads Flux
+- `flux_wrapper.py` calls `prepare_for("image")` before loading Flux → unloads LTX
+- `flux_wrapper.py` `unload()` calls `release("image")` to update slot tracking
+
+### Ollama Keep-Alive Control
+
+`llm.py` sends `keep_alive: config.OLLAMA_KEEP_ALIVE` (default `"0"`) in every Ollama generate request. After prompt enhancement completes, an explicit unload request is sent:
+
+```python
+requests.post(url, json={"model": model, "keep_alive": 0, "prompt": "", "stream": False})
+```
+
+This frees the Ollama model (e.g., gemma3-27b at ~49GB VRAM) immediately, rather than waiting for the default 5-minute timeout. Configurable via `MILIMO_OLLAMA_KEEP_ALIVE` env var or the frontend AI Settings toggle.
+
 ### Device Selection
 ```python
 device = "cpu"
@@ -389,14 +428,16 @@ When switching pipeline types:
 1. Delete existing pipeline reference
 2. Call `gc.collect()`
 3. Empty GPU cache (`torch.cuda.empty_cache()` / `torch.mps.empty_cache()`)
-4. Load new pipeline with appropriate checkpoint
-5. If MPS: force `pipeline.vae` to `float32`
+4. **Call `memory_manager.prepare_for("video")`** — unloads Flux if loaded
+5. Load new pipeline with appropriate checkpoint
+6. If MPS: force `pipeline.vae` to `float32`
 
 ### AE Hot-Swap Logic (FluxInpainter)
 When `enable_ae` toggle changes between calls:
-1. Full model unload (flow model, AE, text encoder)
-2. Reload with new AE variant (native or diffusers)
-3. Tracked via `last_ae_enable_request` memo
+1. Full model unload (flow model, AE, text encoder, IP-Adapter)
+2. `memory_manager.release("image")` called
+3. Reload with new AE variant (native or diffusers)
+4. Tracked via `last_ae_enable_request` memo
 
 ### Checkpoint Auto-Selection (ModelManager)
 1. Priority: `ltx-2-19b-distilled.safetensors` (full precision)
@@ -421,9 +462,102 @@ When `enable_ae` toggle changes between calls:
 
 ## 6. Prompt Enhancement
 
-Located in `ltx_pipelines/utils/helpers.py` and `tasks/video.py`:
+### LLM Dispatcher (`llm.py`)
 
-- `generate_enhanced_prompt(prompt, text_encoder, image_for_gemma)` — uses Gemma 3 text encoder for cinematic prompt enrichment
-- **Image-conditioned enhancement**: When `image_for_gemma` is provided, the prompt is enriched with visual context from the conditioning image
-- **Element injection**: `ElementManager.inject_elements_into_prompt()` scans for trigger words (e.g., `@Hero`) and returns the enriched prompt + list of element image paths for IP-Adapter conditioning
+All prompt enhancement routes through a single dispatcher that selects between two providers:
+
+| Provider | Config Value | Model | Enhancement Method |
+|---|---|---|---|
+| **Gemma** (built-in) | `gemma` | Gemma 3 (LTX-2 text encoder) | Direct `text_encoder._enhance()` on-device |
+| **Ollama** (local) | `ollama` | Any Ollama model (e.g., gemma3-27b) | HTTP API `POST /api/generate` |
+
+```python
+# Usage (all callers use the same API):
+from llm import enhance_prompt
+enhanced = enhance_prompt(prompt, system_prompt="...", is_video=True, text_encoder=te)
+```
+
+**Ollama features:**
+- `keep_alive: config.OLLAMA_KEEP_ALIVE` sent with every request (default `"0"` = unload immediately)
+- Explicit unload request after enhancement to free VRAM before generation
+- Vision model detection via `/api/tags` — models with `mllama`, `clip`, `llava` families tagged as `is_vision: true`
+- Settings API: `GET/PATCH /settings/llm` + `GET /settings/llm/models`
+- Frontend: model dropdown with 👁️ vision badges, "Keep Model Loaded" toggle
+
+**System prompts:**
+- `VIDEO_SYSTEM_PROMPT` — concise, action-focused descriptions for video generation
+- `IMAGE_SYSTEM_PROMPT` — vivid, detailed descriptions for image generation
+
+**Callers:**
+- `tasks/video.py` — ti2vid, ic_lora, keyframe, single-frame Flux paths
+- `tasks/chained.py` — chunk 0 and narrative continuation for chunks 1+
+- `tasks/image.py` — standalone image generation
+- `storyboard/manager.py` — chunk continuation prompts
+
+### Element Injection
+
+- `ElementManager.inject_elements_into_prompt()` scans for trigger words (e.g., `@Hero`) and returns the enriched prompt + list of element image paths for IP-Adapter conditioning
 - **Implicit trigger detection**: In `tasks/image.py`, all project elements are scanned — if a trigger word appears in the prompt, the element's reference image is automatically added to `resolved_ip_paths`
+
+## 7. AI Storyboard Analysis
+
+### 7.1 Overview
+
+**File**: `services/ai_storyboard.py`
+**Model**: Gemma 3 text encoder (reused from LTX-2 pipeline via `model_engine.manager`)
+**Endpoint**: `POST /projects/{id}/storyboard/ai-parse`
+
+Uses the Gemma text encoder's **chat completion interface** (`_enhance()`) to intelligently parse free-form text into structured scenes and shots. This provides a smarter alternative to the regex-based `ScriptParser` — handling non-standard scripts, treatments, and prose descriptions.
+
+### 7.2 Pipeline
+
+```mermaid
+flowchart TD
+    UI[ScriptInput — Brain icon] --> API["POST /storyboard/ai-parse"]
+    API --> CHECK{Gemma loaded?}
+    CHECK -->|Yes| GEMMA["ai_parse_script(text, text_encoder)"]
+    CHECK -->|No| REGEX["Fallback: script_parser.parse_script()"]
+    
+    GEMMA --> BUILD["Build chat messages:<br/>system = AI_STORYBOARD_SYSTEM_PROMPT<br/>user = script text"]
+    BUILD --> ENHANCE["text_encoder._enhance(messages, max_new_tokens=1024)"]
+    ENHANCE --> EXTRACT["_extract_json(): strip markdown fences,<br/>regex search for JSON array"]
+    EXTRACT --> VALIDATE["_validate_scenes(): normalize shot_types,<br/>sanitize DialogueLine/character types"]
+    
+    VALIDATE --> RETURN["List[ParsedScene]"]
+    REGEX --> RETURN
+```
+
+### 7.3 System Prompt
+
+The AI is instructed to act as a **professional storyboard artist and screenwriter**. Key directives:
+- Output **valid JSON only** — no markdown explanation
+- Each scene: 1–8 shots with varied shot types for cinematic interest
+- Action descriptions: vivid and visual, suitable for AI video generation
+- Dialogue paired with `close_up` or `medium` shots
+- Character names in TITLE CASE
+- Valid shot types: `close_up`, `medium`, `wide`, `establishing`, `insert`, `tracking`
+
+### 7.4 JSON Extraction & Validation
+
+`_extract_json()` handles Gemma output quirks:
+1. Strip markdown `\`\`\`json` fences
+2. Try direct `json.loads()` parse
+3. Fallback: regex search for `[...]` array in response
+4. Raise `ValueError` if no valid JSON found
+
+`_validate_scenes()` sanitizes the output:
+- Unknown shot types default to `"medium"`
+- Missing actions get placeholder: `"A cinematic shot."`
+- Dialogue/character fields coerced to `str | None`
+
+### 7.5 Concept Art Thumbnails
+
+**Endpoint**: `POST /projects/{id}/storyboard/thumbnails`
+**Schema**: `BatchThumbnailRequest` (`shot_ids`, `width=512`, `height=320`, `force=False`)
+
+For each shot without an existing `thumbnail_url` (or when `force=True`):
+1. Creates a `Job` DB record with `is_thumbnail=True`
+2. Dispatches `generate_image_task()` via `BackgroundTasks`
+3. Flux 2 generates concept art at 512×320
+4. `tasks/image.py` writes result to `Shot.thumbnail_url` for `is_thumbnail` jobs
+5. SSE `complete` event includes `shot_id` — `ServerSlice` matches by `shot_id` (not `lastJobId`) and updates only the thumbnail

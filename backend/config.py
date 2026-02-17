@@ -33,6 +33,10 @@ DEFAULT_RESOLUTION_W = 768
 DEFAULT_RESOLUTION_H = 512
 DEFAULT_FPS = 25
 DEFAULT_SEED = 42
+DEFAULT_NUM_FRAMES = 121       # LTX-2 default chunk size (was hardcoded)
+DEFAULT_OVERLAP_FRAMES = 24   # Frames overlapped between chained chunks
+DEFAULT_THUMBNAIL_W = 512     # Concept art thumbnail width
+DEFAULT_THUMBNAIL_H = 320     # Concept art thumbnail height
 
 def setup_paths():
     """Ensure necessary paths are in sys.path"""
@@ -48,11 +52,19 @@ os.makedirs(PROJECTS_DIR, exist_ok=True)
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 
+# MPS Memory Safety
+# Maximum safe generation resolution for Apple MPS with 19B float32 model
+# The two-stage pipeline runs Stage 1 at half-res and Stage 2 at full-res.
+# Attention memory scales quadratically with token count (H*W*Frames).
+MPS_MAX_RESOLUTION_W = 1280
+MPS_MAX_RESOLUTION_H = 768
+MPS_MAX_PIXELS = MPS_MAX_RESOLUTION_W * MPS_MAX_RESOLUTION_H  # ~983K pixels
+
 PRESETS = {
-    "Standard": {"width": 1280, "height": 720},
-    "Cinematic": {"width": 1920, "height": 800},
-    "4K": {"width": 3840, "height": 2160},
-    "Social": {"width": 1080, "height": 1920}
+    "Standard": {"width": 768, "height": 512},
+    "Widescreen": {"width": 1024, "height": 576},
+    "HD": {"width": 1280, "height": 704},
+    "Portrait": {"width": 512, "height": 768},
 }
 
 FILTER_PRESETS = [
@@ -61,3 +73,13 @@ FILTER_PRESETS = [
     {"name": "Anime", "prompt": "studio ghibli style, cel shaded, vibrant colors, detailed background"},
     {"name": "Vintage", "prompt": "1950s footage, black and white, film grain, scratches, flickering"},
 ]
+
+# ── LLM Configuration ─────────────────────────────────────────────
+# Provider: "gemma" (built-in LTX text encoder) or "ollama" (local LLM)
+LLM_PROVIDER = os.environ.get("MILIMO_LLM_PROVIDER", "gemma")
+OLLAMA_BASE_URL = os.environ.get("MILIMO_OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.environ.get("MILIMO_OLLAMA_MODEL", "llama3.1")
+# "0" = unload model immediately after use (saves ~49GB during generation)
+# "5m" = keep loaded 5 minutes (Ollama default, faster re-prompts but wastes RAM)
+OLLAMA_KEEP_ALIVE = os.environ.get("MILIMO_OLLAMA_KEEP_ALIVE", "0")
+

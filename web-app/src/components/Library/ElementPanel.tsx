@@ -121,7 +121,11 @@ export const ElementPanel = () => {
                                 <span className="text-sm font-bold">{el.name}</span>
                             </div>
                             <button
-                                onClick={() => deleteElement(el.id)}
+                                onClick={() => {
+                                    if (window.confirm(`Delete element "${el.name}"? This cannot be undone.`)) {
+                                        deleteElement(el.id);
+                                    }
+                                }}
                                 className="text-white/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
                             >
                                 <Trash2 size={12} />

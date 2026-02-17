@@ -143,7 +143,12 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
             {/* Footer Actions */}
             <div className="px-5 pb-5 pt-0 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
-                    onClick={(e) => { e.stopPropagation(); onDelete(el.id); }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if (window.confirm(`Delete element "${el.name}"? This cannot be undone.`)) {
+                            onDelete(el.id);
+                        }
+                    }}
                     className="text-red-500/50 hover:text-red-500 transition-colors p-2"
                 >
                     <Trash2 size={16} />

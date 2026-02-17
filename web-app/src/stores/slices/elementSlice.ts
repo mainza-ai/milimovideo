@@ -176,4 +176,40 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
             addToast("Failed to commit storyboard", "error");
         }
     },
+
+    aiParseScript: async (text: string) => {
+        try {
+            const project_id = get().project.id;
+            const res = await fetch(`http://localhost:8000/projects/${project_id}/storyboard/ai-parse`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ script_text: text })
+            });
+            const data = await res.json();
+            if (data.mode === 'fallback') {
+                get().addToast("AI unavailable — used standard parser", "info");
+            }
+            return data.scenes as ParsedScene[];
+        } catch (e) {
+            console.error("AI parse failed", e);
+            get().addToast("AI parse failed", "error");
+            return [];
+        }
+    },
+
+    updateSceneName: async (sceneId: string, name: string) => {
+        const { project } = get();
+        try {
+            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/scenes/${sceneId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (!res.ok) throw new Error("Scene rename failed");
+        } catch (e) {
+            console.error("Scene rename failed", e);
+            get().addToast("Failed to rename scene", "error");
+        }
+    },
 });
+

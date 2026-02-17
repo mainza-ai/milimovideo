@@ -31,11 +31,11 @@ class Scene(SQLModel, table=True):
     script_content: Optional[str] = None # The text segment for this scene
     
     project: Optional[Project] = Relationship(back_populates="scenes")
-    # shots: List["Shot"] = Relationship(back_populates="scene") # Future
+    shots: List["Shot"] = Relationship(back_populates="scene", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
 class Shot(SQLModel, table=True):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
-    scene_id: Optional[str] = Field(default=None, index=True) # Optional link to Scene
+    scene_id: Optional[str] = Field(default=None, index=True, foreign_key="scene.id") # Link to Scene
     project_id: str = Field(index=True, foreign_key="project.id") # Redundant but useful for queries
     index: Optional[int] = None
     track_index: int = Field(default=0) # 0=Main, 1=Overlay, 2=Audio?
@@ -44,6 +44,7 @@ class Shot(SQLModel, table=True):
     trim_out: int = Field(default=0) # Trim from end (frames)
     
     project: Optional[Project] = Relationship(back_populates="shots")
+    scene: Optional[Scene] = Relationship(back_populates="shots")
     
     # Content
     action: Optional[str] = None # "Hero runs down the alley" (Storyboard context)
@@ -63,6 +64,7 @@ class Shot(SQLModel, table=True):
     upscale: bool = False
     pipeline_override: str = "auto"
     auto_continue: bool = Field(default=False)
+    shot_type: Optional[str] = None  # close_up, medium, wide, establishing, insert, tracking
     
     # Generation State
     prompt_enhanced: Optional[str] = None # Legacy field

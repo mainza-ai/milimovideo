@@ -43,7 +43,7 @@ The frontend relies on a single `useTimelineStore` composed from **7 slices** (P
 Real-time progress uses SSE (`EventManager` → `ServerSlice.handleServerEvent`). On page refresh, `jobPoller.ts` performs a one-shot sync to recover in-flight job state from the database.
 
 ### 5. Storyboard → Timeline Pipeline
-Scripts are parsed via `ScriptParser` (regex-based screenwriting format) into `Scene` → `Shot` hierarchies, which then map to timeline clips for generation.
+Scripts are parsed into `Scene` → `Shot` hierarchies via two paths: **`ScriptParser`** (regex-based screenwriting format) for instant structured parsing, or **`ai_parse_script()`** (Gemma 3 AI via LTX-2 text encoder) for intelligent free-form text analysis with cinematic shot type suggestions. The storyboard supports AI concept art thumbnails (Flux 2, 512×320), batch video generation, drag-to-reorder shots, scene name editing, and Push to Timeline to commit scenes/shots directly into the NLE.
 
 ### 6. SAM 3 as Isolated Microservice
 SAM 3 runs on port 8001 as a standalone FastAPI server (`sam3/start_sam_server.py`). It supports text-prompted segmentation (`Sam3Processor`), click-to-segment (`inst_interactive_predictor`), and video object tracking (`Sam3VideoPredictor`, lazy-loaded with MPS/CUDA/CPU device auto-detection). The main backend communicates with it via HTTP POST through `InpaintingManager` and `TrackingManager`. Inpaint jobs are persisted as `Job` DB records for status polling via `/status/{job_id}`.
@@ -73,7 +73,7 @@ The codebase is designed to run on Apple Silicon (MPS) with CUDA as the primary 
 
 ## File Inventory
 
-### Backend (`backend/`) — 24 source files
+### Backend (`backend/`) — 25 source files
 ```
 server.py              config.py              database.py
 worker.py              job_utils.py           events.py
@@ -86,6 +86,7 @@ managers/element_manager.py
 managers/inpainting_manager.py
 managers/tracking_manager.py
 services/script_parser.py
+services/ai_storyboard.py
 storyboard/manager.py
 models/flux_wrapper.py
 ```
@@ -120,6 +121,9 @@ components/Library/ElementManager.tsx
 components/Library/ElementPanel.tsx
 components/Images/ImagesView.tsx
 components/Storyboard/StoryboardView.tsx
+components/Storyboard/StoryboardSceneGroup.tsx
+components/Storyboard/StoryboardShotCard.tsx
+components/Storyboard/ScriptInput.tsx
 components/ProjectManager.tsx
 components/MediaUploader.tsx
 components/VideoPlayer.tsx

@@ -66,6 +66,19 @@ class Sam3VideoPredictor:
             .eval()
         )
 
+        # MPS does not support bfloat16 — ensure all params are float32
+        if self.device.type == "mps":
+            _converted = 0
+            for p in self.model.parameters():
+                if p.dtype == torch.bfloat16:
+                    p.data = p.data.to(torch.float32)
+                    _converted += 1
+            for b in self.model.buffers():
+                if b.dtype == torch.bfloat16:
+                    b.data = b.data.to(torch.float32)
+                    _converted += 1
+            logger.info(f"Converted {_converted} bfloat16 params/buffers to float32 after .to(mps)")
+
     @torch.inference_mode()
     def handle_request(self, request):
         """Dispatch a request based on its type."""
@@ -140,7 +153,11 @@ class Sam3VideoPredictor:
             f"started new session {session_id}; {self._get_session_stats()}; "
             f"{self._get_torch_and_gpu_properties()}"
         )
-        return {"session_id": session_id}
+        return {
+            "session_id": session_id,
+            "fps": inference_state["fps"],
+            "num_frames": inference_state["num_frames"],
+        }
 
     def add_prompt(
         self,

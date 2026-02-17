@@ -1,0 +1,16 @@
+{
+  "session_id": "80416893-ae65-4c87-9079-75759a400a18",
+  "total_frames": 121,
+  "frames": {
+    "-1": {
+      "num_objects": 1,
+      "objects": [
+        {
+          "id": "0",
+          "score": 0.9309750199317932,
+          "file": "frame_-0001_obj_0.png"
+        }
+      ]
+    }
+  }
+}

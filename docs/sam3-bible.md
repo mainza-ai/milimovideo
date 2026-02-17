@@ -189,6 +189,7 @@ All SAM-related edit routes are **multipart file-upload proxies** — they accep
 | POST | `/track/prompt` | JSON body | Add tracking prompt |
 | POST | `/track/propagate` | JSON body | Propagate tracking |
 | POST | `/track/stop` | JSON body | Stop tracking session |
+| POST | `/edit/track/save` | JSON body (`TrackingSaveRequest`) | Export tracking results: saves base64 masks as PNG files to `exports/tracking/<session_id>/masks/` and writes `manifest.json`. |
 
 ### 5.5 Frontend Components
 
@@ -274,6 +275,7 @@ Video Object Tracking:
 
 SAM 3 was designed for CUDA. Running on MPS requires several workarounds:
 
+#### Image/Detection Fixes
 | Issue | Fix | Location |
 |---|---|---|
 | `grid_sample` crashes with empty tensors | Early return guard when `n_points == 0` | `geometry_encoders.py:_encode_points` |
@@ -283,9 +285,51 @@ SAM 3 was designed for CUDA. Running on MPS requires several workarounds:
 | BFloat16 tensors incompatible with numpy | `.float()` cast before `.numpy()` | `start_sam_server.py:detect_objects` |
 | Mask output shape `[N,1,H,W]` vs expected `[N,H,W]` | `.squeeze(1)` before numpy conversion | `start_sam_server.py:detect_objects` |
 | Canvas tainting (cross-origin video frames) | `crossOrigin="anonymous"` on `<video>`/`<img>` | `CinematicPlayer.tsx:VideoSurface` |
-| `Sam3VideoPredictor.__init__()` hardcodes `.cuda()` | Added `device` param; `.to(self.device)` with auto-detect (CUDA → MPS → CPU) | `sam3_video_predictor.py:__init__` |
-| `_get_session_stats()` calls `torch.cuda.*` | Guarded behind `torch.cuda.is_available()` | `sam3_video_predictor.py:_get_session_stats` |
-| `_get_torch_and_gpu_properties()` calls `torch.cuda.*` | Guarded behind `torch.cuda.is_available()` | `sam3_video_predictor.py:_get_torch_and_gpu_properties` |
+
+#### Video Predictor Initialization Fixes
+| Issue | Fix | Location |
+|---|---|---|
+| `Sam3VideoPredictor.__init__()` hardcodes `.cuda()` | Added `device` param; `.to(self.device)` with auto-detect | `sam3_video_predictor.py:__init__` |
+| `_get_session_stats()` calls `torch.cuda.*` | Guarded behind `torch.cuda.is_available()` | `sam3_video_predictor.py` |
+| `_get_torch_and_gpu_properties()` calls `torch.cuda.*` | Guarded behind `torch.cuda.is_available()` | `sam3_video_predictor.py` |
+| `build_sam3_video_model` defaults to `"cpu"` | Changed to `"mps"` when MPS available | `model_builder.py:668` |
+| bfloat16 params survive checkpoint loading | Convert all bfloat16 → float32 on MPS after `.to(device)` | `model_builder.py:797-812`, `sam3_video_predictor.py:69-76` |
+
+#### Autocast & Dtype Fixes
+| Issue | Fix | Location |
+|---|---|---|
+| CPU autocast silently falls back to bfloat16 | Disable autocast entirely on MPS via `contextlib.nullcontext()` | `sam3_tracking_predictor.py:50-67` |
+| `torch.amp.autocast("cuda")` hardcoded | Dynamic device type; MPS → `"cpu"` with `enabled=False` | `decoder.py:70-72` |
+| Explicit bfloat16 cast on backbone features | Conditional: MPS keeps float32, CUDA casts to bfloat16 | `sam3_image.py:834-836` |
+
+#### CUDA-Hardcoding Fixes (Video Tracking)
+| Issue | Fix | Location |
+|---|---|---|
+| `storage_device` hardcodes `torch.device("cuda")` | Uses `self.device` instead | `sam3_tracking_predictor.py:101` |
+| `.cuda(non_blocking=True)` on mask logits | Replaced with `.to(device)` | `sam3_tracking_predictor.py:323` |
+| `non_blocking=True` triggers CUDA init on MPS | Conditional: `non_blocking=(device.type == "cuda")` | `sam3_tracking_predictor.py` (6 sites) |
+| `pin_memory()` in temporal position encoding | Skipped on non-CUDA devices | `sam3_tracker_base.py:167` |
+| `pin_memory()` + `non_blocking` in output filtering | Conditional on CUDA | `sam3_video_inference.py:481` |
+
+#### MPS Tensor Operation Fixes
+| Issue | Fix | Location |
+|---|---|---|
+| `freqs_cis` on CPU vs query on MPS | Added `.to(xq_.device)` after reshape | `rope.py:70` |
+| `repeat()` not supported for complex tensors | Decompose into real/imag, repeat each, reconstruct via `torch.complex()` | `rope.py:76-78` |
+| `torch.stack` on empty tensor list | Guard for `batch_size == 0` with early return | `connected_components.py:43-48` |
+
+#### Server Integration Fixes
+| Issue | Fix | Location |
+|---|---|---|
+| `str(result)` destroys model output structure | Proper JSON serialization of `object_ids`, `scores`, `num_objects` | `start_sam_server.py:track_prompt` |
+| Click points missing required `obj_id` | Auto-assign `obj_id=1` when points sent without explicit ID | `start_sam_server.py:track_prompt` |
+| `max_frames=-1` sentinel causes 0 propagation iterations | Convert `-1` → `None` before passing to model | `start_sam_server.py:track_propagate` |
+| `start_frame_idx` key mismatch | Fixed to `start_frame_index` matching predictor | `start_sam_server.py:track_propagate` |
+
+#### Dependencies
+| Package | Reason |
+|---|---|
+| `scikit-image` | Required for CPU-based connected components labeling (`skimage.measure.label`) used in hole-filling |
 
 ### 5.9 CORS Configuration
 
@@ -304,7 +348,10 @@ The frontend routes all SAM requests through the Milimo backend proxy (`:8000/ed
 - **Mask Quality Issues**: Try adding background points (`label=0`) to exclude regions. Use the text tool for complex/ambiguous segmentation.
 - **Video Tracking Memory**: The video predictor is lazy-loaded on first `/track/start` call. On shared-GPU systems, this may compete with the image model for VRAM.
 - **Import Issues**: The server manipulates `sys.path` to find the `sam3` package. If the directory structure changes, update the path logic in `start_sam_server.py`.
-- **MPS Crashes (Apple Silicon)**: Ensure `run_sam.sh` has `export PYTORCH_ENABLE_MPS_FALLBACK=1`. If new PyTorch ops fail, check for `pin_memory()`, empty tensor ops, or SDPA backend assumptions.
+- **MPS Crashes (Apple Silicon)**: Ensure `run_sam.sh` has `export PYTORCH_ENABLE_MPS_FALLBACK=1`. If new PyTorch ops fail, check for `pin_memory()`, empty tensor ops, complex tensor ops, or SDPA backend assumptions. See section 5.8 for the full compatibility table.
+- **Video Tracking: 0 Detections**: If text prompt returns `Detected 0 object(s)`, verify the SAM server is returning proper JSON with `object_ids` (not `str(result)`). Check SAM logs for `Track prompt response: N objects detected`.
+- **Video Tracking: 0 Propagation Iterations**: The model expects `None` for "track all frames", not `-1`. Ensure the server converts `-1` sentinels to `None` before calling the model.
+- **Video Tracking: Device Mismatch**: Many SAM3 internals hardcode CUDA. Check for `.cuda()`, `non_blocking=True`, `pin_memory()`, and `torch.device("cuda")` — all must be conditionalized for MPS. See the CUDA-Hardcoding and MPS Tensor Op tables in section 5.8.
 - **Inpaint Job Not Found (404)**: Inpaint jobs are now persisted as `Job` DB records (since Phase 5 fix). If `/status/{job_id}` returns 404, verify the `Job` record is created in `elements.py:inpaint_image()` and `update_job_db()` is called in `inpainting_manager.py`.
 
 ## 7. Glossary

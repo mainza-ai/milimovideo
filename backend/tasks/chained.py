@@ -11,7 +11,8 @@ from file_utils import get_project_output_paths
 from ltx_pipelines.utils.media_io import encode_video
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
-from ltx_pipelines.utils.helpers import generate_enhanced_prompt, cleanup_memory
+from ltx_pipelines.utils.helpers import cleanup_memory
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -119,16 +120,17 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Force auto_continue if enhance_prompt is active (Smart Prompt Evolution)
             should_auto_continue = params.get("auto_continue", False) or params.get("enhance_prompt", False)
 
-            if chunk_idx > 0 and should_auto_continue and hasattr(pipeline, "stage_1_model_ledger"):
-                 logger.info("Retrieving text encoder for narrative prompt generation...")
-                 try:
-                     text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-                 except Exception as e:
-                     logger.warning(f"Could not retrieve text encoder: {e}")
+            if chunk_idx > 0 and should_auto_continue and config.LLM_PROVIDER.lower() == "gemma":
+                 if hasattr(pipeline, "stage_1_model_ledger"):
+                     logger.info("Retrieving text encoder for narrative prompt generation (Gemma)...")
+                     try:
+                         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                     except Exception as e:
+                         logger.warning(f"Could not retrieve text encoder: {e}")
 
             chunk_config = await storyboard_manager.prepare_next_chunk(chunk_idx, last_chunk_output, text_encoder)
             
-            # Cleanup encoder reference to free memory if needed (though manager just used it)
+            # Cleanup encoder reference to free memory if needed
             if text_encoder:
                 del text_encoder
                 cleanup_memory()
@@ -198,59 +200,66 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
 
             # Only enhance manually for Chunk 0 if it wasn't handled (e.g. Extend mode needs Director prompt)
             if chunk_idx == 0 and params.get("enhance_prompt", True):
-                if not text_encoder and hasattr(pipeline, "stage_1_model_ledger"):
+                from llm import enhance_prompt as llm_enhance
+                
+                # For Gemma, we need the text encoder
+                text_encoder = None
+                if config.LLM_PROVIDER.lower() == "gemma" and hasattr(pipeline, "stage_1_model_ledger"):
                      try:
                          text_encoder = pipeline.stage_1_model_ledger.text_encoder()
                      except: pass
                 
-                if text_encoder:
-                     # Detect extend mode
-                     is_extend = (chunk_idx == 0 and chunk_images)
-                     sys_prompt = None
-                     effective_prompt = chunk_prompt
-                     
-                     if is_extend:
-                          # Use the same STRICT Director Prompt as StoryboardManager to prevent drift!
-                          sys_prompt = (
-                             "You are a visionary Film Director and Cinematographer. Your goal is to continue the narrative flow of a video scene.\n"
-                             "You will be given the Global Story Goal (which you must adhere to) and the immediate context (last frame description).\n"
-                             "TASK: Describe the next 4 seconds of video action. The transition must be seamless but FOCUSED on the Global Goal.\n"
-                             "GUIDELINES:\n"
-                             "- Analyze the visual context of the input image (characters, clothing, lighting, background).\n"
-                             "- Describe the ACTION that happens next. Do not just describe the static image.\n"
-                             "- CRITICAL: Do not drift from the Global Story Goal. If the context has drifted, steer it back.\n"
-                             "- Maintain character identity and visual consistency.\n"
-                             "- CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right', 'handheld', 'static').\n"
-                             "- LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting', 'soft morning light', 'neon rim light').\n"
-                             "- AUDIO: Include a description of the soundscape (ambient sounds, dialogue if applicable).\n"
-                             "- Output ONLY the prompt for the next shot. Single paragraph, chronological flow."
-                          )
-                          effective_prompt = (
-                             f"Global Story Goal (PRIMARY): {chunk_prompt}. "
-                             f"Task: Write a prompt for the NEXT 4 seconds of video extending the provided frame. "
-                             f"The action MUST advance the Global Story Goal."
-                          )
+                # Detect extend mode
+                is_extend = (chunk_idx == 0 and chunk_images)
+                sys_prompt = None
+                effective_prompt = chunk_prompt
+                
+                if is_extend:
+                     # Use the same STRICT Director Prompt as StoryboardManager to prevent drift!
+                     sys_prompt = (
+                        "You are a visionary Film Director and Cinematographer. Your goal is to continue the narrative flow of a video scene.\n"
+                        "You will be given the Global Story Goal (which you must adhere to) and the immediate context (last frame description).\n"
+                        "TASK: Describe the next 4 seconds of video action. The transition must be seamless but FOCUSED on the Global Goal.\n"
+                        "GUIDELINES:\n"
+                        "- Analyze the visual context of the input image (characters, clothing, lighting, background).\n"
+                        "- Describe the ACTION that happens next. Do not just describe the static image.\n"
+                        "- CRITICAL: Do not drift from the Global Story Goal. If the context has drifted, steer it back.\n"
+                        "- Maintain character identity and visual consistency.\n"
+                        "- CINEMATOGRAPHY: Specify camera movement (e.g., 'slow dolly in', 'pan right', 'handheld', 'static').\n"
+                        "- LIGHTING: Describe the lighting atmosphere (e.g., 'cinematic lighting', 'soft morning light', 'neon rim light').\n"
+                        "- AUDIO: Include a description of the soundscape (ambient sounds, dialogue if applicable).\n"
+                        "- Output ONLY the prompt for the next shot. Single paragraph, chronological flow."
+                     )
+                     effective_prompt = (
+                        f"Global Story Goal (PRIMARY): {chunk_prompt}. "
+                        f"Task: Write a prompt for the NEXT 4 seconds of video extending the provided frame. "
+                        f"The action MUST advance the Global Story Goal."
+                     )
 
-                     try:
-                         logger.info(f"Manually enhancing Chunk 0 prompt (Extend={is_extend})...")
-                         enhanced = generate_enhanced_prompt(
-                             text_encoder, 
-                             effective_prompt, 
-                             image_path=chunk_images[0][0] if chunk_images else None,
-                             seed=seed,
-                             is_image=False, # Video generation
-                             system_prompt=sys_prompt
-                         )
-                         if enhanced:
-                             chunk_prompt = enhanced
-                             active_jobs[job_id]["current_prompt"] = chunk_prompt
-                             
-                             # CRITICAL FIX: Update the Global Story Goal!
-                             logger.info(f"Updating Global Story Goal to match enhanced Chunk 0 prompt...")
-                             storyboard_manager.state.global_prompt = enhanced
-                     except Exception as e:
-                         logger.warning(f"Manual enhancement failed: {e}")
-                         do_pipeline_enhance = True # Fallback to pipeline
+                try:
+                    logger.info(f"Enhancing Chunk 0 prompt via {config.LLM_PROVIDER} (Extend={is_extend})...")
+                    enhanced = llm_enhance(
+                        prompt=effective_prompt,
+                        system_prompt=sys_prompt,
+                        is_video=True,
+                        text_encoder=text_encoder,
+                        image_path=chunk_images[0][0] if chunk_images else None,
+                        seed=seed,
+                    )
+                    if enhanced:
+                        chunk_prompt = enhanced
+                        active_jobs[job_id]["current_prompt"] = chunk_prompt
+                        
+                        # CRITICAL FIX: Update the Global Story Goal!
+                        logger.info(f"Updating Global Story Goal to match enhanced Chunk 0 prompt...")
+                        storyboard_manager.state.global_prompt = enhanced
+                except Exception as e:
+                    logger.warning(f"Manual enhancement failed: {e}")
+                    do_pipeline_enhance = True # Fallback to pipeline
+                finally:
+                    if text_encoder is not None:
+                        del text_encoder
+                        cleanup_memory()
                 
             
             # Expose current prompt to UI

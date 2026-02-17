@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from sqlmodel import Session
@@ -9,8 +10,35 @@ import config
 
 logger = logging.getLogger(__name__)
 
+# ── Concurrent GPU Job Limiter ─────────────────────────────────────
+# Only 1 GPU-intensive job at a time (video gen, image gen, inpainting).
+# Additional jobs wait in a FIFO queue via the semaphore.
+_gpu_semaphore = asyncio.Semaphore(1)
+_gpu_queue_count = 0  # Track how many jobs are waiting
+
+async def gpu_job_wrapper(coro):
+    """Wraps a GPU task coroutine so only one runs at a time."""
+    global _gpu_queue_count
+    _gpu_queue_count += 1
+    logger.info(f"GPU job queued ({_gpu_queue_count} in queue)")
+    
+    try:
+        async with _gpu_semaphore:
+            _gpu_queue_count -= 1
+            logger.info(f"GPU job acquired lock ({_gpu_queue_count} waiting)")
+            return await coro
+    except Exception as e:
+        _gpu_queue_count = max(0, _gpu_queue_count - 1)
+        raise
+
+def is_gpu_busy() -> dict:
+    """Returns GPU busy status for the frontend."""
+    return {
+        "busy": _gpu_semaphore.locked(),
+        "queued": _gpu_queue_count
+    }
+
 # Cancellation tracking
-# job_id -> {'cancelled': bool}
 # job_id -> {'cancelled': bool}
 active_jobs: Dict[str, Dict[str, Any]] = {}
 

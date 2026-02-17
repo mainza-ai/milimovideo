@@ -332,4 +332,200 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             updateShot(shotId, { isGenerating: false, statusMessage: "Failed" });
         }
     },
+
+    // ── Storyboard Operations ──────────────────────────────────────
+
+    batchGenerateShots: async (shotIds: string[]) => {
+        const { project, addToast, updateShot } = get();
+
+        // Optimistic: mark all as generating
+        for (const id of shotIds) {
+            updateShot(id, { isGenerating: true, statusMessage: "Queued..." });
+        }
+
+        try {
+            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/batch-generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shot_ids: shotIds })
+            });
+
+            if (!res.ok) throw new Error("Batch generate failed");
+
+            const data = await res.json();
+            addToast(`Batch generation started for ${data.results?.length || shotIds.length} shots`, "success");
+
+            // Update each with its job ID
+            for (const result of (data.results || [])) {
+                if (result.status === 'queued') {
+                    updateShot(result.shot_id, { statusMessage: "Generating...", lastJobId: result.job_id });
+                } else if (result.status === 'error') {
+                    updateShot(result.shot_id, { isGenerating: false, statusMessage: "Failed" });
+                }
+            }
+        } catch (e) {
+            console.error("Batch generate failed", e);
+            addToast("Batch generation failed", "error");
+            for (const id of shotIds) {
+                updateShot(id, { isGenerating: false, statusMessage: "Failed" });
+            }
+        }
+    },
+
+    reorderShotsInScene: async (sceneId: string, shotIds: string[]) => {
+        const { project, addToast } = get();
+
+        // Optimistic reorder
+        set(state => {
+            const reordered = shotIds.map((id, idx) => {
+                const shot = state.project.shots.find(s => s.id === id);
+                return shot ? { ...shot, index: idx } : null;
+            }).filter(Boolean) as Shot[];
+
+            const otherShots = state.project.shots.filter(s => !shotIds.includes(s.id));
+
+            return {
+                project: {
+                    ...state.project,
+                    shots: [...otherShots, ...reordered]
+                }
+            };
+        });
+
+        try {
+            await fetch(`http://localhost:8000/projects/${project.id}/storyboard/shots/reorder`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scene_id: sceneId, shot_ids: shotIds })
+            });
+        } catch (e) {
+            console.error("Reorder failed", e);
+            addToast("Failed to reorder shots", "error");
+        }
+    },
+
+    addShotToScene: async (sceneId: string, data?: { action?: string; dialogue?: string; character?: string; shotType?: string }) => {
+        const { project, addToast, loadProject } = get();
+
+        try {
+            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/shots/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    scene_id: sceneId,
+                    action: data?.action || "A cinematic shot...",
+                    dialogue: data?.dialogue || null,
+                    character: data?.character || null,
+                    shot_type: data?.shotType || "medium"
+                })
+            });
+
+            if (!res.ok) throw new Error("Add shot failed");
+            addToast("Shot added", "success");
+            await loadProject(project.id);
+        } catch (e) {
+            console.error("Add shot failed", e);
+            addToast("Failed to add shot", "error");
+        }
+    },
+
+    deleteShotFromStoryboard: async (shotId: string) => {
+        const { project, addToast } = get();
+
+        // Optimistic removal
+        set(state => ({
+            project: {
+                ...state.project,
+                shots: state.project.shots.filter(s => s.id !== shotId)
+            },
+            selectedShotId: state.selectedShotId === shotId ? null : state.selectedShotId
+        }));
+
+        try {
+            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/shots/${shotId}`, {
+                method: 'DELETE'
+            });
+
+            if (!res.ok) throw new Error("Delete failed");
+            addToast("Shot deleted", "info");
+        } catch (e) {
+            console.error("Delete shot failed", e);
+            addToast("Failed to delete shot", "error");
+        }
+    },
+
+    generateThumbnail: async (shotId: string) => {
+        const { project, addToast } = get();
+        try {
+            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/generate-thumbnails`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shot_ids: [shotId] })
+            });
+            if (!res.ok) throw new Error("Thumbnail generation failed");
+            addToast("Generating concept art...", "info");
+        } catch (e) {
+            console.error("Thumbnail generation failed", e);
+            addToast("Failed to generate thumbnail", "error");
+        }
+    },
+
+    batchGenerateThumbnails: async (shotIds: string[]) => {
+        const { project, addToast } = get();
+        try {
+            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/generate-thumbnails`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shot_ids: shotIds })
+            });
+            if (!res.ok) throw new Error("Batch thumbnail generation failed");
+            const data = await res.json();
+            const queued = data.results?.filter((r: any) => r.status === 'queued').length || 0;
+            addToast(`Generating ${queued} concept art thumbnails...`, "info");
+        } catch (e) {
+            console.error("Batch thumbnail generation failed", e);
+            addToast("Failed to generate thumbnails", "error");
+        }
+    },
+
+    pushStoryboardToTimeline: () => {
+        const { project, addToast, updateShot } = get();
+
+        // Collect all completed shots (with video) in scene/index order
+        const scenes = project.scenes || [];
+        const orderedShots: Shot[] = [];
+
+        for (const scene of scenes) {
+            const sceneShots = project.shots
+                .filter(s => s.sceneId === scene.id && s.videoUrl)
+                .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
+            orderedShots.push(...sceneShots);
+        }
+
+        // Also include unassigned completed shots
+        const assignedIds = new Set(orderedShots.map(s => s.id));
+        const unassigned = project.shots
+            .filter(s => !s.sceneId && s.videoUrl && !assignedIds.has(s.id));
+        orderedShots.push(...unassigned);
+
+        if (orderedShots.length === 0) {
+            addToast("No completed shots to push to timeline", "info");
+            return;
+        }
+
+        // Place sequentially on V1 (trackIndex 0)
+        let currentFrame = 0;
+        for (const shot of orderedShots) {
+            updateShot(shot.id, {
+                trackIndex: 0,
+                startFrame: currentFrame,
+                trimIn: 0,
+                trimOut: shot.numFrames,
+            });
+            currentFrame += shot.numFrames;
+        }
+
+        addToast(`Placed ${orderedShots.length} shots on timeline`, "success");
+    },
 });
+

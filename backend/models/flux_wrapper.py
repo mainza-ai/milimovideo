@@ -157,6 +157,10 @@ class FluxInpainter:
 
         logger.info(f"Loading Flux 2 (Klein) Model on {self.device}. Native AE: {enable_ae}")
 
+        # Unload conflicting models (e.g., LTX) before loading Flux
+        from memory_manager import memory_manager
+        memory_manager.prepare_for("image")
+
         try:
             from flux2.util import load_ae, load_flow_model, load_text_encoder, FLUX2_MODEL_INFO
             from flux2.sampling import get_schedule, batched_prc_img, batched_prc_txt
@@ -637,13 +641,24 @@ class FluxInpainter:
         self.ae = None
         self.text_encoder = None
         self.model_loaded = False
+        # Also unload IP-Adapter if loaded
+        self.image_encoder = None
+        self.image_processor = None
+        self.ip_adapter_projector = None
+        self.ip_adapter_loaded = False
         import gc
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         if torch.backends.mps.is_available():
             torch.mps.empty_cache()
-        logger.info("Flux Model Unloaded")
+        # Notify memory manager
+        try:
+            from memory_manager import memory_manager
+            memory_manager.release("image")
+        except Exception:
+            pass
+        logger.info("Flux Model Unloaded (all components + IP-Adapter)")
     def inpaint(self, image: Image.Image, mask: Image.Image, prompt: str, num_inference_steps: int = 25, guidance: float = 2.0, strength: float = 0.85, seed: int = None, enable_ae: bool = True, enable_true_cfg: bool = False, negative_prompt: str = None, step_callback=None) -> Image.Image:
         """
         Public inpainting method.

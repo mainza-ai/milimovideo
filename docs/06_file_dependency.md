@@ -44,6 +44,7 @@ graph TD
         flux_wrapper[models/flux_wrapper.py]
         sb_mgr[storyboard/manager.py]
         script_parser[services/script_parser.py]
+        ai_storyboard[services/ai_storyboard.py]
     end
 
     %% Server imports
@@ -86,11 +87,15 @@ graph TD
 
     r_storyboard --> database
     r_storyboard --> script_parser
+    r_storyboard --> ai_storyboard
     r_storyboard --> sb_mgr
     r_storyboard --> config
     r_storyboard --> t_video
     r_storyboard --> job_utils
     r_storyboard --> events
+
+    %% AI Storyboard
+    ai_storyboard --> model_engine
 
     %% Task dependencies
     t_video --> config
@@ -211,6 +216,9 @@ graph TD
         elemPanel[ElementPanel.tsx]
         imagesView[ImagesView.tsx]
         storyView[StoryboardView.tsx]
+        storyScene[StoryboardSceneGroup.tsx]
+        storyShotCard[StoryboardShotCard.tsx]
+        scriptInput[ScriptInput.tsx]
     end
 
     %% Entry
@@ -282,6 +290,12 @@ graph TD
     elemPanel --> store
     imagesView --> store
     storyView --> store
+    storyView --> storyScene
+    storyView --> scriptInput
+    storyScene --> storyShotCard
+    storyScene --> store
+    storyShotCard --> store
+    scriptInput --> store
 
     %% Job Poller
     jobPoller --> store
@@ -366,5 +380,12 @@ graph TD
 | POST | `/projects/{id}/storyboard/parse` | storyboard | `parse_script` |
 | POST | `/projects/{id}/storyboard/commit` | storyboard | `commit_storyboard` |
 | GET | `/projects/{id}/storyboard` | storyboard | `get_storyboard` |
-| POST | `/storyboard/shots/{shot_id}/generate` | storyboard | `generate_storyboard_shot` → LTX-2 |
+| PATCH | `/projects/{id}/storyboard/scenes/{scene_id}` | storyboard | `update_scene` |
+| POST | `/projects/{id}/storyboard/ai-parse` | storyboard | `ai_parse` → Gemma 3 AI |
+| POST | `/projects/{id}/storyboard/thumbnails` | storyboard | `generate_thumbnails` → Flux 2 |
+| POST | `/projects/{id}/storyboard/reorder-shots` | storyboard | `reorder_shots` |
+| POST | `/projects/{id}/storyboard/add-shot` | storyboard | `add_shot` |
+| DELETE | `/projects/{id}/storyboard/shots/{shot_id}` | storyboard | `delete_storyboard_shot` |
+| POST | `/projects/{id}/storyboard/batch-generate` | storyboard | `batch_generate` |
+| POST | `/storyboard/shots/{shot_id}/generate` | storyboard | `generate_shot` → LTX-2 |
 | GET | `/events` | server.py (direct) | `event_subscribe` (SSE) |

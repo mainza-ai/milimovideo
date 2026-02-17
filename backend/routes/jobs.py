@@ -76,6 +76,13 @@ async def cancel_job(job_id: str, session: Session = Depends(get_session)):
     return {"status": "not_found_or_already_done"}
 
 
+@router.get("/gpu/status")
+def gpu_status():
+    """Returns whether the GPU is busy and how many jobs are queued."""
+    from job_utils import is_gpu_busy
+    return is_gpu_busy()
+
+
 @router.post("/generate/advanced")
 async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
     """
@@ -132,7 +139,7 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
                          # Project-scoped paths are REQUIRED
                          if cond_path.startswith("/projects/"):
                              # Helper to resolve FS path
-                             rel = cond_path.lstrip("/projects/")
+                             rel = cond_path.removeprefix("/projects/")
                              fs_cond_path = os.path.join(config.PROJECTS_DIR, rel)
                              
                              # Let's generate a temporary last frame path

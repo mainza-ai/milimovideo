@@ -135,12 +135,10 @@ export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
                                         setResW(w); setResH(h);
                                     }}
                                 >
-                                    <option value="1280x704">1280x704 (HD Aligned)</option>
-                                    <option value="1920x1088">1920x1088 (FHD Aligned)</option>
-                                    <option value="3840x2176">3840x2176 (4K UHD Aligned)</option>
-                                    <option value="768x512">768x512 (Standard Landscape)</option>
-                                    <option value="512x768">512x768 (Standard Portrait)</option>
-                                    <option value="1024x576">1024x576 (Wide SD)</option>
+                                    <option value="768x512">768×512 (Standard)</option>
+                                    <option value="512x768">512×768 (Portrait)</option>
+                                    <option value="1024x576">1024×576 (Widescreen)</option>
+                                    <option value="1280x704">1280×704 (HD)</option>
                                 </select>
                             </div>
                             <div className="space-y-1">

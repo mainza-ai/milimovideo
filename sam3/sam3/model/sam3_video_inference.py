@@ -60,7 +60,7 @@ class Sam3VideoInference(Sam3VideoBase):
         video_loader_type="cv2",
     ):
         """Initialize an inference state from `resource_path` (an image or a video)."""
-        images, orig_height, orig_width = load_resource_as_video_frames(
+        result = load_resource_as_video_frames(
             resource_path=resource_path,
             image_size=self.image_size,
             offload_video_to_cpu=offload_video_to_cpu,
@@ -69,12 +69,14 @@ class Sam3VideoInference(Sam3VideoBase):
             async_loading_frames=async_loading_frames,
             video_loader_type=video_loader_type,
         )
+        images, orig_height, orig_width, fps = result if len(result) == 4 else (*result, 30.0)
         inference_state = {}
         inference_state["image_size"] = self.image_size
         inference_state["num_frames"] = len(images)
         # the original video height and width, used for resizing final output scores
         inference_state["orig_height"] = orig_height
         inference_state["orig_width"] = orig_width
+        inference_state["fps"] = fps
         # values that don't change across frames (so we only need to hold one copy of them)
         inference_state["constants"] = {}
         # inputs on each frame
@@ -478,9 +480,11 @@ class Sam3VideoInference(Sam3VideoBase):
 
             # slice those valid entries from the original outputs
             keep_idx = torch.nonzero(keep, as_tuple=True)[0]
-            keep_idx_gpu = keep_idx.pin_memory().to(
-                device=out_binary_masks.device, non_blocking=True
-            )
+            _dev = out_binary_masks.device
+            if _dev.type == "cuda":
+                keep_idx_gpu = keep_idx.pin_memory().to(device=_dev, non_blocking=True)
+            else:
+                keep_idx_gpu = keep_idx.to(device=_dev)
 
             out_obj_ids = torch.index_select(out_obj_ids, 0, keep_idx)
             out_probs = torch.index_select(out_probs, 0, keep_idx)
@@ -551,12 +555,13 @@ class Sam3VideoInference(Sam3VideoBase):
     def _build_tracker_output(
         self, inference_state, frame_idx, refined_obj_id_to_mask=None
     ):
-        assert (
-            "cached_frame_outputs" in inference_state
-            and frame_idx in inference_state["cached_frame_outputs"]
-        ), (
-            "No cached outputs found. Ensure normal propagation has run first to populate the cache."
-        )
+        if "cached_frame_outputs" not in inference_state or frame_idx not in inference_state["cached_frame_outputs"]:
+             # If no cache exists (e.g. adding points before propagation/inference), initialize empty
+             if "cached_frame_outputs" not in inference_state:
+                 inference_state["cached_frame_outputs"] = {}
+             if frame_idx not in inference_state["cached_frame_outputs"]:
+                 inference_state["cached_frame_outputs"][frame_idx] = {}
+        
         cached_outputs = inference_state["cached_frame_outputs"][frame_idx]
 
         obj_id_to_mask = cached_outputs.copy()

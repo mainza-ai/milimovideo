@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form, Depends
-from schemas import ElementCreate, ElementVisualizeRequest, InpaintRequest
+from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File, Form, Depends, Request
+from schemas import ElementCreate, ElementUpdate, ElementVisualizeRequest, InpaintRequest, TrackingSaveRequest
 from typing import List, Optional
 import os
 import logging
@@ -32,6 +32,39 @@ async def get_elements(project_id: str):
 async def delete_element(element_id: str):
     success = element_manager.delete_element(element_id)
     return {"success": success}
+
+@router.put("/elements/{element_id}")
+async def update_element(element_id: str, update: ElementUpdate):
+    """Update an element's properties (name, description, trigger_word, etc.)."""
+    updates = update.model_dump(exclude_unset=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    result = element_manager.update_element(element_id, updates)
+    if not result:
+        raise HTTPException(status_code=404, detail=f"Element {element_id} not found")
+    return result
+
+# --- SAM Service Health Check ---
+
+@router.get("/sam/health")
+async def sam_health_check():
+    """Check if the SAM 3 microservice is reachable."""
+    import requests as http_requests
+    import time
+    try:
+        start = time.time()
+        res = http_requests.get(
+            f"http://localhost:{config.SAM_SERVICE_PORT}/health",
+            timeout=3
+        )
+        latency_ms = round((time.time() - start) * 1000)
+        return {
+            "online": res.status_code == 200,
+            "latency_ms": latency_ms,
+            "status": res.json() if res.status_code == 200 else None
+        }
+    except Exception:
+        return {"online": False, "latency_ms": -1, "status": None}
 
 @router.post("/elements/{element_id}/visualize")
 async def visualize_element(element_id: str, req: ElementVisualizeRequest, background_tasks: BackgroundTasks):
@@ -241,11 +274,36 @@ class TrackPropagateRequest(BaseModel):
 class TrackStopRequest(BaseModel):
     session_id: str
 
+class TrackRemoveRequest(BaseModel):
+    session_id: str
+    obj_id: int
+
 
 @router.post("/track/start")
 async def track_start(req: TrackStartRequest):
     """Start a SAM video tracking session."""
-    result = tracking_manager.start_session(req.video_path, req.session_id)
+    video_path = req.video_path
+
+    # Resolve URL paths to absolute filesystem paths
+    # Frontend sends paths like "/projects/{id}/generated/job_xxx.mp4"
+    # or full URLs like "http://localhost:8000/projects/..."
+    if video_path.startswith("http"):
+        from urllib.parse import urlparse
+        video_path = urlparse(video_path).path  # Strip scheme+host
+
+    if video_path.startswith("/projects/"):
+        video_path = os.path.join(config.PROJECTS_DIR, video_path[len("/projects/"):])
+    elif video_path.startswith("/generated/"):
+        legacy_generated = os.path.join(config.BACKEND_DIR, "generated")
+        video_path = os.path.join(legacy_generated, video_path[len("/generated/"):])
+    elif video_path.startswith("/uploads/"):
+        legacy_uploads = os.path.join(config.BACKEND_DIR, "uploads")
+        video_path = os.path.join(legacy_uploads, video_path[len("/uploads/"):])
+
+    video_path = os.path.normpath(video_path)
+    logger.info(f"Track start — resolved video path: {video_path}")
+
+    result = tracking_manager.start_session(video_path, req.session_id)
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
@@ -291,3 +349,154 @@ async def track_stop(req: TrackStopRequest):
         raise HTTPException(status_code=500, detail=result["error"])
     return result
 
+
+@router.post("/track/remove")
+async def track_remove_object(req: TrackRemoveRequest):
+    """Remove an object from the tracking session."""
+    result = tracking_manager.remove_object(req.session_id, req.obj_id)
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
+
+@router.post("/edit/track/save")
+async def save_tracking_results(request: TrackingSaveRequest):
+    """Save tracking results (masks) to disk to prevent data loss."""
+    try:
+        import base64
+        import json
+        import hashlib
+        from PIL import Image
+        import io
+
+        # Use video_path hash as persistence key (session IDs are ephemeral)
+        video_path = getattr(request, 'video_path', None) or request.session_id
+        path_hash = hashlib.md5(video_path.encode()).hexdigest()[:12]
+        session_dir = os.path.join(config.BACKEND_DIR, "exports", "tracking", path_hash)
+        masks_dir = os.path.join(session_dir, "masks")
+        os.makedirs(masks_dir, exist_ok=True)
+
+        saved_files = []
+        frame_map = {}
+
+        for frame in request.frames:
+            frame_idx = frame.get("frame_idx", -1)
+            masks = frame.get("masks", {})
+            scores = frame.get("scores", {})
+            
+            frame_map[frame_idx] = {
+                "num_objects": frame.get("num_objects", 0),
+                "objects": []
+            }
+
+            for obj_id_str, b64_mask in masks.items():
+                try:
+                    # Decode base64
+                    img_data = base64.b64decode(b64_mask)
+                    img = Image.open(io.BytesIO(img_data))
+                    
+                    # Save as PNG: frame_XXXXX_obj_Y.png
+                    filename = f"frame_{int(frame_idx):05d}_obj_{obj_id_str}.png"
+                    filepath = os.path.join(masks_dir, filename)
+                    img.save(filepath, "PNG")
+                    
+                    saved_files.append(filepath)
+                    
+                    # Metadata
+                    frame_map[frame_idx]["objects"].append({
+                        "id": obj_id_str,
+                        "score": scores.get(obj_id_str, 0.0),
+                        "file": filename
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to save mask for frame {frame_idx} obj {obj_id_str}: {e}")
+
+        # Save manifest
+        manifest_path = os.path.join(session_dir, "manifest.json")
+        with open(manifest_path, "w") as f:
+            json.dump({
+                "session_id": request.session_id,
+                "video_path": video_path,
+                "total_frames": len(request.frames),
+                "frames": frame_map
+            }, f, indent=2)
+
+        return {
+            "status": "saved",
+            "path": session_dir,
+            "count": len(saved_files)
+        }
+    except Exception as e:
+        logger.error(f"Tracking save error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/edit/track/load")
+async def load_tracking_results(request: Request):
+    """Load tracking results (masks) from disk."""
+    try:
+        import base64
+        import json
+        import hashlib
+
+        body = await request.json()
+        video_path = body.get('video_path', '')
+        session_id = body.get('session_id', '')
+        
+        # Try video_path hash first, fall back to session_id
+        path_hash = hashlib.md5(video_path.encode()).hexdigest()[:12] if video_path else ''
+        candidates = []
+        if path_hash:
+            candidates.append(os.path.join(config.BACKEND_DIR, "exports", "tracking", path_hash))
+        if session_id:
+            candidates.append(os.path.join(config.BACKEND_DIR, "exports", "tracking", session_id))
+        
+        session_dir = None
+        manifest_path = None
+        for d in candidates:
+            mp = os.path.join(d, "manifest.json")
+            if os.path.exists(mp):
+                session_dir = d
+                manifest_path = mp
+                break
+        
+        if not manifest_path:
+             return {"status": "not_found", "frames": []}
+
+        with open(manifest_path, "r") as f:
+            manifest = json.load(f)
+
+        frames = []
+        # Reconstruct frameResults format
+        # manifest["frames"] is a dict: frame_idx -> { objects: [...] }
+        for frame_idx_str, data in manifest.get("frames", {}).items():
+            masks = {}
+            scores = {}
+            for obj in data.get("objects", []):
+                obj_id = obj["id"]
+                score = obj["score"]
+                filename = obj["file"]
+                filepath = os.path.join(session_dir, "masks", filename)
+                
+                if os.path.exists(filepath):
+                    with open(filepath, "rb") as img_f:
+                        b64_mask = base64.b64encode(img_f.read()).decode('utf-8')
+                        masks[obj_id] = b64_mask
+                        scores[obj_id] = score
+            
+            if masks:
+                frames.append({
+                    "frame_idx": int(frame_idx_str),
+                    "masks": masks,
+                    "scores": scores,
+                    "num_objects": len(masks)
+                })
+
+        return {
+            "status": "loaded",
+            "frames": frames,
+            "session_id": session_id
+        }
+
+    except Exception as e:
+        logger.error(f"Tracking load error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

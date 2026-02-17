@@ -45,6 +45,29 @@ async def generate_image_task(job_id: str, params: dict):
         
         logger.info(f"DEBUG: Task received guidance_scale={cfg_scale}, negative_prompt='{negative_prompt}', AE={enable_ae}, TrueCFG={enable_true_cfg}")
 
+        # Prompt Enhancement (via configurable LLM)
+        # NOTE: Image gen uses Flux (not LTX), so Gemma text_encoder is NOT available.
+        # Only Ollama can enhance image prompts. Gemma selection will log a warning.
+        enhance = params.get("enhance_prompt", True)
+        if enhance:
+            try:
+                from llm import enhance_prompt as llm_enhance
+                provider = config.LLM_PROVIDER.lower()
+                if provider == "gemma":
+                    logger.warning(
+                        "Gemma cannot enhance image prompts (requires LTX text_encoder, "
+                        "but image gen uses Flux). Skipping enhancement. "
+                        "Switch to Ollama in AI Settings for image prompt enhancement."
+                    )
+                else:
+                    logger.info(f"Enhancing image prompt via {provider}...")
+                    enhanced = llm_enhance(prompt=prompt, is_video=False, seed=seed)
+                    if enhanced and enhanced != prompt:
+                        logger.info(f"Enhanced image prompt: {enhanced[:100]}...")
+                        update_job_db(job_id, "processing", enhanced_prompt=enhanced)
+                        prompt = enhanced
+            except Exception as e:
+                logger.warning(f"Image prompt enhancement failed: {e}")
         
         # Flux 2 Logic
         from models.flux_wrapper import flux_inpainter
@@ -54,15 +77,6 @@ async def generate_image_task(job_id: str, params: dict):
         element_images = params.get("element_images", [])
         if "reference_images" in params and params["reference_images"]:
             element_images.extend(params["reference_images"])
-
-
-        # ... (lines 46-118 skipped for brevity in thought, but tool needs contiguous replacement or careful split)
-        # Actually, I should use 2 chunks or just one if close enough. 
-        # Lines 38-127 is huge.
-        # Let's just do the extraction first, then the call.
-        
-        # Wait, I can use multi_replace.
-        pass
         
         # Resolve 'element_images' or 'reference_images'
         # Resolve Elements / IP-Adapter
@@ -95,20 +109,19 @@ async def generate_image_task(job_id: str, params: dict):
                             if isinstance(item, str):
                                 if item.startswith("/projects"):
                                     # project path
-                                    rel = item.lstrip("/projects/")
+                                    rel = item.removeprefix("/projects/")
                                     resolved_ip_paths.add(os.path.join(get_base_dir(), "projects", rel))
                                 else:
                                     resolved_ip_paths.add(item)
 
-            # 2. Scan Prompt for Implicit Triggers (e.g. "@Hero")
-            if project_id:
-                all_elements = session.exec(select(Element).where(Element.project_id == project_id)).all()
-                for el in all_elements:
-                    if el.trigger_word and el.trigger_word in prompt:
-                        resolved_path = resolve_element_image_path(el.image_path)
-                        if resolved_path:
-                            logger.info(f"Auto-detected trigger in prompt: {el.trigger_word}")
-                            resolved_ip_paths.add(resolved_path)
+            # 2. Scan Prompt for Implicit Triggers (e.g. "@Hero") — cross-project
+            all_elements = session.exec(select(Element)).all()
+            for el in all_elements:
+                if el.trigger_word and el.trigger_word.lower() in prompt.lower():
+                    resolved_path = resolve_element_image_path(el.image_path)
+                    if resolved_path:
+                        logger.info(f"Auto-detected trigger in prompt: {el.trigger_word} (project {el.project_id})")
+                        resolved_ip_paths.add(resolved_path)
 
         element_images = list(resolved_ip_paths)
 
@@ -216,12 +229,19 @@ async def generate_image_task(job_id: str, params: dict):
             status_message="Flux Image Ready"
         )
         
+        # If this is a storyboard thumbnail, write back to the Shot record
+        shot_id = params.get("shot_id")
+        if params.get("is_thumbnail") and shot_id:
+            update_shot_db(shot_id, thumbnail_url=web_url, status="pending")
+            logger.info(f"Thumbnail saved to shot {shot_id}: {web_url}")
+        
         await event_manager.broadcast("complete", {
             "job_id": job_id, 
             "url": web_url,
-            "type": "image",
+            "type": "thumbnail" if params.get("is_thumbnail") else "image",
             "thumbnail_url": web_thumb,
-            "asset_id": asset_id
+            "asset_id": asset_id,
+            "shot_id": shot_id,
         })
         
     except Exception as e:

@@ -275,6 +275,38 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
         
     return {"status": "saved"}
 
+@router.patch("/projects/{project_id}/settings")
+async def update_project_settings(project_id: str, updates: dict, session: Session = Depends(get_session)):
+    """Update project settings (resolution, fps, seed, name) after creation."""
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    allowed_fields = {"name", "resolution_w", "resolution_h", "fps", "seed"}
+    applied = {}
+    for key, value in updates.items():
+        if key in allowed_fields and value is not None:
+            setattr(project, key, value)
+            applied[key] = value
+    
+    if not applied:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    
+    session.add(project)
+    session.commit()
+    session.refresh(project)
+    
+    return {
+        "status": "updated",
+        "settings": {
+            "name": project.name,
+            "resolution_w": project.resolution_w,
+            "resolution_h": project.resolution_h,
+            "fps": project.fps,
+            "seed": project.seed
+        }
+    }
+
 @router.patch("/shots/{shot_id}")
 async def update_shot_partial(shot_id: str, updates: dict, session: Session = Depends(get_session)):
     """
@@ -300,78 +332,175 @@ async def update_shot_partial(shot_id: str, updates: dict, session: Session = De
 @router.post("/projects/{project_id}/render")
 async def render_project(project_id: str, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
     """
-    Stitches all generated shots in the project into a final MP4.
+    Kicks off an async render job that stitches V1 shots + A1 audio into a final MP4.
+    Progress is sent via SSE events: render_progress, render_complete, render_failed.
+    Returns immediately with { job_id, status: "rendering" }.
     """
-    from database import Job
-    import subprocess
+    from database import Job, Asset
     
-    # 1. Load project from DB
     project = session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    shots = session.exec(select(Shot).where(Shot.project_id == project_id).order_by(Shot.created_at)).all()
-    if not shots:
-        raise HTTPException(status_code=400, detail="Project has no shots")
+    # Collect V1 video shots in timeline order  
+    shots = session.exec(
+        select(Shot)
+        .where(Shot.project_id == project_id)
+        .where(Shot.track_index == 0)  # V1 only
+        .order_by(Shot.start_frame.asc(), Shot.created_at.asc())
+    ).all()
     
-    # 2. Collect video paths by looking up jobs in DB
-    input_files = []
-    
+    # Collect video file paths
+    video_files = []
     for shot in shots:
-        if not shot.last_job_id:
-            continue
-        
-        # Look up job to get actual output path
-        job = session.get(Job, shot.last_job_id)
-        if job and job.output_path:
-            # Require project-scoped paths
-            if not job.output_path.startswith("/projects/"):
-                logger.warning(f"Skipping job {shot.last_job_id} in render - uses legacy path format")
-                continue
-            
-            # config.PROJECTS_DIR is base for project paths
-            # path is like /projects/{id}/generated/foo.mp4
-            rel = job.output_path.lstrip("/projects/")
-            file_path = os.path.join(config.PROJECTS_DIR, rel)
-            
-            if os.path.exists(file_path) and file_path.endswith(".mp4"):
-                input_files.append(file_path)
+        if shot.video_url:
+            from file_utils import resolve_path
+            resolved = resolve_path(shot.video_url)
+            if resolved and os.path.exists(resolved) and resolved.endswith(".mp4"):
+                video_files.append(resolved)
     
-    if not input_files:
+    if not video_files:
         raise HTTPException(status_code=400, detail="No generated videos found for this project")
     
-    # 3. Stitch to project workspace
-    render_job_id = f"render_{uuid.uuid4().hex[:8]}"
+    # Collect A1 audio clips
+    audio_files = []
+    audio_shots = session.exec(
+        select(Shot)
+        .where(Shot.project_id == project_id)
+        .where(Shot.track_index == 2)  # A1
+        .order_by(Shot.start_frame.asc())
+    ).all()
+    for audio_shot in audio_shots:
+        if audio_shot.video_url:
+            from file_utils import resolve_path as rp
+            resolved_audio = rp(audio_shot.video_url)
+            if resolved_audio and os.path.exists(resolved_audio):
+                audio_files.append(resolved_audio)
     
-    # Output to project's generated folder
-    project_generated_dir = os.path.join(config.PROJECTS_DIR, project_id, "generated")
-    os.makedirs(project_generated_dir, exist_ok=True)
-    output_path = os.path.join(project_generated_dir, f"{render_job_id}.mp4")
+    render_id = f"render_{uuid.uuid4().hex[:8]}"
+    
+    # Run render in background
+    background_tasks.add_task(
+        _render_background, project_id, render_id, video_files, audio_files, project.fps
+    )
+    
+    return {"job_id": render_id, "status": "rendering"}
+
+
+async def _render_background(
+    project_id: str, render_id: str,
+    video_files: list, audio_files: list, fps: int
+):
+    """Background task: concat videos, mix audio, emit SSE progress."""
+    import subprocess
+    import asyncio
+    from events import event_manager
+    
+    project_dir = os.path.join(config.PROJECTS_DIR, project_id, "generated")
+    os.makedirs(project_dir, exist_ok=True)
+    
+    output_path = os.path.join(project_dir, f"{render_id}.mp4")
+    temp_video_path = os.path.join(project_dir, f"{render_id}_video_only.mp4")
+    list_file_path = os.path.join(project_dir, f"{render_id}_list.txt")
+    
+    total_steps = 2 + (1 if audio_files else 0)  # concat + finalize + optional audio mix
+    current_step = 0
+    
+    async def emit_progress(step: int, message: str):
+        pct = int((step / total_steps) * 100)
+        await event_manager.broadcast("render_progress", {
+            "job_id": render_id,
+            "project_id": project_id,
+            "progress": pct,
+            "message": message
+        })
     
     try:
-        list_file_path = os.path.join(project_generated_dir, f"{render_job_id}_list.txt")
+        # Step 1: Concat videos
+        await emit_progress(0, "Concatenating video clips...")
+        
         with open(list_file_path, "w") as f:
-            for mp4 in input_files:
+            for mp4 in video_files:
                 f.write(f"file '{mp4}'\n")
         
-        # ffmpeg concat
+        concat_target = temp_video_path if audio_files else output_path
         cmd = [
-            "ffmpeg", "-f", "concat", "-safe", "0", "-i", list_file_path,
-            "-c", "copy", "-y", output_path
+            "ffmpeg", "-f", "concat", "-safe", "0",
+            "-i", list_file_path,
+            "-c", "copy", "-y", concat_target
         ]
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        current_step += 1
+        await emit_progress(current_step, "Video concatenation complete")
         
-        subprocess.run(cmd, check=True)
+        # Step 2: Mix audio (if any A1 clips exist) 
+        if audio_files:
+            await emit_progress(current_step, "Mixing audio track...")
+            
+            # Build ffmpeg command to overlay audio
+            # For simplicity, take the first audio file and mix it in
+            audio_input = audio_files[0]
+            cmd_audio = [
+                "ffmpeg", "-y",
+                "-i", temp_video_path,
+                "-i", audio_input,
+                "-c:v", "copy",
+                "-c:a", "aac", "-b:a", "192k",
+                "-shortest",
+                output_path
+            ]
+            subprocess.run(cmd_audio, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            current_step += 1
+            await emit_progress(current_step, "Audio mixed")
+            
+            # Clean up temp video-only file
+            if os.path.exists(temp_video_path):
+                os.remove(temp_video_path)
         
-        # Cleanup list file
+        # Final: Clean up and emit completion
         if os.path.exists(list_file_path):
             os.remove(list_file_path)
         
-        # Return project-scoped URL
-        return {"status": "completed", "video_url": f"/projects/{project_id}/generated/{render_job_id}.mp4"}
-    
+        video_url = f"/projects/{project_id}/generated/{render_id}.mp4"
+        
+        await event_manager.broadcast("render_complete", {
+            "job_id": render_id,
+            "project_id": project_id,
+            "video_url": video_url,
+            "message": "Render complete!"
+        })
+        logger.info(f"Render complete: {output_path}")
+        
     except Exception as e:
-        print(f"Render failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Render failed: {e}")
+        await event_manager.broadcast("render_failed", {
+            "job_id": render_id,
+            "project_id": project_id,
+            "error": str(e)
+        })
+        # Clean up partial files
+        for f in [temp_video_path, list_file_path, output_path]:
+            if os.path.exists(f):
+                try:
+                    os.remove(f)
+                except:
+                    pass
+
+
+@router.get("/projects/{project_id}/render/{render_id}/download")
+async def download_render(project_id: str, render_id: str):
+    """Serve the rendered video file as a download."""
+    from fastapi.responses import FileResponse
+    
+    file_path = os.path.join(config.PROJECTS_DIR, project_id, "generated", f"{render_id}.mp4")
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="Render not found")
+    
+    return FileResponse(
+        file_path,
+        media_type="video/mp4",
+        filename=f"{render_id}.mp4"
+    )
 
 @router.get("/projects/{project_id}/images")
 async def get_project_images(project_id: str, session: Session = Depends(get_session)):
@@ -462,3 +591,68 @@ async def split_shot(shot_id: str, req: SplitShotRequest, session: Session = Dep
     }
 
 
+# ── LLM Settings ──────────────────────────────────────────────────
+
+@router.get("/settings/llm")
+def get_llm_settings():
+    """Return current LLM configuration."""
+    return {
+        "provider": config.LLM_PROVIDER,
+        "ollama_base_url": config.OLLAMA_BASE_URL,
+        "ollama_model": config.OLLAMA_MODEL,
+        "ollama_keep_alive": config.OLLAMA_KEEP_ALIVE,
+    }
+
+
+@router.patch("/settings/llm")
+def update_llm_settings(body: dict):
+    """Update LLM settings at runtime."""
+    if "provider" in body:
+        if body["provider"] not in ("gemma", "ollama"):
+            raise HTTPException(400, f"Invalid provider: {body['provider']}. Must be 'gemma' or 'ollama'.")
+        config.LLM_PROVIDER = body["provider"]
+    if "ollama_model" in body:
+        config.OLLAMA_MODEL = body["ollama_model"]
+    if "ollama_base_url" in body:
+        config.OLLAMA_BASE_URL = body["ollama_base_url"]
+    if "ollama_keep_alive" in body:
+        config.OLLAMA_KEEP_ALIVE = body["ollama_keep_alive"]
+    
+    logger.info(f"LLM settings updated: provider={config.LLM_PROVIDER}, model={config.OLLAMA_MODEL}, keep_alive={config.OLLAMA_KEEP_ALIVE}")
+    return get_llm_settings()
+
+
+# Vision model families — these can accept images via Ollama's multimodal API
+VISION_FAMILIES = {"mllama", "clip", "llava", "bakllava", "moondream"}
+
+@router.get("/settings/llm/models")
+def list_ollama_models():
+    """Query Ollama for available models, tagging vision-capable ones."""
+    import requests
+    try:
+        resp = requests.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=5)
+        resp.raise_for_status()
+        models = resp.json().get("models", [])
+        
+        # Detect which models support vision (image input)
+        result = []
+        for m in models:
+            families = set(m.get("details", {}).get("families") or [])
+            is_vision = bool(families & VISION_FAMILIES)
+            # Skip embedding-only models (bert, nomic-bert)
+            family = m.get("details", {}).get("family", "")
+            if family in ("bert", "nomic-bert"):
+                continue
+            result.append({
+                "name": m["name"],
+                "size": m.get("size"),
+                "modified_at": m.get("modified_at"),
+                "is_vision": is_vision,
+                "parameter_size": m.get("details", {}).get("parameter_size"),
+            })
+        
+        return {"models": result}
+    except requests.ConnectionError:
+        raise HTTPException(503, f"Cannot reach Ollama at {config.OLLAMA_BASE_URL}")
+    except Exception as e:
+        raise HTTPException(500, str(e))

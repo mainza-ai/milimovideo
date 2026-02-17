@@ -150,6 +150,7 @@ Handles video, image, chained, and inpainting generation.
 | `tasks/image.py` | `generate_image_task()` — Flux 2 image generation with element/trigger resolution, IP-Adapter reference images, Asset DB record creation. |
 | `models/flux_wrapper.py` | `FluxInpainter` singleton — wraps Flux 2 Klein 9B with AE hot-swap, MPS hacks, IP-Adapter, True CFG double-pass, and RePaint inpainting. |
 | `storyboard/manager.py` | `StoryboardManager` — dual-mode (worker/server). Chunk preparation, last-frame extraction via ffmpeg, shot-based prompt enrichment with narrative context. |
+| `services/ai_storyboard.py` | `ai_parse_script()` — Gemma 3 AI script analysis. Parses free-form text into structured scenes/shots via chat interface with cinematic system prompt. Falls back to regex parser if Gemma unavailable. |
 
 ### C. The API Layer (Backend)
 5 routers with ~30 endpoints.
@@ -160,7 +161,7 @@ Handles video, image, chained, and inpainting generation.
 | `jobs.py` | `/status`, `/generate` | Status polling, advanced generation, image generation, cancel |
 | `assets.py` | `/uploads`, `/assets` | File upload, list media, delete, get last frame |
 | `elements.py` | `/elements`, `/edit` | Element CRUD, visualize, inpaint, segment |
-| `storyboard.py` | `/storyboard` | Parse script, commit storyboard, get hierarchy, generate shot |
+| `storyboard.py` | `/storyboard` | Parse script (regex + AI), commit, get hierarchy, update scene, generate shot, batch generate, generate thumbnails, reorder/add/delete shots |
 
 ### D. The Player System (Frontend)
 "Program Monitor" pattern with multi-component composition.

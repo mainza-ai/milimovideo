@@ -1,7 +1,6 @@
 import logging
 from typing import List, Optional
 from sqlmodel import Session, select
-from sqlmodel import Session, select
 from database import engine, Element, Project, Asset
 from datetime import datetime, timezone
 import uuid
@@ -123,10 +122,27 @@ class ElementManager:
     def inject_elements_into_prompt(self, prompt: str, project_id: str) -> tuple[str, List[str]]:
         """
         Scans prompt for trigger words.
+        Strategy: project-local elements first, then global fallback.
         Returns: (enhanced_prompt, list_of_image_paths)
         """
-        # Get all elements for this project
+        # 1. Try current project first
         elements = self.get_elements(project_id)
+        
+        # 2. Fallback: search ALL projects if no local match
+        if not elements or not any(
+            el.trigger_word and el.trigger_word.lower() in prompt.lower()
+            for el in elements
+        ):
+            with Session(engine) as session:
+                all_elements = session.exec(select(Element)).all()
+                # Merge: local elements first (priority), then others
+                local_ids = {el.id for el in elements}
+                elements = list(elements) + [
+                    el for el in all_elements if el.id not in local_ids
+                ]
+                if len(elements) > len(local_ids):
+                    logger.info(f"Element fallback: searching {len(elements)} elements across all projects")
+
         if not elements:
             return prompt, []
 
@@ -135,39 +151,54 @@ class ElementManager:
         collected_images = []
         
         for el in elements:
-            if el.trigger_word and el.trigger_word in final_prompt:
+            if not el.trigger_word:
+                continue
+            
+            # Case-insensitive trigger matching
+            trigger_lower = el.trigger_word.lower()
+            prompt_lower = final_prompt.lower()
+            
+            if trigger_lower in prompt_lower:
                 # If element has a visual, use Name (avoid description contamination)
                 # If text-only, use Description
                 if el.image_path:
                     replacement = el.name
                 else:
                     replacement = f"{el.description}"
-                    
-                final_prompt = final_prompt.replace(el.trigger_word, replacement)
+                
+                # Case-insensitive replace while preserving surrounding text
+                import re
+                final_prompt = re.sub(re.escape(el.trigger_word), replacement, final_prompt, flags=re.IGNORECASE)
                 injected_count += 1
                 
                 # Collect Visual Asset if available
                 if el.image_path:
-                    # Resolve full path if it's a relative web URL
-                    # stored as /projects/{id}/assets/...
-                    if el.image_path.startswith("/projects"):
-                        from config import PROJECTS_DIR
-                        # Remove /projects/ prefix to join with PROJECTS_DIR parent? 
-                        # Actually PROJECTS_DIR is /.../projects
-                        # URL: /projects/123/assets/img.jpg
-                        # File: PROJECTS_DIR/123/assets/img.jpg
-                        
-                        relative = el.image_path.lstrip("/projects/") # -> 123/assets/img.jpg
-                        full_path = os.path.join(PROJECTS_DIR, relative)
-                        if os.path.exists(full_path):
-                            collected_images.append(full_path)
-                    elif os.path.exists(el.image_path):
-                        collected_images.append(el.image_path)
+                    resolved = self._resolve_element_image(el.image_path)
+                    if resolved:
+                        collected_images.append(resolved)
         
         if injected_count > 0:
             logger.info(f"Injected {injected_count} elements into prompt. Found {len(collected_images)} visuals.")
             
         return final_prompt, collected_images
+
+    def _resolve_element_image(self, image_path: str) -> str | None:
+        """Resolve element image_path to absolute filesystem path."""
+        if not image_path:
+            return None
+        # Already absolute and exists
+        if os.path.isabs(image_path) and os.path.exists(image_path):
+            return image_path
+        # Web URL format: /projects/{id}/assets/...
+        if image_path.startswith("/projects"):
+            from config import PROJECTS_DIR
+            relative = image_path.removeprefix("/projects/")
+            full_path = os.path.join(PROJECTS_DIR, relative)
+            if os.path.exists(full_path):
+                return full_path
+            else:
+                logger.warning(f"Element image not found: {full_path}")
+        return None
 
     async def generate_visual(self, element_id: str, prompt_override: str = None, guidance: float = 2.0, enable_ae: bool = False, job_id: str = None) -> Optional[str]:
         """

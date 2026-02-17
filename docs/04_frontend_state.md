@@ -97,15 +97,17 @@ graph TD
 **Track mapping**: `0=V1 (Main)`, `1=V2 (Overlay)`, `2=A1 (Audio)`
 
 ### ElementSlice
-| State | Actions |
-|---|---|
 | `elements: StoryElement[]` | `fetchElements(projectId)` |
 | `generatingElementIds: Record<string, string>` | `createElement(projectId, data)` |
-| — | `deleteElement(elementId)` |
+| `parsedScenes: ParsedScene[] \| null` | `deleteElement(elementId)` |
 | — | `generateVisual(elementId, ...)` → POST `/elements/{id}/visualize` |
 | — | `cancelElementGeneration(elementId)` |
-| — | `parseScript(text)` → `ParsedScene[]` |
+| — | `parseScript(text)` → `ParsedScene[]` (regex) |
+| — | `aiParseScript(text)` → `ParsedScene[]` (Gemma 3 AI) |
 | — | `commitStoryboard(scenes)` |
+| — | `generateThumbnails(shotIds)` → Flux 2 concept art |
+| — | `updateSceneName(sceneId, name)` → PATCH |
+| — | `pushStoryboardToTimeline()` → commit + reload project |
 
 ### ServerSlice
 | Actions | Description |
@@ -116,7 +118,7 @@ graph TD
 | Event Type | Action |
 |---|---|
 | `progress` | Update shot `progress`, `statusMessage`, `etaSeconds`, `enhancedPromptResult` |
-| `complete` | Set shot `isGenerating=false`, `videoUrl`, `thumbnailUrl`, `progress=100`; trigger `assetRefresh`. Handles both video/image generation and inpainting completions (inpaint events include `type: "inpaint"` and `asset_id`). |
+| `complete` | Set shot `isGenerating=false`, `videoUrl`, `thumbnailUrl`, `progress=100`; trigger `assetRefresh`. Handles both video/image generation and inpainting completions (inpaint events include `type: "inpaint"` and `asset_id`). For `is_thumbnail` jobs: matches by `shot_id` (not `lastJobId`), sets only `thumbnailUrl` without clearing generation state. |
 | `error` | Set shot `isGenerating=false`, show toast |
 | `cancelled` | Set shot `isGenerating=false`, `status="pending"` |
 

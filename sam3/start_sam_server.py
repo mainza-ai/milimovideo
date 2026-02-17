@@ -105,8 +105,16 @@ def _read_image(contents: bytes) -> np.ndarray:
 
 
 def _mask_to_png_bytes(mask: np.ndarray) -> bytes:
-    """Convert a boolean/uint8 mask to PNG bytes."""
-    mask_image = Image.fromarray((mask.astype(np.uint8) * 255))
+    """Convert a boolean/uint8 mask to RGBA PNG bytes where mask is the alpha channel."""
+    h, w = mask.shape[:2]
+    # Create RGBA image: white color where mask is, with mask as alpha
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    alpha = mask.astype(np.uint8) * 255
+    rgba[:, :, 0] = 255  # R
+    rgba[:, :, 1] = 255  # G
+    rgba[:, :, 2] = 255  # B
+    rgba[:, :, 3] = alpha  # A — only mask pixels are visible
+    mask_image = Image.fromarray(rgba, mode="RGBA")
     buf = io.BytesIO()
     mask_image.save(buf, format="PNG")
     buf.seek(0)
@@ -383,7 +391,7 @@ async def track_start(
     """Start a tracking session on a video file or frame directory."""
     predictor = _get_video_predictor()
 
-    if not os.path.exists(video_path):
+    if not os.path.exists(video_path) and not video_path.startswith("<"):
         raise HTTPException(status_code=404, detail=f"Video not found: {video_path}")
 
     try:
@@ -392,7 +400,12 @@ async def track_start(
             "resource_path": video_path,
             "session_id": session_id,
         })
-        return {"session_id": result, "status": "started"}
+        return {
+            "session_id": result["session_id"],
+            "status": "started",
+            "fps": result.get("fps", 30.0),
+            "num_frames": result.get("num_frames", 0),
+        }
     except Exception as e:
         logger.error(f"Track start error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -416,7 +429,7 @@ async def track_prompt(
         prompt_request = {
             "type": "add_prompt",
             "session_id": session_id,
-            "frame_idx": frame_idx,
+            "frame_index": frame_idx,
         }
 
         if text:
@@ -431,11 +444,77 @@ async def track_prompt(
             prompt_request["bounding_box_labels"] = json.loads(box_labels)
         if obj_id is not None:
             prompt_request["obj_id"] = obj_id
+        elif points:
+            # SAM3 requires obj_id when points are provided — auto-assign
+            prompt_request["obj_id"] = 1
+
+        logger.info(f"Track prompt request: frame={frame_idx}, text={text}, "
+                     f"points={points is not None}, boxes={boxes is not None}, "
+                     f"obj_id={prompt_request.get('obj_id')}")
 
         result = predictor.handle_request(prompt_request)
-        return {"status": "prompt_added", "result": str(result)}
+        logger.info(f"Track prompt result keys: {list(result.keys()) if isinstance(result, dict) else type(result)}")
+
+        # Properly serialize model outputs for the frontend
+        response = {"status": "prompt_added"}
+        if isinstance(result, dict):
+            outputs = result.get("outputs", {})
+            if isinstance(outputs, dict):
+                obj_ids = outputs.get("out_obj_ids")
+                if obj_ids is not None:
+                    import numpy as np
+                    response["object_ids"] = obj_ids.tolist() if hasattr(obj_ids, 'tolist') else list(obj_ids)
+                    response["num_objects"] = len(response["object_ids"])
+                    probs = outputs.get("out_probs")
+                    if probs is not None:
+                        response["scores"] = {
+                            int(oid): float(p)
+                            for oid, p in zip(obj_ids, probs)
+                        }
+
+                    # Extract masks so frontend gets immediate visual feedback
+                    masks = outputs.get("out_binary_masks")
+                    if masks is not None:
+                        if hasattr(masks, "cpu"):
+                            masks = masks.cpu().numpy()
+                        mask_dict = {}
+                        for i, oid in enumerate(obj_ids):
+                            mask = masks[i]
+                            if mask.ndim == 3 and mask.shape[0] == 1:
+                                mask = mask.squeeze(0)
+                            mask_dict[str(int(oid))] = _mask_to_base64(mask)
+                        response["masks"] = mask_dict
+                else:
+                    response["object_ids"] = []
+                    response["num_objects"] = 0
+            response["frame_index"] = result.get("frame_index", frame_idx)
+        logger.info(f"Track prompt response: {response.get('num_objects', 0)} objects detected, masks={'masks' in response}")
+        return response
     except Exception as e:
         logger.error(f"Track prompt error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/track/remove_object")
+async def track_remove_object(
+    session_id: str = Form(...),
+    obj_id: int = Form(...),
+):
+    """Remove an object from the tracking session."""
+    predictor = _get_video_predictor()
+
+    try:
+        logger.info(f"Remove object: session={session_id}, obj_id={obj_id}")
+        predictor.handle_request({
+            "type": "remove_object",
+            "session_id": session_id,
+            "obj_id": obj_id,
+        })
+        return {"status": "removed", "session_id": session_id, "obj_id": obj_id}
+    except Exception as e:
+        logger.error(f"Track remove object error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -451,23 +530,56 @@ async def track_propagate(
 
     try:
         results = []
+        # Convert -1 sentinels to None (model expects None for "all frames")
+        _start = start_frame if start_frame >= 0 else None
+        _max = max_frames if max_frames >= 0 else None
+        logger.info(f"Propagate: session={session_id}, direction={direction}, "
+                     f"start_frame={_start}, max_frames={_max}")
+
         for frame_result in predictor.handle_stream_request({
             "type": "propagate_in_video",
             "session_id": session_id,
             "propagation_direction": direction,
-            "start_frame_idx": start_frame,
-            "max_frame_num_to_track": max_frames,
+            "start_frame_index": _start,
+            "max_frame_num_to_track": _max,
         }):
-            # Each frame_result is a dict with frame info and masks
+            # Each frame_result is {"frame_index": int, "outputs": dict}
+            frame_idx = frame_result.get("frame_index", -1)
+            outputs = frame_result.get("outputs", {})
+            
             frame_data = {
-                "frame_idx": frame_result.get("frame_idx", -1),
-                "num_objects": frame_result.get("num_objects", 0),
+                "frame_idx": frame_idx,
+                "num_objects": 0,
+                "masks": {},
+                "scores": {}
             }
 
-            # If masks are tensors, convert to base64
-            if "masks" in frame_result and hasattr(frame_result["masks"], "cpu"):
-                masks_np = frame_result["masks"].cpu().numpy()
-                frame_data["masks"] = [_mask_to_base64(m) for m in masks_np]
+            if isinstance(outputs, dict):
+                # Extract object IDs and masks
+                obj_ids = outputs.get("out_obj_ids")
+                masks = outputs.get("out_binary_masks")
+                probs = outputs.get("out_probs")
+
+                if obj_ids is not None and masks is not None:
+                    # Convert to numpy if they are tensors
+                    if hasattr(obj_ids, "cpu"): obj_ids = obj_ids.cpu().numpy()
+                    if hasattr(masks, "cpu"): masks = masks.cpu().numpy()
+                    if probs is not None and hasattr(probs, "cpu"): probs = probs.cpu().numpy()
+
+                    # Handle 0-detected case
+                    if obj_ids.size > 0:
+                        frame_data["num_objects"] = len(obj_ids)
+                        for i, obj_id in enumerate(obj_ids):
+                            oid = int(obj_id)
+                            # Mask shape is [N, H, W] or [N, 1, H, W]
+                            mask = masks[i]
+                            if mask.ndim == 3 and mask.shape[0] == 1:
+                                mask = mask.squeeze(0)
+                            
+                            frame_data["masks"][str(oid)] = _mask_to_base64(mask)
+                            
+                            if probs is not None:
+                                frame_data["scores"][str(oid)] = float(probs[i])
 
             results.append(frame_data)
 

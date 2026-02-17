@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+import torch.distributed as dist
 from sam3.model.model_misc import SAM3Output
 from sam3.model.sam1_task_predictor import SAM3InteractiveImagePredictor
 from sam3.model.vl_combiner import SAM3VLBackbone
@@ -115,25 +116,75 @@ class Sam3Image(torch.nn.Module):
         """Retrieve correct image features from backbone output."""
         if "backbone_fpn" in backbone_out:
             if "id_mapping" in backbone_out and backbone_out["id_mapping"] is not None:
-                img_ids = backbone_out["id_mapping"][img_ids]
-                # If this assert fails, it likely means we're requesting different img_ids (perhaps a different frame?)
-                # We currently don't expect this to happen. We could technically trigger a recompute here,
-                # but likely at the cost of a cpu<->gpu sync point, which would deteriorate perf
-                torch._assert_async((img_ids >= 0).all())
+                # Check if img_ids are valid for the current id_mapping
+                # If NOT valid (out of bounds or negative), we assume the mapping is stale/incorrect
+                # and fall back to computing features on the fly (below).
+                is_valid_mapping = True
+                
+                if (img_ids >= len(backbone_out["id_mapping"])).any():
+                     import logging
+                     logger = logging.getLogger("SAM3_Server")
+                     logger.warning(
+                         f"id_mapping exists but is too small (len={len(backbone_out['id_mapping'])}) "
+                         f"for requested img_ids (max={img_ids.max()}). Ignoring cached mapping."
+                     )
+                     is_valid_mapping = False
+                
+                if is_valid_mapping and (img_ids < 0).any():
+                     import logging
+                     logger = logging.getLogger("SAM3_Server")
+                     logger.warning(
+                         f"id_mapping exists but img_ids has negative values (min={img_ids.min()}). "
+                         f"Ignoring cached mapping."
+                     )
+                     is_valid_mapping = False
 
-            vis_feats = backbone_out["backbone_fpn"][-self.num_feature_levels :]
-            vis_pos_enc = backbone_out["vision_pos_enc"][-self.num_feature_levels :]
-            vis_feat_sizes = [x.shape[-2:] for x in vis_pos_enc]  # (H, W) shapes
-            # index and flatten visual features NxCxHxW => HWxNxC (batch-first => seq-first)
-            img_feats = [x[img_ids].flatten(2).permute(2, 0, 1) for x in vis_feats]
-            img_pos_embeds = [
-                x[img_ids].flatten(2).permute(2, 0, 1) for x in vis_pos_enc
-            ]
-            return backbone_out, img_feats, img_pos_embeds, vis_feat_sizes
+                if is_valid_mapping:
+                    img_ids = backbone_out["id_mapping"][img_ids]
+                    # Double check mapped ids are valid (should be non-negative)
+                    if (img_ids < 0).any():
+                        # This implies the requested frame wasn't processed in the batch that generated id_mapping
+                        # (even if it was within bounds, it mapped to -1)
+                        import logging
+                        logger = logging.getLogger("SAM3_Server")
+                        logger.warning(
+                             f"id_mapping mapped some img_ids to -1 (min={img_ids.min()}). "
+                             "Ignoring cached mapping."
+                        )
+                        is_valid_mapping = False
+                
+                if is_valid_mapping:
+                     # Mapping is valid, proceed to extract features
+                     vis_feats = backbone_out["backbone_fpn"][-self.num_feature_levels :]
+                     vis_pos_enc = backbone_out["vision_pos_enc"][-self.num_feature_levels :]
+                     vis_feat_sizes = [x.shape[-2:] for x in vis_pos_enc]  # (H, W) shapes
+                     # index and flatten visual features NxCxHxW => HWxNxC (batch-first => seq-first)
+                     img_feats = [x[img_ids].flatten(2).permute(2, 0, 1) for x in vis_feats]
+                     img_pos_embeds = [
+                         x[img_ids].flatten(2).permute(2, 0, 1) for x in vis_pos_enc
+                     ]
+                     return backbone_out, img_feats, img_pos_embeds, vis_feat_sizes
+                
+                # If we get here, is_valid_mapping is False, so we skip to the fallback block below
 
         # Image features not available in backbone output, so we compute them on the fly
         # This case likely occurs for video. In that case, we want to forward only the current frame
         img_batch = backbone_out["img_batch_all_stages"]
+
+        # Security/Stability Check: Ensure requested object indices are within bounds of the image batch
+        max_idx = len(img_batch)
+        if (img_ids >= max_idx).any() or (img_ids < 0).any():
+             import logging
+             logger = logging.getLogger("SAM3_Server")
+             err_msg = (
+                 f"WARNING: _get_img_feats received invalid img_ids. "
+                 f"Max allowed index: {max_idx-1}, but found values up to {img_ids.max()} "
+                 f"(and min {img_ids.min()}). "
+                 f"Clamping to valid range [0, {max_idx-1}] to proceed."
+             )
+             logger.warning(err_msg)
+             img_ids = torch.clamp(img_ids, min=0, max=max_idx - 1)
+
         if img_ids.numel() > 1:
             # Only forward backbone on unique image ids to avoid repetitive computation
             unique_ids, _ = torch.unique(img_ids, return_inverse=True)
@@ -833,7 +884,11 @@ class Sam3ImageOnVideoMultiGPU(Sam3Image):
             assert len(feats["backbone_fpn"]) == 3  # SAM2 backbone always have 3 levels
             # cast the SAM2 backbone features to bfloat16 for all-gather (this is usually
             # a no-op, SAM2 backbone features are likely already in bfloat16 due to AMP)
-            backbone_fpn_bf16 = [x.to(torch.bfloat16) for x in feats["backbone_fpn"]]
+            # On MPS, bfloat16 is not supported in conv/linear layers, so skip the cast.
+            _fpn_dtype = torch.bfloat16
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                _fpn_dtype = torch.float32  # MPS does not support bfloat16
+            backbone_fpn_bf16 = [x.to(_fpn_dtype) for x in feats["backbone_fpn"]]
             fpn0, fpn_handle0 = self._gather_tensor(backbone_fpn_bf16[0])
             fpn1, fpn_handle1 = self._gather_tensor(backbone_fpn_bf16[1])
             fpn2, fpn_handle2 = self._gather_tensor(backbone_fpn_bf16[2])

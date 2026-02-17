@@ -19,9 +19,35 @@ from database import engine
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 from ltx_pipelines.utils.media_io import encode_video
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE
-from ltx_pipelines.utils.helpers import generate_enhanced_prompt, cleanup_memory
+from ltx_pipelines.utils.helpers import cleanup_memory
 
 logger = logging.getLogger(__name__)
+
+def clamp_resolution_for_device(width: int, height: int) -> tuple[int, int]:
+    """Clamp resolution to safe limits for the current device (MPS/CUDA).
+    
+    On MPS, the 19B float32 transformer's attention scales quadratically with 
+    token count. Resolutions above ~983K pixels (1280×768) cause OOM during 
+    scaled_dot_product_attention. This function scales down proportionally,
+    maintaining aspect ratio and mod64 alignment.
+    """
+    if not torch.backends.mps.is_available():
+        return width, height  # CUDA handles larger resolutions
+    
+    max_pixels = config.MPS_MAX_PIXELS
+    current_pixels = width * height
+    
+    if current_pixels > max_pixels:
+        scale = (max_pixels / current_pixels) ** 0.5
+        new_width = round(width * scale / 64) * 64
+        new_height = round(height * scale / 64) * 64
+        logger.warning(
+            f"⚠️ MPS Resolution Clamp: {width}x{height} → {new_width}x{new_height} "
+            f"(original {current_pixels:,} px exceeded {max_pixels:,} px safe limit)"
+        )
+        return new_width, new_height
+    
+    return width, height
 
 async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         prompt = params.get("prompt", "")
@@ -33,6 +59,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         # Ensure mod64 for LTX-2
         height = round(height / 64) * 64
         width = round(width / 64) * 64
+        
+        # MPS Safety: Clamp resolution to prevent OOM with 19B float32 model
+        width, height = clamp_resolution_for_device(width, height)
+        
         num_frames = params.get("num_frames", 121) 
         num_inference_steps = params.get("num_inference_steps", 40)
         cfg_scale = params.get("cfg_scale", 2.0)
@@ -72,10 +102,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         logger.info(f"Parsed URL to path: {path}")
                     
                     if isinstance(path, str) and path.startswith("/projects"):
-                        abs_path = os.path.join(base_dir, "projects", path.lstrip("/projects/").lstrip("/"))
+                        abs_path = os.path.join(base_dir, "projects", path.removeprefix("/projects/").lstrip("/"))
                         # Better fix: strip /projects/ then join with PROJECTS_DIR
                         # PROJECTS_DIR is config.PROJECTS_DIR
-                        abs_path = os.path.join(config.PROJECTS_DIR, path.lstrip("/projects/").lstrip("/"))
+                        abs_path = os.path.join(config.PROJECTS_DIR, path.removeprefix("/projects/").lstrip("/"))
                         
                         logger.info(f"Resolved to abs_path: {abs_path}")
                         if os.path.exists(abs_path):
@@ -118,7 +148,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             for img_path in element_images:
                  if isinstance(img_path, str) and img_path.startswith("/projects"):
                      # config.PROJECTS_DIR logic
-                     rel = img_path.lstrip("/projects/")
+                     rel = img_path.removeprefix("/projects/")
                      abs_path = os.path.join(config.PROJECTS_DIR, rel)
                      if os.path.exists(abs_path):
                          resolved_elements.append(abs_path)
@@ -127,12 +157,9 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                          resolved_elements.append(img_path)
             element_images = resolved_elements
 
-        # Visual Conditioning Logic (Phase 1.5)
-        is_inferred_start_frame = False
-        if not input_images and element_images:
-            logger.info(f"Applying Visual Conditioning from Elements: {len(element_images)} images.")
-            input_images = [(element_images[0], 0, 1.0)]
-            is_inferred_start_frame = True
+        # Note: element_images are passed ONLY to ip_adapter_images (line ~210)
+        # for style/character guidance. They must NOT be used as input_images
+        # (frame-0 conditioning) which would freeze the video as a still frame.
 
         video_cond = params.get("video_conditioning", [])
         video_cond = params.get("video_conditioning", [])
@@ -166,6 +193,28 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         if num_frames == 1:
             logger.info(f"Detected single-frame generation. Delegating to Flux 2 (T2I mode)...")
             from models.flux_wrapper import flux_inpainter
+            
+            # Prompt Enhancement for single-frame (image) mode
+            # NOTE: Flux doesn't use LTX text_encoder — only Ollama can enhance here.
+            if enhance_prompt:
+                try:
+                    from llm import enhance_prompt as llm_enhance
+                    provider = config.LLM_PROVIDER.lower()
+                    if provider == "gemma":
+                        logger.warning(
+                            "Gemma cannot enhance single-frame prompts (Flux has no LTX text_encoder). "
+                            "Skipping enhancement. Use Ollama for image prompt enhancement."
+                        )
+                    else:
+                        logger.info(f"Enhancing single-frame prompt via {provider}...")
+                        enhanced = llm_enhance(prompt=prompt, is_video=False, seed=seed)
+                        if enhanced and enhanced != prompt:
+                            prompt = enhanced
+                            update_job_db(job_id, "processing", enhanced_prompt=prompt)
+                            update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=prompt)
+                            logger.info(f"Enhanced single-frame prompt: {prompt[:100]}...")
+                except Exception as e:
+                    logger.warning(f"Single-frame prompt enhancement failed: {e}")
             
             def _run_flux():
                  def flux_callback(step, total):
@@ -302,33 +351,33 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 run_prompt = prompt
                 if enhance_prompt:
                     update_job_progress(job_id, 5, "Enhancing Prompt...")
-                    logger.info("Enhancing prompt with Gemma...")
-                    try: 
-                        text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                    logger.info(f"Enhancing prompt with {config.LLM_PROVIDER}...")
+                    try:
+                        from llm import enhance_prompt as llm_enhance
                         is_image_mode = (num_frames == 1)
-                        # Use the new optimized video prompt from helpers.py
-                        sys_prompt = None
                         
-                        image_for_gemma = None
-                        if input_images and not is_inferred_start_frame:
-                            image_for_gemma = input_images[0][0]
+                        # For Gemma, we need the text encoder
+                        text_encoder = None
+                        if config.LLM_PROVIDER.lower() == "gemma":
+                            text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                        
+                        image_for_llm = None
+                        if input_images:
+                            image_for_llm = input_images[0][0]
 
-                        effective_prompt = prompt
-                        
-                        run_prompt = generate_enhanced_prompt(
-                            text_encoder, 
-                            effective_prompt, 
-                            image_path=image_for_gemma,
+                        run_prompt = llm_enhance(
+                            prompt=prompt,
+                            is_video=not is_image_mode,
+                            text_encoder=text_encoder,
+                            image_path=image_for_llm,
                             seed=seed,
-                            is_image=is_image_mode,
-                            system_prompt=None # Use default video prompt in helpers
                         )
                         update_job_db(job_id, "processing", enhanced_prompt=run_prompt)
-                        # Explicitly broadcast the enhanced prompt so frontend picks it up immediately
-                        # Use update_job_progress for thread-safety
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=run_prompt)
-                        del text_encoder
-                        cleanup_memory()
+                        
+                        if text_encoder is not None:
+                            del text_encoder
+                            cleanup_memory()
                     except Exception as e:
                         logger.warning(f"Prompt enhancement failed: {e}")
 
@@ -376,8 +425,31 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     callback_on_step_end=cancellation_check
                 )
             elif pipeline_type == "ic_lora":
+                # Manual enhancement for ic_lora (same as ti2vid)
+                ic_prompt = prompt
+                if enhance_prompt:
+                    try:
+                        from llm import enhance_prompt as llm_enhance
+                        text_encoder = None
+                        if config.LLM_PROVIDER.lower() == "gemma":
+                            text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                        ic_prompt = llm_enhance(
+                            prompt=prompt, is_video=True,
+                            text_encoder=text_encoder,
+                            image_path=input_images[0][0] if input_images else None,
+                            seed=seed,
+                        )
+                        update_job_db(job_id, "processing", enhanced_prompt=ic_prompt)
+                        update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=ic_prompt)
+                        if text_encoder is not None:
+                            del text_encoder
+                            cleanup_memory()
+                    except Exception as e:
+                        logger.warning(f"ic_lora prompt enhancement failed: {e}")
+                        ic_prompt = prompt
+
                 result = pipeline(
-                    prompt=prompt,
+                    prompt=ic_prompt,
                     seed=seed,
                     height=height,
                     width=width,
@@ -385,13 +457,36 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     frame_rate=float(params.get("fps", 25.0)),
                     images=input_images,
                     video_conditioning=video_cond,
-                    enhance_prompt=enhance_prompt,
+                    enhance_prompt=False,
                     tiling_config=tiling_config,
                     callback_on_step_end=cancellation_check
                 )
             elif pipeline_type == "keyframe":
+                # Manual enhancement for keyframe (same as ti2vid)
+                kf_prompt = prompt
+                if enhance_prompt:
+                    try:
+                        from llm import enhance_prompt as llm_enhance
+                        text_encoder = None
+                        if config.LLM_PROVIDER.lower() == "gemma":
+                            text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                        kf_prompt = llm_enhance(
+                            prompt=prompt, is_video=True,
+                            text_encoder=text_encoder,
+                            image_path=input_images[0][0] if input_images else None,
+                            seed=seed,
+                        )
+                        update_job_db(job_id, "processing", enhanced_prompt=kf_prompt)
+                        update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=kf_prompt)
+                        if text_encoder is not None:
+                            del text_encoder
+                            cleanup_memory()
+                    except Exception as e:
+                        logger.warning(f"keyframe prompt enhancement failed: {e}")
+                        kf_prompt = prompt
+
                 result = pipeline(
-                    prompt=prompt,
+                    prompt=kf_prompt,
                     negative_prompt=negative_prompt,
                     seed=seed,
                     height=height,
@@ -402,7 +497,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     cfg_guidance_scale=cfg_scale,
                     images=input_images,
                     tiling_config=tiling_config,
-                    enhance_prompt=enhance_prompt,
+                    enhance_prompt=False,
                     callback_on_step_end=cancellation_check
                 )
             

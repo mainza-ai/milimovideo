@@ -1,4 +1,5 @@
 export type ConditioningType = 'image' | 'video';
+export type ShotType = 'close_up' | 'medium' | 'wide' | 'establishing' | 'insert' | 'tracking';
 
 export interface ConditioningItem {
     id: string; // Internal ID
@@ -54,6 +55,7 @@ export interface Shot {
 
     // UI State
     isGenerating?: boolean;
+    status?: 'pending' | 'generating' | 'completed' | 'failed';
 
     // Storyboard metadata
     sceneId?: string;
@@ -61,6 +63,7 @@ export interface Shot {
     action?: string;
     dialogue?: string;
     character?: string;
+    shotType?: ShotType;
 }
 
 export interface ShotConfig extends Partial<Shot> {
@@ -79,11 +82,12 @@ export interface ParsedShot {
     action: string;
     dialogue?: string;
     character?: string;
+    shot_type?: string;
 }
 
 export interface ParsedScene {
     id?: string; // Optional (not in DB yet)
-    header: string;
+    name: string;
     content: string;
     shots: ParsedShot[];
 }
@@ -131,6 +135,19 @@ export interface ShotSlice {
     getShotStartTime: (shotId: string) => number;
     generateShot: (shotId: string) => Promise<void>;
     inpaintShot: (shotId: string, frameDataUrl: string, maskDataUrl: string, prompt: string) => Promise<void>;
+
+    // Storyboard operations
+    batchGenerateShots: (shotIds: string[]) => Promise<void>;
+    reorderShotsInScene: (sceneId: string, shotIds: string[]) => Promise<void>;
+    addShotToScene: (sceneId: string, data?: { action?: string; dialogue?: string; character?: string; shotType?: string }) => Promise<void>;
+    deleteShotFromStoryboard: (shotId: string) => Promise<void>;
+
+    // Phase 2: Thumbnails
+    generateThumbnail: (shotId: string) => Promise<void>;
+    batchGenerateThumbnails: (shotIds: string[]) => Promise<void>;
+
+    // Phase 3: Timeline integration
+    pushStoryboardToTimeline: () => void;
 }
 
 export interface PlaybackSlice {
@@ -176,7 +193,9 @@ export interface ElementSlice {
 
     // Storyboard
     parseScript: (text: string) => Promise<ParsedScene[]>;
+    aiParseScript: (text: string) => Promise<ParsedScene[]>;
     commitStoryboard: (scenes: ParsedScene[]) => Promise<void>;
+    updateSceneName: (sceneId: string, name: string) => Promise<void>;
 }
 
 export interface ServerSlice {

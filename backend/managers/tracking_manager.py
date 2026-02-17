@@ -91,7 +91,7 @@ class TrackingManager:
                 "start_frame": str(start_frame),
                 "max_frames": str(max_frames),
             }
-            res = requests.post(f"{SAM_URL}/track/propagate", data=data, timeout=300)
+            res = requests.post(f"{SAM_URL}/track/propagate", data=data, timeout=1200)
             if res.status_code == 200:
                 return res.json()
             else:
@@ -99,6 +99,20 @@ class TrackingManager:
                 return {"error": res.text}
         except Exception as e:
             logger.error(f"Track propagate connection error: {e}")
+            return {"error": str(e)}
+
+    def remove_object(self, session_id: str, obj_id: int) -> dict:
+        """Remove an object from the tracking session."""
+        try:
+            data = {"session_id": session_id, "obj_id": str(obj_id)}
+            res = requests.post(f"{SAM_URL}/track/remove_object", data=data, timeout=30)
+            if res.status_code == 200:
+                return res.json()
+            else:
+                logger.error(f"Track remove object failed: {res.text}")
+                return {"error": res.text}
+        except Exception as e:
+            logger.error(f"Track remove object connection error: {e}")
             return {"error": str(e)}
 
     def stop_session(self, session_id: str) -> dict:

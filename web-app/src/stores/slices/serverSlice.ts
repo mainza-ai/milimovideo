@@ -21,27 +21,35 @@ export const createServerSlice: StateCreator<TimelineState, [], [], ServerSlice>
                 updateShot(shot.id, updates);
             }
         } else if (type === 'complete') {
-            const shot = project.shots.find(s => s.lastJobId === data.job_id);
+            // Match by lastJobId first, then fallback to shot_id for thumbnails
+            let shot = project.shots.find(s => s.lastJobId === data.job_id);
+            if (!shot && data.shot_id) {
+                shot = project.shots.find(s => s.id === data.shot_id);
+            }
             if (shot) {
+                const isThumbnail = data.type === 'thumbnail';
                 const isInpaint = data.type === 'inpaint';
                 const updates: any = {
                     isGenerating: false,
                     progress: 100,
                     statusMessage: "Complete"
                 };
-                // Video gen produces a video URL; inpaint produces only a thumbnail/image
-                if (data.url) {
-                    updates.videoUrl = getAssetUrl(data.url);
-                }
-                if (data.thumbnail_url) {
-                    updates.thumbnailUrl = getAssetUrl(data.thumbnail_url);
+                // Thumbnail events only update thumbnailUrl, not videoUrl
+                if (isThumbnail) {
+                    if (data.url) updates.thumbnailUrl = getAssetUrl(data.url);
+                } else {
+                    if (data.url) updates.videoUrl = getAssetUrl(data.url);
+                    if (data.thumbnail_url) updates.thumbnailUrl = getAssetUrl(data.thumbnail_url);
                 }
                 if (data.actual_frames) {
                     updates.numFrames = data.actual_frames;
                 }
                 updateShot(shot.id, updates);
                 triggerAssetRefresh();
-                addToast(isInpaint ? "In-Painting Complete" : "Generation Complete", "success");
+                addToast(
+                    isThumbnail ? "Concept Art Ready" : isInpaint ? "In-Painting Complete" : "Generation Complete",
+                    "success"
+                );
             }
         } else if (type === 'error') {
             const shot = project.shots.find(s => s.lastJobId === data.job_id);
@@ -53,6 +61,18 @@ export const createServerSlice: StateCreator<TimelineState, [], [], ServerSlice>
                 });
                 addToast(`Generation Failed: ${data.message}`, "error");
             }
+
+            // ── Render/Export Events ──────────────────────────────────────
+        } else if (type === 'render_progress') {
+            addToast(`Export: ${data.message} (${data.progress}%)`, "info");
+
+        } else if (type === 'render_complete') {
+            const downloadUrl = `http://localhost:8000${data.video_url}`;
+            addToast("Export Complete! Opening video...", "success");
+            window.open(downloadUrl, '_blank');
+
+        } else if (type === 'render_failed') {
+            addToast(`Export Failed: ${data.error}`, "error");
         }
     },
 });
