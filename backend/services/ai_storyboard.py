@@ -4,6 +4,10 @@ AI Storyboard — Gemma 3 powered script analysis.
 Uses the Gemma text encoder's chat interface to intelligently parse
 free-form text into structured scenes and shots with cinematic
 action descriptions, character detection, and shot type suggestions.
+
+Enhanced with element-aware prompting: when project elements are provided,
+the AI is given an element manifest so it can reference characters, locations,
+and objects by their exact project names.
 """
 
 import json
@@ -52,8 +56,9 @@ You MUST respond with valid JSON only — no markdown, no explanation.
 def ai_parse_script(
     text: str,
     text_encoder,
-    max_new_tokens: int = 1024,
+    max_new_tokens: int = 4096,
     seed: int = 42,
+    project_elements: list = None,
 ) -> list[dict]:
     """
     Use Gemma 3 to intelligently parse script text into scenes/shots.
@@ -63,13 +68,24 @@ def ai_parse_script(
         text_encoder: A GemmaTextEncoderModelBase instance with model+processor loaded.
         max_new_tokens: Max tokens for Gemma to generate.
         seed: RNG seed for reproducibility.
+        project_elements: Optional list of elements to match characters against.
     
     Returns:
         List of dicts matching ScriptParser output format:
-        [{"name": str, "shots": [{"action": str, "dialogue": str|None, ...}]}]
+        [{\"name\": str, \"shots\": [{\"action\": str, \"dialogue\": str|None, ...}]}]
     """
+    from services.element_matcher import build_element_manifest, match_elements
+
+    # Build element-aware system prompt
+    system_prompt = AI_STORYBOARD_SYSTEM_PROMPT
+    if project_elements:
+        manifest = build_element_manifest(project_elements)
+        if manifest:
+            system_prompt = system_prompt + "\n" + manifest
+            logger.info(f"AI prompt enriched with {len(project_elements)} element(s)")
+
     messages = [
-        {"role": "system", "content": AI_STORYBOARD_SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": f"Break this into a storyboard:\n\n{text}"},
     ]
 
@@ -90,7 +106,13 @@ def ai_parse_script(
             raise ValueError("AI response did not produce a valid scene list")
 
         # Validate / sanitize structure
-        return _validate_scenes(parsed)
+        validated = _validate_scenes(parsed)
+        
+        # Run production element matching
+        if project_elements:
+            validated = match_elements(validated, project_elements)
+            
+        return validated
 
     except Exception as e:
         logger.error(f"AI parse failed: {e}")
@@ -117,6 +139,17 @@ def _extract_json(text: str) -> list | dict:
             return json.loads(match.group())
         except json.JSONDecodeError:
             pass
+            
+    # Try to fix truncated JSON (common with token limits)
+    try:
+        if text.startswith("["):
+            if not text.endswith("]"):
+                 last_brace = text.rfind("}")
+                 if last_brace != -1:
+                     fixed = text[:last_brace+1] + "]"
+                     return json.loads(fixed)
+    except json.JSONDecodeError:
+        pass
 
     raise ValueError(f"Could not extract valid JSON from AI response: {text[:200]}")
 

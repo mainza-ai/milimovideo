@@ -52,6 +52,12 @@ classDiagram
         +generate_visual_task(job_id, element_id, ...)
     }
 
+    class ElementMatcher {
+        +match_elements(scenes, elements)
+        +_match_shot(shot, elements)
+        +_build_element_index(elements)
+    }
+
     class InpaintingManager {
         +str sam_url
         +get_mask_from_sam(image_path, points) str
@@ -77,6 +83,7 @@ classDiagram
     ElementManager --> FluxInpainter : "uses for visuals"
     InpaintingManager --> FluxInpainter : "uses for inpainting"
     StoryboardManager --> ModelManager : "coordinates"
+    StoryboardManager --> ElementMatcher : "uses for matching"
 ```
 
 ## 2. LTX-2 Video Generation
@@ -561,3 +568,52 @@ For each shot without an existing `thumbnail_url` (or when `force=True`):
 3. Flux 2 generates concept art at 512×320
 4. `tasks/image.py` writes result to `Shot.thumbnail_url` for `is_thumbnail` jobs
 5. SSE `complete` event includes `shot_id` — `ServerSlice` matches by `shot_id` (not `lastJobId`) and updates only the thumbnail
+
+## 8. Smart Element Matching
+
+### 8.1 Overview
+
+**File**: `services/element_matcher.py`
+**Endpoint**: `POST /projects/{id}/storyboard/match-elements`
+
+The `ElementMatcher` service is a deterministic, multi-signal engine that links storyboard shots to project elements (characters, locations, objects) without requiring LLM inference. It runs after script parsing (AI or Regex) and before commit.
+
+### 8.2 Matching Signals
+
+The engine evaluates 8 distinct signals for every element-shot pair, calculating a composite confidence score.
+
+| Signal | Confidence | Description |
+|---|---|---|
+| `character_field_exact` | **1.0** | Shot's `character` field exactly matches element name. |
+| `trigger_word_in_action` | **0.95** | Element's `@TriggerWord` found in shot action. |
+| `name_in_action` | **0.85** | Element name found in shot action text. |
+| `partial_name_in_character` | **0.8** | Partial match in `character` field (e.g. "DETECTIVE" matches "Detective"). |
+| `name_in_scene` | **0.6** | Element name found in scene heading (e.g. "INT. NEON CITY"). |
+| `description_tokens` | **0.5** | Significant overlap between element description tokens and shot action. |
+| `dialogue_mention` | **0.5** | Element name spoken in dialogue. |
+| `action_keywords` | **0.4** | General keyword match (weak signal). |
+
+### 8.3 Matching Flow
+
+```mermaid
+flowchart LR
+    Elements[Project Elements] --> Index[In-Memory Index]
+    Script[Parsed Script] --> Matcher[ElementMatcher]
+    Index --> Matcher
+    Matcher --> Scoring[Multi-Signal Scoring]
+    Scoring --> Dedup[Deduplicate & Sort]
+    Dedup --> Threshold{Confidence >= 0.35?}
+    Threshold -->|Yes| Match[Link Element]
+    Threshold -->|No| Discard[Ignore]
+    Match --> JSON[shot.matched_elements]
+```
+
+### 8.4 Integration Points
+
+1.  **AI Parser**: `ai_storyboard.py` calls `match_elements()` immediately after Gemma generates the JSON structure.
+2.  **Regex Parser**: `script_parser.py` calls `match_elements()` after regex extraction.
+3.  **Manual Re-Match**: User can trigger matching on existing shots via the UI (calls `/match-elements`).
+4.  **Generation**: `StoryboardManager` uses these matches to:
+    *   Inject reference images (IP-Adapter) for characters/locations.
+    *   Append trigger words to prompts automatically.
+

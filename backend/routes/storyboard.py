@@ -27,9 +27,15 @@ router = APIRouter(tags=["storyboard"])
 
 @router.post("/projects/{project_id}/script/parse")
 async def parse_script(project_id: str, req: ScriptParseRequest):
-    """Parses text into Scenes/Shots preview (no DB save)."""
+    """Parses text into Scenes/Shots preview (no DB save). Includes element matching."""
     try:
-        parsed_scenes = script_parser.parse_script(req.script_text, parse_mode=req.parse_mode or "auto")
+        from managers.element_manager import element_manager
+        project_elements = element_manager.get_elements(project_id)
+        parsed_scenes = script_parser.parse_script(
+            req.script_text,
+            parse_mode=req.parse_mode or "auto",
+            elements=project_elements if project_elements else None,
+        )
         return {"scenes": parsed_scenes}
     except Exception as e:
         logger.error(f"Script parse failed: {e}")
@@ -42,6 +48,12 @@ async def commit_storyboard(project_id: str, req: CommitStoryboardRequest, sessi
     # Goal: Preserve existing Scene/Shot IDs if they match structure (index/name).
     
     # 1. Load Existing Data
+    if req.script_text:
+        project = session.get(Project, project_id)
+        if project:
+            project.script_content = req.script_text
+            session.add(project)
+
     existing_scenes = session.exec(select(Scene).where(Scene.project_id == project_id).order_by(Scene.index)).all()
     existing_shots = session.exec(select(Shot).where(Shot.project_id == project_id)).all()
     
@@ -96,9 +108,16 @@ async def commit_storyboard(project_id: str, req: CommitStoryboardRequest, sessi
                 db_shot.dialogue = shot_data.dialogue
                 db_shot.character = shot_data.character
                 db_shot.shot_type = shot_data.shot_type
+                # Persist matched elements if present
+                if hasattr(shot_data, 'matched_elements') and shot_data.matched_elements:
+                    db_shot.matched_elements = json.dumps(shot_data.matched_elements) if isinstance(shot_data.matched_elements, list) else shot_data.matched_elements
                 # Preserve Status, Video URL, etc.
                 session.add(db_shot)
             else:
+                # Serialize matched_elements for new shots
+                me_json = None
+                if hasattr(shot_data, 'matched_elements') and shot_data.matched_elements:
+                    me_json = json.dumps(shot_data.matched_elements) if isinstance(shot_data.matched_elements, list) else shot_data.matched_elements
                 # Create New Shot
                 db_shot = Shot(
                     scene_id=db_scene.id,
@@ -108,6 +127,7 @@ async def commit_storyboard(project_id: str, req: CommitStoryboardRequest, sessi
                     dialogue=shot_data.dialogue,
                     character=shot_data.character,
                     shot_type=shot_data.shot_type,
+                    matched_elements=me_json,
                     status="pending",
                     duration=4.0
                 )
@@ -188,7 +208,11 @@ async def ai_parse(project_id: str, req: ScriptParseRequest):
     """AI-powered script parsing using Gemma 3.
     
     Falls back to regex parser if Gemma is unavailable.
+    Both paths include element matching.
     """
+    from managers.element_manager import element_manager
+    project_elements = element_manager.get_elements(project_id)
+    
     try:
         from model_engine import manager
         
@@ -200,6 +224,7 @@ async def ai_parse(project_id: str, req: ScriptParseRequest):
             text=req.script_text,
             text_encoder=text_encoder,
             seed=42,
+            project_elements=project_elements if project_elements else None,
         )
         
         # Cleanup
@@ -211,13 +236,65 @@ async def ai_parse(project_id: str, req: ScriptParseRequest):
         
     except Exception as e:
         logger.warning(f"AI parse failed, falling back to regex: {e}")
-        # Fallback to regex parser
+        # Fallback to regex parser (still includes element matching)
         try:
-            parsed_scenes = script_parser.parse_script(req.script_text, parse_mode="auto")
+            parsed_scenes = script_parser.parse_script(
+                req.script_text,
+                parse_mode="auto",
+                elements=project_elements if project_elements else None,
+            )
             return {"scenes": parsed_scenes, "mode": "fallback"}
         except Exception as e2:
             logger.error(f"Fallback parse also failed: {e2}")
             raise HTTPException(status_code=500, detail=str(e2))
+
+
+@router.post("/projects/{project_id}/storyboard/match-elements")
+async def rematch_elements(project_id: str, session: Session = Depends(get_session)):
+    """Re-match all storyboard shots against current project elements.
+    
+    Useful after adding, editing, or deleting elements.
+    """
+    from managers.element_manager import element_manager
+    from services.element_matcher import match_elements
+    
+    project_elements = element_manager.get_elements(project_id)
+    if not project_elements:
+        return {"status": "skipped", "message": "No elements to match"}
+    
+    scenes = session.exec(select(Scene).where(Scene.project_id == project_id).order_by(Scene.index)).all()
+    updated_count = 0
+    
+    for scene in scenes:
+        shots = session.exec(select(Shot).where(Shot.scene_id == scene.id).order_by(Shot.index)).all()
+        
+        # Build scene dict for matcher
+        scene_dict = {
+            "name": scene.name,
+            "shots": [
+                {
+                    "action": s.action or "",
+                    "dialogue": s.dialogue,
+                    "character": s.character,
+                    "shot_type": s.shot_type,
+                }
+                for s in shots
+            ]
+        }
+        
+        matched = match_elements([scene_dict], project_elements)
+        matched_shots = matched[0].get("shots", []) if matched else []
+        
+        for i, shot_db in enumerate(shots):
+            if i < len(matched_shots):
+                me = matched_shots[i].get("matched_elements", [])
+                shot_db.matched_elements = json.dumps(me) if me else None
+                session.add(shot_db)
+                if me:
+                    updated_count += 1
+    
+    session.commit()
+    return {"status": "success", "message": f"Updated {updated_count} shots with element matches"}
 
 
 @router.post("/projects/{project_id}/storyboard/generate-thumbnails")
@@ -227,8 +304,17 @@ async def generate_thumbnails(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
-    """Generate Flux 2 concept art thumbnails for shots without videos."""
+    """Generate Flux 2 concept art thumbnails for shots without videos.
+    
+    Integrates project Elements (characters, locations, objects) by:
+    1. Reading matched_elements from the shot DB record
+    2. Enriching the prompt with element descriptions
+    3. Collecting element reference visuals for IP-Adapter conditioning
+    4. Falling back to trigger-word scanning if no matches are persisted
+    """
     from tasks.image import generate_image_task
+    from managers.element_manager import element_manager
+    from database import Element
     
     results = []
     for shot_id in req.shot_ids:
@@ -243,10 +329,67 @@ async def generate_thumbnails(
                 results.append({"shot_id": shot_id, "status": "skipped", "detail": "Already has thumbnail"})
                 continue
             
+            # If force=True, clear existing video_url so the new concept art is visible
+            if req.force:
+                shot.video_url = None
+                shot.status = "generating_thumbnail" # Reset status logic
+                session.add(shot)
+            
             # Build prompt from shot data
             prompt = shot.action or shot.prompt or "A cinematic shot"
             if shot.character:
                 prompt = f"{shot.character}: {prompt}"
+            
+            # ── Element Integration ─────────────────────────────────
+            element_images = []
+            
+            # 0. Manual Timeline Integration (Conditioning)
+            # Users can manually drag images to the shot timeline. These should be treated as conditioning.
+            if shot.timeline:
+                try:
+                    timeline_data = json.loads(shot.timeline)
+                    for item in timeline_data:
+                        if item.get("type") == "image" and item.get("path"):
+                             path = item["path"]
+                             element_images.append(path)
+                             logger.info(f"Thumbnail {shot_id}: injected manual conditioning image {path}")
+                except Exception as e:
+                    logger.warning(f"Failed to parse shot timeline for thumbnail {shot_id}: {e}")
+
+            # Primary path: use matched_elements from DB
+            if shot.matched_elements:
+                try:
+                    matches = json.loads(shot.matched_elements)
+                    for match in matches:
+                        el_name = match.get("element_name", "")
+                        trigger = match.get("trigger_word", "")
+                        
+                        # Fetch full element for description
+                        el = session.get(Element, match.get("element_id"))
+                        if el and el.description:
+                            prompt += f". {el.name}: {el.description}"
+                        
+                        # Collect visual reference for IP-Adapter
+                        image_url = match.get("image_url")
+                        if image_url:
+                            resolved = element_manager._resolve_element_image(image_url)
+                            if resolved:
+                                element_images.append(resolved)
+                        
+                        # Replace trigger words with element name in prompt
+                        if trigger and trigger in prompt:
+                            prompt = prompt.replace(trigger, el_name)
+                    
+                    if element_images:
+                        logger.info(f"Thumbnail {shot_id}: injected {len(element_images)} element visuals from matched_elements")
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Failed to parse matched_elements for thumbnail {shot_id}: {e}")
+            
+            # Fallback: trigger-word scanning
+            if not element_images:
+                prompt, element_images = element_manager.inject_elements_into_prompt(
+                    prompt, project_id
+                )
             
             # Thumbnail generation params (small, fast)
             job_id = f"thumb_{uuid.uuid4().hex[:8]}"
@@ -257,10 +400,11 @@ async def generate_thumbnails(
                 "width": req.width or 512,
                 "height": req.height or 320,
                 "num_inference_steps": 15,  # Fast
-                "cfg_scale": 2.0,
+                "guidance_scale": 2.0,
                 "seed": shot.seed or 42,
                 "shot_id": shot_id,  # So task can update shot thumbnail
                 "is_thumbnail": True,
+                "element_images": element_images,  # For IP-Adapter conditioning
             }
             
             job = Job(
@@ -421,6 +565,7 @@ async def batch_generate(project_id: str, req: BatchGenerateRequest, background_
                 })
                 
             worker_params["element_images"] = job_config.get("element_images", [])
+            worker_params["inspiration_images"] = job_config.get("inspiration_images", [])
             
             # Update Shot status
             shot.status = "generating"
@@ -457,6 +602,16 @@ async def generate_shot(shot_id: str, background_tasks: BackgroundTasks, session
         shot = session.get(Shot, shot_id)
         if not shot:
             raise HTTPException(status_code=404, detail="Shot not found")
+        
+        # 0. Randomize Seed for fresh generation
+        import random
+        new_seed = random.randint(0, 2**32 - 1)
+        shot.seed = new_seed
+        session.add(shot)
+        session.commit()
+        session.refresh(shot)
+        logger.info(f"Randomized seed for Shot {shot.index}: {new_seed}")
+
         project_id = shot.project_id
             
         projects_dir = os.path.join(config.PROJECTS_DIR, project_id)
@@ -494,6 +649,8 @@ async def generate_shot(shot_id: str, background_tasks: BackgroundTasks, session
             
         # Add Element Visuals (for IP-Adapter)
         worker_params["element_images"] = job_config.get("element_images", [])
+        # Add Inspiration Images (for VLM / Style Reference)
+        worker_params["inspiration_images"] = job_config.get("inspiration_images", [])
         
         # Update Shot status
         shot.status = "generating"

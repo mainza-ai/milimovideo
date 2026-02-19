@@ -85,6 +85,9 @@ graph TD
         R_Elem --> InpMgr[InpaintingManager]
         InpMgr --> FluxW
         InpMgr -->|"HTTP POST"| SAM_Svc
+        
+        R_Story --> ElemMatch[ElementMatcher]
+        ElemMatch --> DB
     end
 
     subgraph "Memory Management"
@@ -166,6 +169,7 @@ Handles video, image, chained, and inpainting generation.
 | `models/flux_wrapper.py` | `FluxInpainter` singleton — wraps Flux 2 Klein 9B with AE hot-swap, MPS hacks, IP-Adapter, True CFG double-pass, and RePaint inpainting. |
 | `storyboard/manager.py` | `StoryboardManager` — dual-mode (worker/server). Chunk preparation, last-frame extraction via ffmpeg, shot-based prompt enrichment with narrative context. |
 | `services/ai_storyboard.py` | `ai_parse_script()` — Gemma 3 AI script analysis. Parses free-form text into structured scenes/shots via chat interface with cinematic system prompt. Falls back to regex parser if Gemma unavailable. |
+| `services/element_matcher.py` | `ElementMatcher` — Intelligent production matching engine. Uses 8 signals (exact name, trigger word, scene heading, action keywords, etc.) to link script elements to project assets. |
 
 ### C. The API Layer (Backend)
 5 routers with ~30 endpoints.

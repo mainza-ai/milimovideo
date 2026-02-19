@@ -97,18 +97,30 @@ export const TrackingPanel = memo(({
                 }));
                 setFrameResults(loadedFrames);
 
-                // Reconstruct objects list from the first frame that has objects
-                // Or collect all unique objects across frames
+                // Restore Objects from metadata (if available) or infer
+                const metadata = result.objects || {};
                 const uniqueObjects = new Map<number, TrackingObject>();
 
+                // 1. Populate from metadata first
+                Object.keys(metadata).forEach(objIdStr => {
+                    const id = parseInt(objIdStr);
+                    const meta = metadata[objIdStr];
+                    uniqueObjects.set(id, {
+                        id,
+                        label: meta.label || `Object ${id}`,
+                        color: meta.color || TRACK_COLORS[id % TRACK_COLORS.length],
+                        visible: true
+                    });
+                });
+
+                // 2. Discover any additional objects from frames that weren't in metadata
                 loadedFrames.forEach(f => {
                     Object.keys(f.masks).forEach((objIdStr) => {
                         const id = parseInt(objIdStr);
                         if (!uniqueObjects.has(id)) {
-                            // Try to infer label/color if possible, otherwise default
                             uniqueObjects.set(id, {
                                 id,
-                                label: `Object ${id}`, // Saved data doesn't explicitly store labels yet, might need to enhance save
+                                label: `Object ${id}`,
                                 color: TRACK_COLORS[id % TRACK_COLORS.length],
                                 visible: true
                             });
@@ -119,20 +131,13 @@ export const TrackingPanel = memo(({
                 setObjects(Array.from(uniqueObjects.values()));
                 setPhase('done');
                 setStatusMsg(`Loaded ${loadedFrames.length} frames.`);
-
-                // Collect keyframes (frames with user interaction - implied by saved data?)
-                // For now, let's assume if there are objects, it might differ from pure propagation
-                // But simplified: we don't know which frame was user-prompted from loaded data easily without extra metadata.
-                // We'll leave keyframeIndices empty on load or populate if we add metadata later.
             } else {
-                // If not found, just clear the status message so user knows they can start fresh
                 setStatusMsg('Ready (no saved data found).');
-                // Optional: clear after a moment
                 setTimeout(() => setStatusMsg(''), 2000);
             }
         } catch (e) {
             console.warn('Failed to load session:', e);
-            setStatusMsg(''); // clear infinite loading
+            setStatusMsg('');
         }
     }, [apiCall, videoPath]);
 
@@ -338,6 +343,12 @@ export const TrackingPanel = memo(({
         setIsExporting(true);
         setStatusMsg('Saving masks to disk...');
         try {
+            // Build Objects Metadata
+            const objectsMeta: Record<string, { label: string; color: string }> = {};
+            objects.forEach(obj => {
+                objectsMeta[obj.id] = { label: obj.label, color: obj.color };
+            });
+
             // Send entire frameResults to backend to save
             const result = await apiCall('/edit/track/save', {
                 session_id: sessionId,
@@ -346,12 +357,11 @@ export const TrackingPanel = memo(({
                     frame_idx: f.frameIndex,
                     masks: f.masks,
                     scores: f.scores,
-                    num_objects: Object.keys(f.masks).length
-                }))
+                })),
+                objects: objectsMeta
             });
             if (result.error) throw new Error(result.error);
             setStatusMsg(`Saved ${result.count} masks to ${result.path}`);
-            // Optional: Auto-dismiss success message after 3s
             setTimeout(() => setStatusMsg('Export/Save complete.'), 3000);
         } catch (e: any) {
             setError(e.message);
@@ -359,7 +369,7 @@ export const TrackingPanel = memo(({
         } finally {
             setIsExporting(false);
         }
-    }, [sessionId, frameResults, apiCall]);
+    }, [sessionId, frameResults, objects, apiCall, videoPath]);
 
     // ── Remove Object ──
     const removeObject = useCallback(async (objId: number) => {

@@ -7,6 +7,7 @@ import uuid
 import os
 import shutil
 import logging
+import json
 import config
 
 logger = logging.getLogger(__name__)
@@ -110,7 +111,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
             "pipeline_override": s.pipeline_override,
             "auto_continue": s.auto_continue,
             "status": s.status,
-            "image_url": s.thumbnail_url,
+            "thumbnail_url": s.thumbnail_url,
             "video_url": s.video_url,
             "track_index": s.track_index,
             "start_frame": s.start_frame,
@@ -120,6 +121,10 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
             "action": s.action,
             "dialogue": s.dialogue,
             "character": s.character,
+            "shot_type": s.shot_type,
+            "matched_elements": s.matched_elements,
+            "enhanced_prompt_result": s.enhanced_prompt_result,
+            "last_job_id": s.last_job_id,
             "created_at": s.created_at.isoformat() if s.created_at else None
         })
         
@@ -250,7 +255,10 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
             
             # Update fields from payload
             for k, v in clean_data.items():
-                setattr(existing_shot, k, v)
+                if k in ["timeline", "matched_elements"] and isinstance(v, (list, dict)):
+                    setattr(existing_shot, k, json.dumps(v))
+                else:
+                    setattr(existing_shot, k, v)
                 
             session.add(existing_shot)
         else:
@@ -258,6 +266,12 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
             # Ensure ID is set
             if not clean_data.get("id"):
                 clean_data["id"] = uuid.uuid4().hex
+            
+            # Serialize JSON fields for creation
+            for field in ["timeline", "matched_elements"]:
+                if field in clean_data and isinstance(clean_data[field], (list, dict)):
+                    clean_data[field] = json.dumps(clean_data[field])
+
             new_shots_to_add.append(Shot(**clean_data))
             
     # 2. DELETE output shots that are not in payload

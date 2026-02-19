@@ -61,6 +61,7 @@ erDiagram
         string last_job_id "nullable"
         string video_url "nullable"
         string thumbnail_url "nullable"
+        string matched_elements "nullable — JSON list"
         float duration "4.0"
         datetime created_at
     }
@@ -212,6 +213,7 @@ classDiagram
         +str dialogue
         +str character
         +str shot_type
+        +List~dict~ matched_elements
     }
 
     class StoryboardSceneData {
@@ -269,6 +271,7 @@ classDiagram
 | `ScriptParseRequest` | `POST /projects/{id}/script/parse` | `script_parser.parse_script()` | None (regex) |
 | `ScriptParseRequest` | `POST /projects/{id}/storyboard/ai-parse` | `ai_parse_script()` | Gemma 3 (via LTX-2 text encoder) |
 | `CommitStoryboardRequest` | `POST /projects/{id}/storyboard/commit` | Smart merge (direct DB) | None |
+| None | `POST /projects/{id}/storyboard/match-elements` | `element_matcher.match_elements()` | None |
 | `BatchThumbnailRequest` | `POST /projects/{id}/storyboard/thumbnails` | `generate_image_task()` | Flux 2 (`is_thumbnail=True`) |
 | `BatchGenerateRequest` | `POST /projects/{id}/storyboard/batch-generate` | `generate_video_task()` | LTX-2 |
 
@@ -314,6 +317,17 @@ classDiagram
         +boolean isGenerating
         +string sceneId
         +string action / dialogue / character
+        +MatchedElement[] matchedElements
+    }
+
+    class MatchedElement {
+        +string element_id
+        +string element_name
+        +string element_type
+        +string image_url
+        +string trigger_word
+        +number confidence
+        +string match_source
     }
 
     class ConditioningItem {
@@ -356,6 +370,7 @@ classDiagram
     Project --> Scene
     Scene --> Shot
     Shot --> ConditioningItem
+    Shot --> MatchedElement
 ```
 
 ### Type Enums

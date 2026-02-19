@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTimelineStore, type ParsedScene } from '../../stores/timelineStore';
 import { Play, Check, Edit2, Loader2, Plus, Trash2, RotateCcw, Brain } from 'lucide-react';
+import { ElementBadgeRow } from './ElementBadge';
 
 const SHOT_TYPE_OPTIONS = [
     { value: 'close_up', label: 'Close Up' },
@@ -12,12 +13,19 @@ const SHOT_TYPE_OPTIONS = [
 ];
 
 export const ScriptInput = () => {
-    const { parseScript, aiParseScript, commitStoryboard } = useTimelineStore();
+    const { project, parseScript, aiParseScript, commitStoryboard } = useTimelineStore();
     const [scriptText, setScriptText] = useState('');
     const [parsedScenes, setParsedScenes] = useState<ParsedScene[] | null>(null);
     const [isParsing, setIsParsing] = useState(false);
     const [isAiParsing, setIsAiParsing] = useState(false);
     const [isCommitting, setIsCommitting] = useState(false);
+
+    // Load persisted script
+    useEffect(() => {
+        if (project?.scriptContent) {
+            setScriptText(project.scriptContent);
+        }
+    }, [project?.scriptContent]);
 
     const handleParse = async () => {
         if (!scriptText.trim()) return;
@@ -30,10 +38,10 @@ export const ScriptInput = () => {
     const handleCommit = async () => {
         if (!parsedScenes) return;
         setIsCommitting(true);
-        await commitStoryboard(parsedScenes);
+        await commitStoryboard(parsedScenes, scriptText);
         setIsCommitting(false);
         setParsedScenes(null);
-        setScriptText('');
+        // Don't clear scriptText so it persists
     };
 
     // ─── Editable Preview Mutations ─────────────────────────────
@@ -176,6 +184,10 @@ export const ScriptInput = () => {
                                                             <option key={opt.value} value={opt.value}>{opt.label}</option>
                                                         ))}
                                                     </select>
+                                                    {/* Element Match Badges */}
+                                                    {shot.matched_elements && shot.matched_elements.length > 0 && (
+                                                        <ElementBadgeRow elements={shot.matched_elements} size="sm" />
+                                                    )}
                                                 </div>
                                             </div>
                                             {/* Delete shot */}

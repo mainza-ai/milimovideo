@@ -211,8 +211,10 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     lastJobId: s.last_job_id,
                     videoUrl: s.video_url ? getAssetUrl(s.video_url) : undefined,  // Use DB value
                     thumbnailUrl: getAssetUrl(s.thumbnail_url),
-                    enhancedPromptResult: s.enhanced_prompt_result // Map from backend
+                    enhancedPromptResult: s.enhanced_prompt_result, // Map from backend
+                    matchedElements: s.matched_elements ? (typeof s.matched_elements === 'string' ? JSON.parse(s.matched_elements) : s.matched_elements) : undefined,
                 })),
+                scriptContent: data.script_content, // Load persisted script
                 scenes: (data.scenes || []).map((sc: any) => ({
                     id: sc.id,
                     index: sc.index,

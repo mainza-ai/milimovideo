@@ -51,6 +51,7 @@ class Shot(SQLModel, table=True):
     prompt: Optional[str] = None # (Generator context)
     dialogue: Optional[str] = None
     character: Optional[str] = None
+    matched_elements: Optional[str] = None  # JSON: [{element_id, element_name, element_type, image_url, confidence, ...}]
     
     # Generation Params (Persisted from ShotConfig)
     negative_prompt: Optional[str] = ""
@@ -59,12 +60,13 @@ class Shot(SQLModel, table=True):
     height: int = 512
     num_frames: int = 121
     fps: int = 25
-    cfg_scale: float = 3.0
+    cfg_scale: float = 1.0
     enhance_prompt: bool = True
     upscale: bool = False
     pipeline_override: str = "auto"
     auto_continue: bool = Field(default=False)
     shot_type: Optional[str] = None  # close_up, medium, wide, establishing, insert, tracking
+    timeline: Optional[str] = None # JSON list of objects: [{path, frame_index, strength, type}]
     
     # Generation State
     prompt_enhanced: Optional[str] = None # Legacy field

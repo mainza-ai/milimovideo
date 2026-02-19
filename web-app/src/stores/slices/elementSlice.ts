@@ -158,18 +158,32 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
         }
     },
 
-    commitStoryboard: async (scenes: ParsedScene[]) => {
+    commitStoryboard: async (scenes: ParsedScene[], scriptText?: string) => {
         const { project, addToast, loadProject } = get();
         try {
+            // Map ParsedScene format to commit payload, including matched_elements
+            const payload = scenes.map((scene: any) => ({
+                name: scene.name,
+                content: scene.content,
+                shots: (scene.shots || []).map((shot: any) => ({
+                    action: shot.action,
+                    dialogue: shot.dialogue,
+                    character: shot.character,
+                    shot_type: shot.shot_type,
+                    matched_elements: shot.matched_elements || undefined,
+                })),
+            }));
             const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/commit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ scenes: scenes })
+                body: JSON.stringify({
+                    scenes: payload,
+                    script_text: scriptText
+                })
             });
             if (!res.ok) throw new Error("Commit failed");
 
             addToast("Storyboard saved!", "success");
-            // Reload project to get the new shots
             await loadProject(project.id);
         } catch (e) {
             console.error("Commit failed", e);
@@ -212,4 +226,3 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
         }
     },
 });
-

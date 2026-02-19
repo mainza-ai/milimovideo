@@ -413,12 +413,16 @@ async def save_tracking_results(request: TrackingSaveRequest):
         # Save manifest
         manifest_path = os.path.join(session_dir, "manifest.json")
         with open(manifest_path, "w") as f:
-            json.dump({
+            manifest_data = {
                 "session_id": request.session_id,
                 "video_path": video_path,
                 "total_frames": len(request.frames),
-                "frames": frame_map
-            }, f, indent=2)
+                "frames": frame_map,
+            }
+            if request.objects:
+                 manifest_data["objects"] = request.objects
+            
+            json.dump(manifest_data, f, indent=2)
 
         return {
             "status": "saved",
@@ -494,7 +498,8 @@ async def load_tracking_results(request: Request):
         return {
             "status": "loaded",
             "frames": frames,
-            "session_id": session_id
+            "session_id": session_id,
+            "objects": manifest.get("objects", {})
         }
 
     except Exception as e:

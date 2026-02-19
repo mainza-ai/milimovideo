@@ -3,9 +3,10 @@ import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 import type { Shot } from '../../stores/types';
 import {
-    GripVertical, Sparkles, Trash2, Film, Image as ImageIcon,
+    GripVertical, Trash2, Film, Image as ImageIcon,
     Play, RotateCcw, CheckCircle, AlertCircle, Loader2
 } from 'lucide-react';
+import { ElementBadgeRow } from './ElementBadge';
 
 const SHOT_TYPE_LABELS: Record<string, string> = {
     close_up: 'CU', medium: 'MS', wide: 'WS',
@@ -33,13 +34,14 @@ interface StoryboardShotCardProps {
 export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
     shot, index, globalIndex, onDragStart, onDragOver, onDrop
 }) => {
-    const { selectShot, selectedShotId, patchShot, generateShot, deleteShotFromStoryboard, generateThumbnail } = useTimelineStore(useShallow(state => ({
+    const { selectShot, selectedShotId, patchShot, generateShot, deleteShotFromStoryboard, generateThumbnail, addConditioningToShot } = useTimelineStore(useShallow(state => ({
         selectShot: state.selectShot,
         selectedShotId: state.selectedShotId,
         patchShot: state.patchShot,
         generateShot: state.generateShot,
         deleteShotFromStoryboard: state.deleteShotFromStoryboard,
         generateThumbnail: state.generateThumbnail,
+        addConditioningToShot: state.addConditioningToShot,
     })));
 
     const [editingField, setEditingField] = useState<'action' | 'dialogue' | 'character' | null>(null);
@@ -89,15 +91,56 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
         }
     };
 
+    const handleCardDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        // If it has JSON (likely asset), allow copy
+        if (e.dataTransfer.types.includes('application/json')) {
+            e.dataTransfer.dropEffect = 'copy';
+        } else {
+            // Otherwise defer to parent reorder
+            onDragOver?.(e);
+        }
+    };
+
+    const handleCardDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+
+        // 1. Try handling Media Asset Drop
+        const jsonData = e.dataTransfer.getData('application/json');
+        if (jsonData) {
+            try {
+                const asset = JSON.parse(jsonData);
+                if (asset.id && asset.type) {
+                    e.stopPropagation();
+                    // Add conditioning
+                    addConditioningToShot(shot.id, {
+                        type: asset.type === 'video' ? 'video' : 'image',
+                        path: asset.url,
+                        frameIndex: 0,
+                        strength: 0.8
+                    });
+                    // Visual feedback could be added here (e.g. toast provided by store?)
+                    return;
+                }
+            } catch (err) {
+                // Not valid JSON or asset, ignore
+            }
+        }
+
+        // 2. Fallback to Shot Reordering
+        onDrop?.(e, shot.id);
+    };
+
     const isSelected = shot.id === selectedShotId;
     const shotTypeKey = shot.shotType || 'medium';
+
 
     return (
         <div
             draggable
             onDragStart={(e) => onDragStart?.(e, shot.id)}
-            onDragOver={(e) => { e.preventDefault(); onDragOver?.(e); }}
-            onDrop={(e) => onDrop?.(e, shot.id)}
+            onDragOver={handleCardDragOver}
+            onDrop={handleCardDrop}
             onClick={() => selectShot(shot.id)}
             className={`relative group bg-[#1a1a1a] rounded-xl overflow-hidden border-2 transition-all cursor-pointer flex flex-col ${isSelected
                 ? 'border-milimo-500 shadow-xl shadow-milimo-500/10'
@@ -178,17 +221,30 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
                             onClick={handleGenerate}
                             className="px-4 py-2 bg-milimo-500 text-black font-bold rounded-lg flex items-center gap-2 hover:bg-milimo-400 transition-colors"
                         >
-                            <Sparkles size={16} />
-                            Generate
+                            <Film size={16} />
+                            Generate Video
                         </button>
                     )}
                     {!shot.videoUrl && !shot.thumbnailUrl && (
                         <button
                             onClick={(e) => { e.stopPropagation(); generateThumbnail(shot.id); }}
-                            className="px-3 py-2 bg-violet-500/30 text-violet-300 font-semibold rounded-lg flex items-center gap-2 hover:bg-violet-500/40 transition-colors text-sm"
+                            className="px-3 py-2 bg-violet-500/30 text-violet-300 font-semibold rounded-lg flex items-center gap-2 hover:bg-violet-500/40 transition-colors text-xs"
                         >
                             <ImageIcon size={14} />
-                            Art
+                            Concept Art
+                        </button>
+                    )}
+                    {!shot.videoUrl && shot.thumbnailUrl && (
+                        <button
+                            className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg flex items-center gap-2 transition-colors text-xs backdrop-blur-md border border-white/10"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                generateThumbnail(shot.id, true);
+                            }}
+                            title="Regenerate Concept Art"
+                        >
+                            <RotateCcw size={14} />
+                            Regen Art
                         </button>
                     )}
                     {shot.videoUrl && (
@@ -196,12 +252,38 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
                             <button className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white">
                                 <Play size={20} fill="currentColor" />
                             </button>
+
+                            {/* Allow regenerating art even if video exists */}
+                            <button
+                                className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    generateThumbnail(shot.id, true);
+                                }}
+                                title="Regenerate Concept Art"
+                            >
+                                <ImageIcon size={18} />
+                            </button>
+
                             <button
                                 className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"
                                 onClick={handleGenerate}
-                                title="Regenerate"
+                                title="Regenerate Video"
                             >
                                 <RotateCcw size={18} />
+                            </button>
+
+                            <button
+                                className="p-2 bg-white/10 hover:bg-red-500/20 text-red-400 rounded-full transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm('Are you sure you want to remove this video?')) {
+                                        patchShot(shot.id, { videoUrl: null }); // Clears video
+                                    }
+                                }}
+                                title="Remove Video"
+                            >
+                                <Trash2 size={18} />
                             </button>
                         </>
                     )}
@@ -225,7 +307,7 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
                     <textarea
                         ref={editRef as React.RefObject<HTMLTextAreaElement>}
                         className="w-full bg-black/50 border border-milimo-500/30 rounded px-2 py-1 text-xs text-white/80 resize-none focus:outline-none"
-                        value={editValue}
+                        value={editValue || ''}
                         rows={2}
                         onChange={(e) => setEditValue(e.target.value)}
                         onBlur={commitEdit}
@@ -248,7 +330,7 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
                         <textarea
                             ref={editRef as React.RefObject<HTMLTextAreaElement>}
                             className="w-full bg-black/50 border border-milimo-500/30 rounded px-2 py-1 text-xs text-white/80 italic resize-none focus:outline-none"
-                            value={editValue}
+                            value={editValue || ''}
                             rows={2}
                             onChange={(e) => setEditValue(e.target.value)}
                             onBlur={commitEdit}
@@ -263,6 +345,13 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
                             "{shot.dialogue}"
                         </p>
                     )
+                )}
+
+                {/* Matched Elements */}
+                {shot.matchedElements && shot.matchedElements.length > 0 && (
+                    <div className="px-2 py-1.5 border-t border-white/5">
+                        <ElementBadgeRow elements={shot.matchedElements} size="sm" maxDisplay={3} />
+                    </div>
                 )}
             </div>
 

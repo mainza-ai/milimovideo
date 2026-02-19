@@ -102,6 +102,7 @@ class StoryboardShotData(BaseModel):
     dialogue: Optional[str] = None
     character: Optional[str] = None
     shot_type: Optional[str] = None
+    matched_elements: Optional[List[dict]] = None  # [{element_id, element_name, element_type, ...}]
 
 class StoryboardSceneData(BaseModel):
     """Typed scene data for storyboard commit (replaces dict)."""
@@ -111,6 +112,7 @@ class StoryboardSceneData(BaseModel):
 
 class CommitStoryboardRequest(BaseModel):
     scenes: List[StoryboardSceneData]
+    script_text: Optional[str] = None
 
 class ReorderShotsRequest(BaseModel):
     """Ordered list of shot IDs — index in list becomes new Shot.index."""
@@ -169,3 +171,4 @@ class TrackingSaveRequest(BaseModel):
     session_id: str
     video_path: Optional[str] = None
     frames: List[dict]  # List of {frame_idx, num_objects, masks: {obj_id: b64}, scores: {obj_id: float}}
+    objects: Optional[dict] = None  # Metadata: {obj_id: {label: str, color: str}}

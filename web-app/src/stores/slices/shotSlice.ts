@@ -454,16 +454,28 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         }
     },
 
-    generateThumbnail: async (shotId: string) => {
-        const { project, addToast } = get();
+    generateThumbnail: async (shotId: string, force?: boolean) => {
+        const { project, addToast, updateShot } = get();
         try {
             const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/generate-thumbnails`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ shot_ids: [shotId] })
+                body: JSON.stringify({ shot_ids: [shotId], force: !!force })
             });
             if (!res.ok) throw new Error("Thumbnail generation failed");
-            addToast("Generating concept art...", "info");
+
+            const data = await res.json();
+            const result = data.results.find((r: any) => r.shot_id === shotId);
+
+            if (result && result.status === 'queued') {
+                updateShot(shotId, {
+                    isGenerating: true,
+                    statusMessage: "Preparing...",
+                    lastJobId: result.job_id,
+                    videoUrl: force ? undefined : project.shots.find(s => s.id === shotId)?.videoUrl
+                });
+                addToast("Generating concept art...", "info");
+            }
         } catch (e) {
             console.error("Thumbnail generation failed", e);
             addToast("Failed to generate thumbnail", "error");
@@ -471,7 +483,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
     },
 
     batchGenerateThumbnails: async (shotIds: string[]) => {
-        const { project, addToast } = get();
+        const { project, addToast, updateShot } = get();
         try {
             const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/generate-thumbnails`, {
                 method: 'POST',
@@ -480,8 +492,22 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             });
             if (!res.ok) throw new Error("Batch thumbnail generation failed");
             const data = await res.json();
-            const queued = data.results?.filter((r: any) => r.status === 'queued').length || 0;
-            addToast(`Generating ${queued} concept art thumbnails...`, "info");
+
+            let queuedCount = 0;
+            (data.results || []).forEach((r: any) => {
+                if (r.status === 'queued') {
+                    queuedCount++;
+                    updateShot(r.shot_id, {
+                        isGenerating: true,
+                        statusMessage: "Queued",
+                        lastJobId: r.job_id
+                    });
+                }
+            });
+
+            if (queuedCount > 0) {
+                addToast(`Generating ${queuedCount} concept art thumbnails...`, "info");
+            }
         } catch (e) {
             console.error("Batch thumbnail generation failed", e);
             addToast("Failed to generate thumbnails", "error");

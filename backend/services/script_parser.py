@@ -41,7 +41,7 @@ class ScriptParser:
         # Counter for round-robin dialogue shot variety
         self._dialogue_counter = 0
 
-    def parse_script(self, text: str, parse_mode: str = "auto") -> List[ParsedScene]:
+    def parse_script(self, text: str, parse_mode: str = "auto", elements: list = None) -> List[ParsedScene]:
         """
         Parses raw script text into a list of Scenes, each containing Shots.
 
@@ -50,6 +50,9 @@ class ScriptParser:
             "screenplay"  — force INT./EXT. heading detection
             "freeform"    — split by paragraph breaks
             "numbered"    — detect numbered list items
+        
+        elements:
+            Optional list of project elements for post-parse matching.
         """
         if not text or not text.strip():
             return []
@@ -58,11 +61,22 @@ class ScriptParser:
             parse_mode = self._detect_mode(text)
 
         if parse_mode == "screenplay":
-            return self._parse_screenplay(text)
+            scenes = self._parse_screenplay(text)
         elif parse_mode == "numbered":
-            return self._parse_numbered(text)
+            scenes = self._parse_numbered(text)
         else:  # freeform
-            return self._parse_freeform(text)
+            scenes = self._parse_freeform(text)
+
+        # Run element matching if elements provided
+        if elements and scenes:
+            from services.element_matcher import match_elements
+            # Convert Pydantic models to dicts for the matcher
+            scene_dicts = [s.dict() for s in scenes]
+            matched = match_elements(scene_dicts, elements)
+            # Convert back to Pydantic (but return dicts since API serializes anyway)
+            return matched
+
+        return scenes
 
     def _detect_mode(self, text: str) -> str:
         """Auto-detect the best parsing mode for the input text."""

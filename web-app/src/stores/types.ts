@@ -46,7 +46,7 @@ export interface Shot {
 
     // Result
     lastJobId?: string;
-    videoUrl?: string; // Derived from jobID
+    videoUrl?: string | null; // Derived from jobID
     thumbnailUrl?: string; // Static Preview
     enhancedPromptResult?: string; // Result from backend
     statusMessage?: string; // Real-time status text
@@ -64,6 +64,7 @@ export interface Shot {
     dialogue?: string;
     character?: string;
     shotType?: ShotType;
+    matchedElements?: MatchedElement[];
 }
 
 export interface ShotConfig extends Partial<Shot> {
@@ -78,11 +79,22 @@ export interface Scene {
     shots: Shot[]; // Frontend convenience: Nested shots
 }
 
+export interface MatchedElement {
+    element_id: string;
+    element_name: string;
+    element_type: 'character' | 'location' | 'object';
+    image_url?: string;
+    trigger_word: string;
+    confidence: number;
+    match_source?: string;
+}
+
 export interface ParsedShot {
     action: string;
     dialogue?: string;
     character?: string;
     shot_type?: string;
+    matched_elements?: MatchedElement[];
 }
 
 export interface ParsedScene {
@@ -101,6 +113,7 @@ export interface Project {
     resolutionW: number;
     resolutionH: number;
     seed: number; // Global seed
+    scriptContent?: string;
 }
 
 export interface ProjectSlice {
@@ -143,7 +156,7 @@ export interface ShotSlice {
     deleteShotFromStoryboard: (shotId: string) => Promise<void>;
 
     // Phase 2: Thumbnails
-    generateThumbnail: (shotId: string) => Promise<void>;
+    generateThumbnail: (shotId: string, force?: boolean) => Promise<void>;
     batchGenerateThumbnails: (shotIds: string[]) => Promise<void>;
 
     // Phase 3: Timeline integration
@@ -194,7 +207,7 @@ export interface ElementSlice {
     // Storyboard
     parseScript: (text: string) => Promise<ParsedScene[]>;
     aiParseScript: (text: string) => Promise<ParsedScene[]>;
-    commitStoryboard: (scenes: ParsedScene[]) => Promise<void>;
+    commitStoryboard: (scenes: ParsedScene[], scriptText?: string) => Promise<void>;
     updateSceneName: (sceneId: string, name: string) => Promise<void>;
 }
 

@@ -161,10 +161,12 @@ class ElementManager:
             if trigger_lower in prompt_lower:
                 # If element has a visual, use Name (avoid description contamination)
                 # If text-only, use Description
-                if el.image_path:
-                    replacement = el.name
+                # ALWAYS use Name (Description) to ensure strong textual conditioning.
+                # This is critical for reference-less video models (LTX) and reinforces image models (Flux).
+                if el.description:
+                    replacement = f"{el.name} ({el.description})"
                 else:
-                    replacement = f"{el.description}"
+                    replacement = el.name
                 
                 # Case-insensitive replace while preserving surrounding text
                 import re

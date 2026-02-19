@@ -125,7 +125,7 @@ async def add_cors_headers(request: Request, call_next):
             status_code=200,
             headers={
                 "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD",
                 "Access-Control-Allow-Headers": "Range, Content-Type, Authorization",
                 "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
                 "Access-Control-Max-Age": "86400",
@@ -152,7 +152,7 @@ MEDIA_DIRS = {
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS, HEAD",
+    "Access-Control-Allow-Methods": "GET, OPTIONS, HEAD, PATCH",
     "Access-Control-Allow-Headers": "Range, Content-Type",
     "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length",
 }

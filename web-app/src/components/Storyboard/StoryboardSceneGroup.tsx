@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
-import type { Shot, Scene } from '../../stores/types';
+import type { Shot, Scene, MatchedElement } from '../../stores/types';
 import { StoryboardShotCard } from './StoryboardShotCard';
 import {
     ChevronDown, ChevronRight, Plus, Sparkles,
@@ -139,6 +139,31 @@ export const StoryboardSceneGroup: React.FC<StoryboardSceneGroupProps> = ({ scen
                             <span className="text-milimo-400/60 animate-pulse">{generatingCount} generating</span>
                         )}
                     </div>
+
+                    {/* Element Cast Summary */}
+                    {(() => {
+                        const allMatches: MatchedElement[] = [];
+                        const seen = new Set<string>();
+                        for (const s of shots) {
+                            for (const m of s.matchedElements || []) {
+                                if (!seen.has(m.element_id)) {
+                                    seen.add(m.element_id);
+                                    allMatches.push(m);
+                                }
+                            }
+                        }
+                        if (allMatches.length === 0) return null;
+                        const chars = allMatches.filter(m => m.element_type === 'character');
+                        const locs = allMatches.filter(m => m.element_type === 'location');
+                        const parts: string[] = [];
+                        if (chars.length) parts.push(`👤 ${chars.map(c => c.element_name).join(', ')}`);
+                        if (locs.length) parts.push(`📍 ${locs.map(l => l.element_name).join(', ')}`);
+                        return (
+                            <span className="text-[10px] text-white/40 ml-2">
+                                {parts.join('  ·  ')}
+                            </span>
+                        );
+                    })()}
                 </div>
 
                 <div className="flex items-center gap-2">

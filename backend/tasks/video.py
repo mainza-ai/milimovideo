@@ -79,6 +79,21 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         
         input_images = params.get("images", [])
         
+        # FIX: Support "timeline" parameter (sent by storyboard.py)
+        if not input_images:
+             timeline = params.get("timeline", [])
+             if timeline:
+                 logger.info(f"Converting 'timeline' param to 'input_images': {len(timeline)} items")
+                 for item in timeline:
+                     # timeline item structure: {"path": str, "frame_index": int, "strength": float, "type": "image"}
+                     if isinstance(item, dict) and item.get("type") == "image":
+                         input_images.append((
+                             item.get("path"), 
+                             item.get("frame_index", 0), 
+                             item.get("strength", 1.0)
+                         ))
+                         logger.info(f"Parsed timeline item: {input_images[-1]}")
+        
         # RESOLVE WEB PATHS for Timeline Input Images
         # Structure: [(path, idx, strength)]
         # Converts /projects/... -> /Users/.../backend/projects/...
@@ -160,6 +175,23 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         # Note: element_images are passed ONLY to ip_adapter_images (line ~210)
         # for style/character guidance. They must NOT be used as input_images
         # (frame-0 conditioning) which would freeze the video as a still frame.
+
+        # INSPIRATION IMAGES (Concept Art / VLM Style Reference)
+        # These are used for LLM prompt enhancement but NOT for video conditioning.
+        inspiration_images = params.get("inspiration_images", [])
+        if inspiration_images:
+            resolved_insp = []
+            for img_path in inspiration_images:
+                 if isinstance(img_path, str) and img_path.startswith("/projects"):
+                     rel = img_path.removeprefix("/projects/")
+                     abs_path = os.path.join(config.PROJECTS_DIR, rel)
+                     if os.path.exists(abs_path):
+                         resolved_insp.append(abs_path)
+                 else:
+                     if os.path.exists(img_path) if isinstance(img_path, str) else True:
+                         resolved_insp.append(img_path)
+            inspiration_images = resolved_insp
+            logger.info(f"Resolved {len(inspiration_images)} inspiration images for VLM.")
 
         video_cond = params.get("video_conditioning", [])
         video_cond = params.get("video_conditioning", [])
@@ -362,8 +394,14 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             text_encoder = pipeline.stage_1_model_ledger.text_encoder()
                         
                         image_for_llm = None
-                        if input_images:
+                        
+                        # PRIORITY: Inspiration Images (Concept Art) -> Input Images (Frame 0)
+                        if inspiration_images:
+                             image_for_llm = inspiration_images[0]
+                             logger.info(f"Using Inspiration Image for VLM Prompt Enhancement: {image_for_llm}")
+                        elif input_images:
                             image_for_llm = input_images[0][0]
+                            logger.info(f"Using Input Image (Frame 0) for VLM Prompt Enhancement: {image_for_llm}")
 
                         run_prompt = llm_enhance(
                             prompt=prompt,
