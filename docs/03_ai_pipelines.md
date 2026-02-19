@@ -412,7 +412,7 @@ flowchart TD
 requests.post(url, json={"model": model, "keep_alive": 0, "prompt": "", "stream": False})
 ```
 
-This frees the Ollama model (e.g., gemma3-27b at ~49GB VRAM) immediately, rather than waiting for the default 5-minute timeout. Configurable via `MILIMO_OLLAMA_KEEP_ALIVE` env var or the frontend AI Settings toggle.
+This frees the Ollama model (e.g., gemma3-27b at ~49GB VRAM) immediately, rather than waiting for the default 5-minute timeout. Configurable via `MILIMO_OLLAMA_KEEP_ALIVE` env var or the frontend AI Settings toggle (`LLMSettings.tsx`).
 
 ### Device Selection
 ```python
@@ -462,9 +462,9 @@ When `enable_ae` toggle changes between calls:
 
 ## 6. Prompt Enhancement
 
-### LLM Dispatcher (`llm.py`)
+### 6.1 LLM Dispatcher (`llm.py`)
 
-All prompt enhancement routes through a single dispatcher that selects between two providers:
+All prompt enhancement routes through a single dispatcher module `llm.py` that selects between two providers:
 
 | Provider | Config Value | Model | Enhancement Method |
 |---|---|---|---|

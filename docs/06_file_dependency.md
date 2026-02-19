@@ -35,6 +35,8 @@ graph TD
         t_chained[tasks/chained.py]
         t_image[tasks/image.py]
         model_engine[model_engine.py]
+        llm[llm.py]
+        memory_mgr[memory_manager.py]
     end
 
     subgraph "Domain Managers"
@@ -105,12 +107,14 @@ graph TD
     t_video --> database
     t_video --> model_engine
     t_video --> flux_wrapper
+    t_video --> llm
 
     t_chained --> config
     t_chained --> job_utils
     t_chained --> file_utils
     t_chained --> sb_mgr
     t_chained --> model_engine
+    t_chained --> llm
 
     t_image --> config
     t_image --> job_utils
@@ -118,6 +122,16 @@ graph TD
     t_image --> events
     t_image --> database
     t_image --> flux_wrapper
+    t_image --> llm
+
+    %% LLM dependencies
+    llm --> config
+
+    %% Memory Manager
+    memory_mgr --> model_engine
+    memory_mgr --> flux_wrapper
+    model_engine --> memory_mgr
+    flux_wrapper --> memory_mgr
 
     %% Manager dependencies
     elem_mgr --> database
@@ -180,6 +194,11 @@ graph TD
         snapEngine[snapEngine.ts]
     end
 
+    subgraph "Providers & Hooks"
+        sseProvider[SSEProvider.tsx]
+        useEventSource[useEventSource.ts]
+    end
+
     subgraph "Layout & Top-Level"
         layout[Layout.tsx]
         controls[Controls.tsx]
@@ -213,18 +232,24 @@ graph TD
     subgraph "Library & Feature Components"
         mediaLib[MediaLibrary.tsx]
         elemMgr[ElementManager.tsx]
-        elemPanel[ElementPanel.tsx]
+        elemView[ElementsView.tsx]
         imagesView[ImagesView.tsx]
         storyView[StoryboardView.tsx]
         storyScene[StoryboardSceneGroup.tsx]
         storyShotCard[StoryboardShotCard.tsx]
         scriptInput[ScriptInput.tsx]
+        llmSettings[LLMSettings.tsx]
     end
 
     %% Entry
     main --> app
     app --> layout
     app --> cinPlayer
+    app --> sseProvider
+
+    %% SSE Provider
+    sseProvider --> store
+    sseProvider --> jobPoller
 
     %% Store composition
     store --> s_project
@@ -245,7 +270,7 @@ graph TD
     layout --> visTL
     layout --> inspector
     layout --> mediaLib
-    layout --> elemPanel
+    layout --> elemView
     layout --> imagesView
     layout --> storyView
     layout --> projmgr
@@ -287,8 +312,9 @@ graph TD
     %% Library & Features
     mediaLib --> store
     elemMgr --> store
-    elemPanel --> store
+    elemView --> store
     imagesView --> store
+    llmSettings --> fe_config
     storyView --> store
     storyView --> storyScene
     storyView --> scriptInput
@@ -330,7 +356,7 @@ graph TD
 | Max Fan-In (most imported) | `config.py` (12) | `timelineStore.ts` (20+) |
 | Max Fan-Out (most imports) | `tasks/video.py` (8) | `Layout.tsx` (9+) |
 | Circular Dependencies | None | None |
-| Singleton Instances | `ModelManager`, `FluxInpainter`, `ElementManager`, `InpaintingManager`, `ScriptParser`, `EventManager` | `GlobalAudioManager` (Web Audio API) |
+| Singleton Instances | `ModelManager`, `FluxInpainter`, `MemoryManager`, `ElementManager`, `InpaintingManager`, `ScriptParser`, `EventManager` | `GlobalAudioManager` (Web Audio API) |
 
 ### Backend Singleton Inventory
 | Singleton | File | Scope | Description |
@@ -342,6 +368,7 @@ graph TD
 | `tracking_manager` | `managers/tracking_manager.py` | Module-level | SAM video tracking HTTP client (session lifecycle + propagation) |
 | `script_parser` | `services/script_parser.py` | Module-level | Screenplay text parser |
 | `event_manager` | `events.py` | Module-level | SSE broadcast to all connected clients |
+| `memory_manager` | `memory_manager.py` | Module-level | Central GPU memory coordinator — mutual exclusion between LTX and Flux |
 
 ## 4. API Endpoint Map
 
@@ -351,41 +378,54 @@ graph TD
 | GET | `/projects` | projects | `list_projects` |
 | GET | `/projects/{id}` | projects | `get_project` |
 | DELETE | `/projects/{id}` | projects | `delete_project` |
-| PUT | `/projects/{id}/save` | projects | `save_project` |
-| POST | `/projects/{id}/split_shot` | projects | `split_shot` |
+| PUT | `/projects/{id}` | projects | `save_project` |
+| PATCH | `/projects/{id}/settings` | projects | `update_project_settings` |
+| PATCH | `/shots/{shot_id}` | projects | `patch_shot` |
+| POST | `/shots/{shot_id}/split` | projects | `split_shot` |
 | POST | `/projects/{id}/render` | projects | `render_project` |
+| GET | `/projects/{id}/render/{render_id}/download` | projects | `download_render` |
 | GET | `/projects/{id}/images` | projects | `get_project_images` |
-| POST | `/generate_advanced` | jobs | `generate_advanced` → LTX-2 (or Flux if 1 frame) |
-| POST | `/generate_image` | jobs | `generate_image_endpoint` → Flux 2 |
+| GET | `/settings/llm` | projects | `get_llm_settings` — current provider, model, keep_alive |
+| PATCH | `/settings/llm` | projects | `update_llm_settings` — change provider/model/keep_alive at runtime |
+| GET | `/settings/llm/models` | projects | `list_ollama_models` — Ollama `/api/tags` with vision detection |
 | GET | `/status/{job_id}` | jobs | `get_job_status` |
-| GET | `/active_jobs` | jobs | `list_active_jobs` |
+| GET | `/projects/{id}/active_jobs` | jobs | `list_active_jobs` |
 | POST | `/jobs/{job_id}/cancel` | jobs | `cancel_job` |
-| POST | `/upload/{project_id}` | assets | `upload_file` |
-| GET | `/assets/last_frame` | assets | `get_last_frame` |
-| GET | `/media/{project_id}` | assets | `list_media` |
-| GET | `/generated/{project_id}` | assets | `list_generated_for_project` |
-| DELETE | `/generated/{project_id}/{filename}` | assets | `delete_generated` |
-| GET | `/elements/{project_id}` | elements | `get_elements` |
-| POST | `/elements/{project_id}` | elements | `create_element` |
+| GET | `/gpu/status` | jobs | `gpu_status` |
+| POST | `/generate/advanced` | jobs | `generate_advanced` → LTX-2 (or Flux if 1 frame) |
+| POST | `/generate/image` | jobs | `generate_image_endpoint` → Flux 2 |
+| POST | `/upload` | assets | `upload_file` |
+| POST | `/shot/{job_id}/last-frame` | assets | `get_last_frame` |
+| GET | `/uploads` | assets | `list_uploads` |
+| DELETE | `/assets/{asset_id}` | assets | `delete_asset` |
+| DELETE | `/upload/{filename}` | assets | `delete_upload` |
+| POST | `/projects/{id}/elements` | elements | `create_element` |
+| GET | `/projects/{id}/elements` | elements | `get_elements` |
 | DELETE | `/elements/{element_id}` | elements | `delete_element` |
+| PUT | `/elements/{element_id}` | elements | `update_element` |
+| GET | `/sam/health` | elements | `sam_health` — SAM 3 readiness probe |
 | POST | `/elements/{element_id}/visualize` | elements | `visualize_element` → Flux 2 |
+| POST | `/edit/inpaint` | elements | `inpaint_image` → SAM 3 + Flux 2 |
 | POST | `/edit/segment` | elements | `segment_preview` → SAM 3 `/predict/mask` (point/box) |
 | POST | `/edit/detect` | elements | `detect_objects` → SAM 3 `/detect` (text) |
 | POST | `/edit/segment-text` | elements | `segment_text` → SAM 3 `/segment/text` |
-| POST | `/edit/inpaint` | elements | `inpaint_image` → SAM 3 + Flux 2 |
 | POST | `/track/start` | elements | `track_start` → SAM 3 video tracking |
 | POST | `/track/prompt` | elements | `track_add_prompt` → SAM 3 add prompt |
 | POST | `/track/propagate` | elements | `track_propagate` → SAM 3 propagation |
 | POST | `/track/stop` | elements | `track_stop` → SAM 3 close session |
-| POST | `/projects/{id}/storyboard/parse` | storyboard | `parse_script` |
+| POST | `/track/remove` | elements | `track_remove_prompt` → SAM 3 remove prompt |
+| POST | `/edit/track/save` | elements | `save_tracking` — export masks + metadata to disk |
+| POST | `/edit/track/load` | elements | `load_tracking` — reload saved tracking data |
+| POST | `/projects/{id}/script/parse` | storyboard | `parse_script` |
 | POST | `/projects/{id}/storyboard/commit` | storyboard | `commit_storyboard` |
 | GET | `/projects/{id}/storyboard` | storyboard | `get_storyboard` |
 | PATCH | `/projects/{id}/storyboard/scenes/{scene_id}` | storyboard | `update_scene` |
+| POST | `/projects/{id}/storyboard/scenes/reorder` | storyboard | `reorder_scenes` |
 | POST | `/projects/{id}/storyboard/ai-parse` | storyboard | `ai_parse` → Gemma 3 AI |
-| POST | `/projects/{id}/storyboard/thumbnails` | storyboard | `generate_thumbnails` → Flux 2 |
-| POST | `/projects/{id}/storyboard/reorder-shots` | storyboard | `reorder_shots` |
-| POST | `/projects/{id}/storyboard/add-shot` | storyboard | `add_shot` |
+| POST | `/projects/{id}/storyboard/generate-thumbnails` | storyboard | `generate_thumbnails` → Flux 2 |
+| POST | `/projects/{id}/storyboard/shots/reorder` | storyboard | `reorder_shots` |
+| POST | `/projects/{id}/storyboard/shots/add` | storyboard | `add_shot` |
 | DELETE | `/projects/{id}/storyboard/shots/{shot_id}` | storyboard | `delete_storyboard_shot` |
 | POST | `/projects/{id}/storyboard/batch-generate` | storyboard | `batch_generate` |
-| POST | `/storyboard/shots/{shot_id}/generate` | storyboard | `generate_shot` → LTX-2 |
+| POST | `/shots/{shot_id}/generate` | storyboard | `generate_shot` → LTX-2 |
 | GET | `/events` | server.py (direct) | `event_subscribe` (SSE) |

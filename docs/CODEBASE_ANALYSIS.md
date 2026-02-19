@@ -1,13 +1,13 @@
 # Milimo Video — Codebase Analysis
 
-**Date:** 2026-02-09  
-**Version:** 0.3.0-Analysis
+**Date:** 2026-02-18  
+**Version:** 0.4.0-Analysis
 
 ## Executive Summary
 
 Milimo Video is a **local-first, AI-native cinematic studio** combining a React/Zustand frontend with a Python/FastAPI backend. The system orchestrates three AI models — **LTX-2** (video generation), **Flux 2** (image generation/inpainting), and **SAM 3** (segmentation) — through a multi-track Non-Linear Editor (NLE) interface.
 
-The codebase spans **~55 source files** across two primary subsystems: a 24-file Python backend and a 30+ file TypeScript/React frontend, connected via REST endpoints and Server-Sent Events (SSE). A third subsystem — the SAM 3 microservice — runs independently on port 8001.
+The codebase spans **~60 source files** across two primary subsystems: a 28-file Python backend and a 35+ file TypeScript/React frontend, connected via REST endpoints and Server-Sent Events (SSE). A third subsystem — the SAM 3 microservice — runs independently on port 8001.
 
 ## Documentation Artifacts
 
@@ -55,6 +55,19 @@ The codebase is designed to run on Apple Silicon (MPS) with CUDA as the primary 
 - Transformer forced to float32 dtype
 - Memory management via `torch.mps.empty_cache()`
 
+### 8. Central Memory Manager
+`MemoryManager` (in `memory_manager.py`) enforces mutual exclusion between heavy GPU models on unified memory. On Apple Silicon, LTX-2 (~76GB), Flux 2 (~36GB), and Ollama (~49GB) can collectively exceed 128GB. The manager uses a slot-based conflict system:
+- `model_engine.py` calls `prepare_for("video")` before loading LTX → unloads Flux
+- `flux_wrapper.py` calls `prepare_for("image")` before loading Flux → unloads LTX
+- Ollama is managed externally via `keep_alive: 0` to unload after use
+
+### 9. Configurable LLM Provider
+Prompt enhancement routes through `llm.py`, a unified dispatcher supporting two providers:
+- **Gemma** (built-in): Uses the LTX-2 text encoder's `_enhance()` method directly on-device
+- **Ollama** (local): HTTP API to any Ollama model with `keep_alive` control for VRAM management
+
+The provider is configurable at runtime via `GET/PATCH /settings/llm` endpoints and the `LLMSettings.tsx` frontend component. Vision-capable Ollama models are auto-detected via `/api/tags`.
+
 ## Technology Stack
 
 | Layer | Technology |
@@ -68,17 +81,20 @@ The codebase is designed to run on Apple Silicon (MPS) with CUDA as the primary 
 | **Video AI** | LTX-2 (19B Dual-Stream Transformer, three pipelines + chained gen) |
 | **Image AI** | Flux 2 Klein 9B (FluxInpainter with IP-Adapter, True CFG, RePaint inpainting) |
 | **Segmentation AI** | SAM 3 (microservice on port 8001, `Sam3Processor` + `inst_interactive_predictor` + `Sam3VideoPredictor` with MPS/CUDA/CPU device support) |
+| **Prompt Enhancement** | Configurable: Gemma (built-in) or Ollama (local LLM via HTTP API) |
+| **Memory Management** | Central `MemoryManager` — slot-based mutual exclusion for GPU models |
 | **Video Processing** | FFmpeg (thumbnails, frame extraction, encoding, overlap trimming, concat) |
 | **Animation** | Framer Motion |
 
 ## File Inventory
 
-### Backend (`backend/`) — 25 source files
+### Backend (`backend/`) — 28 source files
 ```
 server.py              config.py              database.py
 worker.py              job_utils.py           events.py
 schemas.py             model_engine.py        file_utils.py
-cleanup_assets.py      migrate_v1_v2.py       
+cleanup_assets.py      migrate_v1_v2.py       fix_db_paths.py
+llm.py                 memory_manager.py
 routes/__init__.py     routes/projects.py     routes/jobs.py
 routes/assets.py       routes/elements.py     routes/storyboard.py
 tasks/video.py         tasks/chained.py       tasks/image.py
@@ -97,7 +113,7 @@ start_sam_server.py    # FastAPI on port 8001 (8 endpoints: health, predict, det
 sam3/                  # SAM 3 package (build_sam3_image_model, Sam3Processor, Sam3VideoPredictor)
 ```
 
-### Frontend (`web-app/src/`) — 30+ source files
+### Frontend (`web-app/src/`) — 35+ source files
 ```
 App.tsx                config.ts              main.tsx
 components/Layout.tsx  components/Controls.tsx
@@ -118,17 +134,20 @@ components/Inspector/NarrativeDirector.tsx
 components/Inspector/ShotParameters.tsx
 components/Library/MediaLibrary.tsx
 components/Library/ElementManager.tsx
-components/Library/ElementPanel.tsx
+components/Elements/ElementsView.tsx
 components/Images/ImagesView.tsx
 components/Storyboard/StoryboardView.tsx
 components/Storyboard/StoryboardSceneGroup.tsx
 components/Storyboard/StoryboardShotCard.tsx
 components/Storyboard/ScriptInput.tsx
+components/LLMSettings.tsx
 components/ProjectManager.tsx
 components/MediaUploader.tsx
 components/VideoPlayer.tsx
 components/ErrorBoundary.tsx
 components/Toggle.tsx
+providers/SSEProvider.tsx
+hooks/useEventSource.ts
 stores/timelineStore.ts  stores/types.ts
 stores/slices/projectSlice.ts  stores/slices/shotSlice.ts
 stores/slices/playbackSlice.ts stores/slices/uiSlice.ts

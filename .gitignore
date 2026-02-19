@@ -69,3 +69,18 @@ build/
 
 # Error Logs
 server_last_error.txt
+
+# Debug & Test Scripts (root-level)
+reproduce_*.py
+verify_*.py
+migrate_db.py
+reproduction*.log
+
+# Backend Runtime Data
+backend/exports/
+backend/migrations/
+backend/test_*.py
+
+# Frontend Build Artifacts
+web-app/dist/
+web-app/frontend.log

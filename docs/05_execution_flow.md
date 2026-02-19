@@ -18,7 +18,7 @@ sequenceDiagram
     
     UI->>Store: generateShot(shotId)
     Store->>Store: updateShot(id, {isGenerating: true})
-    Store->>API: POST /generate_advanced {project_id, shot_config}
+    Store->>API: POST /generate/advanced {project_id, shot_config}
 
     API->>DB: Create Job (status=pending)
     API->>DB: Update Shot (status=generating, last_job_id)
@@ -46,7 +46,7 @@ sequenceDiagram
     ME-->>Worker: Pipeline ready
 
     Note over Worker: Prompt Enhancement
-    Worker->>Worker: generate_enhanced_prompt(prompt, text_encoder, image_for_gemma)
+    Worker->>Worker: llm.enhance_prompt(prompt, text_encoder, image_path)
     Worker->>Utils: update_shot_db(shot_id, {enhanced_prompt_result: ...})
     Worker->>Utils: broadcast_progress(job_id, 5, enhanced_prompt)
     Utils-->>UI: SSE event: {type: "progress", enhanced_prompt: "..."}
@@ -97,7 +97,7 @@ sequenceDiagram
     participant Worker as BackgroundTask
     participant Flux as FluxInpainter
 
-    UI->>API: POST /generate_image {project_id, prompt, reference_images, enable_ae, enable_true_cfg, ...}
+    UI->>API: POST /generate/image {project_id, prompt, reference_images, enable_ae, enable_true_cfg, ...}
     API->>DB: Create Job (type="generation")
     API->>Worker: BackgroundTasks.add_task(generate_image_task)
     API-->>UI: {job_id, status: "queued"}

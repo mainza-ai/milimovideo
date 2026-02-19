@@ -7,6 +7,8 @@ Milimo Video is a local-first, AI-native cinematic studio with a split architect
 - **Frontend**: React 18 / Vite / TypeScript — UI, Timeline State, Multi-Track NLE, Preview Player
 - **Backend**: Python / FastAPI — Model Inference, Asset Management, Job Queue, Database
 - **AI Models**: LTX-2 (Video), Flux 2 (Image/Inpainting), SAM 3 (Segmentation)
+- **LLM**: Configurable prompt enhancement — Gemma (built-in) or Ollama (local)
+- **Memory**: Central `MemoryManager` enforces mutual exclusion between GPU models
 - **Microservice**: SAM 3 runs as a separate FastAPI server on port 8001
 
 ## 2. High-Level Architecture Diagram
@@ -19,7 +21,8 @@ graph TD
         Layout --> VT[VisualTimeline]
         Layout --> Inspector[InspectorPanel]
         Layout --> Library[MediaLibrary]
-        Layout --> Elements[ElementPanel]
+        Layout --> Elements[ElementsView]
+        Layout --> LLMSet[LLMSettings]
         Layout --> Storyboard[StoryboardView]
         Layout --> Images[ImagesView]
         Layout --> PM[ProjectManager]
@@ -40,7 +43,8 @@ graph TD
         Inspector --> NarDir[NarrativeDirector]
 
         All["All Components"] --> Store[useTimelineStore]
-        Store --> SSE_Client[SSE Event Listener]
+        SSEProv[SSEProvider] --> Store
+        SSEProv --> SSE_Client[SSE EventSource]
         Store --> JobPoll[jobPoller]
     end
 
@@ -67,17 +71,27 @@ graph TD
         Tasks --> ChainedTask[chained.py]
         Tasks --> ImageTask[image.py]
         
+        VideoTask --> LLM_Dispatch[llm.py — LLM Dispatcher]
         VideoTask --> ME[ModelManager]
         VideoTask -->|"num_frames==1"| FluxW[FluxInpainter]
         ChainedTask --> ME
+        ChainedTask --> LLM_Dispatch
         ChainedTask --> SBMgr[StoryboardManager]
         ImageTask --> FluxW
+        ImageTask --> LLM_Dispatch
         
         R_Elem --> ElMgr[ElementManager]
         ElMgr --> FluxW
         R_Elem --> InpMgr[InpaintingManager]
         InpMgr --> FluxW
         InpMgr -->|"HTTP POST"| SAM_Svc
+    end
+
+    subgraph "Memory Management"
+        MemMgr[MemoryManager] -->|"prepare_for('video')"| ME
+        MemMgr -->|"prepare_for('image')"| FluxW
+        LLM_Dispatch -->|"provider=ollama"| Ollama_API[Ollama API :11434]
+        LLM_Dispatch -->|"provider=gemma"| Gemma_TE[Gemma 3 Text Encoder]
     end
 
     subgraph "AI Inference"
@@ -115,8 +129,9 @@ graph TD
 | **UI → Backend** | HTTP REST | CRUD for projects, shots, elements, assets. Job dispatch. |
 | **Backend → UI** | SSE (Server-Sent Events) | Real-time progress updates, job completion, error logs. |
 | **UI Refresh Sync** | HTTP GET `/status/{job_id}` | One-shot job state recovery on page load via `jobPoller`. |
-| **Worker → LTX-2** | Direct Python Import | `ModelManager` loads LTX-2 pipelines into VRAM. One pipeline cached at a time. |
-| **Worker → Flux 2** | Direct Python Import | `FluxInpainter` singleton (persistent in memory) for image gen + inpainting. |
+| **Worker → LTX-2** | Direct Python Import | `ModelManager` loads LTX-2 pipelines into VRAM. One pipeline cached at a time. `MemoryManager.prepare_for("video")` unloads Flux first. |
+| **Worker → Flux 2** | Direct Python Import | `FluxInpainter` singleton for image gen + inpainting. `MemoryManager.prepare_for("image")` unloads LTX first. |
+| **Prompt Enhancement** | Configurable via `llm.py` | `enhance_prompt()` routes to Gemma (built-in) or Ollama (HTTP API). Ollama sends `keep_alive: 0` to unload after use. |
 | **Backend → SAM** | HTTP REST (port 8001) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. |
 | **Timeline → Player** | Headless rAF subscription | `PlaybackEngine` drives `currentTime` via `requestAnimationFrame` with cached layout. `CinematicPlayer` subscribes with throttled drift correction (250ms). |
 | **Playback → Audio** | `GlobalAudioManager` singleton | Web Audio API (`AudioContext` + `AudioBufferSourceNode`) for precise cross-browser playback. Buffers decoded upfront; drift tolerance 0.3s. |
@@ -160,8 +175,8 @@ Handles video, image, chained, and inpainting generation.
 | `projects.py` | `/projects` | CRUD, save, render, split shot, get images |
 | `jobs.py` | `/status`, `/generate` | Status polling, advanced generation, image generation, cancel |
 | `assets.py` | `/uploads`, `/assets` | File upload, list media, delete, get last frame |
-| `elements.py` | `/elements`, `/edit` | Element CRUD, visualize, inpaint, segment |
-| `storyboard.py` | `/storyboard` | Parse script (regex + AI), commit, get hierarchy, update scene, generate shot, batch generate, generate thumbnails, reorder/add/delete shots |
+| `elements.py` | `/elements`, `/edit`, `/track` | Element CRUD, visualize, inpaint, segment, tracking save/load |
+| `storyboard.py` | `/storyboard` | Parse script (regex + AI), commit, get hierarchy, update scene, generate shot, batch generate, generate thumbnails, reorder scenes/shots, add/delete shots |
 
 ### D. The Player System (Frontend)
 "Program Monitor" pattern with multi-component composition.
@@ -176,7 +191,16 @@ Handles video, image, chained, and inpainting generation.
 | `PlayerHUD` | Resolution/FPS/Seed overlay |
 | `LoadingOverlay` | Generation progress display with ambient glow effects |
 | `ControlsBar` | Play/pause, edit mode toggle, tracking mode toggle (Crosshair icon), fullscreen |
-| `TrackingPanel.tsx` | Video object tracking UI — session lifecycle (start/prompt/propagate/stop), text/click prompts, mask overlay canvas, frame navigation. Mutually exclusive with edit mode. |
+| `TrackingPanel.tsx` | Video object tracking UI — session lifecycle (start/prompt/propagate/stop), text/click prompts, mask overlay canvas, frame navigation, export/save masks. Mutually exclusive with edit mode. |
+
+### G. The SSE System (Frontend)
+Reliable server-sent events with auto-reconnect.
+
+| Component | Role |
+|---|---|
+| `SSEProvider.tsx` | React context provider — manages `EventSource` lifecycle with exponential backoff reconnect. Syncs in-flight jobs on mount via `jobPoller`. Listens for `progress`, `complete`, `error`, `log` events. |
+| `useEventSource.ts` | Standalone hook for SSE connections (low-level). Returns `{lastEvent, isConnected}`. |
+| `useSSE()` | Context hook — provides `{isConnected, lastEventTime}` from `SSEProvider`. |
 
 ### E. The Inspector System (Frontend)
 Shot editing panel with sub-components.
@@ -184,6 +208,7 @@ Shot editing panel with sub-components.
 | Component | Role |
 |---|---|
 | `InspectorPanel.tsx` | Master panel — shows selected shot details, generate/cancel/extend |
+| `LLMSettings.tsx` | AI settings — provider selection (Gemma/Ollama), model dropdown with 👁️ vision badges, keep_alive toggle |
 | `ShotParameters.tsx` | Resolution, frames, FPS, seed controls |
 | `AdvancedSettings.tsx` | CFG scale, pipeline override, enhance prompt toggle, enable AE, True CFG |
 | `ConditioningEditor.tsx` | Image/video conditioning management with drag-drop |
@@ -202,3 +227,6 @@ Isolated segmentation and tracking service.
 | `POST /track/*` | Video tracking: `start`, `prompt`, `propagate`, `stop` |
 | `InpaintingManager` | Backend HTTP client — point masks, text masks, object detection |
 | `TrackingManager` | Backend HTTP client — session-based video tracking |
+| `POST /track/remove` | Remove prompt from tracking session |
+| `POST /edit/track/save` | Export tracking masks + metadata to disk |
+| `POST /edit/track/load` | Reload saved tracking data from disk |

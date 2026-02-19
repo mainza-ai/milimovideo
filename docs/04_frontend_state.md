@@ -138,8 +138,9 @@ graph LR
         IP[InspectorPanel]
         PM[ProjectManager]
         ML[MediaLibrary]
-        EP[ElementPanel]
+        EP[ElementsView]
         IV[ImagesView]
+        LLM[LLMSettings]
     end
 
     subgraph "Selectors Used"
@@ -169,6 +170,7 @@ graph LR
     ML --> S_assetVer
     EP --> S_elements
     IV --> S_assetVer
+    LLM --> |"fetch API"| S_assetVer
 ```
 
 ## 4. Middleware Configuration
@@ -266,7 +268,10 @@ useEffect(() => {
 - `PlayerHUD` — only re-renders on resolution/fps/seed changes
 - `LoadingOverlay` — only re-renders on generation state changes
 - `ControlsBar` — only re-renders on play/edit/tracking state changes. Includes Crosshair icon for tracking mode toggle.
-- `TrackingPanel` — self-contained session state management (idle/starting/prompting/propagating/done/error), not connected to global store
+- `TrackingPanel` — self-contained session state management (idle/starting/prompting/propagating/done/error), not connected to global store. Supports mask export via `POST /edit/track/save` and reload via `POST /edit/track/load`.
+
+### G. SSE Provider
+`SSEProvider.tsx` wraps the app in a React context that manages the `EventSource` lifecycle. On mount, it syncs any in-flight jobs via `jobPoller`. The connection uses exponential backoff on errors (1s → 10s max). It replaces the previous inline SSE listener that was tightly coupled to the store.
 
 ## 6. Data Flow: SSE → Store
 
