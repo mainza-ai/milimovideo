@@ -180,7 +180,7 @@ Handles video, image, chained, and inpainting generation.
 | `jobs.py` | `/status`, `/generate` | Status polling, advanced generation, image generation, cancel |
 | `assets.py` | `/uploads`, `/assets` | File upload, list media, delete, get last frame |
 | `elements.py` | `/elements`, `/edit`, `/track` | Element CRUD, visualize, inpaint, segment, tracking save/load |
-| `storyboard.py` | `/storyboard` | Parse script (regex + AI), commit, get hierarchy, update scene, generate shot, batch generate, generate thumbnails, reorder scenes/shots, add/delete shots |
+| `storyboard.py` | `/storyboard` | Parse script (regex + AI), commit, get hierarchy, update scene, generate shot (auto-randomizes seed if fresh), batch generate, generate thumbnails, reorder scenes/shots, add/delete shots |
 
 ### D. The Player System (Frontend)
 "Program Monitor" pattern with multi-component composition.

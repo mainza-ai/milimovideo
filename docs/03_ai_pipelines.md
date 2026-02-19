@@ -139,11 +139,17 @@ flowchart TD
 
 ### 2.3 Image Conditioning Mechanism
 
-Milimo uses `image_conditionings_by_replacing_latent`:
-1. Input images are encoded to latents via the video VAE
-2. These latents **replace** noisy latents at specific spatiotemporal positions (usually frame 0)
-3. Acts as a "hard" constraint for the diffusion start point
-4. Supports multiple conditioning items with configurable `strength` and `frame_index`
+Milimo uses `image_conditionings_by_replacing_latent` with a strict priority system to determine the starting frame (Frame 0):
+
+1. **Manual Timeline Image**: Explicitly set by user (Highest Priority).
+2. **Concept Art (Thumbnail)**: If present, used as the starting frame. This enables "Image to Video" behavior where the video evolves from the concept art.
+3. **Continuity (Previous Shot)**: If no Concept Art exists, the last frame of the previous shot is used (flow continuity).
+
+**Process:**
+1. Input images are encoded to latents via the video VAE.
+2. These latents **replace** noisy latents at specific spatiotemporal positions (usually frame 0).
+3. Acts as a "hard" constraint for the diffusion start point.
+4. Supports multiple conditioning items, though typically only one is used for Frame 0 based on the priority above.
 
 ### 2.4 Chained Generation — Quantum Alignment
 
