@@ -210,6 +210,18 @@ Visit **`http://localhost:5173`** to enter the studio.
 
 ---
 
+---
+
+## 🤝 Community & Collaboration
+
+Milimo Video is an open-source project, and we welcome contributions! Whether you're a developer, filmmaker, or AI enthusiast, there are many ways to get involved:
+
+*   **Code**: Submit Pull Requests for new features, bug fixes, or performance improvements.
+*   **Models**: Share custom LoRAs or fine-tunes that work well with the LTX-2/Flux pipeline.
+*   **Feedback**: Open Issues for bugs or feature requests on our [GitHub repository](https://github.com/mainza-ai/milimovideo).
+
+Let's build the future of AI cinema together.
+
 ## ✍️ Author
 
 **Mainza Kangombe**  
