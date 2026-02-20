@@ -18,3 +18,4 @@ sentencepiece
 diffusers
 scikit-image
 sqlmodel
+sse-starlette
