@@ -71,7 +71,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         
         # Auto-Negative Prompting: Structural Injection
         # We append these terms to ensuring the model avoids non-visual artifacts
-        auto_negative = ", text, watermark, copyright, fuzzy, low resolution, audio, sound, voice, speech, caption"
+        auto_negative = ", text, watermark, copyright, fuzzy, low resolution, caption"
         if negative_prompt:
              negative_prompt += auto_negative
         else:
@@ -380,6 +380,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             text_encoder=text_encoder,
                             image_path=image_for_llm,
                             seed=seed,
+                            duration_seconds=(num_frames / float(params.get("fps", 25.0))),
                         )
                         logger.info(f"DEBUG: Prompt AFTER VLM Enhancement: {run_prompt}")
                         update_job_db(job_id, "processing", enhanced_prompt=run_prompt)
@@ -448,6 +449,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             text_encoder=text_encoder,
                             image_path=input_images[0][0] if input_images else None,
                             seed=seed,
+                            duration_seconds=(num_frames / float(params.get("fps", 25.0))),
                         )
                         update_job_db(job_id, "processing", enhanced_prompt=ic_prompt)
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=ic_prompt)
@@ -485,6 +487,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             text_encoder=text_encoder,
                             image_path=input_images[0][0] if input_images else None,
                             seed=seed,
+                            duration_seconds=(num_frames / float(params.get("fps", 25.0))),
                         )
                         update_job_db(job_id, "processing", enhanced_prompt=kf_prompt)
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=kf_prompt)
@@ -739,8 +742,8 @@ async def generate_video_task(job_id: str, params: dict):
         
         # Chained Generation Delegation
         num_frames = params.get("num_frames", 121)
-        if pipeline_type == "ti2vid" and num_frames > 121:
-             logger.info(f"Delegating to Chained Generation (frames={num_frames})")
+        if pipeline_type == "ti2vid" and num_frames > config.NATIVE_MAX_FRAMES:
+             logger.info(f"Delegating to Chained Generation (frames={num_frames} > {config.NATIVE_MAX_FRAMES})")
              await generate_chained_video_task(job_id, params, pipeline)
         else:
              await generate_standard_video_task(job_id, params, pipeline)

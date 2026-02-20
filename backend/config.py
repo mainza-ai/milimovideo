@@ -34,6 +34,7 @@ DEFAULT_RESOLUTION_H = 512
 DEFAULT_FPS = 25
 DEFAULT_SEED = 42
 DEFAULT_NUM_FRAMES = 121       # LTX-2 default chunk size (was hardcoded)
+NATIVE_MAX_FRAMES = 505        # LTX-2 native maximum (~20.2s at 25fps)
 DEFAULT_OVERLAP_FRAMES = 24   # Frames overlapped between chained chunks
 DEFAULT_THUMBNAIL_W = 512     # Concept art thumbnail width
 DEFAULT_THUMBNAIL_H = 320     # Concept art thumbnail height

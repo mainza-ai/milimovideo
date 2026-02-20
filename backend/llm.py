@@ -11,22 +11,30 @@ import config
 
 logger = logging.getLogger(__name__)
 
-# ── Video-Aware System Prompt (shared across providers) ──────────
-VIDEO_SYSTEM_PROMPT = (
-    "You are a Creative Assistant writing concise, action-focused image-to-video prompts. "
-    "Given a user's Raw Input Prompt, generate a richly detailed prompt to guide video generation.\n\n"
-    "#### Guidelines:\n"
-    "- Expand the user's prompt with vivid visual details, motion, camera movement, and atmosphere.\n"
-    "- Active language: Use present-progressive verbs ('is walking,' 'speaking').\n"
-    "- Chronological flow: Use temporal connectors ('as,' 'then,' 'while').\n"
-    "- Speech (only when requested): Provide exact words in quotes with voice characteristics.\n"
-    "- Style: Include visual style at beginning: 'Style: <style>, <rest of prompt>.' If unclear, omit.\n"
-    "- Visual and audio: Describe complete soundscape alongside actions.\n"
-    "- CRITICAL: PRESERVE all specific details about Characters, Locations, and Settings provided in the input. Do not summarize them away; integrate them naturally into the scene.\n"
-    "- Restrained language: Avoid dramatic terms. Use mild, natural, understated phrasing.\n"
-    "- Formatting: Single concise paragraph. No titles or markdown.\n"
-    "- Output ONLY the complete prompt text."
-)
+def get_video_system_prompt(duration_seconds: float) -> str:
+    """Generate a dynamic system prompt scaled to the target video duration."""
+    if duration_seconds <= 6.0:
+        length_guideline = "- Formatting: Single concise paragraph of 2-3 sentences max. Focus on a SINGLE continuous action to prevent scene complexity overload."
+    elif duration_seconds <= 12.0:
+        length_guideline = "- Formatting: Single flowing paragraph of 3-5 sentences. Maintain a steady pace without rushing the action."
+    else:
+        length_guideline = "- Formatting: Single flowing paragraph of 4-8 sentences. You may include a more complex scene progression suitable for a longer video."
+
+    return (
+        "You are a Creative Assistant writing concise, action-focused image-to-video prompts. "
+        "Given a user's Raw Input Prompt, generate a richly detailed prompt to guide video generation. "
+        "Match the pacing and complexity of the action to the available duration.\n\n"
+        "#### Guidelines:\n"
+        "- Expand the user's prompt with vivid visual details, motion, camera movement, and atmosphere.\n"
+        "- Active language: Use present-progressive verbs ('is walking,' 'speaking').\n"
+        "- Chronological flow: Use temporal connectors ('as,' 'then,' 'while').\n"
+        "- Audio/Speech: Describe any sounds, speech, or music occurring during the action seamlessly. Provide exact words in quotes if requested.\n"
+        "- Style: Include visual style at beginning: 'Style: <style>.' If unclear, omit.\n"
+        "- CRITICAL: PRESERVE all specific details about Characters, Locations, and Settings provided in the input. Do not summarize them away; integrate them naturally into the scene.\n"
+        "- Restrained language: Avoid dramatic terms. Use mild, natural, understated phrasing.\n"
+        f"{length_guideline}\n"
+        "- Output ONLY the complete prompt text."
+    )
 
 IMAGE_SYSTEM_PROMPT = (
     "You are a Creative Assistant writing detailed image generation prompts. "
@@ -44,10 +52,11 @@ def enhance_prompt_ollama(
     prompt: str,
     system_prompt: str | None = None,
     is_video: bool = True,
+    duration_seconds: float = 4.8,
 ) -> str:
     """Enhance a prompt using Ollama's local LLM API."""
     if not system_prompt:
-        system_prompt = VIDEO_SYSTEM_PROMPT if is_video else IMAGE_SYSTEM_PROMPT
+        system_prompt = get_video_system_prompt(duration_seconds) if is_video else IMAGE_SYSTEM_PROMPT
 
     url = f"{config.OLLAMA_BASE_URL}/api/generate"
     payload = {
@@ -115,6 +124,7 @@ def enhance_prompt(
     text_encoder=None,
     image_path: str | None = None,
     seed: int = 42,
+    duration_seconds: float = 4.8,
 ) -> str:
     """
     Unified prompt enhancement dispatcher.
@@ -122,8 +132,11 @@ def enhance_prompt(
     """
     provider = config.LLM_PROVIDER.lower()
 
+    if not system_prompt:
+        system_prompt = get_video_system_prompt(duration_seconds) if is_video else IMAGE_SYSTEM_PROMPT
+
     if provider == "ollama":
-        return enhance_prompt_ollama(prompt, system_prompt, is_video)
+        return enhance_prompt_ollama(prompt, system_prompt, is_video, duration_seconds)
 
     elif provider == "gemma":
         if text_encoder is None:

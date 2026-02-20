@@ -37,7 +37,7 @@ class StoryboardManager:
             self.artifacts_dir = None
 
         # Chaining Configuration — centralized in config.py
-        self.chunk_size = config.DEFAULT_NUM_FRAMES
+        self.chunk_size = getattr(config, "NATIVE_MAX_FRAMES", config.DEFAULT_NUM_FRAMES)
         self.overlap_frames = config.DEFAULT_OVERLAP_FRAMES
         
         # State
@@ -46,7 +46,7 @@ class StoryboardManager:
 
     def get_total_chunks(self) -> int:
         """Calculate number of chunks needed."""
-        total_frames = self.params.get("num_frames", config.DEFAULT_NUM_FRAMES)
+        total_frames = self.params.get("num_frames", self.chunk_size)
         if total_frames <= self.chunk_size:
             return 1
             
@@ -203,8 +203,8 @@ class StoryboardManager:
         if meta_parts:
             base_prompt += ". ".join(meta_parts) + ". "
             
-        # Add Action
-        base_prompt += shot.action or "A cinematic shot"
+        # Add Action or Prompt (Prioritize user's manual prompt)
+        base_prompt += shot.prompt or shot.action or "A cinematic shot"
         
         shot_config = {
             "prompt": base_prompt,
