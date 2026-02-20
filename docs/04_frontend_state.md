@@ -47,7 +47,7 @@ graph TD
 |---|---|
 | `project: Project` | `setProject(p)` |
 | `assetRefreshVersion: number` | `triggerAssetRefresh()` |
-| — | `saveProject()` |
+| — | `saveProject()` (PUT mapped to an UPSERT pattern) |
 | — | `createNewProject(name, settings?)` |
 | — | `loadProject(id)` |
 | — | `deleteProject(id)` |
@@ -66,7 +66,7 @@ graph TD
 | `updateConditioning(shotId, itemId, updates)` | Update conditioning |
 | `removeConditioning(shotId, itemId)` | Remove conditioning |
 | `getShotStartTime(shotId)` | Compute absolute start time |
-| `generateShot(shotId)` | Dispatch generation request → POST `/generate_advanced` |
+| `generateShot(shotId)` | Dispatch generation request → POST `/shots/{shotId}/generate` |
 | `inpaintShot(shotId, frame, mask, prompt)` | Dispatch inpainting → POST `/edit/inpaint` |
 
 ### PlaybackSlice

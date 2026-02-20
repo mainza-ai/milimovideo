@@ -196,7 +196,7 @@ export const InspectorPanel = () => {
                     <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Prompt</label>
                     <textarea
                         className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-white/90 focus:outline-none focus:border-milimo-500/50 min-h-[100px] resize-none"
-                        value={shot.prompt}
+                        value={shot.prompt || ''}
                         onChange={(e) => updateShot(shot.id, { prompt: e.target.value })}
                         placeholder="Describe the shot..."
                     />
@@ -206,7 +206,7 @@ export const InspectorPanel = () => {
                     <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Negative Prompt</label>
                     <textarea
                         className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-xs text-white/70 focus:outline-none focus:border-milimo-500/50 min-h-[60px] resize-none"
-                        value={shot.negativePrompt}
+                        value={shot.negativePrompt || ''}
                         onChange={(e) => updateShot(shot.id, { negativePrompt: e.target.value })}
                     />
                 </div>

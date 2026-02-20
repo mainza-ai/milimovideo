@@ -584,8 +584,8 @@ async def batch_generate(project_id: str, req: BatchGenerateRequest, background_
             )
             session.add(job)
             session.commit()
-            
-            background_tasks.add_task(generate_video_task, job_id, worker_params)
+            from job_utils import queue_video_task
+            background_tasks.add_task(queue_video_task, job_id, worker_params)
             results.append({"shot_id": shot_id, "status": "queued", "job_id": job_id})
             
         except Exception as e:
@@ -626,6 +626,7 @@ async def generate_shot(shot_id: str, background_tasks: BackgroundTasks, session
         worker_params = {
             "job_id": job_id,
             "project_id": project_id,
+            "shot_id": shot.id,  # ADDED: explicit link for post-gen update
             "prompt": job_config["prompt"],
             "width": shot.width,
             "height": shot.height,
@@ -671,7 +672,8 @@ async def generate_shot(shot_id: str, background_tasks: BackgroundTasks, session
         session.commit()
         
         # Trigger Worker
-        background_tasks.add_task(generate_video_task, job_id, worker_params)
+        from job_utils import queue_video_task
+        background_tasks.add_task(queue_video_task, job_id, worker_params)
         
         return {"status": "queued", "job_id": job_id}
             

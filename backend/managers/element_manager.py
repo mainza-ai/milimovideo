@@ -188,19 +188,15 @@ class ElementManager:
         """Resolve element image_path to absolute filesystem path."""
         if not image_path:
             return None
-        # Already absolute and exists
-        if os.path.isabs(image_path) and os.path.exists(image_path):
-            return image_path
-        # Web URL format: /projects/{id}/assets/...
-        if image_path.startswith("/projects"):
-            from config import PROJECTS_DIR
-            relative = image_path.removeprefix("/projects/")
-            full_path = os.path.join(PROJECTS_DIR, relative)
-            if os.path.exists(full_path):
-                return full_path
-            else:
-                logger.warning(f"Element image not found: {full_path}")
-        return None
+        
+        from file_utils import resolve_path
+        abs_path = resolve_path(image_path)
+        
+        if abs_path and os.path.exists(abs_path):
+            return abs_path
+        else:
+            logger.warning(f"Element image not found: {abs_path or image_path}")
+            return None
 
     async def generate_visual(self, element_id: str, prompt_override: str = None, guidance: float = 2.0, enable_ae: bool = False, job_id: str = None) -> Optional[str]:
         """

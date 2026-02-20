@@ -75,7 +75,7 @@ class StoryboardManager:
         
         if chunk_idx > 0 and last_chunk_output:
             # Extract last frame for overlap conditioning
-            last_frame = self._extract_last_frame(last_chunk_output, f"chunk_{chunk_idx-1}")
+            last_frame = await self._extract_last_frame(last_chunk_output, f"chunk_{chunk_idx-1}")
             if last_frame:
                  # (path, frame_idx, strength)
                  # LTX conditioning at frame 0
@@ -126,8 +126,8 @@ class StoryboardManager:
         })
         logger.info(f"Committed chunk {chunk_idx}: {path}")
 
-    def _extract_last_frame(self, video_path: str, shot_id: str) -> Optional[str]:
-        """Extract last frame of video to artifacts dir using FFmpeg."""
+    async def _extract_last_frame(self, video_path: str, shot_id: str) -> Optional[str]:
+        """Extract last frame of video to artifacts dir using FFmpeg async to unblock event loop."""
         if not self.artifacts_dir:
             return None
         try:
@@ -146,7 +146,21 @@ class StoryboardManager:
                 "-update", "1",
                 out_path
             ]
-            subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            logger.info(f"Executing ffmpeg command asynchronously: {' '.join(cmd)}")
+            
+            import asyncio
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode != 0:
+                logger.error(f"FFmpeg failed asynchronously: {stderr.decode()}")
+                return None
+                
+            logger.info(f"FFmpeg success. Output saved to: {out_path}")
             return out_path
         except Exception as e:
             logger.error(f"Failed to extract last frame: {e}")
@@ -218,16 +232,28 @@ class StoryboardManager:
                  logger.info(f"Injected Concept Art for Video Conditioning (Frame 0): {resolved_thumb}")
 
         # 3. Continuity Conditioning (Previous Shot in same Scene)
+        logger.info(f"Querying previous shot for Scene {shot.scene_id}, Index {shot.index - 1}...")
         # Find previous shot
         prev_shot = session.exec(
             select(Shot)
             .where(Shot.scene_id == shot.scene_id)
             .where(Shot.index == shot.index - 1)
         ).first()
+        logger.info(f"Previous shot query finished. Found: {prev_shot.id if prev_shot else None}")
         
         if prev_shot and prev_shot.video_url and prev_shot.status == "completed":
              # Extract last frame
-             last_frame_path = self._extract_last_frame(prev_shot.video_url, prev_shot.id)
+             logger.info(f"Attempting to extract last frame from {prev_shot.video_url}...")
+             from file_utils import resolve_path
+             resolved_video_path = resolve_path(prev_shot.video_url)
+             logger.info(f"Resolved video path to: {resolved_video_path}")
+             
+             if not resolved_video_path or not os.path.exists(resolved_video_path):
+                 logger.warning(f"Resolved video path does not exist, skipping continuity extraction.")
+                 last_frame_path = None
+             else:
+                 last_frame_path = await self._extract_last_frame(resolved_video_path, prev_shot.id)
+             
              if last_frame_path:
                  # Only use continuity if we don't already have a Concept Art conditioning
                  # Priority: Manual > Concept Art > Continuity
@@ -280,6 +306,10 @@ class StoryboardManager:
                         # Let's just append "Setting: Name (Description)" if it's a location match
                         shot_config["prompt"] += f". Setting: {replacement}"
 
+                if replacement:
+                     shot_config["prompt"] += f". Setting: {replacement}"
+
+                logger.info(f"DEBUG: Prompt AFTER Element Injection: {shot_config['prompt']}")
                 logger.info(f"Injected Element Descriptions into Prompt")
             except (json.JSONDecodeError, TypeError) as e:
                 logger.warning(f"Failed to parse matched_elements: {e}")
@@ -295,6 +325,7 @@ class StoryboardManager:
 
         # 5. Manual Timeline / ControlNet / IP-Adapter (from Shot.timeline)
         if shot.timeline:
+            from file_utils import resolve_path
             import json
             try:
                 timeline_data = json.loads(shot.timeline) if isinstance(shot.timeline, str) else shot.timeline
@@ -306,16 +337,14 @@ class StoryboardManager:
                         t_str = item.get("strength", 1.0)
                         
                         if t_path:
-                            # Resolve path if relative
-                            if t_path.startswith("/projects"):
-                                # config.PROJECTS_DIR is needed here, or assume absolute?
-                                # video.py handles /projects resolution, but let's be safe
-                                pass 
+                            # Resolve path properly including URLs and URL encoded chars
+                            resolved_timeline_path = resolve_path(t_path)
                             
-                            # Add to images list for LTX conditioning
-                            # Format: (path, frame_idx, strength)
-                            shot_config["images"].append((t_path, t_idx, t_str))
-                            logger.info(f"Injected Manual Timeline Conditioning: {t_path} at frame {t_idx}")
+                            if resolved_timeline_path:
+                                # Add to images list for LTX conditioning
+                                # Format: (path, frame_idx, strength)
+                                shot_config["images"].append((resolved_timeline_path, t_idx, t_str))
+                                logger.info(f"Injected Manual Timeline Conditioning: {resolved_timeline_path} at frame {t_idx}")
             except Exception as e:
                 logger.warning(f"Failed to parse shot.timeline: {e}")
 

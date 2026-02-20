@@ -98,78 +98,53 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         # Structure: [(path, idx, strength)]
         # Converts /projects/... -> /Users/.../backend/projects/...
         logger.info(f"=== IMAGE PATH RESOLUTION DEBUG ===")
-        logger.info(f"Raw input_images from params: {input_images}")
+        logger.info(f"Raw input_images from params: {len(input_images)} items")
         project_id = params.get("project_id", None)
         if input_images:
             resolved_inputs = []
-            base_dir = get_base_dir()
-            logger.info(f"base_dir: {base_dir}, project_id: {project_id}")
+            logger.info(f"project_id: {project_id}")
             for item in input_images:
                 try:
                     path, idx, strength = item
                     logger.info(f"Processing item: path='{path}', idx={idx}, strength={strength}")
                     
-                    # Handle Full URLs
-                    if isinstance(path, str) and (path.startswith("http://") or path.startswith("https://")):
-                        from urllib.parse import urlparse, unquote
-                        parsed = urlparse(path)
-                        path = unquote(parsed.path)
-                        logger.info(f"Parsed URL to path: {path}")
+                    resolved_abs = resolve_path(path)
                     
-                    if isinstance(path, str) and path.startswith("/projects"):
-                        abs_path = os.path.join(base_dir, "projects", path.removeprefix("/projects/").lstrip("/"))
-                        # Better fix: strip /projects/ then join with PROJECTS_DIR
-                        # PROJECTS_DIR is config.PROJECTS_DIR
-                        abs_path = os.path.join(config.PROJECTS_DIR, path.removeprefix("/projects/").lstrip("/"))
-                        
-                        logger.info(f"Resolved to abs_path: {abs_path}")
-                        if os.path.exists(abs_path):
-                            resolved_inputs.append((abs_path, idx, strength))
-                            logger.info(f"✓ Path exists, added to resolved_inputs")
-                        else:
-                            logger.warning(f"✗ Timeline Image Not Found & Skipped: {abs_path}")
+                    if resolved_abs and os.path.exists(resolved_abs):
+                        resolved_inputs.append((resolved_abs, idx, strength))
+                        logger.info(f"✓ Path exists: {resolved_abs}")
                     else:
-                        logger.info(f"Path doesn't start with /projects, checking raw: {path}")
-                        if os.path.exists(path) if isinstance(path, str) else True:
-                            resolved_inputs.append(item)
-                            logger.info(f"✓ Raw path added")
-                        else:
-                            # FALLBACK: Legacy paths
-                            found = False
-                            if project_id and isinstance(path, str):
-                                filename = os.path.basename(path)
-                                project_path = os.path.join(config.PROJECTS_DIR, project_id, "generated", "images", filename)
-                                if os.path.exists(project_path):
-                                    resolved_inputs.append((project_path, idx, strength))
+                        # FALLBACK: Legacy paths
+                        found = False
+                        if project_id and isinstance(path, str):
+                            filename = os.path.basename(path)
+                            project_path = os.path.join(config.PROJECTS_DIR, project_id, "generated", "images", filename)
+                            if os.path.exists(project_path):
+                                resolved_inputs.append((project_path, idx, strength))
+                                found = True
+                            else:
+                                # Fallback 2: Check in generated folder (flat)
+                                project_path_flat = os.path.join(config.PROJECTS_DIR, project_id, "generated", filename)
+                                if os.path.exists(project_path_flat):
+                                    resolved_inputs.append((project_path_flat, idx, strength))
                                     found = True
-                                else:
-                                    # Fallback 2: Check in generated folder (flat)
-                                    project_path_flat = os.path.join(config.PROJECTS_DIR, project_id, "generated", filename)
-                                    if os.path.exists(project_path_flat):
-                                        resolved_inputs.append((project_path_flat, idx, strength))
-                                        found = True
-                            if not found:
-                                logger.warning(f"✗ Raw path not found: {path}")
+                        if not found:
+                            logger.warning(f"✗ Raw path not found: {path} (resolved as {resolved_abs})")
                 except Exception as e:
                     logger.warning(f"Failed to resolve input image path: {item} - {e}")
                     resolved_inputs.append(item)
             input_images = resolved_inputs
             logger.info(f"Final resolved input_images: {len(input_images)} items")
         
+        
         # Element Images Resolution
         element_images = params.get("element_images", [])
         if element_images:
             resolved_elements = []
             for img_path in element_images:
-                 if isinstance(img_path, str) and img_path.startswith("/projects"):
-                     # config.PROJECTS_DIR logic
-                     rel = img_path.removeprefix("/projects/")
-                     abs_path = os.path.join(config.PROJECTS_DIR, rel)
-                     if os.path.exists(abs_path):
-                         resolved_elements.append(abs_path)
-                 else:
-                     if os.path.exists(img_path) if isinstance(img_path, str) else True:
-                         resolved_elements.append(img_path)
+                 resolved_abs = resolve_path(img_path)
+                 if resolved_abs and os.path.exists(resolved_abs):
+                     resolved_elements.append(resolved_abs)
             element_images = resolved_elements
 
         # Note: element_images are passed ONLY to ip_adapter_images (line ~210)
@@ -182,14 +157,9 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         if inspiration_images:
             resolved_insp = []
             for img_path in inspiration_images:
-                 if isinstance(img_path, str) and img_path.startswith("/projects"):
-                     rel = img_path.removeprefix("/projects/")
-                     abs_path = os.path.join(config.PROJECTS_DIR, rel)
-                     if os.path.exists(abs_path):
-                         resolved_insp.append(abs_path)
-                 else:
-                     if os.path.exists(img_path) if isinstance(img_path, str) else True:
-                         resolved_insp.append(img_path)
+                 resolved_abs = resolve_path(img_path)
+                 if resolved_abs and os.path.exists(resolved_abs):
+                     resolved_insp.append(resolved_abs)
             inspiration_images = resolved_insp
             logger.info(f"Resolved {len(inspiration_images)} inspiration images for VLM.")
 
@@ -403,6 +373,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             image_for_llm = input_images[0][0]
                             logger.info(f"Using Input Image (Frame 0) for VLM Prompt Enhancement: {image_for_llm}")
 
+                        logger.info(f"DEBUG: Prompt BEFORE VLM Enhancement: {prompt}")
                         run_prompt = llm_enhance(
                             prompt=prompt,
                             is_video=not is_image_mode,
@@ -410,6 +381,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             image_path=image_for_llm,
                             seed=seed,
                         )
+                        logger.info(f"DEBUG: Prompt AFTER VLM Enhancement: {run_prompt}")
                         update_job_db(job_id, "processing", enhanced_prompt=run_prompt)
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=run_prompt)
                         
@@ -611,6 +583,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 logger.warning(f"Failed to generate thumbnail: {e}")
 
             output_url = f"/projects/{project_id}/generated/{os.path.basename(output_path)}"
+            # Update Job DB
             update_job_db(
                 job_id, 
                 "completed", 
@@ -618,6 +591,25 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 thumbnail_path=thumbnail_web_path,
                 actual_frames=actual_frames
             )
+
+            # FIX: Update Shot if linked
+            shot_id = params.get("shot_id")
+            if shot_id:
+                # Convert absolute path to web URL
+                # projects/{id}/generated/foo.mp4
+                rel_path = f"/projects/{project_id}/generated/{os.path.basename(output_path)}"
+                shot_updates = {
+                    "video_url": rel_path,
+                    "status": "completed",
+                    "last_job_id": job_id
+                }
+                # Also update thumbnail if we generated one and shot doesn't have a custom one?
+                # For now let's leave thumbnail alone unless we want to overwrite it.
+                # Usually concept art is the thumbnail. We shouldn't overwrite concept art with the first frame of video unless requested.
+                # So we ONLY update video_url.
+                
+                update_shot_db(shot_id, **shot_updates)
+                logger.info(f"Updated Shot {shot_id} with video: {rel_path}")
             update_job_progress(job_id, 100, "Done")
             
             shot_id = params.get("id")
@@ -648,6 +640,16 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
 
 
 async def generate_video_task(job_id: str, params: dict):
+    from sqlmodel import Session
+    from database import engine, Job
+    
+    # 0. Check pre-generation cancellation (e.g. while sitting in GPU queue)
+    with Session(engine) as session:
+        job = session.get(Job, job_id)
+        if job and job.status == "cancelled":
+            logger.info(f"Job {job_id} was cancelled before starting execution.")
+            return
+
     logger.info(f"Starting generation for job {job_id}")
     active_jobs[job_id] = {
         "cancelled": False,

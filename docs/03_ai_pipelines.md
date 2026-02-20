@@ -74,6 +74,7 @@ classDiagram
         +prepare_next_chunk(chunk_idx, last_output) dict
         +commit_chunk(chunk_idx, path, prompt)
         +prepare_shot_generation(shot_id, session) dict
+        +async _extract_last_frame(video_path, shot_id) str
         +cleanup()
     }
 
@@ -162,7 +163,7 @@ flowchart TD
 
     subgraph LOOP["Chunk Loop"]
         PREP[prepare_next_chunk] -->|"chunk 0"| GEN[Run TI2Vid — 121 frames]
-        PREP -->|"chunk > 0"| EXTRACT[Extract Last Frame — ffmpeg -sseof -0.1]
+        PREP -->|"chunk > 0"| EXTRACT[Async Extract Last Frame — asyncio ffmpeg -sseof -0.1]
         EXTRACT --> COND[Set as Image Conditioning at frame 0]
         COND --> GEN
         

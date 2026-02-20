@@ -167,7 +167,7 @@ export const ScriptInput = () => {
                                                 <textarea
                                                     className={`w-full bg-transparent border border-transparent hover:border-white/10 focus:border-milimo-500/30 rounded px-1 py-0.5 text-sm resize-none focus:outline-none ${shot.dialogue ? 'italic text-white/90' : 'text-white/70'}`}
                                                     rows={2}
-                                                    value={shot.dialogue || shot.action}
+                                                    value={shot.dialogue || shot.action || ''}
                                                     onChange={(e) => {
                                                         const field = shot.dialogue ? 'dialogue' : 'action';
                                                         updateShotField(i, j, field, e.target.value);

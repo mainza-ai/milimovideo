@@ -102,75 +102,131 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     params["project_id"] = req.project_id
     params["pipeline_type"] = "advanced"
 
-    # --- Element Injection (Triggers) ---
-    raw_prompt = params.get("prompt", "")
-    if "@" in raw_prompt:
-         enriched_prompt, element_images = element_manager.inject_elements_into_prompt(raw_prompt, req.project_id)
-         params["prompt"] = enriched_prompt
-         params["element_images"] = element_images
-         logger.info(f"Enriched prompt: {enriched_prompt} | Visuals: {len(element_images)}")
-
-    # --- Smart Continue / Auto-Conditioning Logic ---
-    # If auto_continue is True and NO explicit image/video conditioning is provided for frame 0,
-    # try to use the last completed shot from this project.
-    if req.shot_config.auto_continue:
-        has_initial_cond = any(
-            t["frame_index"] == 0 and t["type"] in ["image", "video"] 
-            for t in params.get("timeline", [])
-        )
+    # --- Unified Generation Prep ---
+    # If this is tied to a Storyboard Shot, we use StoryboardManager to build the exact payload
+    # which securely loads Concept Art (`thumbnail_url`) and `matched_elements`
+    from database import Shot
+    shot = session.get(Shot, req.shot_config.id) if req.shot_config.id else None
+    
+    if shot:
+        # 1. Update shot params from incoming request, but keep DB properties
+        shot.prompt = req.shot_config.prompt
+        shot.negative_prompt = req.shot_config.negative_prompt
+        shot.seed = req.shot_config.seed
+        shot.width = req.shot_config.width
+        shot.height = req.shot_config.height
+        shot.num_frames = req.shot_config.num_frames
+        shot.fps = req.shot_config.fps
+        shot.cfg_scale = req.shot_config.cfg_scale
+        shot.enhance_prompt = req.shot_config.enhance_prompt
+        shot.pipeline_override = req.shot_config.pipeline_override
+        # Ensure timeline string is updated
+        if req.shot_config.timeline:
+             shot.timeline = json.dumps([t.model_dump() for t in req.shot_config.timeline])
+        else:
+             shot.timeline = "[]"
+             
+        session.add(shot)
+        session.commit()
+        session.refresh(shot)
         
-        if not has_initial_cond:
-            # Query DB for last successful job in this project
-            try:
-                last_job = session.exec(
-                    select(Job)
-                    .where(Job.project_id == req.project_id)
-                    .where(Job.status == "completed")
-                    .where(Job.output_path != None)
-                    .order_by(Job.created_at.desc())
-                ).first()
-                
-                if last_job and last_job.output_path:
-                    logger.info(f"Smart Continue: Extending from last job {last_job.id}")
-                    
-                    cond_path = last_job.output_path
-                    if cond_path.endswith(".mp4") or cond_path.endswith(".mov"):
-                         # We need to extract the last frame. 
-                         # Project-scoped paths are REQUIRED
-                         if cond_path.startswith("/projects/"):
-                             # Helper to resolve FS path
-                             rel = cond_path.removeprefix("/projects/")
-                             fs_cond_path = os.path.join(config.PROJECTS_DIR, rel)
-                             
-                             # Let's generate a temporary last frame path
-                             project_dir = os.path.join(config.PROJECTS_DIR, req.project_id)
-                             last_frame_path = os.path.join(project_dir, "thumbnails", f"{last_job.id}_auto_last.jpg")
-                             
-                             # Extract last frame
-                             import subprocess
-                             if not os.path.exists(last_frame_path):
-                                 os.makedirs(os.path.dirname(last_frame_path), exist_ok=True)
-                                 subprocess.run([
-                                     "ffmpeg", "-y", "-sseof", "-1.0", "-i", fs_cond_path, 
-                                     "-q:v", "2", "-update", "1", last_frame_path
-                                 ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                             
-                             cond_path = last_frame_path
+        # 2. Use StoryboardManager for canonical payload construction
+        from storyboard.manager import StoryboardManager
+        projects_dir = os.path.join(config.PROJECTS_DIR, req.project_id)
+        manager = StoryboardManager(output_dir=projects_dir)
+        
+        # Await the preparation properly
+        job_config = await manager.prepare_shot_generation(shot.id, session)
+        
+        # Override params with manager's unified config
+        params["prompt"] = job_config["prompt"]
+        
+        # The manager returns a tuple list: [(path, frame_idx, strength)]
+        # We need to structure it into the timeline format expected by tasks/video.py
+        timeline_items = []
+        for img_path, idx, strength in job_config.get("images", []):
+            timeline_items.append({
+                "path": img_path,
+                "frame_index": idx,
+                "strength": strength,
+                "type": "image"
+            })
+        params["timeline"] = timeline_items
+        params["inspiration_images"] = job_config.get("inspiration_images", [])
+        
+        logger.info(f"Loaded DB Shot {shot.id} for Generation. Timeline Items: {len(timeline_items)}")
 
-                    # Add to params AND timeline
-                    new_item = {
-                        "path": cond_path, 
-                        "frame_index": 0, 
-                        "strength": 1.0, 
-                        "type": "image"
-                    }
+    else:
+        # --- Fallback: Ad-hoc UI Generation (No DB Shot) ---
+        # --- Element Injection (Triggers) ---
+        raw_prompt = params.get("prompt", "")
+        if "@" in raw_prompt:
+             enriched_prompt, element_images = element_manager.inject_elements_into_prompt(raw_prompt, req.project_id)
+             params["prompt"] = enriched_prompt
+             params["element_images"] = element_images
+             logger.info(f"Enriched prompt: {enriched_prompt} | Visuals: {len(element_images)}")
+
+        # --- Smart Continue / Auto-Conditioning Logic ---
+        # If auto_continue is True and NO explicit image/video conditioning is provided for frame 0,
+        # try to use the last completed shot from this project.
+        if req.shot_config.auto_continue:
+            has_initial_cond = any(
+                t["frame_index"] == 0 and t["type"] in ["image", "video"] 
+                for t in params.get("timeline", [])
+            )
+            
+            if not has_initial_cond:
+                # Query DB for last successful job in this project
+                try:
+                    last_job = session.exec(
+                        select(Job)
+                        .where(Job.project_id == req.project_id)
+                        .where(Job.status == "completed")
+                        .where(Job.output_path != None)
+                        .order_by(Job.created_at.desc())
+                    ).first()
                     
-                    # Append to params["timeline"]
-                    params["timeline"] = [new_item] + params.get("timeline", [])
-                    logger.info(f"Auto-injected conditioning from {cond_path}")
-                    
-            except Exception as e:
-                logger.error(f"Smart Continue failed: {e}")
+                    if last_job and last_job.output_path:
+                        logger.info(f"Smart Continue: Extending from last job {last_job.id}")
+                        
+                        cond_path = last_job.output_path
+                        if cond_path.endswith(".mp4") or cond_path.endswith(".mov"):
+                             # We need to extract the last frame. 
+                             # Project-scoped paths are REQUIRED
+                             if cond_path.startswith("/projects/"):
+                                 # Helper to resolve FS path
+                                 rel = cond_path.removeprefix("/projects/")
+                                 fs_cond_path = os.path.join(config.PROJECTS_DIR, rel)
+                                 
+                                 # Let's generate a temporary last frame path
+                                 project_dir = os.path.join(config.PROJECTS_DIR, req.project_id)
+                                 last_frame_path = os.path.join(project_dir, "thumbnails", f"{last_job.id}_auto_last.jpg")
+                                 
+                                 # Extract last frame
+                                 import subprocess
+                                 if not os.path.exists(last_frame_path):
+                                     os.makedirs(os.path.dirname(last_frame_path), exist_ok=True)
+                                     subprocess.run([
+                                         "ffmpeg", "-y", "-sseof", "-1.0", "-i", fs_cond_path, 
+                                         "-q:v", "2", "-update", "1", last_frame_path
+                                     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                 
+                                 cond_path = last_frame_path
+
+                        # Add to params AND timeline
+                        new_item = {
+                            "path": cond_path, 
+                            "frame_index": 0, 
+                            "strength": 1.0, 
+                            "type": "image"
+                        }
+                        
+                        # Append to params["timeline"]
+                        params["timeline"] = [new_item] + params.get("timeline", [])
+                        logger.info(f"Auto-injected conditioning from {cond_path}")
+                        
+                except Exception as e:
+                    logger.error(f"Smart Continue failed: {e}")
 
     # Persist Job to DB (Pending)
     job = Job(
@@ -184,8 +240,8 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     )
     session.add(job)
     session.commit()
-    
-    background_tasks.add_task(generate_video_task, job_id, params)
+    from job_utils import queue_video_task
+    background_tasks.add_task(queue_video_task, job_id, params)
     
     return {"job_id": job_id, "status": "queued"}
 

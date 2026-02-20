@@ -22,8 +22,9 @@ VIDEO_SYSTEM_PROMPT = (
     "- Speech (only when requested): Provide exact words in quotes with voice characteristics.\n"
     "- Style: Include visual style at beginning: 'Style: <style>, <rest of prompt>.' If unclear, omit.\n"
     "- Visual and audio: Describe complete soundscape alongside actions.\n"
+    "- CRITICAL: PRESERVE all specific details about Characters, Locations, and Settings provided in the input. Do not summarize them away; integrate them naturally into the scene.\n"
     "- Restrained language: Avoid dramatic terms. Use mild, natural, understated phrasing.\n"
-    "- Formatting: Single concise paragraph (3-5 sentences). No titles or markdown.\n"
+    "- Formatting: Single concise paragraph. No titles or markdown.\n"
     "- Output ONLY the complete prompt text."
 )
 

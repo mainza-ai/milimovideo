@@ -163,11 +163,11 @@ Handles video, image, chained, and inpainting generation.
 | Component | Role |
 |---|---|
 | `model_engine.py` | `ModelManager` singleton — loads/manages LTX-2 pipelines. Auto-selects checkpoint (full > FP8). |
-| `tasks/video.py` | `generate_video_task()` — orchestrates pipeline selection, prompt enhancement, path resolution, delegates to standard or chained gen. Single-frame requests shortcut to Flux 2. |
+| `tasks/video.py` | `generate_video_task()` — gpu_job_wrapper gated with lazy asyncio Semaphore. Performs pre-execution cancellation checks (`Job.status == "cancelled"`). Orchestrates pipeline selection, path resolution via `file_utils`, and prompt enhancement. |
 | `tasks/chained.py` | `generate_chained_video_task()` — autoregressive multi-chunk generation with Quantum Alignment latent handoff and ffmpeg overlap trimming. |
 | `tasks/image.py` | `generate_image_task()` — Flux 2 image generation with element/trigger resolution, IP-Adapter reference images, Asset DB record creation. |
 | `models/flux_wrapper.py` | `FluxInpainter` singleton — wraps Flux 2 Klein 9B with AE hot-swap, MPS hacks, IP-Adapter, True CFG double-pass, and RePaint inpainting. |
-| `storyboard/manager.py` | `StoryboardManager` — dual-mode (worker/server). Chunk preparation, last-frame extraction via ffmpeg, shot-based prompt enrichment with narrative context. |
+| `storyboard/manager.py` | `StoryboardManager` — chunk preparation, asynchronous last-frame extraction via `asyncio.create_subprocess_exec` ffmpeg (preventing Event Loop deadlock), shot-based prompt enrichment via LLM. |
 | `services/ai_storyboard.py` | `ai_parse_script()` — Gemma 3 AI script analysis. Parses free-form text into structured scenes/shots via chat interface with cinematic system prompt. Falls back to regex parser if Gemma unavailable. |
 | `services/element_matcher.py` | `ElementMatcher` — Intelligent production matching engine. Uses 8 signals (exact name, trigger word, scene heading, action keywords, etc.) to link script elements to project assets. |
 

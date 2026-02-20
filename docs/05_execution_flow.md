@@ -22,8 +22,9 @@ sequenceDiagram
 
     API->>DB: Create Job (status=pending)
     API->>DB: Update Shot (status=generating, last_job_id)
+    API->>Utils: Check GPU Semaphore Limit
     API->>Utils: Register active_jobs[job_id]
-    API->>Worker: BackgroundTasks.add_task(generate_video_task)
+    API->>Worker: BackgroundTasks.add_task(queue_video_task)
     API-->>UI: Return 200 {job_id, status: "queued"}
 
     Note over UI: SSE connection already active
@@ -73,7 +74,7 @@ sequenceDiagram
     LTX-->>Worker: Return video tensor
 
     Worker->>FFmpeg: encode_video(tensor, output_path) — libx264 + yuv420p + movflags faststart
-    Worker->>FFmpeg: generate_thumbnail(video_path)
+    Worker->>FFmpeg: Asynchronous generate_thumbnail(video_path)
     Worker->>Utils: update_job_db(job_id, "completed", output_path, thumbnail_path)
     Worker->>Utils: update_shot_db(shot_id, {video_url, thumbnail_url, status: "completed"})
     Worker->>Utils: broadcast_progress(job_id, 100, "completed", video_url, thumbnail_url)
@@ -210,7 +211,7 @@ sequenceDiagram
         alt Chunk 0
             SBMgr-->>Worker: {prompt, images: user_conditioning}
         else Chunk > 0
-            SBMgr->>FFmpeg: Extract last frame (ffmpeg -sseof -0.1)
+            SBMgr->>FFmpeg: Extract last frame (asyncio.create_subprocess_exec ffmpeg)
             SBMgr-->>Worker: {prompt, images: [(last_frame, 0, 1.0)]}
         end
 

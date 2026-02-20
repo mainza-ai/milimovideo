@@ -176,7 +176,17 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     
     db_project = session.get(Project, project_id)
     if not db_project:
-            raise HTTPException(status_code=404, detail="Project not found")
+        # UPSERT logic: If project doesn't exist (e.g., cleared DB but frontend still has default UI state), recreate it.
+        logger.info(f"Project {project_id} not found, recreating...")
+        db_project = Project(
+            id=project_id,
+            name=state.name,
+            resolution_w=state.resolution_w,
+            resolution_h=state.resolution_h,
+            fps=state.fps,
+            seed=state.seed
+        )
+        session.add(db_project)
     
     db_project.name = state.name
     

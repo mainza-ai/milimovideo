@@ -13,8 +13,14 @@ logger = logging.getLogger(__name__)
 # ── Concurrent GPU Job Limiter ─────────────────────────────────────
 # Only 1 GPU-intensive job at a time (video gen, image gen, inpainting).
 # Additional jobs wait in a FIFO queue via the semaphore.
-_gpu_semaphore = asyncio.Semaphore(1)
+_gpu_semaphore = None
 _gpu_queue_count = 0  # Track how many jobs are waiting
+
+def get_gpu_semaphore():
+    global _gpu_semaphore
+    if _gpu_semaphore is None:
+        _gpu_semaphore = asyncio.Semaphore(1)
+    return _gpu_semaphore
 
 async def gpu_job_wrapper(coro):
     """Wraps a GPU task coroutine so only one runs at a time."""
@@ -22,8 +28,9 @@ async def gpu_job_wrapper(coro):
     _gpu_queue_count += 1
     logger.info(f"GPU job queued ({_gpu_queue_count} in queue)")
     
+    sem = get_gpu_semaphore()
     try:
-        async with _gpu_semaphore:
+        async with sem:
             _gpu_queue_count -= 1
             logger.info(f"GPU job acquired lock ({_gpu_queue_count} waiting)")
             return await coro
@@ -31,10 +38,15 @@ async def gpu_job_wrapper(coro):
         _gpu_queue_count = max(0, _gpu_queue_count - 1)
         raise
 
+async def queue_video_task(job_id: str, params: dict):
+    """Helper to wrap video generation in the queue"""
+    from tasks.video import generate_video_task
+    await gpu_job_wrapper(generate_video_task(job_id, params))
+
 def is_gpu_busy() -> dict:
     """Returns GPU busy status for the frontend."""
     return {
-        "busy": _gpu_semaphore.locked(),
+        "busy": _gpu_semaphore.locked() if _gpu_semaphore else False,
         "queued": _gpu_queue_count
     }
 
