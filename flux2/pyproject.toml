@@ -10,8 +10,8 @@ authors = [
 license = { file = "LICENSE.md" }
 
 dependencies = [
-  "torch==2.8.0",
-  "torchvision==0.23.0",
+  "torch>=2.8.0",
+  "torchvision>=0.23.0",
   "einops==0.8.1",
   "transformers==4.56.1",
   "safetensors==0.4.5",
