@@ -133,12 +133,10 @@ Milimo uses a specialized environment for LTX-2 and Flux.
 
 1.  **Create Environment**:
     ```bash
-    cd backend
-    python3 -m venv ../milimov
-    source ../milimov/bin/activate
-    pip install -e ../LTX-2
-    pip install -e ../flux2
-    pip install -r requirements.txt
+    python3 -m venv milimov
+    ./milimov/bin/pip install -e ./LTX-2
+    ./milimov/bin/pip install -e ./flux2
+    ./milimov/bin/pip install -r backend/requirements.txt
     ```
 
 2.  **Download LTX-2 Models**:
