@@ -41,6 +41,7 @@ backend/uploads/
 *.db
 backend/*.log
 backend/*.txt
+!backend/requirements.txt
 backend/server_last_request.json
 *.log
 server_last_request.json
