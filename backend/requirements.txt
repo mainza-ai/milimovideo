@@ -17,3 +17,4 @@ fire
 sentencepiece
 diffusers
 scikit-image
+sqlmodel
