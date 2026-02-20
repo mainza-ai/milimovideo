@@ -8,6 +8,7 @@ import { ElementsView } from './Elements/ElementsView';
 import { ImagesView } from './Images/ImagesView';
 import { useTimelineStore, getLastProjectId } from '../stores/timelineStore';
 import { ProjectManager } from './ProjectManager';
+import { ExportModal } from './ExportModal';
 import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
 import { PanelErrorBoundary } from './ErrorBoundary';
 import { LLMSettings } from './LLMSettings';
@@ -31,6 +32,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
         setViewMode: state.setViewMode
     })));
     const [showProjects, setShowProjects] = useState(false);
+    const [showExports, setShowExports] = useState(false);
 
     // Access temporal store (zundo)
     const temporal = (useTimelineStore as any).temporal;
@@ -161,26 +163,9 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
     }, [isPlaying, setIsPlaying, saveProject, deleteShot, selectedShotId, temporal]);
 
     const handleExport = async () => {
-        addToast("Saving project...", "info");
+        addToast("Saving project configuration...", "info");
         await saveProject();
-
-        addToast("Starting Export...", "info");
-        try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/render`, { method: 'POST' });
-            const data = await res.json();
-
-            if (data.status === 'rendering') {
-                addToast("Export started — progress will appear via notifications", "info");
-            } else if (data.status === 'completed') {
-                // Legacy fallback (shouldn't happen with new async endpoint)
-                addToast("Export Complete!", "success");
-                window.open(`http://localhost:8000${data.video_url}`, '_blank');
-            } else {
-                addToast(`Export failed: ${data.detail || 'Unknown error'}`, "error");
-            }
-        } catch (e) {
-            addToast("Export failed — could not reach server", "error");
-        }
+        setShowExports(true);
     };
 
     return (
@@ -332,6 +317,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
 
             {/* Modals */}
             {showProjects && <ProjectManager onClose={() => setShowProjects(false)} />}
+            {showExports && <ExportModal onClose={() => setShowExports(false)} />}
         </div >
     );
 };

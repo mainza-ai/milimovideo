@@ -366,149 +366,156 @@ async def render_project(project_id: str, background_tasks: BackgroundTasks, ses
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Collect V1 video shots in timeline order  
-    shots = session.exec(
-        select(Shot)
-        .where(Shot.project_id == project_id)
-        .where(Shot.track_index == 0)  # V1 only
-        .order_by(Shot.start_frame.asc(), Shot.created_at.asc())
-    ).all()
-    
-    # Collect video file paths
-    video_files = []
-    for shot in shots:
-        if shot.video_url:
-            from file_utils import resolve_path
-            resolved = resolve_path(shot.video_url)
-            if resolved and os.path.exists(resolved) and resolved.endswith(".mp4"):
-                video_files.append(resolved)
-    
-    if not video_files:
-        raise HTTPException(status_code=400, detail="No generated videos found for this project")
-    
-    # Collect A1 audio clips
-    audio_files = []
-    audio_shots = session.exec(
-        select(Shot)
-        .where(Shot.project_id == project_id)
-        .where(Shot.track_index == 2)  # A1
-        .order_by(Shot.start_frame.asc())
-    ).all()
-    for audio_shot in audio_shots:
-        if audio_shot.video_url:
-            from file_utils import resolve_path as rp
-            resolved_audio = rp(audio_shot.video_url)
-            if resolved_audio and os.path.exists(resolved_audio):
-                audio_files.append(resolved_audio)
-    
     render_id = f"render_{uuid.uuid4().hex[:8]}"
+
+    # Register render job in DB
+    job = Job(
+        id=render_id,
+        project_id=project_id,
+        type="render",
+        status="processing",
+        progress=0,
+        status_message="Initializing render..."
+    )
+    session.add(job)
+    session.commit()
     
     # Run render in background
     background_tasks.add_task(
-        _render_background, project_id, render_id, video_files, audio_files, project.fps
+        _render_background, project_id, render_id, project.fps, project.resolution_w, project.resolution_h
     )
     
     return {"job_id": render_id, "status": "rendering"}
 
 
 async def _render_background(
-    project_id: str, render_id: str,
-    video_files: list, audio_files: list, fps: int
+    project_id: str, render_id: str, fps: int, width: int, height: int
 ):
-    """Background task: concat videos, mix audio, emit SSE progress."""
+    """Background task: Builds FFmpeg filtergraph, executes render, and tracks progress via DB/SSE."""
     import subprocess
     import asyncio
     from events import event_manager
-    
-    project_dir = os.path.join(config.PROJECTS_DIR, project_id, "generated")
-    os.makedirs(project_dir, exist_ok=True)
-    
-    output_path = os.path.join(project_dir, f"{render_id}.mp4")
-    temp_video_path = os.path.join(project_dir, f"{render_id}_video_only.mp4")
-    list_file_path = os.path.join(project_dir, f"{render_id}_list.txt")
-    
-    total_steps = 2 + (1 if audio_files else 0)  # concat + finalize + optional audio mix
-    current_step = 0
-    
-    async def emit_progress(step: int, message: str):
-        pct = int((step / total_steps) * 100)
-        await event_manager.broadcast("render_progress", {
-            "job_id": render_id,
-            "project_id": project_id,
-            "progress": pct,
-            "message": message
-        })
-    
-    try:
-        # Step 1: Concat videos
-        await emit_progress(0, "Concatenating video clips...")
+    from utils.render_utils import build_complex_filtergraph
+    from file_utils import resolve_path
+    from database import engine
+
+    # Note: Using a local session inside background thread
+    with Session(engine) as session:
+        job = session.get(Job, render_id)
+        if not job:
+            logger.error(f"Render Job {render_id} missing in background thread.")
+            return
+
+        project_dir = os.path.join(config.PROJECTS_DIR, project_id, "generated")
+        os.makedirs(project_dir, exist_ok=True)
         
-        with open(list_file_path, "w") as f:
-            for mp4 in video_files:
-                f.write(f"file '{mp4}'\n")
-        
-        concat_target = temp_video_path if audio_files else output_path
-        cmd = [
-            "ffmpeg", "-f", "concat", "-safe", "0",
-            "-i", list_file_path,
-            "-c", "copy", "-y", concat_target
-        ]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        current_step += 1
-        await emit_progress(current_step, "Video concatenation complete")
-        
-        # Step 2: Mix audio (if any A1 clips exist) 
-        if audio_files:
-            await emit_progress(current_step, "Mixing audio track...")
-            
-            # Build ffmpeg command to overlay audio
-            # For simplicity, take the first audio file and mix it in
-            audio_input = audio_files[0]
-            cmd_audio = [
-                "ffmpeg", "-y",
-                "-i", temp_video_path,
-                "-i", audio_input,
-                "-c:v", "copy",
-                "-c:a", "aac", "-b:a", "192k",
-                "-shortest",
-                output_path
-            ]
-            subprocess.run(cmd_audio, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-            current_step += 1
-            await emit_progress(current_step, "Audio mixed")
-            
-            # Clean up temp video-only file
-            if os.path.exists(temp_video_path):
-                os.remove(temp_video_path)
-        
-        # Final: Clean up and emit completion
-        if os.path.exists(list_file_path):
-            os.remove(list_file_path)
-        
+        output_path = os.path.join(project_dir, f"{render_id}.mp4")
         video_url = f"/projects/{project_id}/generated/{render_id}.mp4"
         
-        await event_manager.broadcast("render_complete", {
-            "job_id": render_id,
-            "project_id": project_id,
-            "video_url": video_url,
-            "message": "Render complete!"
-        })
-        logger.info(f"Render complete: {output_path}")
-        
-    except Exception as e:
-        logger.error(f"Render failed: {e}")
-        await event_manager.broadcast("render_failed", {
-            "job_id": render_id,
-            "project_id": project_id,
-            "error": str(e)
-        })
-        # Clean up partial files
-        for f in [temp_video_path, list_file_path, output_path]:
-            if os.path.exists(f):
-                try:
-                    os.remove(f)
-                except:
-                    pass
+        async def emit_progress(step: int, total_steps: int, message: str, status: str = "processing"):
+            pct = int((step / total_steps) * 100) if total_steps > 0 else 100
+            
+            # Update Database
+            job.progress = pct
+            job.status_message = message
+            job.status = status
+            if status == "completed":
+                job.output_path = video_url
+            elif status == "failed":
+                job.error_message = message
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+
+            # Broadcast via SSE
+            event_payload = {
+                "job_id": render_id,
+                "project_id": project_id,
+                "progress": pct,
+                "message": message,
+                "status": status
+            }
+            if status == "completed":
+                event_payload["video_url"] = video_url
+            elif status == "failed":
+                event_payload["error"] = message
+                
+            await event_manager.broadcast("render_progress" if status == "processing" else f"render_{status}", event_payload)
+
+        try:
+            await emit_progress(5, 100, "Gathering timeline tracks...")
+            
+            # Fetch all shots for this project
+            all_shots = session.exec(
+                select(Shot).where(Shot.project_id == project_id).order_by(Shot.start_frame.asc())
+            ).all()
+
+            v1_clips = []
+            v2_clips = []
+            a1_clips = []
+
+            for shot in all_shots:
+                if not shot.video_url: continue
+                resolved = resolve_path(shot.video_url)
+                if not resolved or not os.path.exists(resolved): continue
+                
+                # Standardize Dictionary for the filtergraph generator
+                clip_data = {
+                    "path": resolved,
+                    "start_frame": shot.start_frame or 0,
+                    "duration_frames": (shot.num_frames or 121) - (shot.trim_in or 0) - (shot.trim_out or 0),
+                    "trim_in": shot.trim_in or 0
+                }
+
+                if shot.track_index == 0: v1_clips.append(clip_data)
+                elif shot.track_index == 1: v2_clips.append(clip_data)
+                elif shot.track_index == 2: a1_clips.append(clip_data)
+
+            if not v1_clips and not v2_clips and not a1_clips:
+                raise ValueError("No valid video or audio clips found to render.")
+
+            await emit_progress(10, 100, "Compiling FFmpeg instructions...")
+            
+            # Build the robust FFmpeg structural command
+            cmd = build_complex_filtergraph(
+                project_fps=fps,
+                project_width=width,
+                project_height=height,
+                v1_shots=v1_clips,
+                v2_shots=v2_clips,
+                a1_shots=a1_clips,
+                output_path=output_path
+            )
+
+            await emit_progress(30, 100, "Executing mixdown matrix...")
+            
+            logger.info(f"Executing Render FFmpeg: {' '.join(cmd)}")
+            # Use asyncio to prevent the Event Loop from dying while the demuxer churns
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode != 0:
+                raise RuntimeError(f"FFmpeg render failed: {stderr.decode()}")
+
+            await emit_progress(100, 100, "Render complete!", status="completed")
+            logger.info(f"Render perfectly completed: {output_path}")
+
+        except Exception as e:
+            logger.error(f"Render fatally failed: {e}")
+            await emit_progress(0, 100, str(e), status="failed")
+
+
+@router.get("/projects/{project_id}/renders")
+async def get_project_renders(project_id: str, session: Session = Depends(get_session)):
+    """Fetch history of completed project renders."""
+    from database import Job
+    statement = select(Job).where(Job.project_id == project_id, Job.type == "render").order_by(Job.created_at.desc())
+    renders = session.exec(statement).all()
+    return renders
 
 
 @router.get("/projects/{project_id}/render/{render_id}/download")
