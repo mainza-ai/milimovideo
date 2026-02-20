@@ -185,9 +185,11 @@ class StoryboardManager:
         # 1. Base Prompt Construction
         # Start with Scene Context (Slugline)
         base_prompt = ""
-        scene = session.get(Scene, shot.scene_id)
-        if scene and scene.name:
-             base_prompt += f"{scene.name}. "
+        scene = None
+        if shot.scene_id:
+            scene = session.get(Scene, shot.scene_id)
+            if scene and scene.name:
+                 base_prompt += f"{scene.name}. "
              
         # Add Shot Metadata
         meta_parts = []
@@ -232,14 +234,16 @@ class StoryboardManager:
                  logger.info(f"Injected Concept Art for Video Conditioning (Frame 0): {resolved_thumb}")
 
         # 3. Continuity Conditioning (Previous Shot in same Scene)
-        logger.info(f"Querying previous shot for Scene {shot.scene_id}, Index {shot.index - 1}...")
-        # Find previous shot
-        prev_shot = session.exec(
-            select(Shot)
-            .where(Shot.scene_id == shot.scene_id)
-            .where(Shot.index == shot.index - 1)
-        ).first()
-        logger.info(f"Previous shot query finished. Found: {prev_shot.id if prev_shot else None}")
+        prev_shot = None
+        if shot.scene_id and shot.index is not None:
+            logger.info(f"Querying previous shot for Scene {shot.scene_id}, Index {shot.index - 1}...")
+            # Find previous shot
+            prev_shot = session.exec(
+                select(Shot)
+                .where(Shot.scene_id == shot.scene_id)
+                .where(Shot.index == shot.index - 1)
+            ).first()
+            logger.info(f"Previous shot query finished. Found: {prev_shot.id if prev_shot else None}")
         
         if prev_shot and prev_shot.video_url and prev_shot.status == "completed":
              # Extract last frame
