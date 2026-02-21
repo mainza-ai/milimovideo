@@ -347,7 +347,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 raise RuntimeError(f"Job {job_id} cancelled by user.")
         
         def _run_pipeline():
-            nonlocal input_images
+            nonlocal input_images, inspiration_images
             result = None
             if pipeline_type == "ti2vid":
                 run_prompt = prompt
@@ -374,15 +374,20 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             logger.info(f"Using Input Image (Frame 0) for VLM Prompt Enhancement: {image_for_llm}")
 
                         logger.info(f"DEBUG: Prompt BEFORE VLM Enhancement: {prompt}")
-                        run_prompt = llm_enhance(
+                        run_prompt, is_ref = llm_enhance(
                             prompt=prompt,
                             is_video=not is_image_mode,
                             text_encoder=text_encoder,
                             image_path=image_for_llm,
                             seed=seed,
                             duration_seconds=(num_frames / float(params.get("fps", 25.0))),
+                            has_input_image=bool(image_for_llm),
                         )
                         logger.info(f"DEBUG: Prompt AFTER VLM Enhancement: {run_prompt}")
+                        if is_ref:
+                            logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V.")
+                            input_images = []
+                            inspiration_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=run_prompt)
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=run_prompt)
                         
@@ -444,13 +449,17 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         text_encoder = None
                         if config.LLM_PROVIDER.lower() == "gemma":
                             text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-                        ic_prompt = llm_enhance(
+                        ic_prompt, is_ref = llm_enhance(
                             prompt=prompt, is_video=True,
                             text_encoder=text_encoder,
                             image_path=input_images[0][0] if input_images else None,
                             seed=seed,
                             duration_seconds=(num_frames / float(params.get("fps", 25.0))),
+                            has_input_image=bool(input_images),
                         )
+                        if is_ref:
+                            logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V (ic_lora).")
+                            input_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=ic_prompt)
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=ic_prompt)
                         if text_encoder is not None:
@@ -482,13 +491,17 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         text_encoder = None
                         if config.LLM_PROVIDER.lower() == "gemma":
                             text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-                        kf_prompt = llm_enhance(
+                        kf_prompt, is_ref = llm_enhance(
                             prompt=prompt, is_video=True,
                             text_encoder=text_encoder,
                             image_path=input_images[0][0] if input_images else None,
                             seed=seed,
                             duration_seconds=(num_frames / float(params.get("fps", 25.0))),
+                            has_input_image=bool(input_images),
                         )
+                        if is_ref:
+                            logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V (keyframe).")
+                            input_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=kf_prompt)
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=kf_prompt)
                         if text_encoder is not None:
