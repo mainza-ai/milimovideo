@@ -147,7 +147,7 @@ async def generate_image_task(job_id: str, params: dict):
                      
                      # Thread-safe broadcast
                      async def send_update():
-                         await broadcast_progress(job_id, active_jobs[job_id]["progress"])
+                         await broadcast_progress(job_id, active_jobs[job_id]["progress"], "processing", active_jobs[job_id]["status_message"])
                      
                      try:
                          asyncio.run_coroutine_threadsafe(send_update(), loop)

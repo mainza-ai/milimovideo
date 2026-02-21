@@ -327,6 +327,9 @@ export const CinematicPlayer = () => {
                     && prev.videoUrl === found.videoUrl
                     && prev.thumbnailUrl === found.thumbnailUrl
                     && prev.isGenerating === found.isGenerating
+                    && prev.progress === found.progress
+                    && prev.statusMessage === found.statusMessage
+                    && prev.enhancedPromptResult === found.enhancedPromptResult
                 ) return prev; // Stable reference — only skip if content matches too
                 return found;
             });
