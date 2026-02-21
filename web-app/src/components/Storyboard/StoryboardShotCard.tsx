@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Shot } from '../../stores/types';
 import {
     GripVertical, Trash2, Film, Image as ImageIcon,
-    Play, RotateCcw, CheckCircle, AlertCircle, Loader2
+    RotateCcw, CheckCircle, AlertCircle, Loader2
 } from 'lucide-react';
 import { ElementBadgeRow } from './ElementBadge';
 
@@ -175,7 +175,7 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
             </div>
 
             {/* Thumbnail */}
-            <div className="aspect-video bg-black relative w-full group/thumb">
+            <div className="aspect-video bg-black relative w-full">
                 {shot.videoUrl ? (
                     shot.videoUrl.match(/\.(jpg|jpeg|png|webp)$/i) ?
                         <img src={shot.videoUrl} className="w-full h-full object-cover" alt="" />
@@ -229,91 +229,76 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
                         )}
                     </>
                 )}
+            </div>
 
-                {/* Hover Actions */}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm gap-2">
+            {/* Action Bar (Always Visible) */}
+            <div className="flex bg-[#111] p-2 border-b border-t border-white/5 gap-2 items-center justify-between">
+                <div className="flex gap-2 flex-1">
                     {!shot.videoUrl && (
                         <button
-                            onClick={handleGenerate}
-                            className="px-4 py-2 bg-milimo-500 text-black font-bold rounded-lg flex items-center gap-2 hover:bg-milimo-400 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); handleGenerate(e); }}
+                            className="flex-1 py-1.5 px-2 bg-milimo-500 hover:bg-milimo-400 text-black font-bold rounded flex items-center justify-center gap-1.5 text-[10px] uppercase transition-colors"
                         >
-                            <Film size={16} />
-                            Generate Video
+                            <Film size={12} /> {shot.thumbnailUrl ? "Generate Video" : "Video"}
                         </button>
                     )}
                     {!shot.videoUrl && !shot.thumbnailUrl && (
                         <button
                             onClick={(e) => { e.stopPropagation(); generateThumbnail(shot.id); }}
-                            className="px-3 py-2 bg-violet-500/30 text-violet-300 font-semibold rounded-lg flex items-center gap-2 hover:bg-violet-500/40 transition-colors text-xs"
+                            className="flex-1 py-1.5 px-2 bg-violet-500/20 hover:bg-violet-500/30 text-violet-300 font-bold rounded flex items-center justify-center gap-1.5 text-[10px] uppercase transition-colors"
                         >
-                            <ImageIcon size={14} />
-                            Concept Art
+                            <ImageIcon size={12} /> Concept Art
                         </button>
                     )}
                     {!shot.videoUrl && shot.thumbnailUrl && (
                         <button
-                            className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg flex items-center gap-2 transition-colors text-xs backdrop-blur-md border border-white/10"
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                generateThumbnail(shot.id, true);
-                            }}
+                            className="p-1.5 bg-white/10 hover:bg-white/20 text-white font-semibold rounded transition-colors text-xs"
+                            onClick={(e) => { e.stopPropagation(); generateThumbnail(shot.id, true); }}
                             title="Regenerate Concept Art"
                         >
-                            <RotateCcw size={14} />
-                            Regen Art
+                            <RotateCcw size={12} />
                         </button>
                     )}
                     {shot.videoUrl && (
                         <>
-                            <button className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white">
-                                <Play size={20} fill="currentColor" />
-                            </button>
-
-                            {/* Allow regenerating art even if video exists */}
                             <button
-                                className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    generateThumbnail(shot.id, true);
-                                }}
+                                className="flex-1 py-1.5 px-2 bg-white/5 hover:bg-white/10 text-white/80 font-bold rounded flex items-center justify-center gap-1.5 text-[10px] uppercase transition-colors"
+                                onClick={(e) => { e.stopPropagation(); handleGenerate(e); }}
+                            >
+                                <RotateCcw size={12} /> Regen Video
+                            </button>
+                            <button
+                                className="p-1.5 bg-white/5 hover:bg-white/10 text-white/80 rounded transition-colors"
+                                onClick={(e) => { e.stopPropagation(); generateThumbnail(shot.id, true); }}
                                 title="Regenerate Concept Art"
                             >
-                                <ImageIcon size={18} />
+                                <ImageIcon size={12} />
                             </button>
-
                             <button
-                                className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white"
-                                onClick={handleGenerate}
-                                title="Regenerate Video"
-                            >
-                                <RotateCcw size={18} />
-                            </button>
-
-                            <button
-                                className="p-2 bg-white/10 hover:bg-red-500/20 text-red-400 rounded-full transition-colors"
+                                className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded transition-colors"
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (confirm('Are you sure you want to remove this video?')) {
-                                        patchShot(shot.id, { videoUrl: null }); // Clears video
+                                        patchShot(shot.id, { videoUrl: null });
                                     }
                                 }}
                                 title="Remove Video"
                             >
-                                <Trash2 size={18} />
+                                <Trash2 size={12} />
                             </button>
                         </>
                     )}
-                    <button
-                        onClick={handleDelete}
-                        className={`p-2 rounded-full transition-colors ${confirmDelete
-                            ? 'bg-red-500 text-white'
-                            : 'bg-white/10 hover:bg-red-500/30 text-white/50 hover:text-red-400'
-                            }`}
-                        title={confirmDelete ? "Click again to confirm" : "Delete shot"}
-                    >
-                        <Trash2 size={18} />
-                    </button>
                 </div>
+                <button
+                    onClick={handleDelete}
+                    className={`p-1.5 rounded transition-colors ${confirmDelete
+                        ? 'bg-red-500 hover:bg-red-400 text-white'
+                        : 'bg-white/5 hover:bg-red-500/20 text-white/40 hover:text-red-400'
+                        }`}
+                    title={confirmDelete ? "Click again to confirm" : "Delete shot"}
+                >
+                    <Trash2 size={12} />
+                </button>
             </div>
 
             {/* Editable fields */}
