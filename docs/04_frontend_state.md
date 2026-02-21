@@ -120,7 +120,7 @@ graph TD
 | `progress` | Update shot `progress`, `statusMessage`, `etaSeconds`, `enhancedPromptResult` |
 | `complete` | Set shot `isGenerating=false`, `videoUrl`, `thumbnailUrl`, `progress=100`; trigger `assetRefresh`. Handles both video/image generation and inpainting completions (inpaint events include `type: "inpaint"` and `asset_id`). For `is_thumbnail` jobs: matches by `shot_id` (not `lastJobId`), sets only `thumbnailUrl` without clearing generation state. |
 | `error` | Set shot `isGenerating=false`, show toast |
-| `cancelled` | Set shot `isGenerating=false`, `status="pending"` |
+| `cancelled` | Server fully aborted the background job. Set shot `isGenerating=false`, `status="pending"`, and clear active `job_id` lock. |
 
 ## 3. Component → Store Mapping
 

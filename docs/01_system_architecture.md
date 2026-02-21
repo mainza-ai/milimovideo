@@ -163,9 +163,9 @@ Handles video, image, chained, and inpainting generation.
 | Component | Role |
 |---|---|
 | `model_engine.py` | `ModelManager` singleton — loads/manages LTX-2 pipelines. Auto-selects checkpoint (full > FP8). |
-| `tasks/video.py` | `generate_video_task()` — gpu_job_wrapper gated with lazy asyncio Semaphore. Performs pre-execution cancellation checks (`Job.status == "cancelled"`). Orchestrates pipeline selection, path resolution via `file_utils`, and prompt enhancement. |
+| `tasks/video.py` | `generate_video_task()` — gpu_job_wrapper gated with lazy asyncio Semaphore. Performs pre-execution cancellation checks (`Job.status == "cancelled"`) and mid-execution pipeline thread yielding. Exception handling explicitly parses `"cancelled"` strings to gracefully abort processes and propagate active-state SSE updates. |
 | `tasks/chained.py` | `generate_chained_video_task()` — autoregressive multi-chunk generation with Quantum Alignment latent handoff and ffmpeg overlap trimming. |
-| `tasks/image.py` | `generate_image_task()` — Flux 2 image generation with element/trigger resolution, IP-Adapter reference images, Asset DB record creation. |
+| `tasks/image.py` | `generate_image_task()` — Flux 2 image generation with element/trigger resolution, IP-Adapter reference images, and Asset DB record creation. Implements `cancellation_check` hook integration to escape the VAE tensor loop early via `RuntimeError`. |
 | `models/flux_wrapper.py` | `FluxInpainter` singleton — wraps Flux 2 Klein 9B with AE hot-swap, MPS hacks, IP-Adapter, True CFG double-pass, and RePaint inpainting. |
 | `storyboard/manager.py` | `StoryboardManager` — chunk preparation, asynchronous last-frame extraction via `asyncio.create_subprocess_exec` ffmpeg (preventing Event Loop deadlock), shot-based prompt enrichment via LLM. |
 | `services/ai_storyboard.py` | `ai_parse_script()` — Gemma 3 AI script analysis. Parses free-form text into structured scenes/shots via chat interface with cinematic system prompt. Falls back to regex parser if Gemma unavailable. |

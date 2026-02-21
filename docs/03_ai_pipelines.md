@@ -116,6 +116,7 @@ flowchart TD
             S1_STEP --> S1_CB[Progress Callback]
             S1_CB --> S1_CANCEL{Cancellation Check}
             S1_CANCEL -->|Continue| S1_STEP
+            S1_CANCEL -->|Abort| S1_HALT[Raise RuntimeError]
         end
         S1_LOOP --> S1_OUT["Low-Res Latent — H/2 x W/2"]
     end

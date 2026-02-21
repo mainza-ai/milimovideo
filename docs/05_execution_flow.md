@@ -440,7 +440,7 @@ flowchart TD
 
 ```mermaid
 sequenceDiagram
-    participant UI as InspectorPanel
+    participant UI as React Frontend
     participant API as FastAPI
     participant Utils as job_utils
     participant Worker as BackgroundTask
@@ -448,18 +448,18 @@ sequenceDiagram
     UI->>API: POST /jobs/{job_id}/cancel
     API->>Utils: active_jobs[job_id]["cancelled"] = True
     API->>Utils: active_jobs[job_id]["status"] = "cancelling"
-    API-->>UI: {status: "cancelling"}
+    API-->>UI: {status: "cancelling"} (HTTP 200)
 
-    Note over Worker: Next denoising step callback
-    Worker->>Utils: Check active_jobs[job_id]["cancelled"]
-    Worker->>Worker: Raise RuntimeError("Cancelled by user")
+    Note over Worker: Next CUDA/MPS Denoising Step
+    Worker->>Utils: Check active_jobs[job_id]["cancelled"] == True
+    Worker->>Worker: Raise RuntimeError("Cancelled") to escape loop
     Worker->>Utils: update_job_db(job_id, "cancelled")
-    Worker->>Utils: update_shot_db(shot_id, {status: "pending"})
-    Worker-->>UI: SSE {status: "cancelled"}
+    Worker-->>UI: SSE Event {type: "cancelled", job_id: "X"}
+    Note over UI: Zustand un-locks component state
 
-    Note over API: Shutdown Flow
-    API->>Utils: cancel_all_jobs() — flags all active jobs
-    API->>API: await asyncio.sleep(2.0) — grace period
+    Note over API: Server Shutdown Fallback
+    API->>Utils: cancel_all_jobs() — flags all active maps
+    API->>API: await asyncio.sleep(2.0) — allows threads to escape
 ```
 
 ## 9. Playback Engine Loop

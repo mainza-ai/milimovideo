@@ -351,7 +351,7 @@ Flux 2 natively uses **Guided Distillation** (a single scalar `guidance` vector)
 6.  Create `Asset` record in DB with generation metadata.
 7.  Broadcast SSE `complete` event with `asset_id` for frontend auto-selection.
 
-**Cancellation**: The `flux_callback` checks `active_jobs[job_id].cancelled` at every step and raises `RuntimeError("Cancelled by user")`.
+**Cancellation**: The `flux_callback` triggers an evaluation of `active_jobs[job_id].get("cancelled")` at every processing layer and, if true, executes a `RuntimeError("Cancelled")` to escape the core execution stack without freezing the GPU.
 
 ### 13.8 Single-Frame Delegation (Video Pipeline)
 
