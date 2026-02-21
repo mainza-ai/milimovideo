@@ -10,7 +10,7 @@ The system supports:
 - **IC-LoRA** integration for subject consistency (concept injection).
 - **Keyframe Interpolation** between start/end frames.
 - **Temporal and Spatial Upsampling** for resolution enhancement.
-- **Chained (Autoregressive) Generation** for videos exceeding the 121-frame context window.
+- **Chained (Autoregressive) Generation** for videos exceeding the 505-frame context window.
 
 The Milimo system integrates LTX-2 as its primary video generation engine through the `ModelManager` singleton and custom task dispatchers.
 
@@ -77,7 +77,7 @@ LTX-2/
 **Parameters**:
 - `prompt`: Text description.
 - `width`, `height`: Output resolution (before upsampling).
-- `num_frames`: Target frame count (max 121 per chunk).
+- `num_frames`: Target frame count (max 505 per chunk).
 - `num_images_cond`: List of `(path, frame_idx, strength)` tuples for conditioning.
 - `seed`: Reproducibility seed.
 - `guidance_scale`: CFG-like scale (typically 1.0 for distilled).
@@ -180,7 +180,7 @@ TI2VidTwoStagesPipeline(
     -   Default → `"ti2vid"`.
 
 2.  **Chained Delegation**:
-    -   If `pipeline_type == "ti2vid"` AND `num_frames > 121` → delegates to `generate_chained_video_task()`.
+    -   If `pipeline_type == "ti2vid"` AND `num_frames > 505` → delegates to `generate_chained_video_task()`.
 
 3.  **Single-Frame Shortcut**:
     -   If `num_frames == 1` → bypasses LTX-2 entirely, calls `flux_inpainter.generate_image()` from Flux 2.
@@ -190,8 +190,8 @@ TI2VidTwoStagesPipeline(
 **`generate_enhanced_prompt()`** (in `tasks/video.py`):
 1.  Uses the **Gemma 3 text encoder** already loaded by the LTX-2 pipeline.
 2.  If an input image is available, it captures a visual description from the image.
-3.  Enhances the user prompt into a cinematically detailed description.
-4.  Returns the enhanced prompt for use in generation.
+3.  Enhances the user prompt into a cinematically detailed description. For Character Sheets or Turnarounds, it explicitly outputs `is_reference_only: true` in its JSON and extracts the visual data into the prompt, telling the pipeline to drop the image conditioning entirely to force a dynamic T2V output.
+4.  Returns the enhanced prompt (and the reference flag) for use in generation.
 
 ### 8.5 Input Image Path Resolution
 
@@ -210,25 +210,25 @@ Timeline images arrive from the frontend as URLs (e.g., `http://localhost:5173/p
 **File**: `backend/tasks/chained.py`  
 **Function**: `generate_chained_video_task()`
 
-This is Milimo's "Smart Continue" feature for videos longer than 121 frames.
+This is Milimo's "Smart Continue" feature for videos longer than 505 frames.
 
 #### Chunk Calculation (via `StoryboardManager`):
 ```python
-chunk_size = 121
+chunk_size = 505
 overlap_frames = 24
-effective_step = chunk_size - overlap_frames  # = 97
+effective_step = chunk_size - overlap_frames  # = 481
 additional = ceil((total_frames - chunk_size) / effective_step)
 total_chunks = 1 + additional
 ```
 
-**Example**: 300 frames → `1 + ceil((300-121)/97)` = `1 + 2` = **3 chunks**.
+**Example**: 1000 frames → `1 + ceil((1000-505)/481)` = `1 + 2` = **3 chunks**.
 
 #### Per-Chunk Loop:
 For each chunk `i`:
 1.  **Configuration Prep** (`StoryboardManager.prepare_next_chunk()`):
     -   Chunk 0: Uses the original prompt and any user-specified conditioning images.
     -   Chunk 1+: Extracts last frame of previous chunk (via `ffmpeg -sseof -0.1`) as conditioning at frame 0.
-2.  **LTX-2 Generation**: Standard `TI2VidTwoStagesPipeline` call with 121 frames.
+2.  **LTX-2 Generation**: Standard `TI2VidTwoStagesPipeline` call with 505 frames.
 3.  **Cancellation Check**: After each chunk, checks `active_jobs[job_id]["cancelled"]`.
 4.  **Progress Broadcasting**: SSE updates with per-chunk progress (`chunk {i}/{total}`).
 
@@ -268,7 +268,7 @@ Orchestrates multi-chunk generation with narrative awareness.
 **Key Methods**:
 | Method | Purpose |
 |---|---|
-| `get_total_chunks()` | Calculates required chunks from `num_frames`, `chunk_size` (121), `overlap_frames` (24) |
+| `get_total_chunks()` | Calculates required chunks from `num_frames`, `chunk_size` (505), `overlap_frames` (24) |
 | `prepare_next_chunk(chunk_idx, last_chunk_output)` | Returns `{prompt, images}` for next chunk. Extracts last frame via ffmpeg for conditioning |
 | `commit_chunk(chunk_idx, path, prompt)` | Registers completed chunk in `StoryboardState.chunks` |
 | `prepare_shot_generation(shot_id, session)` | For storyboard mode: resolves Shot→Scene→previous shot chain, enriches prompt via `element_manager` |
@@ -278,8 +278,9 @@ Orchestrates multi-chunk generation with narrative awareness.
 1.  Loads `Shot` from DB.
 2.  Finds previous shot in same scene (`Shot.index - 1`).
 3.  If previous shot is completed → extracts last frame as conditioning.
-4.  Injects narrative context: `"Following the previous shot where {prev_shot.action}. {enriched_prompt}"`.
-5.  Resolves project `Element` trigger words via `element_manager.inject_elements_into_prompt()`.
+4.  Determines the base prompt by prioritizing `shot.prompt` (manual user override) over `shot.action` (storyboard description).
+5.  Injects narrative context: `"Following the previous shot where {prev_shot.action}. {enriched_prompt}"`.
+6.  Resolves project `Element` trigger words via `element_manager.inject_elements_into_prompt()`.
 
 ### 8.8 MPS Compatibility Summary
 

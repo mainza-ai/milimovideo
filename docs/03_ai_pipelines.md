@@ -99,7 +99,7 @@ The `generate_video_task()` function in `tasks/video.py` determines which pipeli
 | `pipeline_override == "auto"` + 2 images at different frames | `keyframe` | Keyframe interpolation between start/end frames |
 | `pipeline_override == "auto"` + IC-LoRA elements | `ic_lora` | Subject consistency via IC-LoRA concept injection |
 | `pipeline_override == "auto"` (default) | `ti2vid` | Text/Image-to-Video (primary pipeline) |
-| `ti2vid` AND `num_frames > 121` | chained task | Autoregressive continuation → `generate_chained_video_task()` |
+| `ti2vid` AND `num_frames > 505` | chained task | Autoregressive continuation → `generate_chained_video_task()` |
 
 ### 2.2 Two-Stage Generation Process (`TI2VidTwoStagesPipeline`)
 
@@ -154,7 +154,7 @@ Milimo uses `image_conditionings_by_replacing_latent` with a strict priority sys
 
 ### 2.4 Chained Generation — Quantum Alignment
 
-For videos exceeding 121 frames, `tasks/chained.py` implements autoregressive chunk-by-chunk generation:
+For videos exceeding 505 frames, `tasks/chained.py` implements autoregressive chunk-by-chunk generation:
 
 ```mermaid
 flowchart TD
@@ -162,7 +162,7 @@ flowchart TD
     CALC --> LOOP
 
     subgraph LOOP["Chunk Loop"]
-        PREP[prepare_next_chunk] -->|"chunk 0"| GEN[Run TI2Vid — 121 frames]
+        PREP[prepare_next_chunk] -->|"chunk 0"| GEN[Run TI2Vid — 505 frames]
         PREP -->|"chunk > 0"| EXTRACT[Async Extract Last Frame — asyncio ffmpeg -sseof -0.1]
         EXTRACT --> COND[Set as Image Conditioning at frame 0]
         COND --> GEN
@@ -190,9 +190,9 @@ flowchart TD
 ```
 
 **Chunk Parameters:**
-- `chunk_size`: 121 frames (LTX-2 context window max)
+- `chunk_size`: 505 frames (LTX-2 native limit)
 - `overlap_frames`: 24 frames (requested pixel overlap)
-- `effective_step`: 97 frames per chunk (121 - 24)
+- `effective_step`: 481 frames per chunk (505 - 24)
 
 **Quantum Alignment Math** (latent grid = 8 pixels/latent):
 | Parameter | Formula | Example (24 px overlap) |
@@ -497,6 +497,11 @@ enhanced = enhance_prompt(prompt, system_prompt="...", is_video=True, text_encod
 - Vision model detection via `/api/tags` — models with `mllama`, `clip`, `llava` families tagged as `is_vision: true`
 - Settings API: `GET/PATCH /settings/llm` + `GET /settings/llm/models`
 - Frontend: model dropdown with 👁️ vision badges, "Keep Model Loaded" toggle
+
+**VLM Structured JSON Extraction:**
+- If an input image is provided (`has_input_image=True`), the system prompt instructs the VLM to analyze it.
+- The VLM outputs a **JSON object** with `enhanced_prompt` and `is_reference_only`.
+- If the image is a Character Sheet or Turnaround (`is_reference_only=True`), the VLM extracts detailed visual descriptions into the prompt, and the `tasks/video.py` dispatcher **drops the image conditioning** to force LTX-2 into Text-to-Video mode, preventing generation failure on frozen 2D character sheets.
 
 **System prompts:**
 - `VIDEO_SYSTEM_PROMPT` — concise, action-focused descriptions for video generation

@@ -38,7 +38,7 @@ sequenceDiagram
     Note over Worker: Pipeline Selection
     Worker->>Worker: Auto-detect pipeline type (ti2vid / ic_lora / keyframe)
     Worker->>Worker: Check num_frames == 1 → delegate to Flux 2 (skip LTX)
-    Worker->>Worker: Check num_frames > 121 → delegate to chained gen
+    Worker->>Worker: Check num_frames > 505 → delegate to chained gen
 
     Worker->>ME: load_pipeline("ti2vid", loras)
     ME->>ME: Unload previous pipeline (gc + cache clear)
@@ -200,7 +200,7 @@ sequenceDiagram
     participant LTX as TI2VidTwoStagesPipeline
     participant FFmpeg as FFmpeg
 
-    Note over Worker: Triggered when ti2vid + num_frames > 121
+    Note over Worker: Triggered when ti2vid + num_frames > 505
 
     Worker->>SBMgr: __init__(job_id, prompt, params, output_dir)
     Worker->>SBMgr: get_total_chunks() → N chunks
@@ -216,7 +216,7 @@ sequenceDiagram
         end
 
         Worker->>ME: load_pipeline("ti2vid")
-        Worker->>LTX: pipeline(prompt, images, 121 frames)
+        Worker->>LTX: pipeline(prompt, images, 505 frames)
         LTX-->>Worker: Video tensor + Stage 1 latent
 
         Note over Worker: Quantum Alignment
@@ -332,7 +332,7 @@ sequenceDiagram
     API->>SBMgr: prepare_shot_generation(shot_id, session)
     SBMgr->>DB: Load Shot → find prev shot in same scene
     SBMgr->>SBMgr: Extract last frame from prev shot (ffmpeg)
-    SBMgr->>ElMgr: inject_elements_into_prompt(action, project_id)
+    SBMgr->>ElMgr: inject_elements_into_prompt(shot.prompt or shot.action, project_id)
     SBMgr->>SBMgr: Add narrative context prefix
     SBMgr-->>API: {prompt, images, element_images}
     API->>API: Create Job → BackgroundTask(generate_video_task)
