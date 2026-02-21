@@ -76,6 +76,9 @@ reproduce_*.py
 verify_*.py
 migrate_db.py
 reproduction*.log
+test_char_sheet.py
+test_img.json
+test_vid.json
 
 # Backend Runtime Data
 backend/exports/
