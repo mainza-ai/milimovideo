@@ -1,0 +1,1 @@
+{"project_id": "test_image", "prompt": "Test progress bar", "width": 1024, "height": 1024, "num_inference_steps": 25, "guidance_scale": 2.0, "seed": 42}

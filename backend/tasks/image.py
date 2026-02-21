@@ -135,24 +135,25 @@ async def generate_image_task(job_id: str, params: dict):
         def _run_flux():
              def flux_callback(step, total):
                  if job_id in active_jobs:
-                     if active_jobs[job_id].get("cancelled", False):
-                         raise RuntimeError("Cancelled by user")
-                     
-                     # Allow pure cancellation check without clearing status
-                     if step == -1:
-                         return
-
-                     active_jobs[job_id]["progress"] = int((step / total) * 100)
-                     active_jobs[job_id]["status_message"] = f"Generating Image ({step}/{total})"
-                     
-                     # Thread-safe broadcast
-                     async def send_update():
-                         await broadcast_progress(job_id, active_jobs[job_id]["progress"], "processing", active_jobs[job_id]["status_message"])
-                     
                      try:
-                         asyncio.run_coroutine_threadsafe(send_update(), loop)
-                     except Exception:
-                         pass # Loop might be closed or not available in edge cases
+                         progress_pct = (step / total) * 100
+                         msg = f"Generating Image ({step}/{total})"
+                         active_jobs[job_id]["progress"] = int(progress_pct)
+                         active_jobs[job_id]["status_message"] = msg
+                         if active_jobs[job_id].get("cancelled", False):
+                             raise RuntimeError(f"Job {job_id} cancelled by user.")
+                         
+                         # Allow pure cancellation check without clearing status
+                         if step >= 0:
+                            # Must run in asyncio thread
+                            asyncio.run_coroutine_threadsafe(
+                                broadcast_progress(job_id, active_jobs[job_id]["progress"], "processing", active_jobs[job_id]["status_message"]),
+                                loop
+                            )
+                     except Exception as e:
+                         if "cancelled" in str(e).lower():
+                             raise  # Rethrow so outer block catches it
+                         logger.error(f"Error in flux callback: {e}")
 
              img = flux_inpainter.generate_image(
                  prompt=prompt,
@@ -245,11 +246,20 @@ async def generate_image_task(job_id: str, params: dict):
         })
         
     except Exception as e:
-        if "Cancelled" in str(e):
-             logger.info(f"Job {job_id} cancelled.")
-             update_job_db(job_id, "cancelled")
-             # Broadcast cancelled event if needed, or simply stop
+        if "cancelled" in str(e).lower():
+            logger.info(f"Job {job_id} cancelled.")
+            update_job_db(job_id, "cancelled")
+            
+            # Broadcast cancelled event explicitly via asyncio
+            async def _broadcast_cancel():
+                from events import event_manager
+                await event_manager.broadcast("cancelled", {"job_id": job_id})
+            
+            asyncio.run_coroutine_threadsafe(_broadcast_cancel(), loop)
+            
         else:
-            logger.error(f"Image Generation failed: {e}")
+            logger.error(f"Generation failed: {e}")
+            import traceback
+            traceback.print_exc()
+            active_jobs[job_id]["status"] = "failed"
             update_job_db(job_id, "failed", error=str(e))
-            await event_manager.broadcast("error", {"job_id": job_id, "message": str(e)})

@@ -46,16 +46,14 @@ export const ImagesView = () => {
 
 
     const handleCancel = async () => {
-        if (!currentJobId) return;
-        try {
-            await fetch(`http://localhost:8000/jobs/${currentJobId}/cancel`, { method: 'POST' });
-            addToast("Cancelling...", "info");
-            // Optimistic update
-            setIsLoading(false);
-            setStatusMsg("Cancelled");
-            setCurrentJobId(null);
-        } catch (e) {
-            console.error("Cancel failed", e);
+        if (currentJobId) {
+            try {
+                // Keep isLoading true, UI will poll until status is 'cancelled'
+                setStatusMsg("Cancelling...");
+                await fetch(`http://localhost:8000/jobs/${currentJobId}/cancel`, { method: 'POST' });
+            } catch (err) {
+                console.error(err);
+            }
         }
     };
 

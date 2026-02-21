@@ -539,7 +539,16 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             else:
                 return (result, None)
         
+        # FINAL CANCELLATION CHECK BEFORE THE LONG RUN
+        if active_jobs.get(job_id, {}).get("cancelled"):
+            raise RuntimeError(f"Job {job_id} cancelled by user.")
+            
         pipeline_result = await loop.run_in_executor(None, _run_pipeline)
+        
+        # FINAL CANCELLATION CHECK BEFORE SAVING
+        if active_jobs.get(job_id, {}).get("cancelled"):
+            raise RuntimeError(f"Job {job_id} cancelled by user.")
+            
         update_job_progress(job_id, 90, "Finalizing & Saving...")
         
         video, audio = pipeline_result
@@ -766,6 +775,18 @@ async def generate_video_task(job_id: str, params: dict):
         if "cancelled" in str(e).lower():
              logger.info(f"Job {job_id} cancelled.")
              update_job_db(job_id, "cancelled")
+             
+             # Broadcast cancelled event explicitly via asyncio
+             import asyncio
+             from events import event_manager
+             try:
+                 asyncio.run_coroutine_threadsafe(
+                     event_manager.broadcast("cancelled", {"job_id": job_id}),
+                     loop
+                 )
+             except NameError:
+                 pass # loop might not be in scope if it crashes extremely early, though unlikely
+             
         else:
             logger.error(f"Job failed: {e}")
             import traceback

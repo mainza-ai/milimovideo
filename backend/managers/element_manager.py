@@ -249,6 +249,15 @@ class ElementManager:
             if job_id in active_jobs and active_jobs[job_id].get("cancelled", False):
                 logger.info(f"Job {job_id} cancelled before generation")
                 return None
+                
+        # Callback for inner Flux cancellation
+        def cancellation_check(step, total):
+            if job_id:
+                from job_utils import active_jobs
+                import asyncio
+                # yield thread context simply by checking dict
+                if job_id in active_jobs and active_jobs[job_id].get("cancelled", False):
+                    raise RuntimeError("Cancelled")
 
         # Run Flux T2I (Offload to thread if needed, but manager is async-aware? 
         # Flux wrapper calls are blocking on GPU. In production we'd use a queue.
@@ -262,7 +271,8 @@ class ElementManager:
                 guidance=guidance,
                 enable_true_cfg=False, # Disable True CFG for element generation to ensure stability
                 enable_ae=enable_ae, # User controlled (default True)
-                ip_adapter_images=element_images # Pass visual conditioning found from triggers!
+                ip_adapter_images=element_images, # Pass visual conditioning found from triggers!
+                callback=cancellation_check
             )
                 
             # Save Image
@@ -309,10 +319,14 @@ class ElementManager:
             return save_path
             
         except Exception as e:
-            logger.error(f"Visual generation failed: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
+            if "cancelled" in str(e).lower():
+                logger.info(f"Visual generation for element {element_id} was cancelled mid-flight.")
+                return None
+            else:
+                logger.error(f"Visual generation failed: {e}")
+                import traceback
+                traceback.print_exc()
+                return None
 
 # Singleton
 element_manager = ElementManager()

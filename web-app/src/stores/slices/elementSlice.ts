@@ -133,7 +133,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
 
         try {
             await fetch(`http://localhost:8000/jobs/${jobId}/cancel`, { method: 'POST' });
-            addToast("Cancelling generation...", "info");
+            addToast("Cancellation requested.", "info");
             // The poller will catch the 'cancelled' status and clean up
         } catch (e) {
             console.error(e);

@@ -61,6 +61,16 @@ export const createServerSlice: StateCreator<TimelineState, [], [], ServerSlice>
                 });
                 addToast(`Generation Failed: ${data.message}`, "error");
             }
+        } else if (type === 'cancelled') {
+            const shot = project.shots.find(s => s.lastJobId === data.job_id);
+            if (shot) {
+                updateShot(shot.id, {
+                    isGenerating: false,
+                    statusMessage: "Cancelled",
+                    progress: 0
+                });
+                addToast("Generation Cancelled", "info");
+            }
 
             // ── Render/Export Events ──────────────────────────────────────
         } else if (type === 'render_progress') {

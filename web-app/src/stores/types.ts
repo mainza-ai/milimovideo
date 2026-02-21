@@ -148,6 +148,7 @@ export interface ShotSlice {
     getShotStartTime: (shotId: string) => number;
     generateShot: (shotId: string) => Promise<void>;
     inpaintShot: (shotId: string, frameDataUrl: string, maskDataUrl: string, prompt: string) => Promise<void>;
+    cancelShotGeneration: (shotId: string) => Promise<void>;
 
     // Storyboard operations
     batchGenerateShots: (shotIds: string[]) => Promise<void>;

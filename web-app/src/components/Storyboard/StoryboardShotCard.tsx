@@ -34,11 +34,12 @@ interface StoryboardShotCardProps {
 export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
     shot, index, globalIndex, onDragStart, onDragOver, onDrop
 }) => {
-    const { selectShot, selectedShotId, patchShot, generateShot, deleteShotFromStoryboard, generateThumbnail, addConditioningToShot } = useTimelineStore(useShallow(state => ({
+    const { selectShot, selectedShotId, patchShot, generateShot, cancelShotGeneration, deleteShotFromStoryboard, generateThumbnail, addConditioningToShot } = useTimelineStore(useShallow(state => ({
         selectShot: state.selectShot,
         selectedShotId: state.selectedShotId,
         patchShot: state.patchShot,
         generateShot: state.generateShot,
+        cancelShotGeneration: state.cancelShotGeneration,
         deleteShotFromStoryboard: state.deleteShotFromStoryboard,
         generateThumbnail: state.generateThumbnail,
         addConditioningToShot: state.addConditioningToShot,
@@ -204,14 +205,29 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
                     )}
                 </div>
 
-                {/* Progress bar */}
-                {shot.isGenerating && shot.progress != null && shot.progress > 0 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50">
-                        <div
-                            className="h-full bg-milimo-500 transition-all duration-300"
-                            style={{ width: `${shot.progress}%` }}
-                        />
-                    </div>
+                {/* Progress bar and Cancelling UI */}
+                {shot.isGenerating && (
+                    <>
+                        <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center backdrop-blur-[2px]">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    cancelShotGeneration(shot.id);
+                                }}
+                                className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/40 text-red-200 text-xs rounded uppercase font-bold tracking-wider cursor-pointer border border-red-500/30 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                        {shot.progress != null && shot.progress > 0 && (
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/50 z-10">
+                                <div
+                                    className="h-full bg-milimo-500 transition-all duration-300"
+                                    style={{ width: `${shot.progress}%` }}
+                                />
+                            </div>
+                        )}
+                    </>
                 )}
 
                 {/* Hover Actions */}

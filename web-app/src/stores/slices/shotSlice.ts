@@ -333,6 +333,31 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         }
     },
 
+    cancelShotGeneration: async (shotId: string) => {
+        const { project, updateShot, addToast } = get();
+        const shot = project.shots.find(s => s.id === shotId);
+
+        if (!shot) return;
+
+        if (shot.lastJobId) {
+            try {
+                // Optimistic UI state just turns to "Cancelling...", it leaves isGenerating=true 
+                // until the backend `cancelled` SSE broadcast actually unlocks it.
+                updateShot(shotId, { statusMessage: "Cancelling..." });
+                await fetch(`http://localhost:8000/jobs/${shot.lastJobId}/cancel`, { method: 'POST' });
+                addToast("Cancellation requested.", "info");
+            } catch (e) {
+                console.error("Failed to cancel job", e);
+            }
+        } else {
+            // If there's no job ID yet, just force unlock
+            updateShot(shotId, {
+                isGenerating: false,
+                statusMessage: "Cancelled"
+            });
+        }
+    },
+
     // ── Storyboard Operations ──────────────────────────────────────
 
     batchGenerateShots: async (shotIds: string[]) => {

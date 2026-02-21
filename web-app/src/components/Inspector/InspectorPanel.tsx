@@ -104,11 +104,8 @@ export const InspectorPanel = () => {
     };
 
     const handleCancel = async () => {
-        if (!shot?.lastJobId) return;
-        try {
-            await fetch(`http://localhost:8000/jobs/${shot.lastJobId}/cancel`, { method: 'POST' });
-            updateShot(shot.id, { isGenerating: false, progress: 0 });
-        } catch (e) { console.error(e); }
+        if (!shot?.id) return;
+        useTimelineStore.getState().cancelShotGeneration(shot.id);
     };
 
     // Extend Shot Logic
