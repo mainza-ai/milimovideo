@@ -19,6 +19,7 @@ export const ScriptInput = () => {
     const [isParsing, setIsParsing] = useState(false);
     const [isAiParsing, setIsAiParsing] = useState(false);
     const [isCommitting, setIsCommitting] = useState(false);
+    const [hoveredShotId, setHoveredShotId] = useState<string | null>(null);
 
     // Load persisted script
     useEffect(() => {
@@ -152,7 +153,12 @@ export const ScriptInput = () => {
                                 </div>
                                 <div className="space-y-3">
                                     {scene.shots.map((shot, j) => (
-                                        <div key={j} className="flex gap-3 text-sm text-white/70 pl-2 border-l-2 border-white/10 group/shot">
+                                        <div
+                                            key={j}
+                                            className="flex gap-3 text-sm text-white/70 pl-2 border-l-2 border-white/10"
+                                            onMouseEnter={() => setHoveredShotId(`${i}-${j}`)}
+                                            onMouseLeave={() => setHoveredShotId(null)}
+                                        >
                                             <span className="text-white/30 font-mono text-[10px] pt-1 shrink-0">SHOT {j + 1}</span>
                                             <div className="flex-1 space-y-1.5">
                                                 {/* Character (editable) */}
@@ -193,7 +199,7 @@ export const ScriptInput = () => {
                                             {/* Delete shot */}
                                             <button
                                                 onClick={() => removeShotFromPreview(i, j)}
-                                                className="opacity-0 group-hover/shot:opacity-100 p-1 text-white/20 hover:text-red-400 transition-all shrink-0"
+                                                className={`p-1 text-white/20 hover:text-red-400 transition-all shrink-0 ${hoveredShotId === `${i}-${j}` ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                                                 title="Remove shot"
                                             >
                                                 <Trash2 size={14} />

@@ -14,10 +14,11 @@ interface Props {
     onDragClipEnd: (id: string, newStartFrame: number, trackIndex: number, action?: any) => void;
 }
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 
 export const TimelineTrack = memo(({ track, clips, zoom, projectFps, allClips, onSnap, onDragClipEnd }: Props) => {
     const selectedShotId = useTimelineStore(state => state.selectedShotId);
+    const [isHovered, setIsHovered] = useState(false);
 
     const { toggleTrackMute, toggleTrackLock, toggleTrackHidden, addShot } = useTimelineStore(useShallow(state => ({
         toggleTrackMute: state.toggleTrackMute,
@@ -98,7 +99,11 @@ export const TimelineTrack = memo(({ track, clips, zoom, projectFps, allClips, o
     };
 
     return (
-        <div className="flex border-b border-white/5">
+        <div
+            className="flex border-b border-white/5"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
             <div className="w-32 min-w-[128px] border-r border-white/5 bg-[#111] p-2 flex flex-col justify-between sticky left-0 z-20">
                 <div className="text-[10px] text-white/50 font-mono font-bold truncate" title={track.name}>
                     {track.name}
@@ -165,10 +170,10 @@ export const TimelineTrack = memo(({ track, clips, zoom, projectFps, allClips, o
                         }}
                         title="Add Empty Shot"
                     >
-                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-milimo-500 group-hover:text-black transition-colors">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isHovered ? 'bg-milimo-500 text-black' : 'bg-white/10 text-white/50'}`}>
                             <Plus size={16} />
                         </div>
-                        <span className="ml-2 text-xs font-bold text-white/50 group-hover:text-white transition-colors">Add Shot</span>
+                        <span className={`ml-2 text-xs font-bold transition-colors ${isHovered ? 'text-white' : 'text-white/50'}`}>Add Shot</span>
                     </div>
                 )}
             </div>

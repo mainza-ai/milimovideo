@@ -16,6 +16,7 @@ export const ElementManager = () => {
     const [elements, setElements] = useState<Element[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [showAddForm, setShowAddForm] = useState(false);
+    const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
 
     // Form State
     const [newName, setNewName] = useState('');
@@ -148,7 +149,12 @@ export const ElementManager = () => {
                 )}
 
                 {elements.map(el => (
-                    <div key={el.id} className="group bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 rounded-lg p-3 transition-all">
+                    <div
+                        key={el.id}
+                        className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 rounded-lg p-3 transition-all"
+                        onMouseEnter={() => setHoveredElementId(el.id)}
+                        onMouseLeave={() => setHoveredElementId(null)}
+                    >
                         <div className="flex justify-between items-start">
                             <div className="flex items-center gap-2 mb-1">
                                 <span className={`p-1 rounded bg-black/50 ${el.type === 'character' ? 'text-blue-400' : el.type === 'location' ? 'text-green-400' : 'text-yellow-400'}`}>
@@ -158,7 +164,7 @@ export const ElementManager = () => {
                             </div>
                             <button
                                 onClick={() => handleDelete(el.id)}
-                                className="text-white/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className={`text-white/20 hover:text-red-400 transition-opacity ${hoveredElementId === el.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                             >
                                 <Trash2 size={12} />
                             </button>

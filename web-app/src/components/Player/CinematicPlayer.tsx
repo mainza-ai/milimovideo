@@ -147,8 +147,8 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
 }));
 
 // 2. HUD - Re-renders only when metadata changes
-const PlayerHUD = memo(({ resolutionW, resolutionH, fps, seed }: any) => (
-    <div className="absolute top-4 left-4 flex gap-4 text-[10px] font-mono text-white/50 bg-black/50 px-3 py-1 rounded backdrop-blur-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+const PlayerHUD = memo(({ resolutionW, resolutionH, fps, seed, isVisible }: any) => (
+    <div className={`absolute top-4 left-4 flex gap-4 text-[10px] font-mono text-white/50 bg-black/50 px-3 py-1 rounded backdrop-blur-md transition-opacity pointer-events-none z-10 ${isVisible ? 'opacity-100' : 'opacity-0'}`}>
         <span>{resolutionW}x{resolutionH}</span>
         <span>{fps} FPS</span>
         <span>SEED: {seed}</span>
@@ -279,6 +279,7 @@ export const CinematicPlayer = () => {
 
     // Tracking mode state (local — not in store since it's view-only)
     const [isTracking, setIsTracking] = useState(false);
+    const [isHudVisible, setIsHudVisible] = useState(false);
 
     // 2. Compute Derived Schedule (Memoized)
     // This creates a flat list of visible regions for all tracks, prioritized.
@@ -346,7 +347,11 @@ export const CinematicPlayer = () => {
     const videoRef = useRef<HTMLVideoElement>(null);
 
     return (
-        <div className="flex-1 bg-black relative flex flex-col items-center justify-center overflow-hidden group">
+        <div
+            className="flex-1 bg-black relative flex flex-col items-center justify-center overflow-hidden"
+            onMouseEnter={() => setIsHudVisible(true)}
+            onMouseLeave={() => setIsHudVisible(false)}
+        >
             {/* Main Video Surface */}
             <div className="relative aspect-video max-h-full max-w-full shadow-2xl bg-[#050505] w-full flex items-center justify-center">
                 {activeShot ? (
@@ -376,6 +381,7 @@ export const CinematicPlayer = () => {
                     resolutionH={resolutionH}
                     fps={fps}
                     seed={activeShot?.seed || seed}
+                    isVisible={isHudVisible}
                 />
 
                 {activeShot && (

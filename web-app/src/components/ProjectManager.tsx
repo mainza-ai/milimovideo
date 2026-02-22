@@ -19,6 +19,7 @@ export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
         deleteProject: state.deleteProject
     })));
     const [projects, setProjects] = useState<ProjectInfo[]>([]);
+    const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
 
     // Create Form State
     const [isCreating, setIsCreating] = useState(false);
@@ -197,13 +198,15 @@ export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
                         {projects.map(p => (
                             <div
                                 key={p.id}
-                                onClick={() => handleLoad(p.id)}
                                 className={clsx(
-                                    "group flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer relative overflow-hidden",
+                                    "flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer relative overflow-hidden",
                                     currentProject.id === p.id
                                         ? "bg-milimo-900/10 border-milimo-500/50"
                                         : "bg-white/5 border-white/5 hover:border-white/20 hover:bg-white/10"
                                 )}
+                                onClick={() => handleLoad(p.id)}
+                                onMouseEnter={() => setHoveredProjectId(p.id)}
+                                onMouseLeave={() => setHoveredProjectId(null)}
                             >
                                 {currentProject.id === p.id && (
                                     <div className="absolute left-0 top-0 bottom-0 w-1 bg-milimo-500" />
@@ -238,7 +241,7 @@ export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
                                     <button
                                         onClick={(e) => handleDeleteClick(e, p.id)}
                                         onMouseDown={(e) => e.stopPropagation()}
-                                        className="p-2 bg-white/5 text-white/30 hover:bg-red-500/20 hover:text-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100 z-10"
+                                        className={`p-2 bg-white/5 text-white/30 hover:bg-red-500/20 hover:text-red-500 rounded-lg transition-colors z-10 ${hoveredProjectId === p.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                                         title="Delete Project"
                                     >
                                         <Trash2 size={16} />

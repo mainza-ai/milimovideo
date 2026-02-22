@@ -6,6 +6,7 @@ export const ElementPanel = () => {
     const { project, fetchElements, elements = [], createElement, deleteElement } = useTimelineStore();
     const [search, setSearch] = useState("");
     const [isCreating, setIsCreating] = useState(false);
+    const [hoveredElementId, setHoveredElementId] = useState<string | null>(null);
 
     // Form State
     const [newName, setNewName] = useState("");
@@ -112,7 +113,12 @@ export const ElementPanel = () => {
             {/* List */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
                 {filteredElements.map((el: any) => (
-                    <div key={el.id} className="group p-3 bg-white/5 hover:bg-white/10 rounded-lg border border-transparent hover:border-white/10 transition-all">
+                    <div
+                        key={el.id}
+                        className="p-3 bg-white/5 hover:bg-white/10 rounded-lg border border-transparent hover:border-white/10 transition-all"
+                        onMouseEnter={() => setHoveredElementId(el.id)}
+                        onMouseLeave={() => setHoveredElementId(null)}
+                    >
                         <div className="flex justify-between items-start mb-1">
                             <div className="flex items-center gap-2">
                                 {el.type === 'character' && <User size={12} className="text-milimo-400" />}
@@ -126,7 +132,7 @@ export const ElementPanel = () => {
                                         deleteElement(el.id);
                                     }
                                 }}
-                                className="text-white/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
+                                className={`text-white/20 hover:text-red-400 transition-all ${hoveredElementId === el.id ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                             >
                                 <Trash2 size={12} />
                             </button>
