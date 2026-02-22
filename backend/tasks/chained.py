@@ -13,6 +13,7 @@ from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 from ltx_pipelines.utils.helpers import cleanup_memory
 import config
+from events import event_manager
 
 logger = logging.getLogger(__name__)
 
