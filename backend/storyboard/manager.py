@@ -74,15 +74,22 @@ class StoryboardManager:
         }
         
         if chunk_idx > 0 and last_chunk_output:
-            # Extract last frame for overlap conditioning
-            last_frame = await self._extract_last_frame(last_chunk_output, f"chunk_{chunk_idx-1}")
-            if last_frame:
-                 # (path, frame_idx, strength)
-                 # LTX conditioning at frame 0
-                 chunk_config["images"] = [(last_frame, 0, 1.0)]
-                 logger.info(f"Conditioned chunk {chunk_idx} on {last_frame}")
+            # Extract overlap frames for continuity conditioning
+            # LTX-Video supports feeding multiple frames in to guide the motion.
+            overlap_frames = await self._extract_overlap_frames(last_chunk_output, f"chunk_{chunk_idx-1}", count=self.overlap_frames)
+            
+            if overlap_frames:
+                 # Populate conditioning natively: list of (path, frame_idx, strength)
+                 for i, frame_path in enumerate(overlap_frames):
+                     chunk_config["images"].append((frame_path, i, 1.0))
+                     
+                 logger.info(f"Conditioned chunk {chunk_idx} on {len(overlap_frames)} overlapping frames natively.")
+                 
+                 # The VLM enhancement only needs the very last frame of the overlap
+                 last_frame = overlap_frames[-1]
             else:
-                logger.warning(f"Failed to get condition frame for chunk {chunk_idx}")
+                logger.warning(f"Failed to get condition frames for chunk {chunk_idx}")
+                last_frame = None
             
             # Narrative continuation via LLM (enhance prompt for this chunk)
             try:
@@ -126,27 +133,34 @@ class StoryboardManager:
         })
         logger.info(f"Committed chunk {chunk_idx}: {path}")
 
-    async def _extract_last_frame(self, video_path: str, shot_id: str) -> Optional[str]:
-        """Extract last frame of video to artifacts dir using FFmpeg async to unblock event loop."""
+    async def _extract_overlap_frames(self, video_path: str, shot_id: str, count: int = 1) -> Optional[list[str]]:
+        """
+        Extract the last `count` frames of a video to the artifacts dir using FFmpeg asynchronously.
+        Returns a sorted list of file paths.
+        """
         if not self.artifacts_dir:
             return None
         try:
-            filename = f"{shot_id}_last.png"
-            out_path = os.path.join(self.artifacts_dir, filename)
+            # Use a pattern for output files
+            out_pattern = os.path.join(self.artifacts_dir, f"{shot_id}_overlap_%03d.png")
             
-            if os.path.exists(out_path):
-                return out_path
-                
+            # Use ffprobe to get total frames first to accurately seek
+            fps = float(self.params.get("fps", 25.0))
+            
+            # Simple heuristic: seek to the last few seconds to save decoding time
+            # 25 fps * 24 frames = ~1 sec. Let's seek to -2 seconds to be safe.
+            seek_time = max(0.1, (count / fps) + 0.5)
+            
             cmd = [
                 "ffmpeg", "-y",
-                "-sseof", "-0.1",  # Seek to last 0.1 sec
+                "-sseof", f"-{seek_time}",  # Seek near the end
                 "-i", video_path,
+                "-vf", f"select='gte(n,0)'", # Select all frames from here
                 "-vsync", "0",
                 "-q:v", "2",
-                "-update", "1",
-                out_path
+                out_pattern
             ]
-            logger.info(f"Executing ffmpeg command asynchronously: {' '.join(cmd)}")
+            logger.info(f"Executing ffmpeg command asynchronously for {count} overlap frames: {' '.join(cmd)}")
             
             import asyncio
             process = await asyncio.create_subprocess_exec(
@@ -159,11 +173,28 @@ class StoryboardManager:
             if process.returncode != 0:
                 logger.error(f"FFmpeg failed asynchronously: {stderr.decode()}")
                 return None
+            
+            import glob
+            # Find all generated frames and sort them
+            generated_frames = sorted(glob.glob(os.path.join(self.artifacts_dir, f"{shot_id}_overlap_*.png")))
+            
+            if not generated_frames:
+                logger.error("FFmpeg succeeded but no frames were found.")
+                return None
                 
-            logger.info(f"FFmpeg success. Output saved to: {out_path}")
-            return out_path
+            # If we extracted more than `count`, just take the last `count` frames
+            if len(generated_frames) > count:
+                frames_to_keep = generated_frames[-count:]
+                # Clean up the extra ones to save space
+                for f in generated_frames[:-count]:
+                     os.remove(f)
+            else:
+                frames_to_keep = generated_frames
+                
+            logger.info(f"FFmpeg success. Extracted {len(frames_to_keep)} overlap frames to {self.artifacts_dir}")
+            return frames_to_keep
         except Exception as e:
-            logger.error(f"Failed to extract last frame: {e}")
+            logger.error(f"Failed to extract overlap frames: {e}")
             return None
 
     async def prepare_shot_generation(self, shot_id: str, session: Any) -> dict:
@@ -256,7 +287,9 @@ class StoryboardManager:
                  logger.warning(f"Resolved video path does not exist, skipping continuity extraction.")
                  last_frame_path = None
              else:
-                 last_frame_path = await self._extract_last_frame(resolved_video_path, prev_shot.id)
+                 # Standard usage only requires 1 frame for simple continuity
+                 overlap_frames = await self._extract_overlap_frames(resolved_video_path, prev_shot.id, count=1)
+                 last_frame_path = overlap_frames[-1] if overlap_frames else None
              
              if last_frame_path:
                  # Only use continuity if we don't already have a Concept Art conditioning

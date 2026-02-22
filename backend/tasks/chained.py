@@ -75,8 +75,6 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
     last_chunk_output = None
     
     try:
-        last_chunk_latent = None
-        
         for chunk_idx in range(num_chunks):
             # Check for cancellation before starting chunk
             if active_jobs.get(job_id, {}).get("cancelled", False):
@@ -139,53 +137,16 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             chunk_prompt = chunk_config.get("prompt", prompt)
             chunk_images = chunk_config.get("images", []) # list of (path, idx, strength)
             overlap_count = 0
-
-            # PREPARE LATENT CONDITIONING for Handoff (QUANTUM ALIGNMENT FIX)
-            conditioning_latent_tensor = None
-            frames_to_trim = 0 # Track exact number of frames to trim later
+            frames_to_trim = 0
             
-            if last_chunk_latent is not None:
-                # LTX-2 Temporal Downsample Factor is 8.
-                # We typically interpret 'overlap' as pixel frames (e.g., 24).
-                # We must convert this to 'latent frames', but robustly.
-                # Formula: latent_slices = ceil((overlap_pixels - 1) / 8) + 1
-                # Example: 24 pixels -> ceil(23/8) + 1 = 3 + 1 = 4 latent slices.
-                
+            # The storyboard manager now handles extracting the overlap frames and
+            # injecting them into chunk_images natively. We calculate how many 
+            # frames to trim based on the number of conditioning images.
+            if chunk_idx > 0:
                 requested_pixel_overlap = len(chunk_images)
-                overlap_count = requested_pixel_overlap # Keep for reference
-                
-                if requested_pixel_overlap > 0:
-                    # 1. Calculate Latent Slices needed to cover these pixels
-                    latent_slice_count = math.ceil((requested_pixel_overlap - 1) / 8) + 1
-                    
-                    # 2. Back-calculate the EFFECTIVE pixel overlap this represents
-                    # (latent_slice_count - 1) * 8 + 1
-                    effective_overlap_pixels = (latent_slice_count - 1) * 8 + 1
-                    frames_to_trim = effective_overlap_pixels
-                    
-                    # 3. Slice the Latent Tensor
-                    # last_chunk_latent shape: [1, C, F, H, W]
-                    total_prev_latents = last_chunk_latent.shape[2]
-                    
-                    # Safety clamp
-                    latent_slice_count = min(latent_slice_count, total_prev_latents)
-                    
-                    # Extract last N latent frames
-                    # conditioning_latent_tensor = last_chunk_latent[:, :, -latent_slice_count:, :, :].clone()
-                    start_slice = total_prev_latents - latent_slice_count
-                    conditioning_latent_tensor = last_chunk_latent[:, :, start_slice:, :, :].clone()
-                    
-                    logger.info(f"Latent Handoff: Requested {requested_pixel_overlap} px -> Aligning to {latent_slice_count} Latents ({effective_overlap_pixels} px effective).")
-                    
-                    # CONFLICT RESOLUTION (Static Anchor Fix):
-                    # If we have successfully prepared High-Fidelity Latent Handoff (Motion),
-                    # we must DISCARD the Static Pixel Conditioning (Images).
-                    # Otherwise, the static images "anchor" the generation, freezing the first second.
-                    if conditioning_latent_tensor is not None:
-                        logger.info("Latent Handoff Active: Disabling Static Pixel Conditioning to prevent 'Frozen Anchor' effect.")
-                        chunk_images = [] 
-
-
+                overlap_count = requested_pixel_overlap
+                frames_to_trim = requested_pixel_overlap
+                logger.info(f"Chunk Video Conditioning: {len(chunk_images)} frames.")
             # Critical Fix for Extend + Smart Continue:
             # If this is the first chunk, and we have global input images (from Extend timeline),
             # we must use them! Storyboard doesn't know about them yet (or returned empty).
@@ -293,7 +254,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
 
             # 2. Define Pipeline execution wrapper
-            def _run_chunk_pipeline(images_arg, current_prompt, pipeline_enhance, latents_in):
+            def _run_chunk_pipeline(images_arg, current_prompt, pipeline_enhance):
                 # Force Negative Prompt for chained chunks to kill static inertia
                 # We start with the user's negative prompt (if any) and append our bans.
                 effective_negative_prompt = negative_prompt or ""
@@ -311,33 +272,42 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     num_inference_steps=params.get("num_inference_steps", 40),
                     cfg_guidance_scale=params.get("cfg_scale", 3.0),
                     images=images_arg,
-                    previous_latent_tensor=latents_in, # New Arg
                     tiling_config=TilingConfig.default(),
                     enhance_prompt=pipeline_enhance,
                     callback_on_step_end=cancellation_check
                 )
                 
             # 3. Run Pipeline
-            # Returns (video, audio, latent)
+            # Returns (video, audio) 
+            # Note: We no longer expect a latent tensor back
             try:
-                video, audio, new_full_latent = await loop.run_in_executor(
-                    None, _run_chunk_pipeline, chunk_images, chunk_prompt, do_pipeline_enhance, conditioning_latent_tensor
+                result = await loop.run_in_executor(
+                    None, _run_chunk_pipeline, chunk_images, chunk_prompt, do_pipeline_enhance
                 )
                 
-                # Update cache for next iteration
-                last_chunk_latent = new_full_latent
-                
+                # Check tuple length depending on pipeline output format over time
+                if isinstance(result, tuple):
+                    if len(result) >= 3:
+                        video, audio, _ = result
+                    elif len(result) == 2:
+                        video, audio = result
+                    else:
+                        video = result[0]
+                        audio = None
+                else:
+                    video = result
+                    audio = None
+                    
             except Exception as e:
                 logger.error(f"Pipeline execution failed: {e}")
                 raise e
             
             # 4. Save Output
             
-            # LATENT HANDOFF: TRIM OVERLAP
-            # If we used latent conditioning from the previous chunk, the model generated
-            # those frames at the start. We must remove them to avoid "skip back" in playback.
-            # QUANTUM FIX: Use 'frames_to_trim' which is aligned to latent boundaries.
-            if chunk_idx > 0 and conditioning_latent_tensor is not None and frames_to_trim > 0:
+            # TRIM OVERLAP
+            # The model generated the overlap frames natively. We drop them here so that we
+            # don't duplicate them when stitching.
+            if chunk_idx > 0 and frames_to_trim > 0:
                 logger.info(f"Trimming {frames_to_trim} overlap frames from start of Chunk {chunk_idx}...")
                 
                 # Helper for generator trimming

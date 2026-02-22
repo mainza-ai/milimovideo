@@ -96,12 +96,11 @@ class TI2VidTwoStagesPipeline:
         num_inference_steps: int,
         cfg_guidance_scale: float,
         images: list[tuple[str, int, float]],
-        previous_latent_tensor: torch.Tensor | None = None, # New: Latent Handoff
         tiling_config: TilingConfig | None = None,
         enhance_prompt: bool = False,
         upscale: bool = True,
         callback_on_step_end: Callable | None = None,
-    ) -> tuple[Iterator[torch.Tensor], torch.Tensor, LatentState]:
+    ) -> tuple[Iterator[torch.Tensor], torch.Tensor]:
         logging.info("DEBUG: TI2VidTwoStagesPipeline.__call__ START")
         assert_resolution(height=height, width=width, is_two_stage=True)
         # ... (setup code skipped, see diff) ...
@@ -171,20 +170,6 @@ class TI2VidTwoStagesPipeline:
             dtype=dtype,
             device=self.device,
         )
-        
-        # LATENT HANDOFF (Stage 1 Downsample)
-        if previous_latent_tensor is not None:
-             # ... existing handoff logic ...
-             from ltx_pipelines.utils.helpers import latent_conditionings_from_tensor
-             # Downsample H, W
-             s1_lat = torch.nn.functional.interpolate(
-                previous_latent_tensor, 
-                scale_factor=(1.0, 0.5, 0.5), 
-                mode='trilinear',
-                align_corners=False
-            ).to(dtype=dtype)
-             s1_items = latent_conditionings_from_tensor(s1_lat, start_frame_idx=0, strength=1.0)
-             stage_1_conditionings.extend(s1_items)
 
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_1_output_shape,
@@ -246,13 +231,6 @@ class TI2VidTwoStagesPipeline:
             dtype=dtype,
             device=self.device,
         )
-        
-        # LATENT HANDOFF (Stage 2 Direct)
-        if previous_latent_tensor is not None:
-            # Use directly
-            from ltx_pipelines.utils.helpers import latent_conditionings_from_tensor
-            s2_items = latent_conditionings_from_tensor(previous_latent_tensor, start_frame_idx=0, strength=1.0)
-            stage_2_conditionings.extend(s2_items)
 
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_2_output_shape,
@@ -321,9 +299,9 @@ class TI2VidTwoStagesPipeline:
             audio_state.latent, self.stage_2_model_ledger.audio_decoder(), self.stage_2_model_ledger.vocoder()
         )
 
-        # Return LatentState for chaining
+        # Return Video and Audio only (no latents)
         logging.info(f"DEBUG: TI2VidTwoStagesPipeline.__call__ END. Returning: Video type={type(decoded_video)}")
-        return decoded_video, decoded_audio, video_state.latent
+        return decoded_video, decoded_audio
 
 
 @smart_inference_mode()
