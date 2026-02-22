@@ -347,14 +347,24 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                         audio = audio[:, trim_samples:]
             
             video_chunks_number = get_video_chunks_number(chunk_size, TilingConfig.default())
-            encode_video(
-                video=video,
-                fps=float(params.get("fps", 25.0)),
-                audio=audio,
-                audio_sample_rate=AUDIO_SAMPLE_RATE,
-                output_path=chunk_output_path,
-                video_chunks_number=video_chunks_number,
-            )
+            
+            # CRITICAL: We MUST consume the generator inside `smart_inference_mode` 
+            # and preferably inside a background thread so we don't hold gradients 
+            # and so we don't block the async event loop during video encode/decode.
+            from ltx_pipelines.utils.helpers import smart_inference_mode
+            
+            @smart_inference_mode()
+            def _run_encode_video():
+                encode_video(
+                    video=video,
+                    fps=float(params.get("fps", 25.0)),
+                    audio=audio,
+                    audio_sample_rate=AUDIO_SAMPLE_RATE,
+                    output_path=chunk_output_path,
+                    video_chunks_number=video_chunks_number,
+                )
+                
+            await loop.run_in_executor(None, _run_encode_video)
             
             # 5. Commit to Manager (updating state)
             await storyboard_manager.commit_chunk(chunk_idx, chunk_output_path, chunk_prompt)

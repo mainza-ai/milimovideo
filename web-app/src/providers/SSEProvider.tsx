@@ -1,18 +1,10 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTimelineStore } from '../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 import { pollJobStatus } from '../utils/jobPoller';
+import { SSEContext } from '../hooks/useSSE';
 
-interface SSEContextType {
-    isConnected: boolean;
-    lastEventTime: number;
-}
-
-const SSEContext = createContext<SSEContextType>({ isConnected: false, lastEventTime: 0 });
-
-export const useSSE = () => useContext(SSEContext);
-
-export const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
     const [lastEventTime, setLastEventTime] = useState(0);
     const eventSourceRef = useRef<EventSource | null>(null);
@@ -135,3 +127,5 @@ export const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         </SSEContext.Provider>
     );
 };
+
+export default SSEProvider;
