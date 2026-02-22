@@ -6,7 +6,7 @@ import logging
 import subprocess
 import torch
 import config
-from job_utils import active_jobs, broadcast_log, broadcast_progress
+from job_utils import active_jobs, broadcast_log, broadcast_progress, update_job_db
 from file_utils import get_project_output_paths
 from ltx_pipelines.utils.media_io import encode_video
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE
