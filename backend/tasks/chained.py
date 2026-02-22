@@ -377,38 +377,6 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             del audio
             cleanup_memory()
 
-            # TRIM OVERLAP (Fix for "Slow Motion" stutter at seams)
-            # If this is not the first chunk, we must trim the overlapping frames 
-            if chunk_idx > 0:
-                 # Use global overlap setting from manager
-                overlap = storyboard_manager.overlap_frames
-                if overlap > 0:
-                    logger.info(f"Trimming {overlap} overlap frames from chunk {chunk_idx} start...")
-                    temp_raw_path = chunk_output_path.replace(".mp4", "_raw.mp4")
-                    os.rename(chunk_output_path, temp_raw_path)
-                    
-                    try:
-                        # Use select filter to drop first N frames. 
-                        # -vsync vfr ensures frames are dropped correctly without duping, 
-                        # but we want to ensure the output is compatible with the target fps.
-                        # ADDED: afade to smooth the audio join (fadeIn 0.1s)
-                        fps = params.get("fps", 25.0)
-                        
-                        subprocess.run([
-                            "ffmpeg", "-i", temp_raw_path,
-                            "-vf", f"select=gte(n\\,{overlap}),setpts=PTS-STARTPTS",
-                            "-af", f"ashowinfo,arealtime,asetpts=PTS-STARTPTS,afade=t=in:st=0:d=0.1", 
-                            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-                            "-movflags", "+faststart",
-                            "-r", str(fps),
-                            "-y", chunk_output_path
-                        ], cwd=output_dir, check=True, stderr=subprocess.DEVNULL)
-                        logger.info(f"Trimmed overlap from chunk {chunk_idx} (with Audio Fade).")
-                    except Exception as e:
-                        logger.error(f"Failed to trim chunk overlap: {e}. Restoring raw.")
-                        if os.path.exists(temp_raw_path):
-                            os.rename(temp_raw_path, chunk_output_path)
-            
         # Final stitching complete
         logger.info(f"All chunks generated successfully. Stitching {len(files_to_stitch)} parts...")
         
