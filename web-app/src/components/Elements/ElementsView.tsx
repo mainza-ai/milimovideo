@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 // import type { StoryElement } from '../../stores/timelineStore';
-import { Plus, Trash2, Wand2, Image as ImageIcon, X } from 'lucide-react';
+import { Plus, Trash2, Wand2, Image as ImageIcon, X, Edit2 } from 'lucide-react';
 
 interface ElementCardProps {
     el: any;
@@ -18,10 +18,14 @@ interface ElementCardProps {
 const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, onEdit, onPreview }: ElementCardProps) => {
     const [guidance, setGuidance] = useState(2.0);
     const [enableAe, setEnableAe] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
 
     return (
         <div
-            className="bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-white/20 transition-all cursor-pointer group relative hover:shadow-lg hover:shadow-milimo-500/10 hover:-translate-y-1"
+            tabIndex={0}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            className="bg-[#111] border border-white/5 rounded-xl overflow-hidden hover:border-white/20 transition-all relative hover:shadow-lg hover:shadow-milimo-500/10 hover:-translate-y-1 flex flex-col transform-gpu"
             draggable
             onDragStart={(e) => {
                 const data = {
@@ -38,7 +42,7 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
         >
             {/* Visual Header */}
             <div
-                className="aspect-video bg-black/50 relative group-hover:bg-black/40 transition-colors"
+                className={`aspect-video bg-black/50 relative transition-colors ${isHovered ? 'bg-black/40' : ''}`}
                 onClick={(e) => {
                     if (el.image_path) {
                         e.stopPropagation();
@@ -87,10 +91,11 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
 
                 {/* Overlay Actions */}
                 {!generating && (
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 backdrop-blur-sm p-4">
+                    <div className={`absolute inset-0 bg-black/60 transition-opacity flex flex-col items-center justify-center gap-3 backdrop-blur-sm p-4 transform-gpu ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
                         <button
                             onClick={(e) => { e.stopPropagation(); onGenerate(el.id, undefined, guidance, enableAe); }}
-                            className="p-2 px-4 bg-milimo-500 text-black rounded-lg hover:bg-milimo-400 transition-transform hover:scale-105 shadow-xl font-bold flex items-center gap-2"
+                            onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); onGenerate(el.id, undefined, guidance, enableAe); }}
+                            className="p-2 px-4 bg-milimo-500 text-black rounded-lg hover:bg-milimo-400 transition-transform hover:scale-105 shadow-xl font-bold flex items-center gap-2 pointer-events-auto"
                             title="Generate Visual (High Quality)"
                         >
                             <Wand2 size={18} /> Generate Visual
@@ -125,10 +130,10 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
             </div>
 
             {/* Content */}
-            <div className="p-5">
+            <div className="p-5 flex-1">
                 <div className="flex items-start justify-between mb-2">
                     <div>
-                        <h3 className="text-xl font-bold text-white group-hover:text-milimo-400 transition-colors" role="button" onClick={() => onEdit(el)}>{el.name}</h3>
+                        <h3 className="text-xl font-bold text-white">{el.name}</h3>
                         <span className="text-xs font-mono text-milimo-500 bg-milimo-500/10 px-2 py-0.5 rounded">{el.triggerWord}</span>
                     </div>
                     <span className="text-[10px] uppercase font-bold tracking-wider text-white/30 border border-white/10 px-2 py-1 rounded-full">
@@ -141,7 +146,22 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
             </div>
 
             {/* Footer Actions */}
-            <div className="px-5 pb-5 pt-0 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className={`px-5 pb-5 pt-0 flex justify-between items-center transition-opacity mt-auto transform-gpu ${isHovered ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onEdit(el);
+                    }}
+                    onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        onEdit(el);
+                    }}
+                    className="flex items-center gap-1.5 text-xs font-bold text-white/50 hover:text-white transition-colors p-2 cursor-pointer z-50 relative bg-black/50 rounded-md"
+                >
+                    <Edit2 size={14} /> Edit Element
+                </button>
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
@@ -160,13 +180,14 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
 
 export const ElementsView = () => {
     const {
-        project, elements, fetchElements, createElement, deleteElement,
+        project, elements, fetchElements, createElement, updateElement, deleteElement,
         generateVisual, generatingElementIds, cancelElementGeneration
     } = useTimelineStore(useShallow(state => ({
         project: state.project,
         elements: state.elements,
         fetchElements: state.fetchElements,
         createElement: state.createElement,
+        updateElement: state.updateElement,
         deleteElement: state.deleteElement,
         generateVisual: state.generateVisual,
         generatingElementIds: state.generatingElementIds,
@@ -192,24 +213,10 @@ export const ElementsView = () => {
     const handleCreate = async () => {
         if (!project) return;
         if (editingId) {
-            // Handle Update (Not yet implemented in store, but effectively delete+create for now or just update metadata)
-            // For now, let's just create new and delete old, or we need an updateElement endpoint.
-            // Given limitations, let's treat it as a create for now or add updateElement to store.
-            // But the user just asked for "edit", so I'll assume they want to change the text.
-            // Wait, I don't have updateElement in the store interface I saw earlier.
-            // I'll stick to Create logic for new items, but for Edit, I'll update the local state to "Create Mode"
-            // and pre-fill. If they save, it should probably update.
-            // Let's implement a basic "Delete + Recreate" or assume backend supports update.
-            // Actually, the user rules say I can be proactive.
-            // I will delete the old one and create a new one with the same ID? No, IDs are unique.
-            // I will just use create for now as a "Save" for new.
-            // To support "Edit", I should probably add `updateElement` to store later.
-            // But to unblock the user: I will make the form "Edit" just delete the old one and create new? 
-            // That loses the image. 
-            // Better: Just allow creating new for now, but pre-fill form.
-            // I will implement a proper "Update" in the next step if needed, but for now let's just prefill.
-            await createElement(project.id, { name, type: type as any, description, triggerWord });
+            // Update existing element
+            await updateElement(editingId, { name, type: type as any, description, triggerWord });
         } else {
+            // Create new element
             await createElement(project.id, { name, type: type as any, description, triggerWord });
         }
         setIsCreating(false);
@@ -220,13 +227,9 @@ export const ElementsView = () => {
     const startEdit = (el: any) => {
         setName(el.name);
         setType(el.type);
-        setDescription(el.description);
+        setDescription(el.description || '');
         setTriggerWord(el.triggerWord);
-        setEditingId(el.id); // For tracking we are editing (though backend update missing, we will just treat as new for now or implement update)
-        // Actually, without updateElement in backend, I can't really "Edit".
-        // I'll make the form available and maybe they can just copy-paste?
-        // No, I should do it right. I'll add updateElement to store/backend in a bit. 
-        // For this step, I'll just enable the UI flow.
+        setEditingId(el.id);
         setIsCreating(true);
     };
 
@@ -252,7 +255,7 @@ export const ElementsView = () => {
                         <p className="text-white/40 mt-1">Manage characters, locations, and props for consistent generation.</p>
                     </div>
                     <button
-                        onClick={() => setIsCreating(true)}
+                        onClick={() => { resetForm(); setIsCreating(true); }}
                         className="px-4 py-2 bg-milimo-500 hover:bg-milimo-400 text-black font-bold rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-milimo-500/20"
                     >
                         <Plus size={18} />
@@ -271,7 +274,9 @@ export const ElementsView = () => {
                             >
                                 <X size={18} />
                             </button>
-                            <h3 className="text-lg font-bold mb-4 text-milimo-400">{editingId ? 'Edit Element' : 'New Element'}</h3>
+                            <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-milimo-400">
+                                {editingId ? <><Edit2 size={18} /> Edit Element</> : <><Plus size={18} /> Create New Element</>}
+                            </h3>
                             <div className="space-y-4">
                                 <div>
                                     <label className="text-xs text-white/40 uppercase font-bold tracking-wider">Name</label>
@@ -312,9 +317,9 @@ export const ElementsView = () => {
                                 </div>
                                 <button
                                     onClick={handleCreate}
-                                    className="w-full py-2 bg-milimo-500 text-black font-bold rounded hover:bg-milimo-400 transition-colors"
+                                    className={`w-full py-2 text-black font-bold rounded transition-colors ${editingId ? 'bg-blue-400 hover:bg-blue-300' : 'bg-milimo-500 hover:bg-milimo-400'}`}
                                 >
-                                    {editingId ? 'Update (As New)' : 'Create Element'}
+                                    {editingId ? 'Save Changes' : 'Create Element'}
                                 </button>
                             </div>
                         </div>

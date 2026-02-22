@@ -29,6 +29,7 @@ export const MediaLibrary = () => {
     const [tab, setTab] = useState<'project' | 'history'>('history');
 
     const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+    const [hoveredAssetId, setHoveredAssetId] = useState<string | null>(null);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
@@ -179,7 +180,10 @@ export const MediaLibrary = () => {
                                         e.dataTransfer.effectAllowed = 'copy';
                                     }}
                                     onClick={() => handleAssetClick(asset)}
-                                    className="relative aspect-square bg-white/5 rounded-lg overflow-hidden border border-white/5 hover:border-milimo-500 cursor-pointer group"
+                                    onMouseEnter={() => setHoveredAssetId(asset.id)}
+                                    onMouseLeave={() => setHoveredAssetId(null)}
+                                    tabIndex={0}
+                                    className="relative aspect-square bg-white/5 rounded-lg overflow-hidden border border-white/5 hover:border-milimo-500 cursor-pointer transform-gpu"
                                 >
                                     {asset.type === 'image' ? (
                                         <img src={asset.url} className="w-full h-full object-cover" />
@@ -200,15 +204,20 @@ export const MediaLibrary = () => {
                                     )}
 
                                     {/* Type icon */}
-                                    <div className="absolute top-1 left-1 bg-black/50 p-1 rounded backdrop-blur-sm">
+                                    <div className="absolute top-1 left-1 bg-black/50 p-1 rounded backdrop-blur-sm pointer-events-none">
                                         {asset.type === 'image' ? <ImageIcon size={10} className="text-white/70" /> : <Film size={10} className="text-white/70" />}
                                     </div>
 
                                     <button
                                         onClick={(e) => requestDelete(e, asset.id)}
-                                        className="absolute top-1 right-1 bg-red-500/80 p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                        onPointerDown={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            requestDelete(e as any, asset.id);
+                                        }}
+                                        className={`absolute top-1 right-1 bg-red-500/80 p-1.5 rounded transition-opacity hover:bg-red-600 z-10 transform-gpu ${hoveredAssetId === asset.id ? 'opacity-100' : 'opacity-0'}`}
                                     >
-                                        <Trash2 size={10} className="text-white" />
+                                        <Trash2 size={12} className="text-white" />
                                     </button>
                                 </div>
                             ))}

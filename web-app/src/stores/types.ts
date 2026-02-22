@@ -201,6 +201,7 @@ export interface ElementSlice {
     generatingElementIds: Record<string, string>;
     fetchElements: (projectId: string) => Promise<void>;
     createElement: (projectId: string, data: Partial<StoryElement>) => Promise<void>;
+    updateElement: (elementId: string, data: Partial<StoryElement>) => Promise<void>;
     deleteElement: (elementId: string) => Promise<void>;
     generateVisual: (elementId: string, promptOverride?: string, guidanceOverride?: number, enableAeOverride?: boolean) => Promise<void>;
     cancelElementGeneration: (elementId: string) => Promise<void>;

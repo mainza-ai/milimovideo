@@ -43,6 +43,34 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
         }
     },
 
+    updateElement: async (elementId, elementData) => {
+        try {
+            const payload: any = {};
+            if (elementData.name !== undefined) payload.name = elementData.name;
+            if (elementData.type !== undefined) payload.type = elementData.type;
+            if (elementData.description !== undefined) payload.description = elementData.description;
+            if (elementData.triggerWord !== undefined) payload.trigger_word = elementData.triggerWord; // backend expects snake_case
+
+            const res = await fetch(`http://localhost:8000/elements/${elementId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (res.ok) {
+                // Refresh list
+                const { project } = get();
+                if (project && project.id) {
+                    get().fetchElements(project.id);
+                }
+                get().addToast("Element updated", "success");
+            } else {
+                get().addToast("Failed to update element", "error");
+            }
+        } catch (e) {
+            get().addToast("Failed to update element", "error");
+        }
+    },
+
     deleteElement: async (elementId) => {
         try {
             const res = await fetch(`http://localhost:8000/elements/${elementId}`, { method: 'DELETE' });

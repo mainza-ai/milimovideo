@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
-import { Loader2, Zap, Image as ImageIcon, Wand2, Upload, X } from 'lucide-react';
+import { Loader2, Zap, Image as ImageIcon, Wand2, Upload, X, Trash2 } from 'lucide-react';
 
 
 interface GeneratedImage {
@@ -26,6 +26,7 @@ export const ImagesView = () => {
     const [images, setImages] = useState<GeneratedImage[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
+    const [hoveredImageId, setHoveredImageId] = useState<string | null>(null);
 
     // Form State
     const [prompt, setPrompt] = useState("");
@@ -97,6 +98,27 @@ export const ImagesView = () => {
             } catch (err) {
                 console.error(err);
             }
+        }
+    };
+
+    const handleDeleteImage = async (imgId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!window.confirm("Delete this image forever?")) return;
+
+        try {
+            const res = await fetch(`http://localhost:8000/assets/${imgId}`, { method: 'DELETE' });
+            if (res.ok) {
+                setImages(prev => prev.filter(img => img.id !== imgId));
+                if (selectedImage?.id === imgId) {
+                    setSelectedImage(null);
+                }
+                addToast("Image deleted", "success");
+            } else {
+                addToast("Failed to delete image", "error");
+            }
+        } catch (err) {
+            console.error(err);
+            addToast("Error deleting image", "error");
         }
     };
 
@@ -360,11 +382,29 @@ export const ImagesView = () => {
                                         }
                                     }
                                 }}
-                                className={`aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all group relative ${selectedImage?.id === img.id ? 'border-milimo-500 shadow-lg shadow-milimo-500/20' : 'border-transparent hover:border-white/20'}`}
+                                onMouseEnter={() => setHoveredImageId(img.id)}
+                                onMouseLeave={() => setHoveredImageId(null)}
+                                tabIndex={0}
+                                className={`aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all relative transform-gpu ${selectedImage?.id === img.id ? 'border-milimo-500 shadow-lg shadow-milimo-500/20' : 'border-transparent hover:border-white/20'}`}
                             >
                                 <img src={`http://localhost:8000${img.url}`} className="w-full h-full object-cover" loading="lazy" />
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    <span className="text-xs font-mono">{img.width}x{img.height}</span>
+                                <div className={`absolute inset-0 bg-black/50 transition-opacity flex flex-col justify-between p-2 ${hoveredImageId === img.id ? 'opacity-100' : 'opacity-0'}`}>
+                                    <div className="flex justify-end relative z-10">
+                                        <button
+                                            onClick={(e) => handleDeleteImage(img.id, e)}
+                                            onPointerDown={(e) => {
+                                                e.stopPropagation();
+                                                e.preventDefault();
+                                                handleDeleteImage(img.id, e as any);
+                                            }}
+                                            className="p-1.5 bg-black/60 hover:bg-red-500/80 hover:text-white rounded-md text-white/70 transition-colors backdrop-blur-sm pointer-events-auto"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center justify-center h-full pointer-events-none">
+                                        <span className="text-xs font-mono">{img.width}x{img.height}</span>
+                                    </div>
                                 </div>
                             </div>
                         ))}

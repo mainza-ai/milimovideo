@@ -273,6 +273,10 @@ useEffect(() => {
 ### G. SSE Provider
 `SSEProvider.tsx` wraps the app in a React context that manages the `EventSource` lifecycle. On mount, it syncs any in-flight jobs via `jobPoller`. The connection uses exponential backoff on errors (1s → 10s max). It replaces the previous inline SSE listener that was tightly coupled to the store.
 
+### H. Safari Draggable Hover Bug
+Elements with `draggable={true}` in Safari WebKit silently swallow CSS pointer events, completely neutralizing CSS `:hover` and `group-hover` pseudo-classes on child overlays.
+**Workaround:** For any draggable interactive cards (like `ElementCard`, Media Assets, or Images), abandon Tailwind CSS hover states. Instead, use explicit React state (e.g., `isHovered`) bound to `onMouseEnter` and `onMouseLeave` synthetic events (which Safari does reliably fire) to toggle UI visibility.
+
 ## 6. Data Flow: SSE → Store
 
 ```mermaid

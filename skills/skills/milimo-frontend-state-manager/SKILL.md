@@ -31,14 +31,21 @@ The timeline UI is entirely DOM/CSS-based absolute positioning (no HTML5 `<canva
 - **Track 0 (V1)** behaves magically: It ignores user-specified `startFrame`. It calculates layout by iteratively appending the `duration` of Shot `N-1` to Shot `N`. Dragging a clip on V1 simply reorders the array.
 - **Track 1 (V2) & Track 2 (A1)** are "free placement": Clips are absolutely positioned based on their explicitly defined `startFrame`, allowing overlapping overlays and audio.
 
-## 3. Engine Loop & Safari Audio Fix (`GlobalAudioManager.ts`)
+## 3. Browser Quirks & Engine Workarounds
 
+Safari is notoriously difficult for media web apps. The frontend must strictly adhere to these workarounds:
+
+### A. Safari Audio Fix (`GlobalAudioManager.ts`)
 Safari blocks `<audio>` autoplay and suffers from aggressive media desync when syncing HTML5 video to separate audio tags.
-
 1. **The Playback Loop**: `PlaybackEngine.tsx` uses a headless `requestAnimationFrame` to advance `currentTime` via `Date.now()` deltas.
 2. **Audio Decoding**: `GlobalAudioManager.ts` pre-fetches `.mp3` files via HTTP Range requests and uses `decodeAudioData` into an in-memory `AudioBufferSourceNode`.
 3. **Mute Control**: Audio nodes remain playing but are muted (`gain.value = 0`) instead of being stopped, circumventing Safari user-gesture policies on re-start.
 4. **Drift Tolerance**: The frontend hardcodes a 250ms drift tolerance. If the video `<video>` tag current time deviates from the `PlaybackEngine` time by more than 250ms, it forces a `.fastSeek()`.
+
+### B. Safari Draggable Hover Bug
+Elements with `draggable={true}` in Safari WebKit silently swallow CSS pointer events, completely neutralizing Tailwind's `group-hover` and standard `:hover` pseudo-classes intended for child overlay UI.
+* **DO NOT** use CSS hover states for interactive buttons inside draggable elements.
+* **INSTEAD**, use explicit React state (e.g., `const [isHovered, setIsHovered] = useState(false)`) bound to `onMouseEnter` and `onMouseLeave` synthetic events (which Safari does reliably fire) to toggle UI visibility.
 
 ## 4. SSE & React Hooks
 
