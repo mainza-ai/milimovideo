@@ -133,6 +133,36 @@ def image_conditionings_by_replacing_latent(
     return conditionings
 
 
+def image_sequence_conditionings_from_paths(
+    image_paths: list[str],
+    height: int,
+    width: int,
+    video_encoder: VideoEncoder,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> list[ConditioningItem]:
+    """
+    Creates continuous video latent conditionings from a sequence of overlapping frames.
+    The sequence is loaded as a single video tensor [1, C, F, H, W] to natively encode
+    spatiotemporal features through the VAE before unpacking to Latent Index conditions.
+    """
+    result = None
+    for path in image_paths:
+        frame = load_image_conditioning(
+            image_path=path,
+            height=height,
+            width=width,
+            dtype=dtype,
+            device=device,
+        )
+        result = frame if result is None else torch.cat([result, frame], dim=2)
+        
+    encoded_video = video_encoder(result)
+    
+    # We use start_frame_idx=0 since this represents the very beginning of the new sequence
+    return latent_conditionings_from_tensor(encoded_video, start_frame_idx=0, strength=1.0)
+
+
 def image_conditionings_by_adding_guiding_latent(
     images: list[tuple[str, int, float]],
     height: int,

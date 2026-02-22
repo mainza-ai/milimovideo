@@ -136,17 +136,18 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Extract params
             chunk_prompt = chunk_config.get("prompt", prompt)
             chunk_images = chunk_config.get("images", []) # list of (path, idx, strength)
+            chunk_media_sequence = chunk_config.get("media_sequence", []) # list of paths
             overlap_count = 0
             frames_to_trim = 0
             
             # The storyboard manager now handles extracting the overlap frames and
-            # injecting them into chunk_images natively. We calculate how many 
-            # frames to trim based on the number of conditioning images.
+            # injecting them into chunk_media_sequence natively. We calculate how many 
+            # frames to trim based on the length of the conditioning sequence.
             if chunk_idx > 0:
-                requested_pixel_overlap = len(chunk_images)
+                requested_pixel_overlap = len(chunk_media_sequence)
                 overlap_count = requested_pixel_overlap
                 frames_to_trim = requested_pixel_overlap
-                logger.info(f"Chunk Video Conditioning: {len(chunk_images)} frames.")
+                logger.info(f"Chunk Video Conditioning: {len(chunk_media_sequence)} frames.")
             # Critical Fix for Extend + Smart Continue:
             # If this is the first chunk, and we have global input images (from Extend timeline),
             # we must use them! Storyboard doesn't know about them yet (or returned empty).
@@ -254,7 +255,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
 
             # 2. Define Pipeline execution wrapper
-            def _run_chunk_pipeline(images_arg, current_prompt, pipeline_enhance):
+            def _run_chunk_pipeline(images_arg, sequence_arg, current_prompt, pipeline_enhance):
                 # Force Negative Prompt for chained chunks to kill static inertia
                 # We start with the user's negative prompt (if any) and append our bans.
                 effective_negative_prompt = negative_prompt or ""
@@ -272,6 +273,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     num_inference_steps=params.get("num_inference_steps", 40),
                     cfg_guidance_scale=params.get("cfg_scale", 3.0),
                     images=images_arg,
+                    media_sequence=sequence_arg,
                     tiling_config=TilingConfig.default(),
                     enhance_prompt=pipeline_enhance,
                     callback_on_step_end=cancellation_check
@@ -282,7 +284,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Note: We no longer expect a latent tensor back
             try:
                 result = await loop.run_in_executor(
-                    None, _run_chunk_pipeline, chunk_images, chunk_prompt, do_pipeline_enhance
+                    None, _run_chunk_pipeline, chunk_images, chunk_media_sequence, chunk_prompt, do_pipeline_enhance
                 )
                 
                 # Check tuple length depending on pipeline output format over time

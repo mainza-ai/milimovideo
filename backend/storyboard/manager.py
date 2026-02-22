@@ -79,9 +79,8 @@ class StoryboardManager:
             overlap_frames = await self._extract_overlap_frames(last_chunk_output, f"chunk_{chunk_idx-1}", count=self.overlap_frames)
             
             if overlap_frames:
-                 # Populate conditioning natively: list of (path, frame_idx, strength)
-                 for i, frame_path in enumerate(overlap_frames):
-                     chunk_config["images"].append((frame_path, i, 1.0))
+                 # Pass the sequence of frames directly as media_sequence for holistic VAE encoding
+                 chunk_config["media_sequence"] = overlap_frames
                      
                  logger.info(f"Conditioned chunk {chunk_idx} on {len(overlap_frames)} overlapping frames natively.")
                  

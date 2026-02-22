@@ -32,6 +32,7 @@ from ltx_pipelines.utils.helpers import (
     get_device,
     guider_denoising_func,
     image_conditionings_by_replacing_latent,
+    image_sequence_conditionings_from_paths,
     simple_denoising_func,
     smart_inference_mode,
     synchronize_device,
@@ -96,6 +97,7 @@ class TI2VidTwoStagesPipeline:
         num_inference_steps: int,
         cfg_guidance_scale: float,
         images: list[tuple[str, int, float]],
+        media_sequence: list[str] | None = None,
         tiling_config: TilingConfig | None = None,
         enhance_prompt: bool = False,
         upscale: bool = True,
@@ -161,7 +163,6 @@ class TI2VidTwoStagesPipeline:
             fps=frame_rate,
         )
         
-        # CONDITIONING PREP
         stage_1_conditionings = image_conditionings_by_replacing_latent(
             images=images,
             height=stage_1_output_shape.height,
@@ -170,6 +171,18 @@ class TI2VidTwoStagesPipeline:
             dtype=dtype,
             device=self.device,
         )
+        
+        if media_sequence:
+            stage_1_conditionings.extend(
+                image_sequence_conditionings_from_paths(
+                    image_paths=media_sequence,
+                    height=stage_1_output_shape.height,
+                    width=stage_1_output_shape.width,
+                    video_encoder=video_encoder,
+                    dtype=dtype,
+                    device=self.device,
+                )
+            )
 
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_1_output_shape,
@@ -231,6 +244,18 @@ class TI2VidTwoStagesPipeline:
             dtype=dtype,
             device=self.device,
         )
+        
+        if media_sequence:
+            stage_2_conditionings.extend(
+                image_sequence_conditionings_from_paths(
+                    image_paths=media_sequence,
+                    height=stage_2_output_shape.height,
+                    width=stage_2_output_shape.width,
+                    video_encoder=video_encoder,
+                    dtype=dtype,
+                    device=self.device,
+                )
+            )
 
         video_state, audio_state = denoise_audio_video(
             output_shape=stage_2_output_shape,
