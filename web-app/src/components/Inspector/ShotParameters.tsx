@@ -48,7 +48,13 @@ export const ShotParameters = ({ shot, fps }: ShotParametersProps) => {
                         type="range" min="25" max="1200" step="1"
                         className="w-full h-1 bg-white/10 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-milimo-500"
                         value={shot.numFrames}
-                        onChange={(e) => updateShot(shot.id, { numFrames: parseInt(e.target.value) })}
+                        onChange={(e) => {
+                            const newFrames = parseInt(e.target.value);
+                            updateShot(shot.id, {
+                                numFrames: newFrames,
+                                ...(newFrames > 121 ? { autoContinue: true } : {})
+                            });
+                        }}
                     />
                 </div>
             )}

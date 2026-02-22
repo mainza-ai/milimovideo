@@ -272,7 +272,16 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 active_jobs[job_id]["eta_seconds"] = eta_seconds
                 
                 # Also status message
-                active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
+                status_msg = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
+                active_jobs[job_id]["status_message"] = status_msg
+                
+                # Broadcast the new target narrative to the frontend!
+                await broadcast_progress(
+                    job_id, 
+                    progress=int((chunk_idx / num_chunks) * 100), 
+                    message=status_msg,
+                    enhanced_prompt=chunk_prompt
+                )
             
             logger.info(f"Starting chunk {chunk_idx}: {chunk_prompt[:50]}...")
             

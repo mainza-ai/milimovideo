@@ -781,7 +781,6 @@ async def generate_video_task(job_id: str, params: dict):
              
              # Broadcast cancelled event explicitly via asyncio
              import asyncio
-             from events import event_manager
              try:
                  asyncio.run_coroutine_threadsafe(
                      event_manager.broadcast("cancelled", {"job_id": job_id}),

@@ -41,7 +41,10 @@ export const pollJobStatus = async (jobId: string, shotId: string) => {
             };
             if (statusData.status_message) updates.statusMessage = statusData.status_message;
             if (statusData.eta_seconds) updates.etaSeconds = statusData.eta_seconds;
-            if (statusData.enhanced_prompt) updates.enhancedPromptResult = statusData.enhanced_prompt;
+            if (statusData.enhanced_prompt) {
+                updates.enhancedPromptResult = statusData.enhanced_prompt;
+                updates.currentPrompt = statusData.enhanced_prompt;
+            }
 
             updateShot(shotId, updates);
         }
