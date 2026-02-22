@@ -386,6 +386,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         logger.info(f"DEBUG: Prompt AFTER VLM Enhancement: {run_prompt}")
                         if is_ref:
                             logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V.")
+                            update_job_progress(job_id, 5, "Reference sheet detected. Using for prompt enhancement only.")
                             input_images = []
                             inspiration_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=run_prompt)
@@ -459,6 +460,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         )
                         if is_ref:
                             logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V (ic_lora).")
+                            update_job_progress(job_id, 5, "Reference sheet detected. Using for prompt enhancement only.")
                             input_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=ic_prompt)
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=ic_prompt)
@@ -501,6 +503,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         )
                         if is_ref:
                             logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V (keyframe).")
+                            update_job_progress(job_id, 5, "Reference sheet detected. Using for prompt enhancement only.")
                             input_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=kf_prompt)
                         update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=kf_prompt)

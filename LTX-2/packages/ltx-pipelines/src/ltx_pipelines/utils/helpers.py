@@ -526,12 +526,8 @@ def clean_response(text: str) -> str:
     # Note: We ALLOW "Style:" as it is part of the official prompt format.
     cleaned_text = re.sub(r'(?i)^(Audio|Visual Description|Visual|Scene|Sound)[:\s\-]+', '', cleaned_text).strip()
 
-    # Strip leading punctuation/whitespace BUT preserve valid starters like "Style:" or alphanumeric
-    # Only strip leading junk characters (quotes, colons not followed by text, etc.)
-    # Don't strip if it starts with a word like "Style:"
-    if cleaned_text and not cleaned_text[0].isalpha():
-         while cleaned_text and not cleaned_text[0].isalnum():
-             cleaned_text = cleaned_text[1:].strip()
+    # Loosened aggressive stripping that was truncating prompts
+    cleaned_text = cleaned_text.lstrip(' \t\n\r"\'*-:.,')
     text = cleaned_text
     
     # Capitalize first letter if lowercase
