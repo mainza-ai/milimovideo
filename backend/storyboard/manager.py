@@ -101,7 +101,7 @@ class StoryboardManager:
                     f"Continue the action from where the previous chunk left off."
                 )
                 
-                enhanced = llm_enhance(
+                enhanced, _ = llm_enhance(
                     prompt=continuation_input,
                     system_prompt=director_prompt,
                     is_video=True,

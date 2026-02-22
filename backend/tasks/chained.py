@@ -238,7 +238,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
 
                 try:
                     logger.info(f"Enhancing Chunk 0 prompt via {config.LLM_PROVIDER} (Extend={is_extend})...")
-                    enhanced = llm_enhance(
+                    enhanced, _ = llm_enhance(
                         prompt=effective_prompt,
                         system_prompt=sys_prompt,
                         is_video=True,
