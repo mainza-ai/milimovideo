@@ -345,9 +345,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                      fps = float(params.get("fps", 25.0))
                      trim_samples = int(frames_to_trim * (AUDIO_SAMPLE_RATE / fps))
                      if audio.ndim == 3:
-                        audio = audio[:, :, trim_samples:]
+                        audio = audio[:, :, :-trim_samples]
                      elif audio.ndim == 2:
-                        audio = audio[:, trim_samples:]
+                        audio = audio[:, :-trim_samples]
             
             video_chunks_number = get_video_chunks_number(chunk_size, TilingConfig.default())
             
