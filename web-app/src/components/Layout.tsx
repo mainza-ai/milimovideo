@@ -12,6 +12,7 @@ import { ExportModal } from './ExportModal';
 import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
 import { PanelErrorBoundary } from './ErrorBoundary';
 import { LLMSettings } from './LLMSettings';
+import { ModelLibrary } from './ModelLibrary';
 
 import { useShallow } from 'zustand/react/shallow';
 
@@ -219,6 +220,12 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                                 >
                                     Images
                                 </button>
+                                <button
+                                    onClick={() => setViewMode('models')}
+                                    className={`px-3 py-1 text-[10px] font-medium rounded-md transition-all ${viewMode === 'models' ? 'bg-white/10 text-white shadow-sm' : 'text-white/40 hover:text-white/60'}`}
+                                >
+                                    Models
+                                </button>
                             </div>
                         </span>
                         <span className="text-[10px] text-white/30 font-mono uppercase">Resolution: {project.resolutionW}x{project.resolutionH}</span>
@@ -294,6 +301,13 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                             <div className="absolute inset-0 z-10 bg-[#050505] w-full h-full">
                                 <PanelErrorBoundary fallbackTitle="Images">
                                     <ImagesView />
+                                </PanelErrorBoundary>
+                            </div>
+                        )}
+                        {viewMode === 'models' && (
+                            <div className="absolute inset-0 z-10 bg-[#050505] w-full h-full overflow-y-auto">
+                                <PanelErrorBoundary fallbackTitle="Model Library">
+                                    <ModelLibrary />
                                 </PanelErrorBoundary>
                             </div>
                         )}

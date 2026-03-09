@@ -1,0 +1,317 @@
+/* ── Model Settings ────────────────────────────────────────────── */
+
+.model-settings {
+    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+    margin-bottom: 16px;
+}
+
+.model-settings--loading {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 11px;
+    padding: 20px;
+}
+
+.model-settings__header {
+    margin-bottom: 12px;
+}
+
+.model-settings__title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #60a5fa;
+}
+
+/* ── Section ──────────────────────────────────────────────────── */
+
+.settings-section {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.settings-section:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.settings-section__title {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 8px;
+}
+
+/* ── Disk Bar ─────────────────────────────────────────────────── */
+
+.disk-bar {
+    height: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.disk-bar__fill {
+    height: 100%;
+    background: linear-gradient(90deg, #34d399, #22c55e);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.disk-bar__fill--warning {
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+}
+
+.disk-bar__fill--critical {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.disk-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 6px;
+}
+
+.disk-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.disk-breakdown__item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.disk-breakdown__name {
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    flex: 1;
+}
+
+.disk-breakdown__size {
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+/* ── Queue ─────────────────────────────────────────────────────── */
+
+.queue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.queue-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 4px;
+    font-size: 9px;
+}
+
+.queue-item__pos {
+    color: rgba(255, 255, 255, 0.25);
+    font-weight: 600;
+    min-width: 18px;
+}
+
+.queue-item__name {
+    flex: 1;
+    color: #e5e5e5;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-item__priority {
+    font-size: 8px;
+    font-weight: 600;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+.queue-item__priority--0 {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+}
+.queue-item__priority--1 {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+}
+.queue-item__priority--2 {
+    color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.queue-item__remove {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.2);
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0 2px;
+    transition: color 0.15s;
+}
+.queue-item__remove:hover {
+    color: #ef4444;
+}
+
+/* ── Toggle ────────────────────────────────────────────────────── */
+
+.settings-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 5px 0;
+}
+
+.settings-toggle__info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.settings-toggle__label {
+    font-size: 10px;
+    font-weight: 500;
+    color: #e5e5e5;
+}
+
+.settings-toggle__desc {
+    font-size: 8px;
+    color: rgba(255, 255, 255, 0.25);
+}
+
+.toggle-switch {
+    width: 30px;
+    height: 16px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+    padding: 0;
+}
+.toggle-switch--on {
+    background: rgba(52, 211, 153, 0.25);
+    border-color: rgba(52, 211, 153, 0.3);
+}
+
+.toggle-switch__knob {
+    width: 10px;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: all 0.2s;
+}
+.toggle-switch--on .toggle-switch__knob {
+    left: 16px;
+    background: #34d399;
+}
+
+.settings-badge {
+    font-size: 8px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+.settings-badge--ok {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.08);
+}
+.settings-badge--warn {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+}
+
+/* ── Version Check ────────────────────────────────────────────── */
+
+.settings-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 9px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.15s;
+    width: 100%;
+    justify-content: center;
+}
+.settings-action-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.7);
+}
+.settings-action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.version-updates {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.version-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+    color: #f59e0b;
+    padding: 3px 6px;
+    background: rgba(245, 158, 11, 0.04);
+    border-radius: 3px;
+}
+
+.version-item__icon {
+    flex-shrink: 0;
+}
+
+.version-item__date {
+    margin-left: auto;
+    color: rgba(255, 255, 255, 0.25);
+    font-size: 8px;
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
