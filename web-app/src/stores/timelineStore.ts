@@ -11,6 +11,7 @@ import { createUISlice } from './slices/uiSlice';
 import { createTrackSlice } from './slices/trackSlice';
 import { createElementSlice } from './slices/elementSlice';
 import { createServerSlice } from './slices/serverSlice';
+import { createModelSlice } from './slices/modelSlice';
 
 // Export Types for consumers
 export * from './types';
@@ -36,6 +37,7 @@ export const useTimelineStore = create<TimelineState>()(
                 ...createTrackSlice(...a),
                 ...createElementSlice(...a),
                 ...createServerSlice(...a),
+                ...createModelSlice(...a),
             }),
             {
                 name: 'milimo-timeline-storage',

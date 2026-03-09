@@ -180,8 +180,8 @@ export interface UISlice {
     transientDuration: number | null;
     setTransientDuration: (d: number | null) => void;
 
-    viewMode: 'timeline' | 'elements' | 'storyboard' | 'images';
-    setViewMode: (mode: 'timeline' | 'elements' | 'storyboard' | 'images') => void;
+    viewMode: 'timeline' | 'elements' | 'storyboard' | 'images' | 'models';
+    setViewMode: (mode: 'timeline' | 'elements' | 'storyboard' | 'images' | 'models') => void;
 
     selectShot: (id: string | null) => void;
 
@@ -217,4 +217,8 @@ export interface ServerSlice {
     handleServerEvent: (type: string, data: any) => void;
 }
 
-export type TimelineState = ProjectSlice & ShotSlice & PlaybackSlice & UISlice & TrackSlice & ElementSlice & ServerSlice;
+// Re-export ModelSlice types from slice file
+export type { ModelSlice, ModelInfo, DownloadProgress, PipelineReadiness } from './slices/modelSlice';
+import type { ModelSlice } from './slices/modelSlice';
+
+export type TimelineState = ProjectSlice & ShotSlice & PlaybackSlice & UISlice & TrackSlice & ElementSlice & ServerSlice & ModelSlice;

@@ -17,6 +17,11 @@ MODELS_DIR = os.path.join(BACKEND_DIR, "models")
 FLUX_WEIGHTS_PATH = os.path.join(MODELS_DIR, "flux2") # Updated path to directory
 SAM_WEIGHTS_PATH = os.path.join(MODELS_DIR, "sam3", "sam3.pt")
 
+# Model Management
+MODELS_MANIFEST_PATH = os.path.join(BACKEND_DIR, "models_manifest.json")
+DOWNLOAD_TEMP_SUFFIX = ".downloading"
+DOWNLOAD_PROGRESS_INTERVAL = 2.0  # seconds between SSE progress updates
+
 # IP-Adapter Paths (Visual Conditioning)
 FLUX_IP_ADAPTER_PATH = os.path.join(MODELS_DIR, "flux-ip-adapter.safetensors") # Placeholder
 LTX_IP_ADAPTER_PATH = os.path.join(MODELS_DIR, "ltx-ip-adapter.safetensors")   # Placeholder

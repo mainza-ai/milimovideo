@@ -9,6 +9,7 @@ const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [lastEventTime, setLastEventTime] = useState(0);
     const eventSourceRef = useRef<EventSource | null>(null);
     const handleServerEvent = useTimelineStore(useShallow(state => state.handleServerEvent));
+    const handleModelEvent = useTimelineStore(useShallow(state => state.handleModelEvent));
 
     // Sync active jobs on mount
     useEffect(() => {
@@ -61,7 +62,6 @@ const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             // Generic Message Handler (if event type is 'message')
             es.onmessage = () => {
                 // Heartbeats or generic messages
-                // console.log("[SSE] Message:", event.data);
             };
 
             // Custom Event Handlers
@@ -87,7 +87,6 @@ const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             });
 
             es.addEventListener('error', (e: MessageEvent) => {
-                // This 'error' event type is custom from backend, NOT connection error
                 try {
                     const data = JSON.parse(e.data);
                     handleServerEvent('error', data);
@@ -99,10 +98,42 @@ const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             es.addEventListener('log', (e: MessageEvent) => {
                 try {
                     JSON.parse(e.data);
-                    // Optional: expose logs to UI?
-                    // console.debug("[Server Log]", data.message);
                 } catch (err) {
                     console.error("[SSE] Failed to parse log", err);
+                }
+            });
+
+            // ── Model Management Events ──────────────────────────────
+            es.addEventListener('download_progress', (e: MessageEvent) => {
+                try {
+                    handleModelEvent('download_progress', JSON.parse(e.data));
+                } catch (err) {
+                    console.error("[SSE] Failed to parse download_progress", err);
+                }
+            });
+
+            es.addEventListener('download_complete', (e: MessageEvent) => {
+                try {
+                    handleModelEvent('download_complete', JSON.parse(e.data));
+                    setLastEventTime(Date.now());
+                } catch (err) {
+                    console.error("[SSE] Failed to parse download_complete", err);
+                }
+            });
+
+            es.addEventListener('download_error', (e: MessageEvent) => {
+                try {
+                    handleModelEvent('download_error', JSON.parse(e.data));
+                } catch (err) {
+                    console.error("[SSE] Failed to parse download_error", err);
+                }
+            });
+
+            es.addEventListener('model_status_change', (e: MessageEvent) => {
+                try {
+                    handleModelEvent('model_status_change', JSON.parse(e.data));
+                } catch (err) {
+                    console.error("[SSE] Failed to parse model_status_change", err);
                 }
             });
 
