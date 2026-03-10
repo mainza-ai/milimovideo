@@ -200,6 +200,7 @@ class FluxInpainter:
                 logger.info(f"Loading Native AutoEncoder from {ae_path_file}...")
                 os.environ["AE_MODEL_PATH"] = ae_path_file
                 self.ae = load_ae(model_name, device=self.device)
+                self.ae = self.ae.to(self.dtype)
                 self.ae.eval()
                 # MPS Hack for native? Usually fine if logic in decode handles it.
                 loaded_native = True
@@ -211,6 +212,7 @@ class FluxInpainter:
             else:
                 logger.warning("No local VAE found, trying HuggingFace download...")
                 self.ae = load_ae(model_name, device=self.device)
+                self.ae = self.ae.to(self.dtype)
                 self.ae.eval()
             
             self.using_native_ae = loaded_native
