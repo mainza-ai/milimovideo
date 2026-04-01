@@ -61,7 +61,7 @@ async def generate_image_task(job_id: str, params: dict):
                     )
                 else:
                     logger.info(f"Enhancing image prompt via {provider}...")
-                    enhanced = llm_enhance(prompt=prompt, is_video=False, seed=seed)
+                    enhanced, _ = llm_enhance(prompt=prompt, is_video=False, seed=seed)
                     if enhanced and enhanced != prompt:
                         logger.info(f"Enhanced image prompt: {enhanced[:100]}...")
                         update_job_db(job_id, "processing", enhanced_prompt=enhanced)
