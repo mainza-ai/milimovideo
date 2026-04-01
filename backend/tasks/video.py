@@ -209,7 +209,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         )
                     else:
                         logger.info(f"Enhancing single-frame prompt via {provider}...")
-                        enhanced = llm_enhance(prompt=prompt, is_video=False, seed=seed)
+                        enhanced, _ = llm_enhance(prompt=prompt, is_video=False, seed=seed)
                         if enhanced and enhanced != prompt:
                             prompt = enhanced
                             update_job_db(job_id, "processing", enhanced_prompt=prompt)
