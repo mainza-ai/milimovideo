@@ -302,3 +302,11 @@ with disabled states and ⌘Z / ⇧⌘Z shortcuts that ignore text fields. Appro
 plan patches remain a single document step, satisfying the "one undo restores
 pre-plan state" contract; added a store test that applies a plan-shaped patch and
 undoes it. Verified: 35 pytest, 15 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] board | viewport culling for large stories
+
+Only cards intersecting the viewport (plus overscan) are mounted, with the
+visible/total count shown in the zoom pill. Areas, links, minimap, and selection
+still read the full layout, so culling changes cost, not semantics. This is the
+first half of the F1 500-card gate; a real 500-card perf measurement is still
+outstanding. Verified: 35 pytest, 15 vitest, tsc clean, eslint 0 errors, build.

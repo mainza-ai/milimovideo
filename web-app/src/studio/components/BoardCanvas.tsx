@@ -5,7 +5,9 @@ import {
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
-import { useStudioEditor, type BoardArea, type LinkKind } from '../state/editorStore';
+import {
+    useStudioEditor, type BoardArea, type BoardPosition, type LinkKind,
+} from '../state/editorStore';
 import { ShotCard } from './ShotCard';
 
 const CARD_W = 300;
@@ -14,6 +16,15 @@ const GAP_X = 44;
 const GAP_Y = 42;
 const COLS = 4;
 const AREA_COLORS = ['#06b2eb', '#9a7bff', '#3ddc97', '#f5b84b', '#ff5d6c'];
+
+function fallbackPosition(index: number): BoardPosition {
+    return {
+        x: (index % COLS) * (CARD_W + GAP_X),
+        y: Math.floor(index / COLS) * (CARD_H + GAP_Y),
+        width: CARD_W,
+        height: CARD_H,
+    };
+}
 
 function linkGeometry(source: { x: number; y: number; width: number; height: number }, target: typeof source) {
     const forward = target.x >= source.x;
@@ -304,6 +315,28 @@ export function BoardCanvas() {
         areaDrag.current = null;
     };
 
+    // Viewport culling: 500 cards stay cheap because only the visible slice is
+    // mounted. The minimap still uses the full layout.
+    const visibleShots = useMemo(() => {
+        const pad = 260 / Math.max(0.2, boardCamera.zoom);
+        const left = -boardCamera.x / boardCamera.zoom - pad;
+        const top = -boardCamera.y / boardCamera.zoom - pad;
+        const right = left + size.width / boardCamera.zoom + pad * 2;
+        const bottom = top + size.height / boardCamera.zoom + pad * 2;
+        return shots
+            .map((shot, index) => ({
+                shot,
+                index,
+                position: boardPositions[shot.id] || fallbackPosition(index),
+            }))
+            .filter(({ position }) => (
+                position.x + position.width >= left
+                && position.x <= right
+                && position.y + position.height >= top
+                && position.y <= bottom
+            ));
+    }, [boardCamera, boardPositions, shots, size.height, size.width]);
+
     const lod = boardCamera.zoom < 0.55 ? 'summary' : boardCamera.zoom < 0.95 ? 'compact' : 'detail';
     const minimap = useMemo(() => {
         const positions = Object.values(boardPositions);
@@ -536,13 +569,7 @@ export function BoardCanvas() {
                                 );
                             })}
 
-                            {shots.map((shot, index) => {
-                                const position = boardPositions[shot.id] || {
-                                    x: (index % COLS) * (CARD_W + GAP_X),
-                                    y: Math.floor(index / COLS) * (CARD_H + GAP_Y),
-                                    width: CARD_W,
-                                    height: CARD_H,
-                                };
+                            {visibleShots.map(({ shot, index, position }) => {
                                 return (
                                     <ShotCard
                                         key={shot.id}
@@ -568,6 +595,11 @@ export function BoardCanvas() {
                             <Minus size={12} />
                         </button>
                         <span className="st-mono">{Math.round(boardCamera.zoom * 100)}%</span>
+                        {visibleShots.length !== shots.length && (
+                            <span className="st-mono" title="Cards mounted in the viewport">
+                                {visibleShots.length}/{shots.length}
+                            </span>
+                        )}
                         <button type="button" className="st-icon-button" onClick={() => setCamera({ ...boardCamera, zoom: Math.min(2.2, boardCamera.zoom * 1.15) })} aria-label="Zoom in">
                             <Plus size={12} />
                         </button>
