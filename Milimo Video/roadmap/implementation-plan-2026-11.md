@@ -52,7 +52,8 @@ single-engineer guidance.
 | P3 OOM retry | **Not started** | P3-03 deferred |
 | P4 UX trust | **Partial** (P4-02,03,05,06) | seed lock, save state/conflict, SSE reconnect |
 | P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health; no Playwright) | 19 backend tests, 3 frontend tests, lint 0 errors, build passes |
-| Front-end F0–F5 | **Deferred** per plan risk note | one engineer, backend gates first |
+| Front-end F0/F1 | **Started** (shell, tokens, editor store, board canvas, list/script, timeline shell, lazy `/studio`) | `StudioApp.test` mounts the shell; tsc/lint/build pass |
+| Front-end F2–F5 | **Deferred** per plan risk note | one engineer, backend gates first |
 
 **Not adopted:** Alembic (P1-02) — a small idempotent schema repair/backfill runs
 in `init_db()`; a real Alembic baseline is still required before the next schema

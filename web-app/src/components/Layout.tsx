@@ -9,7 +9,7 @@ import { ImagesView } from './Images/ImagesView';
 import { useTimelineStore, getLastProjectId } from '../stores/timelineStore';
 import { ProjectManager } from './ProjectManager';
 import { ExportModal } from './ExportModal';
-import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
+import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon, Sparkles } from 'lucide-react';
 import { PanelErrorBoundary } from './ErrorBoundary';
 import { LLMSettings } from './LLMSettings';
 import { ModelLibrary } from './ModelLibrary';
@@ -197,6 +197,14 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                                 value={project.name}
                                 onChange={(e) => useTimelineStore.getState().setProject({ ...project, name: e.target.value })}
                             />
+                            <button
+                                type="button"
+                                onClick={() => window.location.assign('/studio')}
+                                className="ml-3 px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-milimo-500/15 text-milimo-300 border border-milimo-500/30 hover:bg-milimo-500/25 transition-colors flex items-center gap-1.5"
+                                title="Open the new studio shell (/studio)"
+                            >
+                                <Sparkles size={11} /> New Studio
+                            </button>
                             {/* View Switcher */}
                             <div className="flex bg-white/5 p-0.5 rounded-lg border border-white/5 ml-4">
                                 <button

@@ -201,3 +201,17 @@ takes/version history, vitest/Playwright, and the F0–F5 studio shell refactor
 (single-engineer guidance: backend gates first). Updated
 `roadmap/implementation-plan-2026-11.md` and `systems/engineering-audit-2026-11.md`
 with status.
+
+## [2026-11-16] frontend | F0 studio shell + F1 board prototype
+
+Added the strangler `/studio` shell (lazy route; legacy editor preserved at `/`):
+design tokens/graphite+cyan CSS, mode rail, top bar, inspector, context-aware
+command dock with plan preview, status strip, persisted editor store. Story
+surface: scene/shot spine, infinite board with pan/zoom/card drag/LOD/minimap,
+accessible shot-list view, script view, selection sync. Edit surface: stage
+monitor, legacy playback clock, V1/V2/A1 timeline shell, playhead, seeking,
+zoom. Generate/Review/Library/Deliver surfaces are real data-backed shells over
+existing endpoints, with explicit F3/F4 gaps rather than fake behavior. Added
+happy-dom + Testing Library mount test for the shell. Verified: tsc, eslint 0
+errors, 4 vitest tests, vite build (StudioApp chunk 58 kB). Updated the
+frontend-refactor and implementation-plan status tables.
