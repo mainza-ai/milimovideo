@@ -609,8 +609,96 @@
     will-change: transform;
 }
 
+.st-board-area {
+    position: absolute;
+    border: 1px dashed;
+    border-radius: var(--st-radius-lg);
+    z-index: 0;
+}
+
+.st-board-area[data-selected="true"] {
+    border-style: solid;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16) inset;
+}
+
+.st-board-area-draft {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.st-board-area-head {
+    position: absolute;
+    top: -12px;
+    left: 10px;
+    height: 23px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding-right: 2px;
+    border: 1px solid var(--st-border-strong);
+    border-radius: var(--st-radius-sm);
+    background: var(--st-bg);
+    cursor: grab;
+    user-select: none;
+}
+
+.st-board-area-head:active { cursor: grabbing; }
+
+.st-board-area-title {
+    width: 132px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 0 5px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.st-board-area-resize {
+    position: absolute;
+    right: -5px;
+    bottom: -5px;
+    width: 14px;
+    height: 14px;
+    border: 1px solid var(--st-border-strong);
+    border-radius: 4px;
+    background: var(--st-panel);
+    cursor: nwse-resize;
+}
+
+.st-board-link {
+    position: absolute;
+    z-index: 1;
+    overflow: visible;
+    pointer-events: none;
+}
+
+.st-board-link path {
+    fill: none;
+    stroke: var(--st-accent);
+    stroke-width: 1.5;
+    opacity: 0.55;
+}
+
+.st-board-link-blocking path { stroke: var(--st-danger); }
+.st-board-link-reference path { stroke: var(--st-v2); }
+
+.st-board-link-node {
+    fill: var(--st-panel);
+    stroke: var(--st-accent);
+    stroke-width: 1.5;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+.st-board-link-blocking .st-board-link-node { stroke: var(--st-danger); }
+.st-board-link-reference .st-board-link-node { stroke: var(--st-v2); }
+
 .st-shot-card {
     position: absolute;
+    z-index: 2;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -629,6 +717,11 @@
 .st-shot-card[data-selected="true"] {
     border-color: var(--st-accent);
     box-shadow: 0 0 0 1px var(--st-accent), 0 18px 40px rgba(0, 0, 0, 0.38);
+}
+
+.st-shot-card[data-link-source="true"] {
+    outline: 2px dashed var(--st-warning);
+    outline-offset: 3px;
 }
 
 .st-shot-card[data-pinned="true"]::after {

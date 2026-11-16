@@ -219,3 +219,13 @@ immutable take history/select via the job ledger (`/shots/{id}/takes`,
 happy-dom + Testing Library mount test for the shell. Verified: tsc, eslint 0
 errors, 4 vitest tests, vite build (StudioApp chunk 58 kB). Updated the
 frontend-refactor and implementation-plan status tables.
+
+## [2026-11-16] frontend | F1 areas and typed links
+
+Completed the F1 board semantics: draggable/resizable areas with inline titles and
+palette colors; typed links (thread, blocking, reference) drawn as bezier curves
+with deletable midpoint handles; link-source card highlight. Both are persisted
+through the existing `/projects/{id}/board` revision/CAS payload, so layout,
+areas, and links save atomically while camera stays in the separate ephemeral view
+record. Added editor-store unit tests for area CRUD and typed-link dedupe.
+Verified: 21 pytest, 6 vitest, tsc clean, eslint 0 errors, vite build.

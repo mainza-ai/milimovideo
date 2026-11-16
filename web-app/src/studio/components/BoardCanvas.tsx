@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Grid3X3, List, Maximize2, Map, Minus, Plus, RotateCcw, Search, Pin } from 'lucide-react';
+import {
+    Grid3X3, Link2, List, Maximize2, Map, Minus, MousePointer2, Plus,
+    RotateCcw, Search, SquareDashed, Trash2, Pin,
+} from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
-import { useStudioEditor } from '../state/editorStore';
+import { useStudioEditor, type BoardArea, type LinkKind } from '../state/editorStore';
 import { ShotCard } from './ShotCard';
 
 const CARD_W = 300;
@@ -10,6 +13,31 @@ const CARD_H = 238;
 const GAP_X = 44;
 const GAP_Y = 42;
 const COLS = 4;
+const AREA_COLORS = ['#06b2eb', '#9a7bff', '#3ddc97', '#f5b84b', '#ff5d6c'];
+
+function linkGeometry(source: { x: number; y: number; width: number; height: number }, target: typeof source) {
+    const forward = target.x >= source.x;
+    const sx = forward ? source.x + source.width : source.x;
+    const sy = source.y + source.height / 2;
+    const tx = forward ? target.x : target.x + target.width;
+    const ty = target.y + target.height / 2;
+    const bend = Math.max(48, Math.abs(tx - sx) * 0.4);
+    const c1 = forward ? sx + bend : sx - bend;
+    const c2 = forward ? tx - bend : tx + bend;
+    const minX = Math.min(sx, tx, c1, c2) - 12;
+    const maxX = Math.max(sx, tx, c1, c2) + 12;
+    const minY = Math.min(sy, ty) - 16;
+    const maxY = Math.max(sy, ty) + 16;
+    return {
+        d: `M ${sx - minX} ${sy - minY} C ${c1 - minX} ${sy - minY}, ${c2 - minX} ${ty - minY}, ${tx - minX} ${ty - minY}`,
+        minX,
+        minY,
+        width: Math.max(24, maxX - minX),
+        height: Math.max(24, maxY - minY),
+        mx: (sx + tx) / 2 - minX,
+        my: (sy + ty) / 2 - minY,
+    };
+}
 
 export function BoardCanvas() {
     const project = useTimelineStore((state) => state.project);
@@ -22,11 +50,22 @@ export function BoardCanvas() {
         storyView, setStoryView, boardCamera, setCamera, boardPositions,
         setBoardPosition, boardPinned, boardMinimapOpen,
         setMinimapOpen, boardFollowSelection, setFollowSelection, resetBoard,
+        boardAreas, boardLinks, boardMode, setBoardMode, linkKind, setLinkKind,
+        selectedAreaId, selectArea, addArea, updateArea, removeArea, addLink, removeLink,
     } = useStudioEditor();
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
     const drag = useRef<{ x: number; y: number; cameraX: number; cameraY: number } | null>(null);
     const cardDrag = useRef<{ id: string; x: number; y: number; origX: number; origY: number } | null>(null);
+    const areaDrag = useRef<{
+        mode: 'create' | 'move' | 'resize';
+        id?: string;
+        startWorldX: number;
+        startWorldY: number;
+        orig: BoardArea;
+    } | null>(null);
+    const [areaDraft, setAreaDraft] = useState<BoardArea | null>(null);
+    const [linkSource, setLinkSource] = useState<string | null>(null);
     const [query, setQuery] = useState('');
 
     const shots = useMemo(() => {
@@ -98,6 +137,32 @@ export function BoardCanvas() {
         });
     }, [project.shots, setBoardPosition]);
 
+    const toWorld = useCallback((clientX: number, clientY: number) => {
+        const rect = hostRef.current?.getBoundingClientRect();
+        if (!rect) return { x: 0, y: 0 };
+        return {
+            x: (clientX - rect.left - boardCamera.x) / boardCamera.zoom,
+            y: (clientY - rect.top - boardCamera.y) / boardCamera.zoom,
+        };
+    }, [boardCamera]);
+
+    const startAreaMove = (event: React.PointerEvent, area: BoardArea) => {
+        event.stopPropagation();
+        selectArea(area.id);
+        setBoardMode('area');
+        const world = toWorld(event.clientX, event.clientY);
+        areaDrag.current = { mode: 'move', id: area.id, startWorldX: world.x, startWorldY: world.y, orig: area };
+        hostRef.current?.setPointerCapture(event.pointerId);
+    };
+
+    const startAreaResize = (event: React.PointerEvent, area: BoardArea) => {
+        event.stopPropagation();
+        selectArea(area.id);
+        const world = toWorld(event.clientX, event.clientY);
+        areaDrag.current = { mode: 'resize', id: area.id, startWorldX: world.x, startWorldY: world.y, orig: area };
+        hostRef.current?.setPointerCapture(event.pointerId);
+    };
+
     const onWheel = (event: React.WheelEvent) => {
         if (!event.ctrlKey && !event.metaKey && Math.abs(event.deltaY) < 2) return;
         event.preventDefault();
@@ -119,6 +184,28 @@ export function BoardCanvas() {
         if (event.button !== 0) return;
         const target = event.target as HTMLElement;
         if (target.closest('.st-shot-card') || target.closest('button')) return;
+        if (target.closest('.st-board-area')) {
+            selectArea(null);
+            return;
+        }
+        if (boardMode === 'area') {
+            const world = toWorld(event.clientX, event.clientY);
+            const draft: BoardArea = {
+                id: 'draft',
+                title: `Area ${Object.keys(boardAreas).length + 1}`,
+                x: world.x,
+                y: world.y,
+                width: 1,
+                height: 1,
+                color: AREA_COLORS[Object.keys(boardAreas).length % AREA_COLORS.length],
+            };
+            areaDrag.current = { mode: 'create', startWorldX: world.x, startWorldY: world.y, orig: draft };
+            setAreaDraft(draft);
+            (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+            return;
+        }
+        if (boardMode === 'link') return;
+        selectArea(null);
         drag.current = {
             x: event.clientX,
             y: event.clientY,
@@ -130,6 +217,18 @@ export function BoardCanvas() {
 
     const startCardDrag = (event: React.PointerEvent, shotId: string) => {
         event.stopPropagation();
+        if (boardMode === 'link') {
+            selectShot(shotId);
+            if (!linkSource) {
+                setLinkSource(shotId);
+            } else if (linkSource !== shotId) {
+                addLink(linkSource, shotId, linkKind);
+                setLinkSource(null);
+            } else {
+                setLinkSource(null);
+            }
+            return;
+        }
         const position = boardPositions[shotId];
         if (!position) return;
         cardDrag.current = {
@@ -158,11 +257,51 @@ export function BoardCanvas() {
                 y: Math.round((cardDrag.current.origY + deltaY) / 8) * 8,
             });
         }
+        if (areaDrag.current) {
+            const world = toWorld(event.clientX, event.clientY);
+            const dragState = areaDrag.current;
+            if (dragState.mode === 'create') {
+                setAreaDraft({
+                    ...dragState.orig,
+                    x: Math.min(dragState.startWorldX, world.x),
+                    y: Math.min(dragState.startWorldY, world.y),
+                    width: Math.max(1, Math.abs(world.x - dragState.startWorldX)),
+                    height: Math.max(1, Math.abs(world.y - dragState.startWorldY)),
+                });
+            } else if (dragState.id) {
+                if (dragState.mode === 'move') {
+                    updateArea(dragState.id, {
+                        x: Math.round(dragState.orig.x + world.x - dragState.startWorldX),
+                        y: Math.round(dragState.orig.y + world.y - dragState.startWorldY),
+                    });
+                } else {
+                    updateArea(dragState.id, {
+                        width: Math.max(160, Math.round(dragState.orig.width + world.x - dragState.startWorldX)),
+                        height: Math.max(120, Math.round(dragState.orig.height + world.y - dragState.startWorldY)),
+                    });
+                }
+            }
+        }
     };
 
     const endDrag = () => {
+        if (areaDrag.current?.mode === 'create' && areaDraft) {
+            if (areaDraft.width > 40 && areaDraft.height > 40) {
+                addArea({
+                    title: areaDraft.title,
+                    x: Math.round(areaDraft.x),
+                    y: Math.round(areaDraft.y),
+                    width: Math.round(areaDraft.width),
+                    height: Math.round(areaDraft.height),
+                    color: areaDraft.color,
+                });
+                setBoardMode('select');
+            }
+            setAreaDraft(null);
+        }
         drag.current = null;
         cardDrag.current = null;
+        areaDrag.current = null;
     };
 
     const lod = boardCamera.zoom < 0.55 ? 'summary' : boardCamera.zoom < 0.95 ? 'compact' : 'detail';
@@ -207,6 +346,50 @@ export function BoardCanvas() {
                 <button type="button" className="st-button" data-size="sm" data-variant={storyView === 'script' ? 'primary' : 'ghost'} onClick={() => setStoryView('script')}>
                     <Search size={13} /> Script
                 </button>
+                <span style={{ width: 1, height: 18, background: 'var(--st-border-strong)', margin: '0 2px' }} />
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={boardMode === 'select' ? 'primary' : 'ghost'}
+                    onClick={() => { setBoardMode('select'); setLinkSource(null); }}
+                    title="Select and pan"
+                >
+                    <MousePointer2 size={13} /> Select
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={boardMode === 'area' ? 'primary' : 'ghost'}
+                    onClick={() => { setBoardMode('area'); setLinkSource(null); }}
+                    title="Drag to create an area"
+                >
+                    <SquareDashed size={13} /> Area
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={boardMode === 'link' ? 'primary' : 'ghost'}
+                    onClick={() => { setBoardMode('link'); setLinkSource(null); }}
+                    title="Click two cards to link them"
+                >
+                    <Link2 size={13} /> Link
+                </button>
+                {boardMode === 'link' && (
+                    <select
+                        className="st-select"
+                        style={{ width: 116, height: 27, padding: '2px 6px' }}
+                        value={linkKind}
+                        onChange={(event) => setLinkKind(event.target.value as LinkKind)}
+                        aria-label="Link kind"
+                    >
+                        <option value="thread">Thread</option>
+                        <option value="blocking">Blocking</option>
+                        <option value="reference">Reference</option>
+                    </select>
+                )}
                 <span className="st-spacer" />
                 <input
                     className="st-input"
@@ -255,6 +438,104 @@ export function BoardCanvas() {
                                 transform: `translate3d(${boardCamera.x}px, ${boardCamera.y}px, 0) scale(${boardCamera.zoom})`,
                             }}
                         >
+                            {Object.values(boardAreas).map((area) => (
+                                <div
+                                    key={area.id}
+                                    className="st-board-area"
+                                    data-selected={selectedAreaId === area.id}
+                                    style={{
+                                        left: area.x,
+                                        top: area.y,
+                                        width: area.width,
+                                        height: area.height,
+                                        borderColor: area.color || 'var(--st-border-strong)',
+                                        background: `${area.color || '#06b2eb'}12`,
+                                    }}
+                                    onPointerDown={(event) => {
+                                        if ((event.target as HTMLElement).closest('input, button')) return;
+                                        event.stopPropagation();
+                                        selectArea(area.id);
+                                    }}
+                                >
+                                    <div
+                                        className="st-board-area-head"
+                                        style={{ color: area.color || 'var(--st-secondary)' }}
+                                        onPointerDown={(event) => startAreaMove(event, area)}
+                                    >
+                                        <input
+                                            className="st-board-area-title"
+                                            value={area.title}
+                                            aria-label="Area title"
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                            onChange={(event) => updateArea(area.id, { title: event.target.value })}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="st-icon-button"
+                                            aria-label={`Remove ${area.title}`}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                            onClick={() => removeArea(area.id)}
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="st-board-area-resize"
+                                        aria-label="Resize area"
+                                        onPointerDown={(event) => startAreaResize(event, area)}
+                                    />
+                                </div>
+                            ))}
+
+                            {areaDraft && (
+                                <div
+                                    className="st-board-area st-board-area-draft"
+                                    style={{
+                                        left: areaDraft.x,
+                                        top: areaDraft.y,
+                                        width: areaDraft.width,
+                                        height: areaDraft.height,
+                                        borderColor: areaDraft.color,
+                                        background: `${areaDraft.color || '#06b2eb'}12`,
+                                    }}
+                                />
+                            )}
+
+                            {boardLinks.map((link) => {
+                                const source = boardPositions[link.source];
+                                const target = boardPositions[link.target];
+                                if (!source || !target) return null;
+                                const geometry = linkGeometry(source, target);
+                                return (
+                                    <svg
+                                        key={link.id}
+                                        className={`st-board-link st-board-link-${link.kind}`}
+                                        style={{
+                                            left: geometry.minX,
+                                            top: geometry.minY,
+                                            width: geometry.width,
+                                            height: geometry.height,
+                                        }}
+                                        aria-label={`${link.kind} link`}
+                                    >
+                                        <path d={geometry.d} vectorEffect="non-scaling-stroke" />
+                                        <circle
+                                            className="st-board-link-node"
+                                            cx={geometry.mx}
+                                            cy={geometry.my}
+                                            r={6}
+                                            onClick={(event) => {
+                                                event.stopPropagation();
+                                                removeLink(link.id);
+                                            }}
+                                        >
+                                            <title>Remove {link.kind} link</title>
+                                        </circle>
+                                    </svg>
+                                );
+                            })}
+
                             {shots.map((shot, index) => {
                                 const position = boardPositions[shot.id] || {
                                     x: (index % COLS) * (CARD_W + GAP_X),
@@ -270,6 +551,7 @@ export function BoardCanvas() {
                                         position={position}
                                         selected={selectedShotId === shot.id}
                                         pinned={!!boardPinned[shot.id]}
+                                        linkSource={linkSource === shot.id}
                                         onSelect={() => {
                                             selectShot(shot.id);
                                             setCurrentTime(0);

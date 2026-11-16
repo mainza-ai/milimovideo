@@ -126,9 +126,15 @@ def test_take_history_and_selection(app_client, project):
 def test_board_layout_roundtrip_and_revision(app_client, project):
     pid = project["id"]
     layout = {
-        "nodes": [{"id": "one", "x": 10, "y": 20, "width": 300, "height": 230, "pinned": True}],
-        "areas": [],
-        "links": [],
+        "nodes": [
+            {"id": "one", "x": 10, "y": 20, "width": 300, "height": 230, "pinned": True},
+            {"id": "two", "x": 380, "y": 20, "width": 300, "height": 230, "pinned": False},
+        ],
+        "areas": [{
+            "id": "area_act1", "title": "Act I", "x": 0, "y": -40,
+            "width": 720, "height": 360, "color": "#06b2eb",
+        }],
+        "links": [{"id": "link_1", "source": "one", "target": "two", "kind": "blocking"}],
         "revision": 0,
     }
     response = app_client.put(f"/projects/{pid}/board", json=layout)
@@ -138,6 +144,8 @@ def test_board_layout_roundtrip_and_revision(app_client, project):
     fetched = app_client.get(f"/projects/{pid}/board").json()
     assert fetched["layout"]["nodes"][0]["id"] == "one"
     assert fetched["layout"]["nodes"][0]["pinned"] is True
+    assert fetched["layout"]["areas"][0]["title"] == "Act I"
+    assert fetched["layout"]["links"][0]["kind"] == "blocking"
 
     stale = {**layout, "revision": 0}
     assert app_client.put(f"/projects/{pid}/board", json=stale).status_code == 409

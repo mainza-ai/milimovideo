@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, type Project, type Shot } from '../../stores/timelineStore';
 import { apiUrl, getAssetUrl } from '../../config';
-import { useStudioEditor, type BoardPosition, type Camera } from '../state/editorStore';
+import {
+    useStudioEditor,
+    type BoardArea,
+    type BoardLink,
+    type BoardPosition,
+    type Camera,
+} from '../state/editorStore';
 
 export interface StudioHealth {
     status: string;
@@ -308,7 +314,10 @@ export function useStudioCreateRender(projectId: string) {
 }
 
 export function useStudioBoardSync(projectId: string) {
-    const { boardPositions, boardPinned, boardCamera, hydrateBoard, setCamera } = useStudioEditor();
+    const {
+        boardPositions, boardPinned, boardAreas, boardLinks, boardCamera,
+        hydrateBoard, setCamera,
+    } = useStudioEditor();
     const addToast = useTimelineStore((state) => state.addToast);
     const loaded = useRef(false);
     const revision = useRef(0);
@@ -337,9 +346,30 @@ export function useStudioBoardSync(projectId: string) {
                 };
                 if (node.pinned) pinned[node.id] = true;
             }
+            const areas: Record<string, BoardArea> = {};
+            for (const area of Array.isArray(board.layout?.areas) ? board.layout.areas : []) {
+                if (!area?.id) continue;
+                areas[area.id] = {
+                    id: area.id,
+                    title: area.title || 'Area',
+                    x: Number(area.x) || 0,
+                    y: Number(area.y) || 0,
+                    width: Number(area.width) || 480,
+                    height: Number(area.height) || 320,
+                    color: area.color || undefined,
+                };
+            }
+            const links: BoardLink[] = (Array.isArray(board.layout?.links) ? board.layout.links : [])
+                .filter((link: BoardLink) => link?.source && link?.target)
+                .map((link: BoardLink) => ({
+                    id: link.id || `${link.source}-${link.target}`,
+                    source: link.source,
+                    target: link.target,
+                    kind: link.kind || 'thread',
+                }));
             const camera = view?.view?.camera as Camera | undefined;
-            if (Object.keys(positions).length > 0) {
-                hydrateBoard(positions, pinned, camera);
+            if (Object.keys(positions).length > 0 || Object.keys(areas).length > 0 || links.length > 0) {
+                hydrateBoard(positions, pinned, camera, areas, links);
             } else if (camera) {
                 setCamera(camera);
             }
@@ -359,11 +389,15 @@ export function useStudioBoardSync(projectId: string) {
                 ...position,
                 pinned: !!boardPinned[id],
             }));
+            const areas = Object.values(boardAreas).map(({ id, title, x, y, width, height, color }) => ({
+                id, title, x, y, width, height, color: color || null,
+            }));
+            const links = boardLinks.map(({ id, source, target, kind }) => ({ id, source, target, kind }));
             try {
                 const response = await fetch(apiUrl(`/projects/${projectId}/board`), {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ nodes, areas: [], links: [], revision: revision.current }),
+                    body: JSON.stringify({ nodes, areas, links, revision: revision.current }),
                 });
                 if (response.status === 409) {
                     addToast('Board layout changed elsewhere; reload to merge.', 'error');
@@ -376,7 +410,7 @@ export function useStudioBoardSync(projectId: string) {
             }
         }, 700);
         return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-    }, [addToast, boardPinned, boardPositions, projectId]);
+    }, [addToast, boardAreas, boardLinks, boardPinned, boardPositions, projectId]);
 
     useEffect(() => {
         if (!loaded.current) return;

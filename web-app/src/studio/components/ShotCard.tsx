@@ -9,11 +9,12 @@ interface Props {
     position: BoardPosition;
     selected: boolean;
     pinned: boolean;
+    linkSource?: boolean;
     onSelect: () => void;
     onDragStart: (event: React.PointerEvent, shotId: string) => void;
 }
 
-export function ShotCard({ shot, index, position, selected, pinned, onSelect, onDragStart }: Props) {
+export function ShotCard({ shot, index, position, selected, pinned, linkSource, onSelect, onDragStart }: Props) {
     const videoUrl = useAssetUrl(shot.videoUrl);
     const thumbnailUrl = useAssetUrl(shot.thumbnailUrl);
     const media = videoUrl || thumbnailUrl;
@@ -25,6 +26,7 @@ export function ShotCard({ shot, index, position, selected, pinned, onSelect, on
             className="st-shot-card"
             data-selected={selected}
             data-pinned={pinned}
+            data-link-source={linkSource || undefined}
             style={{
                 left: position.x,
                 top: position.y,
