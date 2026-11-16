@@ -70,6 +70,8 @@ def _shot_dict(shot: Shot) -> dict:
         "enhanced_prompt_result": shot.enhanced_prompt_result,
         "last_job_id": shot.last_job_id,
         "selected_take_id": shot.selected_take_id,
+        "audio_gain": shot.audio_gain,
+        "audio_muted": shot.audio_muted,
         "created_at": shot.created_at.isoformat() if shot.created_at else None,
     }
 
@@ -605,8 +607,8 @@ async def _render_background(
                     "start_frame": start_frame,
                     "duration_frames": duration_frames,
                     "trim_in": shot.trim_in or 0,
-                    "gain": 1.0,
-                    "muted": False,
+                    "gain": shot.audio_gain if shot.audio_gain is not None else 1.0,
+                    "muted": bool(shot.audio_muted),
                     "hidden": False,
                     "has_audio": await _has_audio_stream(resolved),
                 }

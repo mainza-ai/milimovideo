@@ -1,4 +1,4 @@
-import { Loader2, Play, RotateCcw, Sparkles, X } from 'lucide-react';
+import { Loader2, Play, RotateCcw, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getAssetUrl } from '../../config';
 import { useStudioEditor } from '../state/editorStore';
@@ -244,9 +244,51 @@ export function Inspector() {
 
                         {inspectorTab === 'audio' && (
                             <div className="st-inspector-section">
-                                <span className="st-label">Audio</span>
-                                <div className="st-value">
-                                    The render path now mixes V1/V2 embedded audio and A1/A2. Per-clip gain/fades arrive with the new timeline inspector.
+                                <span className="st-label">Embedded audio</span>
+                                <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                                    Gain and mute are written into the computed cut and applied by FFmpeg.
+                                </div>
+                                <label style={{ display: 'block', marginTop: 10 }}>
+                                    <span className="st-label">
+                                        Gain · {Math.round((shot.audioGain ?? 1) * 100)}%
+                                    </span>
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={200}
+                                        step={5}
+                                        value={Math.round((shot.audioGain ?? 1) * 100)}
+                                        onChange={(event) => updateShot(shot.id, {
+                                            audioGain: Number(event.target.value) / 100,
+                                        })}
+                                        style={{ width: '100%', accentColor: 'var(--st-accent)' }}
+                                    />
+                                </label>
+                                <div className="st-button-row" style={{ marginTop: 8 }}>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant={shot.audioMuted ? 'danger' : undefined}
+                                        onClick={() => updateShot(shot.id, { audioMuted: !shot.audioMuted })}
+                                    >
+                                        {shot.audioMuted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+                                        {shot.audioMuted ? 'Muted' : 'Mute clip'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant="ghost"
+                                        onClick={() => updateShot(shot.id, { audioGain: 1, audioMuted: false })}
+                                    >
+                                        Reset
+                                    </button>
+                                </div>
+                                <div className="st-meta-grid" style={{ marginTop: 10 }}>
+                                    <dt>Track</dt><dd>{shot.trackIndex === 2 ? 'A1' : shot.trackIndex === 1 ? 'V2' : 'V1'}</dd>
+                                    <dt>Frames</dt><dd className="st-mono">{shot.numFrames}</dd>
+                                    <dt>Trim</dt><dd className="st-mono">{shot.trimIn || 0} / {shot.trimOut || 0}</dd>
                                 </div>
                             </div>
                         )}

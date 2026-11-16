@@ -47,6 +47,8 @@ export interface Shot {
     // Result
     lastJobId?: string;
     selectedTakeId?: string;
+    audioGain?: number;
+    audioMuted?: boolean;
     videoUrl?: string | null; // Derived from jobID
     thumbnailUrl?: string; // Static Preview
     enhancedPromptResult?: string; // Result from backend

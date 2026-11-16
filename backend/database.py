@@ -86,6 +86,8 @@ class Shot(SQLModel, table=True):
     status: str = "pending" # pending, generating, completed, failed
     last_job_id: Optional[str] = None
     selected_take_id: Optional[str] = None  # Job id of the selected immutable take
+    audio_gain: float = 1.0
+    audio_muted: bool = False
 
     # Results
     video_url: Optional[str] = None
@@ -200,6 +202,8 @@ def _add_missing_columns() -> None:
         "shot": {
             "sequence_index": "INTEGER",
             "selected_take_id": "TEXT",
+            "audio_gain": "FLOAT NOT NULL DEFAULT 1.0",
+            "audio_muted": "BOOLEAN NOT NULL DEFAULT 0",
         },
         "job": {
             "resume_policy": "TEXT NOT NULL DEFAULT 'fail'",

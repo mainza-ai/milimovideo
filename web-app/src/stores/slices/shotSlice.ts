@@ -79,6 +79,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 else if (k === 'startFrame') snakeUpdates['start_frame'] = v;
                 else if (k === 'trimIn') snakeUpdates['trim_in'] = v;
                 else if (k === 'trimOut') snakeUpdates['trim_out'] = v;
+                else if (k === 'audioGain') snakeUpdates['audio_gain'] = v;
+                else if (k === 'audioMuted') snakeUpdates['audio_muted'] = v;
                 else if (k === 'autoContinue') snakeUpdates['auto_continue'] = v;
                 else if (k === 'sceneId') snakeUpdates['scene_id'] = v;
                 else if (k === 'sequenceIndex') snakeUpdates['sequence_index'] = v;
@@ -144,6 +146,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 startFrame: s.start_frame || 0,
                 trimIn: s.trim_in || 0,
                 trimOut: s.trim_out || 0,
+                audioGain: s.audio_gain ?? 1,
+                audioMuted: s.audio_muted ?? false,
                 timeline: (typeof s.timeline === "string"
                     ? (() => { try { return JSON.parse(s.timeline || "[]"); } catch { return []; } })()
                     : (s.timeline || [])

@@ -46,7 +46,7 @@ at `/`.
 |---|---|---|
 | **F0 Foundation** | **Started** | `studio.css` tokens, shell, mode rail, top bar, inspector, command dock, status strip, `editorStore` (persisted camera/layout), API base/token, `/studio` lazy route, component mount test |
 | **F1 Story** | **Partial** | Story spine with master-reference filter, board canvas (pan/zoom/drag/LOD/minimap), areas with inline rename/resize, typed links (thread/blocking/reference), list view, script view, selection sync, board layout persisted with revision/CAS + separate view save |
-| **F2 Edit** | **Partial** | Stage monitor, legacy playback clock, V1/V2/A1 clips, playhead, seeking, zoom; tested frame-accurate trim (in/out), slip, roll, blade at playhead, and ripple delete through pure ops; no keyframes/caption UI yet |
+| **F2 Edit** | **Partial** | Stage monitor, legacy playback clock, V1/V2/A1 clips, playhead, seeking, zoom; tested frame-accurate trim (in/out), slip, roll, blade at playhead, and ripple delete through pure ops; per-clip audio gain/mute persists and reaches the render filtergraph; no keyframes/caption UI yet |
 | **F3 Generate** | **Partial** | Shot workspace, prompt/params, generate/cancel, immutable take history from completed jobs with select-take |
 | **F4 Review** | **Partial** | Version stack reads the same take history; `POST /projects/{id}/plan` returns deterministic plan cards (diff, estimate, warnings) applied through the undoable store; frame-accurate comments with resolve/delete and per-shot approvals persist via `/projects/{id}/review`; share links/activity stay open |
 | **F5 Shorts/lenses** | **Not started** | — |

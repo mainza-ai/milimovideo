@@ -265,3 +265,13 @@ tools, trim handles, blade at playhead via the existing split endpoint, ripple
 delete, and gesture previews that commit once on pointer-up so undo stays
 useful. V1 remains magnetic; ripple reflow comes from computeTimelineLayout.
 Verified: 28 pytest, 11 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] audio | per-clip gain and mute through the render path
+
+Added `shot.audio_gain` and `shot.audio_muted` (idempotent migration), serialized
+them with the project, mapped them through the frontend document store, and used
+them when building render clips instead of hardcoded 1.0/False. The studio
+Inspector audio tab now has a 0–200% gain slider, mute/reset, and trim/track
+readouts. Added filtergraph tests proving gain is emitted, muted clips keep video
+but drop audio, and hidden/muted track states win. Verified: 32 pytest, 11 vitest,
+tsc clean, eslint 0 errors, vite build. Live DB backed up and columns added.
