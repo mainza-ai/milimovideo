@@ -6,6 +6,7 @@ from .storyboard import router as storyboard_router
 from .elements import router as elements_router
 from .shots import router as shots_router
 from .models import router as models_router
+from .planner import router as planner_router
 
 router = APIRouter()
 
@@ -16,4 +17,5 @@ router.include_router(storyboard_router)
 router.include_router(elements_router)
 router.include_router(shots_router)
 router.include_router(models_router)
+router.include_router(planner_router)
 

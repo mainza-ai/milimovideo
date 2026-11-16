@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, List, Optional, Literal
+from typing import Any, Dict, List, Optional, Literal
 
 class TimelineItem(BaseModel):
     path: str
@@ -255,6 +255,37 @@ class RenderRequest(BaseModel):
 
 class SelectTakeRequest(BaseModel):
     job_id: str
+
+
+class PlanRequest(BaseModel):
+    text: str
+    mode: str = "direct"  # ask | direct | generate | find
+    shot_id: Optional[str] = None
+
+
+class PlanStep(BaseModel):
+    kind: str
+    label: str
+    target: Optional[str] = None
+    before: Optional[Any] = None
+    after: Optional[Any] = None
+    detail: Optional[str] = None
+
+
+class PlanEstimate(BaseModel):
+    model: Optional[str] = None
+    gpu_seconds: Optional[float] = None
+    vram_mb: Optional[int] = None
+    note: str = "Rough local estimate; the queue reports actual time."
+
+
+class PlanResponse(BaseModel):
+    mode: str
+    summary: str
+    steps: List[PlanStep] = []
+    estimate: Optional[PlanEstimate] = None
+    warnings: List[str] = []
+    shot_id: Optional[str] = None
 
 
 class TrackingSaveRequest(BaseModel):

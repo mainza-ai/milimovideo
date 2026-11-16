@@ -45,6 +45,7 @@ interface EditorState {
     boardPinned: Record<string, boolean>;
     boardAreas: Record<string, BoardArea>;
     boardLinks: BoardLink[];
+    boardQuery: string;
     boardMode: BoardMode;
     linkKind: LinkKind;
     selectedAreaId: string | null;
@@ -73,6 +74,7 @@ interface EditorState {
     setBoardPosition: (shotId: string, position: Partial<BoardPosition>) => void;
     togglePin: (shotId: string) => void;
     setBoardMode: (mode: BoardMode) => void;
+    setBoardQuery: (query: string) => void;
     setLinkKind: (kind: LinkKind) => void;
     selectArea: (areaId: string | null) => void;
     addArea: (area: Omit<BoardArea, 'id'>) => string;
@@ -114,6 +116,7 @@ export const useStudioEditor = create<EditorState>()(
             boardPinned: {},
             boardAreas: {},
             boardLinks: [],
+            boardQuery: '',
             boardMode: 'select',
             linkKind: 'thread',
             selectedAreaId: null,
@@ -152,6 +155,7 @@ export const useStudioEditor = create<EditorState>()(
                 boardPinned: { ...state.boardPinned, [shotId]: !state.boardPinned[shotId] },
             })),
             setBoardMode: (boardMode) => set({ boardMode }),
+            setBoardQuery: (boardQuery) => set({ boardQuery }),
             setLinkKind: (linkKind) => set({ linkKind }),
             selectArea: (selectedAreaId) => set({ selectedAreaId }),
             addArea: (area) => {
@@ -222,6 +226,7 @@ export const useStudioEditor = create<EditorState>()(
                 boardPinned: state.boardPinned,
                 boardAreas: state.boardAreas,
                 boardLinks: state.boardLinks,
+                boardQuery: state.boardQuery,
                 boardMode: state.boardMode,
                 linkKind: state.linkKind,
                 boardMinimapOpen: state.boardMinimapOpen,

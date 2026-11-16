@@ -229,3 +229,16 @@ through the existing `/projects/{id}/board` revision/CAS payload, so layout,
 areas, and links save atomically while camera stays in the separate ephemeral view
 record. Added editor-store unit tests for area CRUD and typed-link dedupe.
 Verified: 21 pytest, 6 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] agent | local plan API and master-reference filter
+
+The command dock no longer fakes plans. `POST /projects/{id}/plan` is a pure,
+local, deterministic planner: explicit directives (prompt:, negative:, seed,
+frames, shot type, add/append) become diff steps with before/after, plus
+shot-type alias normalization, rough GPU/VRAM estimates for generate plans, and
+honest warnings when nothing matches. Ask returns project/shot facts; Find
+returns a board filter. The client applies approved patches through the
+undoable document store, and generation only runs after approval. Added the
+master-reference chip list and filter to the story spine, moved the board
+filter into the editor store so Find can drive it. Verified: 25 pytest,
+6 vitest, tsc clean, eslint 0 errors, vite build.

@@ -45,14 +45,14 @@ at `/`.
 | Stage | Status | What exists |
 |---|---|---|
 | **F0 Foundation** | **Started** | `studio.css` tokens, shell, mode rail, top bar, inspector, command dock, status strip, `editorStore` (persisted camera/layout), API base/token, `/studio` lazy route, component mount test |
-| **F1 Story** | **Partial** | Story spine, board canvas (pan/zoom/drag/LOD/minimap), areas with inline rename/resize, typed links (thread/blocking/reference), list view, script view, selection sync, board layout persisted with revision/CAS + separate view save |
+| **F1 Story** | **Partial** | Story spine with master-reference filter, board canvas (pan/zoom/drag/LOD/minimap), areas with inline rename/resize, typed links (thread/blocking/reference), list view, script view, selection sync, board layout persisted with revision/CAS + separate view save |
 | **F2 Edit** | **Partial** | Stage monitor, legacy playback clock, timeline shell with V1/V2/A1 clips, playhead, seeking, zoom; no tools/keyframes/audio/captions yet |
 | **F3 Generate** | **Partial** | Shot workspace, prompt/params, generate/cancel, immutable take history from completed jobs with select-take |
-| **F4 Review** | **Partial** | Version stack reads the same take history; frame comments/approvals still open |
+| **F4 Review** | **Partial** | Version stack reads the same take history; `POST /projects/{id}/plan` returns deterministic plan cards (diff, estimate, warnings) applied through the undoable store; frame comments/approvals still open |
 | **F5 Shorts/lenses** | **Not started** | — |
 
-**Next:** wire the command dock to a plan API, add frame comments/approvals, and
-move document state off the legacy store. Do not cut over `/` until F2
+**Next:** add frame comments/approvals and persistence for the review surface,
+then move document state off the legacy store. Do not cut over `/` until F2
 review/render parity.
 
 ## Why This Refactor

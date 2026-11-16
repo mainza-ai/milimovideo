@@ -3,6 +3,7 @@ import { ChevronRight, Search, Sparkles } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useStudioEditor } from '../state/editorStore';
+import { useStudioElements } from '../data/useStudioData';
 import { BoardCanvas } from '../components/BoardCanvas';
 
 export function StorySurface() {
@@ -13,18 +14,22 @@ export function StorySurface() {
         setCurrentTime: state.setCurrentTime,
     })));
     const { selectedSceneId, selectScene } = useStudioEditor();
+    const elements = useStudioElements(project.id);
     const [query, setQuery] = useState('');
+    const [elementFilter, setElementFilter] = useState<string | null>(null);
 
     const groups = useMemo(() => {
         const scenes = project.scenes || [];
         const q = query.trim().toLowerCase();
-        const visible = q
-            ? project.shots.filter((shot) =>
-                `${shot.action || ''} ${shot.prompt || ''} ${shot.character || ''}`
-                    .toLowerCase()
-                    .includes(q),
-            )
-            : project.shots;
+        const visible = project.shots.filter((shot) => {
+            if (q && !`${shot.action || ''} ${shot.prompt || ''} ${shot.character || ''}`.toLowerCase().includes(q)) {
+                return false;
+            }
+            if (elementFilter && !shot.matchedElements?.some((match) => match.element_id === elementFilter)) {
+                return false;
+            }
+            return true;
+        });
         return scenes.map((scene) => ({
             id: scene.id,
             name: scene.name,
@@ -34,7 +39,7 @@ export function StorySurface() {
             name: 'Unassigned',
             shots: visible.filter((shot) => !shot.sceneId),
         }]).filter((group) => group.shots.length > 0 || group.id !== '__unassigned');
-    }, [project.shots, project.scenes, query]);
+    }, [elementFilter, project.shots, project.scenes, query]);
 
     return (
         <div className="st-story">
@@ -90,8 +95,44 @@ export function StorySurface() {
                             ))}
                         </div>
                     ))}
-                    <div style={{ padding: '10px 7px 4px', color: 'var(--st-faint)', fontSize: 9, lineHeight: 1.5 }}>
-                        <Sparkles size={10} /> Master References area and typed links are next in F1.
+                    <div className="st-spine-refs">
+                        <div className="st-spine-title" style={{ marginBottom: 6 }}>
+                            <Sparkles size={10} style={{ verticalAlign: -1, marginRight: 4 }} />
+                            Master references · {elements.length}
+                        </div>
+                        {elements.length === 0 ? (
+                            <div style={{ color: 'var(--st-faint)', fontSize: 9, lineHeight: 1.5 }}>
+                                Characters, locations, and objects appear here once created.
+                            </div>
+                        ) : (
+                            <div className="st-chip-row">
+                                {elements.map((element) => (
+                                    <button
+                                        key={element.id}
+                                        type="button"
+                                        className="st-chip"
+                                        data-active={elementFilter === element.id}
+                                        style={{ cursor: 'pointer' }}
+                                        title={element.description}
+                                        onClick={() => setElementFilter(elementFilter === element.id ? null : element.id)}
+                                    >
+                                        @{element.trigger_word.replace(/^@/, '')}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {elementFilter && (
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                data-variant="ghost"
+                                style={{ marginTop: 6 }}
+                                onClick={() => setElementFilter(null)}
+                            >
+                                Clear reference filter
+                            </button>
+                        )}
                     </div>
                 </div>
             </aside>

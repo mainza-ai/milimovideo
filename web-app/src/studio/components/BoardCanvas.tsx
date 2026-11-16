@@ -52,6 +52,7 @@ export function BoardCanvas() {
         setMinimapOpen, boardFollowSelection, setFollowSelection, resetBoard,
         boardAreas, boardLinks, boardMode, setBoardMode, linkKind, setLinkKind,
         selectedAreaId, selectArea, addArea, updateArea, removeArea, addLink, removeLink,
+        boardQuery, setBoardQuery,
     } = useStudioEditor();
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
@@ -66,17 +67,16 @@ export function BoardCanvas() {
     } | null>(null);
     const [areaDraft, setAreaDraft] = useState<BoardArea | null>(null);
     const [linkSource, setLinkSource] = useState<string | null>(null);
-    const [query, setQuery] = useState('');
 
     const shots = useMemo(() => {
-        const q = query.trim().toLowerCase();
+        const q = boardQuery.trim().toLowerCase();
         if (!q) return project.shots;
         return project.shots.filter((shot) =>
             `${shot.action || ''} ${shot.prompt || ''} ${shot.character || ''} ${shot.dialogue || ''}`
                 .toLowerCase()
                 .includes(q),
         );
-    }, [project.shots, query]);
+    }, [boardQuery, project.shots]);
 
     // Auto-place new shots in a readable scene-agnostic grid. Pinned cards and
     // cards already placed are never moved.
@@ -395,8 +395,8 @@ export function BoardCanvas() {
                     className="st-input"
                     style={{ width: 180, height: 27, padding: '3px 8px' }}
                     placeholder="Filter shots…"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    value={boardQuery}
+                    onChange={(event) => setBoardQuery(event.target.value)}
                     aria-label="Filter shots"
                 />
                 <button type="button" className="st-button" data-size="sm" onClick={arrange} title="Arrange cards">

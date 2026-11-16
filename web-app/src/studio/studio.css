@@ -552,6 +552,22 @@
     font-size: 9px;
 }
 
+.st-spine-refs {
+    margin-top: 10px;
+    padding: 10px 7px;
+    border-top: 1px solid var(--st-border);
+}
+
+.st-spine-refs .st-chip {
+    cursor: pointer;
+}
+
+.st-spine-refs .st-chip[data-active="true"] {
+    color: var(--st-bg);
+    background: var(--st-accent);
+    border-color: transparent;
+}
+
 .st-board-wrap {
     flex: 1;
     min-width: 0;
@@ -1449,6 +1465,89 @@
     color: var(--st-secondary);
     font-size: 10px;
     line-height: 1.6;
+}
+
+.st-plan-summary {
+    margin: 0 0 8px;
+    color: var(--st-secondary);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.st-plan-preview .st-plan-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.st-plan-steps li {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 6px 8px;
+    border: 1px solid var(--st-border);
+    border-radius: var(--st-radius-sm);
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.st-plan-steps strong {
+    color: var(--st-text);
+    font-size: 10px;
+}
+
+.st-plan-diff {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    color: var(--st-muted);
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.st-plan-detail {
+    color: var(--st-faint);
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.st-plan-estimate {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    margin-top: 8px;
+}
+
+.st-plan-preview .st-plan-warnings {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--st-warning);
+    font-size: 9px;
+    line-height: 1.5;
+}
+
+.st-plan-warnings li {
+    display: flex;
+    align-items: flex-start;
+    gap: 5px;
+}
+
+.st-plan-error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 12px 8px;
+    color: var(--st-danger);
+    font-size: 10px;
 }
 
 .st-plan-actions {
