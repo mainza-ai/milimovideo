@@ -50,6 +50,30 @@ export interface StudioTake {
     selected: boolean;
 }
 
+export interface ReviewComment {
+    id: string;
+    project_id: string;
+    shot_id: string | null;
+    kind: 'comment' | 'approval';
+    frame: number;
+    body: string;
+    author: string;
+    status: 'open' | 'resolved' | 'approved' | 'changes_requested';
+    created_at: string | null;
+    updated_at: string | null;
+}
+
+export interface ReviewPayload {
+    comments: ReviewComment[];
+    approvals: ReviewComment[];
+    summary: {
+        comments: number;
+        open: number;
+        approved: number;
+        changes_requested: number;
+    };
+}
+
 export interface StudioRender {
     id: string;
     status: string;
@@ -199,6 +223,96 @@ export function useStudioSelectTake() {
         addToast('Take selected', 'success');
         return true;
     }, [addToast, updateShot]);
+}
+
+const EMPTY_REVIEW: ReviewPayload = {
+    comments: [],
+    approvals: [],
+    summary: { comments: 0, open: 0, approved: 0, changes_requested: 0 },
+};
+
+export function useStudioReview(projectId: string) {
+    const addToast = useTimelineStore((state) => state.addToast);
+    const [review, setReview] = useState<ReviewPayload>(EMPTY_REVIEW);
+    const [loading, setLoading] = useState(true);
+
+    const refresh = useCallback(async () => {
+        try {
+            const response = await fetch(apiUrl(`/projects/${projectId}/review`));
+            const data = response.ok ? await response.json() : EMPTY_REVIEW;
+            setReview({
+                comments: Array.isArray(data.comments) ? data.comments : [],
+                approvals: Array.isArray(data.approvals) ? data.approvals : [],
+                summary: data.summary || EMPTY_REVIEW.summary,
+            });
+        } catch {
+            setReview(EMPTY_REVIEW);
+        } finally {
+            setLoading(false);
+        }
+    }, [projectId]);
+
+    useEffect(() => { void refresh(); }, [refresh]);
+
+    const addComment = useCallback(async (shotId: string | null, frame: number, body: string) => {
+        const response = await fetch(apiUrl(`/projects/${projectId}/review/comments`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shot_id: shotId, frame, body }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Could not add comment', 'error');
+            return false;
+        }
+        await refresh();
+        addToast(`Comment added at frame ${frame}`, 'success');
+        return true;
+    }, [addToast, projectId, refresh]);
+
+    const updateComment = useCallback(async (commentId: string, patch: { status?: 'open' | 'resolved'; body?: string }) => {
+        const response = await fetch(apiUrl(`/projects/${projectId}/review/comments/${commentId}`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patch),
+        });
+        if (!response.ok) {
+            addToast('Could not update comment', 'error');
+            return false;
+        }
+        await refresh();
+        return true;
+    }, [addToast, projectId, refresh]);
+
+    const deleteComment = useCallback(async (commentId: string) => {
+        const response = await fetch(apiUrl(`/projects/${projectId}/review/comments/${commentId}`), {
+            method: 'DELETE',
+        });
+        if (!response.ok) {
+            addToast('Could not delete comment', 'error');
+            return false;
+        }
+        await refresh();
+        return true;
+    }, [addToast, projectId, refresh]);
+
+    const setApproval = useCallback(async (shotId: string, status: 'approved' | 'changes_requested', note = '') => {
+        const response = await fetch(apiUrl(`/projects/${projectId}/review/approvals`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shot_id: shotId, status, note }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Could not save approval', 'error');
+            return false;
+        }
+        await refresh();
+        addToast(status === 'approved' ? 'Shot approved' : 'Changes requested', 'success');
+        return true;
+    }, [addToast, projectId, refresh]);
+
+    return { review, loading, refresh, addComment, updateComment, deleteComment, setApproval };
 }
 
 export function useStudioRenders(projectId: string) {

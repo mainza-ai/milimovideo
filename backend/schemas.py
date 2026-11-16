@@ -257,6 +257,25 @@ class SelectTakeRequest(BaseModel):
     job_id: str
 
 
+class ReviewCommentRequest(BaseModel):
+    shot_id: Optional[str] = None
+    frame: int = 0
+    body: str
+    author: str = "local"
+
+
+class ReviewCommentUpdate(BaseModel):
+    body: Optional[str] = None
+    status: Optional[Literal["open", "resolved"]] = None
+
+
+class ReviewApprovalRequest(BaseModel):
+    shot_id: str
+    status: Literal["approved", "changes_requested"]
+    note: str = ""
+    author: str = "local"
+
+
 class PlanRequest(BaseModel):
     text: str
     mode: str = "direct"  # ask | direct | generate | find

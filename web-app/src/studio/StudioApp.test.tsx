@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StudioApp } from './StudioApp';
 
 function json(data: unknown, status = 200): Response {
@@ -38,5 +38,13 @@ describe('StudioApp shell', () => {
         expect(screen.getByText('Milimo')).toBeTruthy();
         expect(screen.getAllByText('Generate').length).toBeGreaterThan(0);
         expect(screen.getAllByText('Deliver').length).toBeGreaterThan(0);
+    });
+
+    it('opens the review surface with frame comments', async () => {
+        render(<StudioApp />);
+        await waitFor(() => expect(screen.getByText('Story spine')).toBeTruthy());
+        fireEvent.click(screen.getAllByText('Review')[0]);
+        await waitFor(() => expect(screen.getByText(/Comment at frame/)).toBeTruthy());
+        expect(screen.getByText(/Approve shot/)).toBeTruthy();
     });
 });

@@ -159,6 +159,24 @@ class Job(SQLModel, table=True):
     resume_policy: str = Field(default="fail")  # fail | resume
     request_id: Optional[str] = Field(default=None, index=True)
 
+class ReviewItem(SQLModel, table=True):
+    """Frame-accurate review comments and per-shot approvals.
+
+    Comments are immutable history unless resolved; approvals are upserted per
+    project+shot so the latest decision is the only one that gates a cut.
+    """
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    project_id: str = Field(index=True)
+    shot_id: Optional[str] = Field(default=None, index=True)
+    kind: str = Field(default="comment", index=True)  # comment | approval
+    frame: int = Field(default=0)
+    body: str = ""
+    author: str = "local"
+    status: str = Field(default="open", index=True)  # open | resolved | approved | changes_requested
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 # Database Setup
 from config import DATABASE_URL
 # check_same_thread=False is required for SQLite when using FastAPI BackgroundTasks

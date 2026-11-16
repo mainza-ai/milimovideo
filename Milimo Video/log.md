@@ -242,3 +242,16 @@ undoable document store, and generation only runs after approval. Added the
 master-reference chip list and filter to the story spine, moved the board
 filter into the editor store so Find can drive it. Verified: 25 pytest,
 6 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] frontend | frame-accurate review comments and approvals
+
+Added the review persistence contract: `review_item` stores project comments
+(shot + frame + body + status) and a single upserted approval per project/shot
+(`approved` | `changes_requested`). Endpoints: `GET /projects/{id}/review`,
+`POST/PATCH/DELETE .../review/comments`, `POST .../review/approvals`. The Review
+surface now reports the live frame from the player, attaches comments at that
+frame, jumps to a comment's frame/shot, resolves/deletes comments, and records
+shot decisions; the version stack and approval badges read the same data. Added
+3 backend tests and a review-surface mount test. Verified: 28 pytest, 7 vitest,
+tsc clean, eslint 0 errors, vite build. Live DB backed up and `review_item`
+created.
