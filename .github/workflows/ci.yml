@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "fix/**", "feat/**"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install CPU torch and backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ./LTX-2/packages/ltx-core -e ./LTX-2/packages/ltx-pipelines -e ./flux2
+          pip install -r backend/requirements.txt
+      - name: Compile
+        run: python -m compileall -q backend
+      - name: Tests
+        run: python -m pytest
+      - name: Lint (non-blocking while legacy code is frozen)
+        run: ruff check backend --output-format=github || true
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+      - run: npm ci
+      - run: npx tsc -b --pretty false
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build

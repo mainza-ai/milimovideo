@@ -1,0 +1,111 @@
+def _shot(shot_id, prompt, **overrides):
+    data = {
+        "id": shot_id,
+        "prompt": prompt,
+        "negative_prompt": "",
+        "seed": 42,
+        "width": 768,
+        "height": 512,
+        "fps": 25,
+        "num_frames": 121,
+        "cfg_scale": 2.0,
+        "enhance_prompt": True,
+        "upscale": False,
+        "pipeline_override": "auto",
+        "track_index": 0,
+        "start_frame": 0,
+        "trim_in": 0,
+        "trim_out": 0,
+        "timeline": [],
+    }
+    data.update(overrides)
+    return data
+
+
+def test_project_roundtrip_order_and_conditioning(app_client, project):
+    pid = project["id"]
+    payload = {
+        "id": pid,
+        "name": "Roundtrip",
+        "fps": 25,
+        "seed": 42,
+        "resolution_w": 768,
+        "resolution_h": 512,
+        "revision": 0,
+        "shots": [
+            _shot(
+                "a",
+                "first",
+                sequence_index=0,
+                height=704,
+                fps=30,
+                shot_type="close_up",
+                timeline=[
+                    {"type": "image", "path": "/projects/x/a.png", "frame_index": 25, "strength": 0.8}
+                ],
+            ),
+            _shot("b", "second", sequence_index=1),
+        ],
+        "scenes": [],
+    }
+    response = app_client.put(f"/projects/{pid}", json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["revision"] == 1
+
+    response = app_client.get(f"/projects/{pid}")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [s["id"] for s in body["shots"]] == ["a", "b"]
+    first = body["shots"][0]
+    assert first["height"] == 704
+    assert first["fps"] == 30
+    assert first["shot_type"] == "close_up"
+    assert first["timeline"][0]["frame_index"] == 25
+    assert first["timeline"][0]["strength"] == 0.8
+    assert body["revision"] == 1
+
+
+def test_stale_revision_returns_conflict(app_client, project):
+    pid = project["id"]
+    base = {
+        "id": pid,
+        "name": "Conflict",
+        "fps": 25,
+        "seed": 42,
+        "resolution_w": 768,
+        "resolution_h": 512,
+        "revision": 0,
+        "shots": [],
+        "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=base).status_code == 200
+    assert app_client.put(f"/projects/{pid}", json=base).status_code == 409
+
+
+def test_split_shot_keeps_order_and_timeline(app_client, project):
+    pid = project["id"]
+    payload = {
+        "id": pid,
+        "name": "Split",
+        "fps": 25,
+        "seed": 42,
+        "resolution_w": 768,
+        "resolution_h": 512,
+        "revision": 0,
+        "shots": [
+            _shot("one", "one", num_frames=121),
+            _shot("two", "two", sequence_index=1),
+        ],
+        "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+
+    response = app_client.post("/shots/one/split", json={"split_frame": 50})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["new_shot"]["trim_in"] == 50
+    assert body["original_shot"]["trim_out"] == 71
+    assert body["new_shot"]["sequence_index"] == 1
+
+    reloaded = app_client.get(f"/projects/{pid}").json()["shots"]
+    assert [s["id"] for s in reloaded] == ["one", body["new_shot"]["id"], "two"]

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 import type { ConditioningItem } from '../../stores/timelineStore';
@@ -47,7 +48,7 @@ export const MediaLibrary = () => {
 
 
         try {
-            const res = await fetch('http://localhost:8000/upload', {
+            const res = await fetch(API_BASE_URL + '/upload', {
                 method: 'POST',
                 body: formData
             });
@@ -56,7 +57,7 @@ export const MediaLibrary = () => {
             const newAsset: Asset = {
                 id: data.asset_id,
                 url: getAssetUrl(data.url) || data.url,
-                path: data.access_path,
+                path: data.url,
                 type: data.type,
                 filename: data.filename,
                 thumbnail: getAssetUrl(data.thumbnail)
@@ -92,7 +93,7 @@ export const MediaLibrary = () => {
 
     const fetchHistory = async () => {
         try {
-            const res = await fetch('http://localhost:8000/uploads');
+            const res = await fetch(API_BASE_URL + '/uploads');
             const data = await res.json();
             const mapped = data.map((a: any) => ({
                 ...a,
@@ -117,7 +118,7 @@ export const MediaLibrary = () => {
     const confirmDelete = async () => {
         if (!deletingAssetId) return;
         try {
-            await fetch(`http://localhost:8000/assets/${deletingAssetId}`, { method: 'DELETE' });
+            await fetch(`${API_BASE_URL}/assets/${deletingAssetId}`, { method: 'DELETE' });
             setAssets(prev => prev.filter(a => a.id !== deletingAssetId));
         } catch (e) { console.error(e); }
         setDeletingAssetId(null);

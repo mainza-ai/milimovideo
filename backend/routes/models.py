@@ -72,17 +72,6 @@ def pipeline_readiness(
     return readiness
 
 
-@router.get("/models/disk")
-def disk_usage():
-    """
-    Get disk usage summary for model storage.
-    
-    Returns total expected size, total downloaded size, and free disk space.
-    """
-    registry = _get_registry()
-    return registry.get_disk_usage()
-
-
 @router.get("/models/memory")
 def memory_status():
     """
@@ -92,16 +81,6 @@ def memory_status():
     """
     from memory_manager import memory_manager
     return memory_manager.status()
-
-
-@router.get("/models/{model_id}")
-def get_model(model_id: str):
-    """Get details for a specific model."""
-    registry = _get_registry()
-    model = registry.get_model(model_id)
-    if not model:
-        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found in manifest")
-    return model
 
 
 @router.post("/models/{model_id}/download")
@@ -149,18 +128,16 @@ async def start_download(model_id: str, request: DownloadRequest, background_tas
         except OSError:
             pass  # Can't check, proceed anyway
 
-    # Start async download
+    # Always go through the priority queue; direct download_model calls allowed
+    # two concurrent writes to the same target directory.
     from services.model_downloader import model_downloader
-    background_tasks.add_task(model_downloader.download_model, model_id)
-
-    # Mark as downloading immediately
-    from services.model_registry import ModelStatus
-    registry.update_model_status(model_id, ModelStatus.DOWNLOADING)
+    result = await model_downloader.enqueue_download(model_id)
 
     return {
         "model_id": model_id,
-        "status": "downloading",
-        "message": f"Download started for {model.name}"
+        "status": result.get("status", "queued"),
+        "queue_position": result.get("position"),
+        "message": f"Download queued for {model.name}",
     }
 
 
@@ -169,11 +146,13 @@ async def cancel_download(model_id: str):
     """Cancel an active download."""
     from services.model_downloader import model_downloader
     cancelled = model_downloader.cancel_download(model_id)
+    if not cancelled:
+        cancelled = await model_downloader.remove_from_queue(model_id)
 
     if not cancelled:
         raise HTTPException(
             status_code=404,
-            detail=f"No active download found for '{model_id}'"
+            detail=f"No active or queued download found for '{model_id}'"
         )
 
     return {"model_id": model_id, "status": "cancelled"}
@@ -289,15 +268,16 @@ async def activate_model(model_id: str):
                 detail=f"Base model '{model.base_repo_id}' must be active before loading LoRA '{model_id}'"
             )
 
-    # For base models: use MemoryManager to unload conflicts, then mark active
-    from memory_manager import memory_manager
-    from services.model_registry import ModelStatus
+    from services.model_loader import model_loader
 
-    if not model.requires_base:
-        slot = "video" if model.pipeline == "video" else "image"
-        memory_manager.prepare_for(slot)
-
-    registry.update_model_status(model_id, ModelStatus.ACTIVE)
+    if model.requires_base:
+        # LoRAs are attached to an already-active base pipeline.
+        result = await model_loader.add_lora(model_id, strength=1.0)
+    else:
+        try:
+            result = await model_loader.activate_base_model(model_id)
+        except MemoryError as exc:
+            raise HTTPException(status_code=507, detail=str(exc))
 
     # Broadcast status change
     await event_manager.broadcast("model_status_change", {
@@ -329,14 +309,12 @@ async def deactivate_model(model_id: str):
             detail=f"Model '{model_id}' is not currently active"
         )
 
-    from memory_manager import memory_manager
-    from services.model_registry import ModelStatus
+    from services.model_loader import model_loader
 
-    if not model.requires_base:
-        slot = "video" if model.pipeline == "video" else "image"
-        memory_manager.release(slot)
-
-    registry.update_model_status(model_id, ModelStatus.DOWNLOADED)
+    if model.requires_base:
+        result = await model_loader.remove_lora(model_id)
+    else:
+        result = await model_loader.deactivate_base_model(model_id)
 
     await event_manager.broadcast("model_status_change", {
         "model_id": model_id,
@@ -552,6 +530,18 @@ async def check_all_versions():
         "total_checked": len(results),
         "updates_available": updates_available,
     }
+
+
+# Static GET routes must be registered before the dynamic /models/{model_id}
+# route, otherwise "disk", "search", "queue", etc. are captured as model IDs.
+@router.get("/models/{model_id}")
+def get_model(model_id: str):
+    """Get details for a specific model."""
+    registry = _get_registry()
+    model = registry.get_model(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found in manifest")
+    return model
 
 
 # ── HF Transfer Acceleration ──────────────────────────────────────

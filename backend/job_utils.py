@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
@@ -42,6 +43,151 @@ async def queue_video_task(job_id: str, params: dict):
     """Helper to wrap video generation in the queue"""
     from tasks.video import generate_video_task
     await gpu_job_wrapper(generate_video_task(job_id, params))
+
+
+async def queue_image_task(job_id: str, params: dict):
+    """All Flux/thumbnail work must share the same GPU slot as video."""
+    from tasks.image import generate_image_task
+    await gpu_job_wrapper(generate_image_task(job_id, params))
+
+
+async def queue_inpaint_task(job_id: str, image_path: str, mask_path: str, prompt: str):
+    from managers.inpainting_manager import inpainting_manager
+    await gpu_job_wrapper(
+        inpainting_manager.process_inpaint(job_id, image_path, mask_path, prompt)
+    )
+
+
+async def queue_element_visual_task(job_id: str, element_id: str, prompt_override=None,
+                                    guidance: float = 2.0, enable_ae: bool = False):
+    from managers.element_manager import element_manager
+    await gpu_job_wrapper(
+        element_manager.generate_visual_task(
+            job_id, element_id, prompt_override, guidance, enable_ae
+        )
+    )
+
+
+# ── Durable dispatch ledger ───────────────────────────────────────
+
+async def enqueue_gpu_job(job_id: str, kind: str, params: dict, **extra) -> str:
+    """Persist a dispatch record, then start it without blocking the request."""
+    from database import QueuedJob
+    from sqlmodel import select
+
+    payload = {**(params or {}), **extra}
+    with Session(engine) as session:
+        existing = session.exec(
+            select(QueuedJob)
+            .where(QueuedJob.job_id == job_id)
+            .where(QueuedJob.status.in_(["queued", "running"]))
+        ).first()
+        if existing:
+            return existing.id
+        queued = QueuedJob(
+            job_id=job_id,
+            kind=kind,
+            params_json=json.dumps(payload),
+        )
+        session.add(queued)
+        session.commit()
+        session.refresh(queued)
+        queue_id = queued.id
+
+    asyncio.create_task(run_queued_job(queue_id))
+    return queue_id
+
+
+async def run_queued_job(queue_id: str) -> None:
+    from database import QueuedJob
+    from sqlmodel import select
+
+    with Session(engine) as session:
+        queued = session.get(QueuedJob, queue_id)
+        if not queued or queued.status != "queued":
+            return
+        queued.status = "running"
+        queued.attempts = (queued.attempts or 0) + 1
+        from datetime import datetime
+        queued.started_at = datetime.utcnow()
+        params = json.loads(queued.params_json or "{}")
+        job_id = queued.job_id
+        kind = queued.kind
+        session.add(queued)
+        session.commit()
+
+    try:
+        if kind == "video":
+            await queue_video_task(job_id, params)
+        elif kind == "image":
+            await queue_image_task(job_id, params)
+        elif kind == "inpaint":
+            await queue_inpaint_task(
+                job_id,
+                params.get("image_path"),
+                params.get("mask_path"),
+                params.get("prompt", ""),
+            )
+        elif kind == "element":
+            await queue_element_visual_task(
+                job_id,
+                params.get("element_id"),
+                params.get("prompt_override"),
+                params.get("guidance", 2.0),
+                params.get("enable_ae", False),
+            )
+        else:
+            raise ValueError(f"Unknown queued job kind: {kind}")
+        status = "completed"
+        error = None
+    except Exception as exc:
+        logger.exception(f"Queued job {job_id} failed: {exc}")
+        status = "failed"
+        error = str(exc)
+        update_job_db(job_id, "failed", error=error)
+
+    with Session(engine) as session:
+        current = session.get(QueuedJob, queue_id)
+        if current:
+            from datetime import datetime
+            current.status = status
+            current.error_message = error
+            current.completed_at = datetime.utcnow()
+            session.add(current)
+            session.commit()
+
+
+async def resume_queued_jobs() -> None:
+    """Recover dispatch records after a restart.
+
+    Running jobs get one retry; queued jobs start immediately. The GPU semaphore
+    still serializes them, so recovery cannot load two heavy models at once.
+    """
+    from database import QueuedJob
+    from sqlmodel import select
+
+    with Session(engine) as session:
+        running = session.exec(
+            select(QueuedJob).where(QueuedJob.status == "running")
+        ).all()
+        for queued in running:
+            if (queued.attempts or 0) < 2:
+                queued.status = "queued"
+            else:
+                queued.status = "failed"
+                queued.error_message = "Interrupted twice; not retrying"
+            session.add(queued)
+        session.commit()
+
+        pending = session.exec(
+            select(QueuedJob)
+            .where(QueuedJob.status == "queued")
+            .order_by(QueuedJob.created_at)
+        ).all()
+        ids = [q.id for q in pending]
+
+    for queue_id in ids:
+        asyncio.create_task(run_queued_job(queue_id))
 
 def is_gpu_busy() -> dict:
     """Returns GPU busy status for the frontend."""

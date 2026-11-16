@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 // import type { StoryElement } from '../../stores/timelineStore';
@@ -48,20 +49,20 @@ const ElementCard = ({ el, generating, project, onGenerate, onDelete, onCancel, 
                         e.stopPropagation();
                         const src = el.image_path.startsWith('http')
                             ? el.image_path
-                            : `http://localhost:8000${el.image_path.startsWith('/') ? '' : '/'}${el.image_path}`;
+                            : `${API_BASE_URL}${el.image_path.startsWith('/') ? '' : '/'}${el.image_path}`;
                         onPreview(src);
                     }
                 }}
             >
                 {el.image_path ? (
                     <img
-                        src={el.image_path.startsWith('http') ? el.image_path : `http://localhost:8000${el.image_path.startsWith('/') ? '' : '/'}${el.image_path}`}
+                        src={el.image_path.startsWith('http') ? el.image_path : `${API_BASE_URL}${el.image_path.startsWith('/') ? '' : '/'}${el.image_path}`}
                         alt={el.name}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                             if (el.image_path && !el.image_path.startsWith('http')) {
                                 const filename = el.image_path.split('/').pop();
-                                const fallbackSrc = `http://localhost:8000/projects/${project?.id}/assets/${filename}`;
+                                const fallbackSrc = `${API_BASE_URL}/projects/${project?.id}/assets/${filename}`;
                                 if ((e.target as HTMLImageElement).src !== fallbackSrc) {
                                     (e.target as HTMLImageElement).src = fallbackSrc;
                                 }

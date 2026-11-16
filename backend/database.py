@@ -1,9 +1,12 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, Field, Relationship
 from typing import Optional, List
-from sqlalchemy import Column, JSON
+from sqlalchemy import Column, JSON, text
 from datetime import datetime
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Define Models directly here for simplicity in this phase
 
@@ -19,7 +22,10 @@ class Project(SQLModel, table=True):
     seed: int = 42
     # Storyboard Support
     script_content: Optional[str] = None # Raw script text
-    
+    # Optimistic concurrency. Clients send the revision they read; a mismatch
+    # returns 409 instead of silently overwriting a newer project.
+    revision: int = Field(default=0)
+
     shots: List["Shot"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     scenes: List["Scene"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
@@ -38,6 +44,8 @@ class Shot(SQLModel, table=True):
     scene_id: Optional[str] = Field(default=None, index=True, foreign_key="scene.id") # Link to Scene
     project_id: str = Field(index=True, foreign_key="project.id") # Redundant but useful for queries
     index: Optional[int] = None
+    # Project-wide story order. Canvas x/y and created_at never define order.
+    sequence_index: Optional[int] = Field(default=None, index=True)
     track_index: int = Field(default=0) # 0=Main, 1=Overlay, 2=Audio?
     start_frame: int = Field(default=0) # Absolute start time (frames) for Non-Linear tracks
     trim_in: int = Field(default=0) # Trim from start (frames)
@@ -105,9 +113,28 @@ class Asset(SQLModel, table=True):
     duration: Optional[float] = None
     meta_json: Optional[str] = None # JSON string for prompt, seed, refs, etc.
 
+class QueuedJob(SQLModel, table=True):
+    """Durable dispatch record for GPU work.
+
+    The Job row is user-facing state; this row is the scheduler's ledger. It
+    exists before a background task starts, so a restart can recover queued work.
+    """
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    job_id: str = Field(index=True)
+    kind: str = Field(index=True)  # video | image | inpaint | element
+    params_json: str = "{}"
+    status: str = Field(default="queued", index=True)  # queued | running | completed | failed
+    attempts: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+
+
 class Job(SQLModel, table=True):
     id: str = Field(primary_key=True) # Job ID from worker
     project_id: Optional[str] = Field(default=None, index=True)
+    shot_id: Optional[str] = Field(default=None, index=True)
     type: str = "generation"
     status: str = "pending" # pending, processing, completed, failed, cancelled
     progress: int = 0
@@ -123,6 +150,9 @@ class Job(SQLModel, table=True):
     status_message: Optional[str] = None
     actual_frames: Optional[int] = None
     thumbnail_path: Optional[str] = None
+    # Recovery/idempotency metadata for the unified scheduler.
+    resume_policy: str = Field(default="fail")  # fail | resume
+    request_id: Optional[str] = Field(default=None, index=True)
 
 # Database Setup
 from config import DATABASE_URL
@@ -130,8 +160,74 @@ from config import DATABASE_URL
 # Increased pool size to prevent "QueuePool limit" errors during heavy polling
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, pool_size=20, max_overflow=40)
 
+def _add_missing_columns() -> None:
+    """Idempotent SQLite schema repair for installs created before a model field.
+
+    `create_all()` never alters existing tables. This is deliberately small and
+    explicit; new schema work should move to Alembic rather than growing this
+    list forever.
+    """
+    migrations = {
+        "project": {
+            "revision": "INTEGER NOT NULL DEFAULT 0",
+        },
+        "shot": {
+            "sequence_index": "INTEGER",
+        },
+        "job": {
+            "resume_policy": "TEXT NOT NULL DEFAULT 'fail'",
+            "request_id": "TEXT",
+            "shot_id": "TEXT",
+        },
+    }
+    with engine.begin() as conn:
+        for table, columns in migrations.items():
+            existing = {
+                row[1]
+                for row in conn.execute(text(f"PRAGMA table_info({table})"))
+            }
+            if not existing:
+                continue  # fresh table will be created by create_all
+            for name, ddl in columns.items():
+                if name not in existing:
+                    logger.info(f"Schema repair: adding {table}.{name}")
+                    conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}"))
+
+        # Backfill story order for existing projects. NULL means "never ordered".
+        for ddl in (
+            "CREATE INDEX IF NOT EXISTS ix_shot_sequence_index ON shot(sequence_index)",
+            "CREATE INDEX IF NOT EXISTS ix_job_shot_id ON job(shot_id)",
+        ):
+            try:
+                conn.execute(text(ddl))
+            except Exception:
+                pass
+
+        project_ids = [
+            row[0]
+            for row in conn.execute(text(
+                "SELECT DISTINCT project_id FROM shot WHERE sequence_index IS NULL"
+            ))
+        ]
+        for project_id in project_ids:
+            shot_ids = [
+                row[0]
+                for row in conn.execute(text(
+                    "SELECT id FROM shot WHERE project_id = :pid "
+                    "ORDER BY created_at ASC, id ASC"
+                ), {"pid": project_id})
+            ]
+            for order, shot_id in enumerate(shot_ids):
+                conn.execute(text(
+                    "UPDATE shot SET sequence_index = :idx WHERE id = :sid"
+                ), {"idx": order, "sid": shot_id})
+        if project_ids:
+            logger.info(f"Schema repair: backfilled sequence_index for {len(project_ids)} project(s)")
+
+
 def init_db():
     SQLModel.metadata.create_all(engine)
+    _add_missing_columns()
 
 def get_session():
     with Session(engine) as session:

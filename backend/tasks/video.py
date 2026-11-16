@@ -690,18 +690,34 @@ async def generate_video_task(job_id: str, params: dict):
     }
     update_job_db(job_id, "processing")
     
-    # Needs to import manager here to avoid circular dependencies if possible, 
+    # Needs to import manager here to avoid circular dependencies if possible,
     # but Manager is singleton.
     from model_engine import manager
-    
+    from services.model_loader import model_loader
+
+    if not config.SKIP_VRAM_CHECK:
+        estimate = (
+            config.VRAM_ESTIMATE_IMAGE_GB
+            if params.get("num_frames") == 1
+            else config.VRAM_ESTIMATE_VIDEO_GB
+        )
+        can_load, reason = model_loader.can_load_model(estimate)
+        if not can_load:
+            message = f"Insufficient memory to start generation: {reason}"
+            logger.error(message)
+            update_job_db(job_id, "failed", error=message)
+            await event_manager.broadcast("error", {"job_id": job_id, "message": message})
+            return
+
     try:
         pipeline_type = params.get("pipeline_override") or params.get("pipeline_type", "ti2vid")
         timeline = params.get("timeline", [])
         
-        # Save request debug info
-        with open("server_last_request.json", "w") as f:
-            import json
-            json.dump(params, f, indent=2)
+        # Save request debug info only when explicitly enabled.
+        if config.DEBUG:
+            with open("server_last_request.json", "w") as f:
+                import json
+                json.dump(params, f, indent=2)
             
         # Pipeline Selection Logic
         if pipeline_type in ("advanced", "auto"):
@@ -778,28 +794,23 @@ async def generate_video_task(job_id: str, params: dict):
         if "cancelled" in str(e).lower():
              logger.info(f"Job {job_id} cancelled.")
              update_job_db(job_id, "cancelled")
-             
-             # Broadcast cancelled event explicitly via asyncio
-             import asyncio
-             try:
-                 asyncio.run_coroutine_threadsafe(
-                     event_manager.broadcast("cancelled", {"job_id": job_id}),
-                     loop
-                 )
-             except NameError:
-                 pass # loop might not be in scope if it crashes extremely early, though unlikely
-             
+             # generate_video_task runs on the event loop; await the broadcast
+             # directly. The old run_coroutine_threadsafe(loop) referenced an
+             # undefined name and silently dropped the event.
+             await event_manager.broadcast("cancelled", {"job_id": job_id})
         else:
             logger.error(f"Job failed: {e}")
             import traceback
             traceback.print_exc()
             
-            # Write Debug Error File
-            try:
-                with open("server_last_error.txt", "w") as f:
-                    f.write(f"Error: {e}\n")
-                    traceback.print_exc(file=f)
-            except: pass
+            # Write Debug Error File only when explicitly enabled.
+            if config.DEBUG:
+                try:
+                    with open("server_last_error.txt", "w") as f:
+                        f.write(f"Error: {e}\n")
+                        traceback.print_exc(file=f)
+                except Exception:
+                    pass
             
             update_job_db(job_id, "failed", error=str(e))
             await event_manager.broadcast("error", {"job_id": job_id, "message": str(e)})

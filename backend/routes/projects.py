@@ -1,18 +1,68 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from typing import List
+from typing import List, Optional
 from sqlmodel import Session, select, SQLModel
 from database import get_session, Project, Shot, Scene
-from schemas import CreateProjectRequest, ProjectState
+from schemas import CreateProjectRequest, ProjectState, TimelineItem, RenderRequest, RenderSettings
 import uuid
 import os
 import shutil
 import logging
 import json
+from datetime import datetime
 import config
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["projects"])
+
+
+def _parse_json_field(value, default):
+    if value is None or value == "":
+        return default
+    if isinstance(value, (list, dict)):
+        return value
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError):
+        return default
+
+
+def _shot_dict(shot: Shot) -> dict:
+    return {
+        "id": shot.id,
+        "project_id": shot.project_id,
+        "scene_id": shot.scene_id,
+        "index": shot.index,
+        "sequence_index": shot.sequence_index,
+        "prompt": shot.prompt,
+        "width": shot.width,
+        "height": shot.height,
+        "seed": shot.seed,
+        "num_frames": shot.num_frames,
+        "fps": shot.fps,
+        "cfg_scale": shot.cfg_scale,
+        "negative_prompt": shot.negative_prompt,
+        "enhance_prompt": shot.enhance_prompt,
+        "upscale": shot.upscale,
+        "pipeline_override": shot.pipeline_override,
+        "auto_continue": shot.auto_continue,
+        "status": shot.status,
+        "thumbnail_url": shot.thumbnail_url,
+        "video_url": shot.video_url,
+        "track_index": shot.track_index,
+        "start_frame": shot.start_frame,
+        "trim_in": shot.trim_in,
+        "trim_out": shot.trim_out,
+        "action": shot.action,
+        "dialogue": shot.dialogue,
+        "character": shot.character,
+        "shot_type": shot.shot_type,
+        "timeline": _parse_json_field(shot.timeline, []),
+        "matched_elements": _parse_json_field(shot.matched_elements, None),
+        "enhanced_prompt_result": shot.enhanced_prompt_result,
+        "last_job_id": shot.last_job_id,
+        "created_at": shot.created_at.isoformat() if shot.created_at else None,
+    }
 
 @router.post("/projects", response_model=ProjectState)
 def create_project(req: CreateProjectRequest, session: Session = Depends(get_session)):
@@ -47,7 +97,8 @@ def create_project(req: CreateProjectRequest, session: Session = Depends(get_ses
         fps=new_project.fps,
         seed=new_project.seed,
         created_at=new_project.created_at.timestamp() if new_project.created_at else None,
-        updated_at=new_project.updated_at.timestamp() if new_project.updated_at else None
+        updated_at=new_project.updated_at.timestamp() if new_project.updated_at else None,
+        revision=new_project.revision,
     )
 
 @router.get("/projects", response_model=List[ProjectState])
@@ -69,7 +120,8 @@ def get_projects(session: Session = Depends(get_session)):
             fps=p.fps,
             seed=p.seed,
             created_at=p.created_at.timestamp() if p.created_at else None,
-            updated_at=p.updated_at.timestamp() if p.updated_at else None
+            updated_at=p.updated_at.timestamp() if p.updated_at else None,
+            revision=p.revision,
         ))
     return results
 
@@ -91,54 +143,24 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
             "script_content": sc.script_content
         })
 
-    shots = session.exec(select(Shot).where(Shot.project_id == project_id).order_by(Shot.created_at)).all()
-    
-    shots_data = []
-    for s in shots:
-        shots_data.append({
-            "id": s.id,
-            "project_id": s.project_id,
-            "prompt": s.prompt,
-            "width": s.width,
-            "height": s.height, 
-            "seed": s.seed,
-            "num_frames": s.num_frames,
-            "fps": s.fps,
-            "cfg_scale": s.cfg_scale,
-            "negative_prompt": s.negative_prompt,
-            "enhance_prompt": s.enhance_prompt,
-            "upscale": s.upscale,
-            "pipeline_override": s.pipeline_override,
-            "auto_continue": s.auto_continue,
-            "status": s.status,
-            "thumbnail_url": s.thumbnail_url,
-            "video_url": s.video_url,
-            "track_index": s.track_index,
-            "start_frame": s.start_frame,
-            "trim_in": s.trim_in,
-            "trim_out": s.trim_out,
-            "scene_id": s.scene_id,
-            "action": s.action,
-            "dialogue": s.dialogue,
-            "character": s.character,
-            "shot_type": s.shot_type,
-            "matched_elements": s.matched_elements,
-            "enhanced_prompt_result": s.enhanced_prompt_result,
-            "last_job_id": s.last_job_id,
-            "created_at": s.created_at.isoformat() if s.created_at else None
-        })
-        
+    shots = session.exec(
+        select(Shot)
+        .where(Shot.project_id == project_id)
+        .order_by(Shot.sequence_index.is_(None), Shot.sequence_index, Shot.created_at, Shot.id)
+    ).all()
+
     return ProjectState(
         id=project.id,
         name=project.name,
-        shots=shots_data,
+        shots=[_shot_dict(s) for s in shots],
         scenes=scenes_data,
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
         fps=project.fps,
         seed=project.seed,
         created_at=project.created_at.timestamp() if project.created_at else None,
-        updated_at=project.updated_at.timestamp() if project.updated_at else None
+        updated_at=project.updated_at.timestamp() if project.updated_at else None,
+        revision=project.revision,
     )
 
 @router.delete("/projects/{project_id}")
@@ -187,7 +209,15 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
             seed=state.seed
         )
         session.add(db_project)
-    
+    elif state.revision is not None and state.revision != db_project.revision:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Project revision conflict: client has {state.revision}, "
+                f"server has {db_project.revision}. Reload before saving."
+            ),
+        )
+
     db_project.name = state.name
     
     # Save settings
@@ -196,8 +226,9 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     db_project.fps = state.fps
     db_project.seed = state.seed
     
-    # db_project.updated_at = datetime.now(timezone.utc) # Handled by SQLModel typically or trigger
-    
+    db_project.updated_at = datetime.utcnow()
+    db_project.revision = (db_project.revision or 0) + 1
+
     # Sync Shots (Smart Merge)
     # Sync Scenes
     existing_scenes = session.exec(select(Scene).where(Scene.project_id == project_id)).all()
@@ -251,36 +282,40 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     
     new_shots_to_add = []
     
-    for s_data in state.shots:
+    for order, s_data in enumerate(state.shots):
         shot_id = s_data.get("id")
+        if not shot_id:
+            shot_id = uuid.uuid4().hex
+            s_data["id"] = shot_id
         payload_ids.add(shot_id)
-        
-        # Clean input data
+
+        # Clean input data. The payload array is the canonical story order.
         clean_data = {k: v for k, v in s_data.items() if k in valid_keys}
         clean_data["project_id"] = project_id
-        
+        clean_data["sequence_index"] = order
+        if "timeline" in clean_data:
+            clean_data["timeline"] = json.dumps(
+                TimelineItem.normalize(clean_data.get("timeline"))
+            )
+        if "matched_elements" in clean_data:
+            matched = _parse_json_field(clean_data.get("matched_elements"), None)
+            clean_data["matched_elements"] = json.dumps(matched) if matched is not None else None
+
         if shot_id and shot_id in existing_map:
             # UPDATE Existing Shot
             existing_shot = existing_map[shot_id]
-            
-            # Update fields from payload
+
             for k, v in clean_data.items():
-                if k in ["timeline", "matched_elements"] and isinstance(v, (list, dict)):
-                    setattr(existing_shot, k, json.dumps(v))
+                if k in ["timeline", "matched_elements"]:
+                    setattr(existing_shot, k, v)
                 else:
                     setattr(existing_shot, k, v)
-                
+
             session.add(existing_shot)
         else:
             # CREATE New Shot
-            # Ensure ID is set
             if not clean_data.get("id"):
                 clean_data["id"] = uuid.uuid4().hex
-            
-            # Serialize JSON fields for creation
-            for field in ["timeline", "matched_elements"]:
-                if field in clean_data and isinstance(clean_data[field], (list, dict)):
-                    clean_data[field] = json.dumps(clean_data[field])
 
             new_shots_to_add.append(Shot(**clean_data))
             
@@ -296,8 +331,9 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
         
     session.add(db_project)
     session.commit()
-        
-    return {"status": "saved"}
+    session.refresh(db_project)
+
+    return {"status": "saved", "revision": db_project.revision}
 
 @router.patch("/projects/{project_id}/settings")
 async def update_project_settings(project_id: str, updates: dict, session: Session = Depends(get_session)):
@@ -331,152 +367,193 @@ async def update_project_settings(project_id: str, updates: dict, session: Sessi
         }
     }
 
-@router.patch("/shots/{shot_id}")
-async def update_shot_partial(shot_id: str, updates: dict, session: Session = Depends(get_session)):
-    """
-    Granular update for a single shot. 
-    Useful for timeline drag-and-drop or text edits without full project save.
-    """
-    shot = session.get(Shot, shot_id)
-    if not shot:
-        raise HTTPException(status_code=404, detail="Shot not found")
-        
-    # Allowed fields to patch
-    # We allow patching almost anything, but be careful with IDs.
-    for k, v in updates.items():
-        if k == "id" or k == "project_id": continue # Don't allow changing PK/FK via patch
-        if hasattr(shot, k):
-            setattr(shot, k, v)
-            
-    session.add(shot)
-    session.commit()
-    session.refresh(shot)
-    return shot
+async def _has_audio_stream(path: str) -> bool:
+    import asyncio
+    import subprocess
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffprobe", "-v", "error", "-select_streams", "a:0",
+            "-show_entries", "stream=index", "-of", "csv=p=0", path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await proc.communicate()
+        return bool(stdout.strip())
+    except Exception:
+        return False
+
 
 @router.post("/projects/{project_id}/render")
-async def render_project(project_id: str, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
-    """
-    Kicks off an async render job that stitches V1 shots + A1 audio into a final MP4.
-    Progress is sent via SSE events: render_progress, render_complete, render_failed.
-    Returns immediately with { job_id, status: "rendering" }.
-    """
-    from database import Job, Asset
-    
+async def render_project(
+    project_id: str,
+    background_tasks: BackgroundTasks,
+    req: Optional[RenderRequest] = None,
+    session: Session = Depends(get_session),
+):
+    """Start a durable render job for the project's computed timeline."""
+    from database import Job
+
     project = session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    
-    render_id = f"render_{uuid.uuid4().hex[:8]}"
 
-    # Register render job in DB
+    render_id = f"render_{uuid.uuid4().hex[:8]}"
+    settings = (req.settings if req else RenderSettings()) or RenderSettings()
+    track_states = (req.track_states if req else {}) or {}
+    fps = settings.fps or project.fps
+    width = settings.width or project.resolution_w
+    height = settings.height or project.resolution_h
+
     job = Job(
         id=render_id,
         project_id=project_id,
         type="render",
         status="processing",
         progress=0,
-        status_message="Initializing render..."
+        status_message="Initializing render...",
+        params_json=json.dumps({
+            "settings": settings.model_dump(),
+            "track_states": track_states,
+        }),
     )
     session.add(job)
     session.commit()
-    
-    # Run render in background
+
     background_tasks.add_task(
-        _render_background, project_id, render_id, project.fps, project.resolution_w, project.resolution_h
+        _render_background,
+        project_id, render_id, fps, width, height, settings, track_states,
     )
-    
     return {"job_id": render_id, "status": "rendering"}
 
 
 async def _render_background(
-    project_id: str, render_id: str, fps: int, width: int, height: int
+    project_id: str,
+    render_id: str,
+    fps: int,
+    width: int,
+    height: int,
+    settings: RenderSettings,
+    track_states: dict,
 ):
-    """Background task: Builds FFmpeg filtergraph, executes render, and tracks progress via DB/SSE."""
-    import subprocess
+    """Build the filtergraph from computed layout, render, and stream progress."""
     import asyncio
     from events import event_manager
     from utils.render_utils import build_complex_filtergraph
     from file_utils import resolve_path
-    from database import engine
+    from database import engine, Job
+    from job_utils import active_jobs
 
-    # Note: Using a local session inside background thread
+    active_jobs[render_id] = {
+        "cancelled": False,
+        "status": "processing",
+        "progress": 0,
+        "status_message": "Initializing render...",
+        "project_id": project_id,
+        "type": "render",
+    }
+
     with Session(engine) as session:
         job = session.get(Job, render_id)
         if not job:
             logger.error(f"Render Job {render_id} missing in background thread.")
+            active_jobs.pop(render_id, None)
             return
 
         project_dir = os.path.join(config.PROJECTS_DIR, project_id, "generated")
         os.makedirs(project_dir, exist_ok=True)
-        
         output_path = os.path.join(project_dir, f"{render_id}.mp4")
         video_url = f"/projects/{project_id}/generated/{render_id}.mp4"
-        
-        async def emit_progress(step: int, total_steps: int, message: str, status: str = "processing"):
-            pct = int((step / total_steps) * 100) if total_steps > 0 else 100
-            
-            # Update Database
+
+        async def emit_progress(pct: int, message: str, status: str = "processing"):
+            pct = max(0, min(100, int(pct)))
+            if render_id in active_jobs:
+                active_jobs[render_id].update({
+                    "progress": pct, "status": status if status != "processing" else "processing",
+                    "status_message": message,
+                })
             job.progress = pct
             job.status_message = message
-            job.status = status
+            job.status = "processing" if status == "processing" else status
             if status == "completed":
                 job.output_path = video_url
-            elif status == "failed":
-                job.error_message = message
+                job.completed_at = datetime.utcnow()
+            elif status in ("failed", "cancelled"):
+                job.error_message = message if status == "failed" else None
+                job.completed_at = datetime.utcnow()
             session.add(job)
             session.commit()
             session.refresh(job)
 
-            # Broadcast via SSE
-            event_payload = {
+            payload = {
                 "job_id": render_id,
                 "project_id": project_id,
                 "progress": pct,
                 "message": message,
-                "status": status
+                "status": status,
             }
             if status == "completed":
-                event_payload["video_url"] = video_url
+                payload["video_url"] = video_url
             elif status == "failed":
-                event_payload["error"] = message
-                
-            await event_manager.broadcast("render_progress" if status == "processing" else f"render_{status}", event_payload)
+                payload["error"] = message
+            await event_manager.broadcast(
+                "render_progress" if status == "processing" else f"render_{status}",
+                payload,
+            )
 
         try:
-            await emit_progress(5, 100, "Gathering timeline tracks...")
-            
-            # Fetch all shots for this project
+            await emit_progress(2, "Gathering computed timeline...")
+
             all_shots = session.exec(
-                select(Shot).where(Shot.project_id == project_id).order_by(Shot.start_frame.asc())
+                select(Shot)
+                .where(Shot.project_id == project_id)
+                .order_by(Shot.sequence_index.is_(None), Shot.sequence_index, Shot.created_at, Shot.id)
             ).all()
 
-            v1_clips = []
-            v2_clips = []
-            a1_clips = []
+            v1_clips, v2_clips, a1_clips = [], [], []
+            v1_cursor = 0
 
             for shot in all_shots:
-                if not shot.video_url: continue
+                if not shot.video_url:
+                    continue
                 resolved = resolve_path(shot.video_url)
-                if not resolved or not os.path.exists(resolved): continue
-                
-                # Standardize Dictionary for the filtergraph generator
-                clip_data = {
-                    "path": resolved,
-                    "start_frame": shot.start_frame or 0,
-                    "duration_frames": (shot.num_frames or 121) - (shot.trim_in or 0) - (shot.trim_out or 0),
-                    "trim_in": shot.trim_in or 0
-                }
+                if not resolved or not os.path.exists(resolved):
+                    logger.warning(f"Render skipping missing media: {shot.video_url}")
+                    continue
 
-                if shot.track_index == 0: v1_clips.append(clip_data)
-                elif shot.track_index == 1: v2_clips.append(clip_data)
-                elif shot.track_index == 2: a1_clips.append(clip_data)
+                duration_frames = max(
+                    0,
+                    (shot.num_frames or 121) - (shot.trim_in or 0) - (shot.trim_out or 0),
+                )
+                if duration_frames <= 0:
+                    continue
+
+                if shot.track_index == 0:
+                    start_frame = v1_cursor
+                    v1_cursor += duration_frames
+                else:
+                    start_frame = shot.start_frame or 0
+
+                clip = {
+                    "path": resolved,
+                    "start_frame": start_frame,
+                    "duration_frames": duration_frames,
+                    "trim_in": shot.trim_in or 0,
+                    "gain": 1.0,
+                    "muted": False,
+                    "hidden": False,
+                    "has_audio": await _has_audio_stream(resolved),
+                }
+                if shot.track_index == 0:
+                    v1_clips.append(clip)
+                elif shot.track_index == 1:
+                    v2_clips.append(clip)
+                elif shot.track_index == 2:
+                    a1_clips.append(clip)
 
             if not v1_clips and not v2_clips and not a1_clips:
                 raise ValueError("No valid video or audio clips found to render.")
 
-            await emit_progress(10, 100, "Compiling FFmpeg instructions...")
-            
-            # Build the robust FFmpeg structural command
+            await emit_progress(5, "Compiling FFmpeg filtergraph...")
             cmd = build_complex_filtergraph(
                 project_fps=fps,
                 project_width=width,
@@ -484,29 +561,64 @@ async def _render_background(
                 v1_shots=v1_clips,
                 v2_shots=v2_clips,
                 a1_shots=a1_clips,
-                output_path=output_path
+                output_path=output_path,
+                track_states=track_states,
+                crf=settings.crf,
+                preset=settings.preset,
+                audio_bitrate=settings.audio_bitrate,
             )
 
-            await emit_progress(30, 100, "Executing mixdown matrix...")
-            
-            logger.info(f"Executing Render FFmpeg: {' '.join(cmd)}")
-            # Use asyncio to prevent the Event Loop from dying while the demuxer churns
+            logger.info("Executing render FFmpeg: %s", " ".join(cmd))
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await process.communicate()
-            
-            if process.returncode != 0:
-                raise RuntimeError(f"FFmpeg render failed: {stderr.decode()}")
+            stderr_task = asyncio.create_task(process.stderr.read())
 
-            await emit_progress(100, 100, "Render complete!", status="completed")
-            logger.info(f"Render perfectly completed: {output_path}")
+            duration_sec = max(1.0, (
+                max((c["start_frame"] + c["duration_frames"]) for c in (v1_clips + v2_clips + a1_clips))
+                / max(1, fps)
+            ))
+
+            cancelled = False
+            while True:
+                if active_jobs.get(render_id, {}).get("cancelled"):
+                    cancelled = True
+                    process.terminate()
+                    break
+                line = await process.stdout.readline()
+                if not line:
+                    break
+                text = line.decode("utf-8", "ignore").strip()
+                if text.startswith("out_time_us=") or text.startswith("out_time_ms="):
+                    raw = text.split("=", 1)[1]
+                    try:
+                        # out_time_us is microseconds; out_time_ms is misleadingly
+                        # microseconds in recent FFmpeg as well.
+                        seconds = int(raw) / 1_000_000
+                        pct = 5 + min(94, int((seconds / duration_sec) * 94))
+                        await emit_progress(pct, f"Rendering {seconds:.1f}s / {duration_sec:.1f}s")
+                    except ValueError:
+                        pass
+
+            returncode = await process.wait()
+            stderr = (await stderr_task).decode("utf-8", "ignore")
+            if cancelled:
+                await emit_progress(0, "Render cancelled", status="cancelled")
+                await event_manager.broadcast("cancelled", {"job_id": render_id})
+                return
+            if returncode != 0:
+                raise RuntimeError(f"FFmpeg render failed: {stderr[-4000:]}")
+
+            await emit_progress(100, "Render complete!", status="completed")
+            logger.info(f"Render completed: {output_path}")
 
         except Exception as e:
-            logger.error(f"Render fatally failed: {e}")
-            await emit_progress(0, 100, str(e), status="failed")
+            logger.error(f"Render failed: {e}")
+            await emit_progress(0, str(e), status="failed")
+        finally:
+            active_jobs.pop(render_id, None)
 
 
 @router.get("/projects/{project_id}/renders")
@@ -580,45 +692,63 @@ async def split_shot(shot_id: str, req: SplitShotRequest, session: Session = Dep
     original_shot.trim_out = new_trim_out
     session.add(original_shot)
     
-    # 3. Create New Shot (Copy of Original)
-    new_shot_data = original_shot.model_dump(exclude={"id", "created_at", "updated_at"})
+    # 3. Shift the project-wide story order and the scene-local index so the
+    # new shot lands immediately after the original, not at the end.
+    new_sequence_index = None
+    if original_shot.sequence_index is not None:
+        new_sequence_index = original_shot.sequence_index + 1
+        for other in session.exec(
+            select(Shot)
+            .where(Shot.project_id == original_shot.project_id)
+            .where(Shot.sequence_index >= new_sequence_index)
+        ).all():
+            other.sequence_index = (other.sequence_index or 0) + 1
+            session.add(other)
+
+    new_scene_index = None
+    if original_shot.index is not None and original_shot.scene_id:
+        new_scene_index = original_shot.index + 1
+        for other in session.exec(
+            select(Shot)
+            .where(Shot.scene_id == original_shot.scene_id)
+            .where(Shot.index >= new_scene_index)
+        ).all():
+            other.index = (other.index or 0) + 1
+            session.add(other)
+
+    # 4. Create New Shot (Copy of Original)
+    new_shot_data = original_shot.model_dump(exclude={"id", "created_at"})
     new_shot = Shot(**new_shot_data)
     new_shot.id = uuid.uuid4().hex
     new_shot.created_at = datetime.utcnow()
-    
-    # 4. Configure New Shot (Trim In)
-    # Starts at absolute_split_frame
-    # trim_in_new = absolute_split_frame
+    new_shot.sequence_index = new_sequence_index
+    new_shot.index = new_scene_index
     new_shot.trim_in = absolute_split_frame
-    new_shot.trim_out = old_trim_out # Resets to original end
-    
-    # 5. Handle Track Positioning
-    if original_shot.track_index == 0:
-        # V1: Magnetic - Insert after original (Update timestamps is implicit in list order, but we track index?)
-        # Current DB doesn't strictly use 'index' column for ordering, usually by created_at or implicit.
-        # But we might need to shift things if we used 'start_frame'.
-        # For V1, start_frame is ignored in rendering.
-        pass
-    else:
-        # V2/A1: Free - Absolute Positioning
-        # New shot starts where the cut happened
-        # Start = Original Start + split_frame (seconds converted to frames?)
-        # Wait, start_frame is absolute project frames.
-        new_shot.start_frame = (original_shot.start_frame or 0) + (req.split_frame) # Shift start
-    
+    new_shot.trim_out = old_trim_out
+
+    # 5. Free tracks keep absolute position; V1 is magnetic from sequence_index.
+    if original_shot.track_index != 0:
+        new_shot.start_frame = (original_shot.start_frame or 0) + req.split_frame
+
     session.add(new_shot)
-    
-    # 6. Duplicate timeline/conditioning if necessary?
-    # For now, simplistic copy. Ideally filter conditioning based on time?
-    # TODO: Filter 'timeline' list based on split point (left vs right).
-    
     session.commit()
     session.refresh(original_shot)
     session.refresh(new_shot)
-    
+
+    def _as_dict(shot: Shot) -> dict:
+        data = shot.model_dump()
+        for key in ("timeline", "matched_elements"):
+            value = data.get(key)
+            if isinstance(value, str):
+                try:
+                    data[key] = json.loads(value) if value else ([] if key == "timeline" else None)
+                except json.JSONDecodeError:
+                    data[key] = [] if key == "timeline" else None
+        return data
+
     return {
-        "original_shot": original_shot,
-        "new_shot": new_shot
+        "original_shot": _as_dict(original_shot),
+        "new_shot": _as_dict(new_shot),
     }
 
 

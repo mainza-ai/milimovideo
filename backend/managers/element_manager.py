@@ -264,15 +264,20 @@ class ElementManager:
         # For MVP Agentic Mode, we run it directly (blocking the worker thread but it's okay for single user).
         
         try:
-            image = flux_inpainter.generate_image(
-                prompt=final_prompt,
-                width=1024,
-                height=1024,
-                guidance=guidance,
-                enable_true_cfg=False, # Disable True CFG for element generation to ensure stability
-                enable_ae=enable_ae, # User controlled (default True)
-                ip_adapter_images=element_images, # Pass visual conditioning found from triggers!
-                callback=cancellation_check
+            import asyncio
+            loop = asyncio.get_running_loop()
+            image = await loop.run_in_executor(
+                None,
+                lambda: flux_inpainter.generate_image(
+                    prompt=final_prompt,
+                    width=1024,
+                    height=1024,
+                    guidance=guidance,
+                    enable_true_cfg=False,
+                    enable_ae=enable_ae,
+                    ip_adapter_images=element_images,
+                    callback=cancellation_check,
+                ),
             )
                 
             # Save Image

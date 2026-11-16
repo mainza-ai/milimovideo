@@ -20,6 +20,17 @@ async def generate_image_task(job_id: str, params: dict):
     config.setup_paths()
     
     logger.info(f"Starting IMAGE generation for job {job_id}")
+
+    if not config.SKIP_VRAM_CHECK:
+        from services.model_loader import model_loader
+        can_load, reason = model_loader.can_load_model(config.VRAM_ESTIMATE_IMAGE_GB)
+        if not can_load:
+            message = f"Insufficient memory for image generation: {reason}"
+            logger.error(message)
+            update_job_db(job_id, "failed", error=message)
+            await event_manager.broadcast("error", {"job_id": job_id, "message": message})
+            return
+
     active_jobs[job_id] = {
         "cancelled": False,
         "status": "processing",
@@ -249,14 +260,7 @@ async def generate_image_task(job_id: str, params: dict):
         if "cancelled" in str(e).lower():
             logger.info(f"Job {job_id} cancelled.")
             update_job_db(job_id, "cancelled")
-            
-            # Broadcast cancelled event explicitly via asyncio
-            async def _broadcast_cancel():
-                from events import event_manager
-                await event_manager.broadcast("cancelled", {"job_id": job_id})
-            
-            asyncio.run_coroutine_threadsafe(_broadcast_cancel(), loop)
-            
+            await event_manager.broadcast("cancelled", {"job_id": job_id})
         else:
             logger.error(f"Generation failed: {e}")
             import traceback

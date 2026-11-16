@@ -2,6 +2,8 @@
 .DS_Store
 .Thumbnails
 .Trashes
+.obsidian/
+*.db.bak-*
 
 # Environment
 milimov/

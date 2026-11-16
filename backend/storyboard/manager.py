@@ -310,40 +310,29 @@ class StoryboardManager:
             import json
             try:
                 matches = json.loads(shot.matched_elements)
-                # Sort matches by length of trigger word (descending) to avoid partial replacements
-                # e.g. @hero_face vs @hero
+                # Sort matches by length of trigger word (descending) to avoid
+                # partial replacements, e.g. @hero_face before @hero.
                 matches.sort(key=lambda x: len(x.get("trigger_word", "")), reverse=True)
-                
+
                 for match in matches:
                     trigger = match.get("trigger_word", "")
                     name = match.get("element_name", "")
                     el_id = match.get("element_id")
-                    
-                    # Fetch full element for description
-                    # We need the description to inject into the text, 
-                    # because LTX-2 ignores visual embeddings (IP-Adapter).
+
                     from database import Element
                     element = session.get(Element, el_id)
                     description = element.description if element else ""
-                    
-                    # Construct Replacement: "Name (Description)"
+
                     replacement = name
                     if description:
                         replacement = f"{name} ({description})"
-                    
-                    if trigger and trigger.startswith("@") and trigger in shot_config["prompt"]:
-                        # Explicit Replacement
-                        shot_config["prompt"] = shot_config["prompt"].replace(trigger, replacement)
-                    elif element and element.type == "location" and name not in shot_config["prompt"]:
-                        # Implicit Location Injection (if not already mentioned)
-                        # Append to Scene Heading part if possible, or just prepend to action
-                        # Simple approach: Prepend to action part
-                        # But wait, we already built base_prompt.
-                        # Let's just append "Setting: Name (Description)" if it's a location match
-                        shot_config["prompt"] += f". Setting: {replacement}"
 
-                if replacement:
-                     shot_config["prompt"] += f". Setting: {replacement}"
+                    if trigger and trigger.startswith("@") and trigger in shot_config["prompt"]:
+                        shot_config["prompt"] = shot_config["prompt"].replace(
+                            trigger, replacement
+                        )
+                    elif element and element.type == "location" and name and name not in shot_config["prompt"]:
+                        shot_config["prompt"] += f". Setting: {replacement}"
 
                 logger.info(f"DEBUG: Prompt AFTER Element Injection: {shot_config['prompt']}")
                 logger.info(f"Injected Element Descriptions into Prompt")

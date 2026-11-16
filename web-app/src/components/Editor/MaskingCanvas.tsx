@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { API_BASE_URL } from '../../config';
 import { Eraser, Paintbrush, RotateCcw, Check, MousePointer, Type, Loader2 } from 'lucide-react';
 import { SegmentationOverlay, type DetectedObject } from './SegmentationOverlay';
 
@@ -10,7 +11,7 @@ interface MaskingCanvasProps {
     onCancel: () => void;
 }
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = API_BASE_URL;
 
 export const MaskingCanvas = ({ width, height, videoRef, onSave, onCancel }: MaskingCanvasProps) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);

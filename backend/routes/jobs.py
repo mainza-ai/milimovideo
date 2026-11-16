@@ -3,7 +3,6 @@ from sqlmodel import Session, select
 from database import get_session, Job, Shot, Project
 from schemas import GenerateAdvancedRequest, GenerateImageRequest
 from tasks.video import generate_video_task
-from tasks.image import generate_image_task
 from job_utils import active_jobs, update_job_db, update_shot_db
 import uuid
 import logging
@@ -76,6 +75,28 @@ async def cancel_job(job_id: str, session: Session = Depends(get_session)):
     return {"status": "not_found_or_already_done"}
 
 
+@router.get("/metrics/jobs")
+def job_metrics(days: int = 7, session: Session = Depends(get_session)):
+    """Small error-budget readout: job outcomes by type for the recent window."""
+    from datetime import timedelta
+    from collections import Counter
+    since = datetime.utcnow() - timedelta(days=max(1, min(days, 90)))
+    jobs = session.exec(select(Job).where(Job.created_at >= since)).all()
+    by_type = Counter(j.type for j in jobs)
+    by_status = Counter(j.status for j in jobs)
+    failures = [
+        {"job_id": j.id, "type": j.type, "error": j.error_message}
+        for j in jobs if j.status == "failed"
+    ][-20:]
+    return {
+        "window_days": days,
+        "total": len(jobs),
+        "by_type": dict(by_type),
+        "by_status": dict(by_status),
+        "recent_failures": failures,
+    }
+
+
 @router.get("/gpu/status")
 def gpu_status():
     """Returns whether the GPU is busy and how many jobs are queued."""
@@ -95,7 +116,19 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     import config
     
     job_id = f"job_{uuid.uuid4().hex[:8]}"
-    
+    shot_id = req.shot_config.id if req.shot_config.id else None
+
+    # Idempotency: a double-click must not create two GPU jobs for one shot.
+    if shot_id:
+        existing = session.exec(
+            select(Job)
+            .where(Job.shot_id == shot_id)
+            .where(Job.status.in_(["pending", "processing"]))
+            .order_by(Job.created_at.desc())
+        ).first()
+        if existing:
+            return {"job_id": existing.id, "status": "already_queued"}
+
     # Validated Params
     params = req.shot_config.model_dump()
     params["job_id"] = job_id
@@ -232,6 +265,7 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     job = Job(
         id=job_id,
         project_id=req.project_id,
+        shot_id=shot_id,
         type="advanced",
         status="pending",
         created_at=datetime.now(timezone.utc),
@@ -240,9 +274,9 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     )
     session.add(job)
     session.commit()
-    from job_utils import queue_video_task
-    background_tasks.add_task(queue_video_task, job_id, params)
-    
+    from job_utils import enqueue_gpu_job
+    await enqueue_gpu_job(job_id, "video", params)
+
     return {"job_id": job_id, "status": "queued"}
 
 # Legacy Alias
@@ -251,11 +285,14 @@ async def generate_video(req: GenerateAdvancedRequest, background_tasks: Backgro
     return await generate_advanced(req, background_tasks, session)
 
 @router.post("/generate/image")
-def generate_image(req: GenerateImageRequest, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
+async def generate_image(req: GenerateImageRequest, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     
+    params = req.model_dump()
     job = Job(
         id=job_id,
+        project_id=req.project_id,
+        shot_id=params.get("shot_id"),
         type="image",
         status="pending",
         params_json=req.model_dump_json(),
@@ -263,8 +300,8 @@ def generate_image(req: GenerateImageRequest, background_tasks: BackgroundTasks,
     )
     session.add(job)
     session.commit()
-    
-    params = req.model_dump()
-    background_tasks.add_task(generate_image_task, job_id, params)
-    
+
+    from job_utils import enqueue_gpu_job
+    await enqueue_gpu_job(job_id, "image", params)
+
     return {"job_id": job_id, "status": "queued"}

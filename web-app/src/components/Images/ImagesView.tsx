@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../../config';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Loader2, Zap, Image as ImageIcon, Wand2, Upload, X, Trash2 } from 'lucide-react';
@@ -51,7 +52,7 @@ export const ImagesView = () => {
             try {
                 // Keep isLoading true, UI will poll until status is 'cancelled'
                 setStatusMsg("Cancelling...");
-                await fetch(`http://localhost:8000/jobs/${currentJobId}/cancel`, { method: 'POST' });
+                await fetch(`${API_BASE_URL}/jobs/${currentJobId}/cancel`, { method: 'POST' });
             } catch (err) {
                 console.error(err);
             }
@@ -85,13 +86,13 @@ export const ImagesView = () => {
             formData.append('type', 'reference');
 
             try {
-                const res = await fetch('http://localhost:8000/upload', {
+                const res = await fetch(API_BASE_URL + '/upload', {
                     method: 'POST',
                     body: formData
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    setUploadedRef(data.access_path);
+                    setUploadedRef(data.url);
                     setUploadedRefUrl(data.url);
                     addToast("Reference uploaded", "success");
                 }
@@ -106,7 +107,7 @@ export const ImagesView = () => {
         if (!window.confirm("Delete this image forever?")) return;
 
         try {
-            const res = await fetch(`http://localhost:8000/assets/${imgId}`, { method: 'DELETE' });
+            const res = await fetch(`${API_BASE_URL}/assets/${imgId}`, { method: 'DELETE' });
             if (res.ok) {
                 setImages(prev => prev.filter(img => img.id !== imgId));
                 if (selectedImage?.id === imgId) {
@@ -133,13 +134,13 @@ export const ImagesView = () => {
         formData.append('type', 'reference');
 
         try {
-            const res = await fetch('http://localhost:8000/upload', {
+            const res = await fetch(API_BASE_URL + '/upload', {
                 method: 'POST',
                 body: formData
             });
             if (res.ok) {
                 const data = await res.json();
-                setUploadedRef(data.access_path);
+                setUploadedRef(data.url);
                 setUploadedRefUrl(data.url);
                 addToast("Reference uploaded", "success");
             } else {
@@ -161,7 +162,7 @@ export const ImagesView = () => {
 
     const checkActiveJobs = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/active_jobs`);
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/active_jobs`);
             if (res.ok) {
                 const jobs = await res.json();
                 // Find first active image job
@@ -183,7 +184,7 @@ export const ImagesView = () => {
         // But the first poll will fix it soon.
 
         const poll = async () => {
-            const statusRes = await fetch(`http://localhost:8000/status/${jobId}`);
+            const statusRes = await fetch(`${API_BASE_URL}/status/${jobId}`);
             if (statusRes.ok) {
                 const job = await statusRes.json();
                 if (job.status === 'completed') {
@@ -193,7 +194,7 @@ export const ImagesView = () => {
                     triggerAssetRefresh();
 
                     // Refresh images
-                    const res = await fetch(`http://localhost:8000/projects/${project.id}/images`);
+                    const res = await fetch(`${API_BASE_URL}/projects/${project.id}/images`);
                     if (res.ok) {
                         const data = await res.json();
                         setImages(data);
@@ -255,7 +256,7 @@ export const ImagesView = () => {
             // OR use the existing "Elements" as a pattern.
 
             // Let's try to fetch from a new endpoint I'll add: GET /projects/{id}/images
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/images`);
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/images`);
             if (res.ok) {
                 const data = await res.json();
                 setImages(data);
@@ -286,7 +287,7 @@ export const ImagesView = () => {
             };
 
             // 1. Trigger Async Job
-            const res = await fetch('http://localhost:8000/generate/image', {
+            const res = await fetch(API_BASE_URL + '/generate/image', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -349,11 +350,11 @@ export const ImagesView = () => {
                                 onDragStart={(e) => {
                                     const data = {
                                         id: img.id,
-                                        url: `http://localhost:8000${img.url}`,
+                                        url: `${API_BASE_URL}${img.url}`,
                                         path: img.path,
                                         filename: img.filename,
                                         type: 'image',
-                                        thumbnail: `http://localhost:8000${img.url}`
+                                        thumbnail: `${API_BASE_URL}${img.url}`
                                     };
                                     e.dataTransfer.setData('application/json', JSON.stringify(data));
                                     e.dataTransfer.effectAllowed = 'copy';
@@ -387,7 +388,7 @@ export const ImagesView = () => {
                                 tabIndex={0}
                                 className={`aspect-square rounded-xl overflow-hidden cursor-pointer border-2 transition-all relative transform-gpu ${selectedImage?.id === img.id ? 'border-milimo-500 shadow-lg shadow-milimo-500/20' : 'border-transparent hover:border-white/20'}`}
                             >
-                                <img src={`http://localhost:8000${img.url}`} className="w-full h-full object-cover" loading="lazy" />
+                                <img src={`${API_BASE_URL}${img.url}`} className="w-full h-full object-cover" loading="lazy" />
                                 <div className={`absolute inset-0 bg-black/50 transition-opacity flex flex-col justify-between p-2 ${hoveredImageId === img.id ? 'opacity-100' : 'opacity-0'}`}>
                                     <div className="flex justify-end relative z-10">
                                         <button
@@ -430,9 +431,9 @@ export const ImagesView = () => {
                 {/* Preview Selected Large */}
                 {selectedImage && (
                     <div className="aspect-square w-full bg-black rounded-lg overflow-hidden border border-white/10 relative">
-                        <img src={`http://localhost:8000${selectedImage.url}`} className="w-full h-full object-contain" />
+                        <img src={`${API_BASE_URL}${selectedImage.url}`} className="w-full h-full object-contain" />
                         <div className="absolute top-2 right-2">
-                            <a href={`http://localhost:8000${selectedImage.url}`} target="_blank" download className="p-2 bg-black/50 rounded-md hover:bg-white/20 text-white">
+                            <a href={`${API_BASE_URL}${selectedImage.url}`} target="_blank" download className="p-2 bg-black/50 rounded-md hover:bg-white/20 text-white">
                                 <ImageIcon size={14} />
                             </a>
                         </div>
@@ -500,7 +501,7 @@ export const ImagesView = () => {
 
                             {uploadedRefUrl && (
                                 <div className="relative w-20 aspect-square rounded overflow-hidden border border-white/20 group">
-                                    <img src={uploadedRefUrl.startsWith('http') ? uploadedRefUrl : `http://localhost:8000${uploadedRefUrl}`} className="w-full h-full object-cover" />
+                                    <img src={uploadedRefUrl.startsWith('http') ? uploadedRefUrl : `${API_BASE_URL}${uploadedRefUrl}`} className="w-full h-full object-cover" />
                                     <button
                                         onClick={() => { setUploadedRef(null); setUploadedRefUrl(null); }}
                                         className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-red-400 transition-opacity"

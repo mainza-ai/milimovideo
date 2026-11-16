@@ -1,0 +1,20 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix, backend]
+        files: ^backend/
+  - repo: local
+    hooks:
+      - id: frontend-typecheck
+        name: frontend typecheck
+        entry: bash -c 'cd web-app && npx tsc -b --pretty false'
+        language: system
+        pass_filenames: false
+        files: ^web-app/src/
+      - id: no-large-files
+        name: block large files
+        entry: bash -c 'git diff --cached --name-only | xargs -r du -m | awk '\''$1 > 20 {print; exit 1}'\'''
+        language: system
+        pass_filenames: false

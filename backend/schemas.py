@@ -1,11 +1,40 @@
 from pydantic import BaseModel
-from typing import List, Optional, Literal
+from typing import Dict, List, Optional, Literal
 
 class TimelineItem(BaseModel):
     path: str
     frame_index: int = 0
     strength: float = 1.0
     type: Literal["image", "video"]
+
+    @classmethod
+    def normalize(cls, value) -> list[dict]:
+        """Accept canonical snake_case, legacy camelCase, or a JSON string."""
+        import json as _json
+        if value is None:
+            return []
+        if isinstance(value, str):
+            try:
+                value = _json.loads(value) if value.strip() else []
+            except _json.JSONDecodeError:
+                return []
+        if not isinstance(value, list):
+            return []
+        result = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            normalized = {
+                "path": item.get("path", ""),
+                "frame_index": item.get("frame_index", item.get("frameIndex", 0)),
+                "strength": item.get("strength", 1.0),
+                "type": item.get("type", "image"),
+            }
+            try:
+                result.append(cls(**normalized).model_dump())
+            except Exception:
+                continue
+        return result
 
 class ShotConfig(BaseModel):
     id: str
@@ -45,6 +74,9 @@ class ProjectState(BaseModel):
     seed: int = 42
     created_at: Optional[float] = None
     updated_at: Optional[float] = None
+    # None means "legacy client, skip the concurrency check". New clients send
+    # the revision they read; a mismatch returns 409.
+    revision: Optional[int] = None
 
 class CreateProjectRequest(BaseModel):
     name: str
@@ -166,6 +198,20 @@ class GenerateImageRequest(BaseModel):
     reference_images: List[str] = []
     enable_ae: bool = True
     enable_true_cfg: bool = False
+
+class RenderSettings(BaseModel):
+    width: Optional[int] = None
+    height: Optional[int] = None
+    fps: Optional[int] = None
+    crf: int = 18
+    preset: str = "fast"
+    audio_bitrate: str = "192k"
+
+
+class RenderRequest(BaseModel):
+    settings: RenderSettings = RenderSettings()
+    track_states: Dict[str, dict] = {}
+
 
 class TrackingSaveRequest(BaseModel):
     session_id: str

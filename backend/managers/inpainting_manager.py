@@ -31,7 +31,7 @@ class InpaintingManager:
                 data = {"points": str(points), "multimask": "false"} 
                 
                 logger.info(f"Requesting mask from SAM at {self.sam_url} with points {points}")
-                res = requests.post(f"{self.sam_url}/predict/mask", files=files, data=data)
+                res = requests.post(f"{self.sam_url}/predict/mask", files=files, data=data, timeout=120)
                 
                 if res.status_code == 200:
                     # Response is a PNG image
@@ -72,7 +72,7 @@ class InpaintingManager:
 
                 logger.info(f"Requesting text-based mask from SAM: '{text_prompt}'")
                 res = requests.post(
-                    f"{self.sam_url}/segment/text", files=files, data=data
+                    f"{self.sam_url}/segment/text", files=files, data=data, timeout=120
                 )
 
                 if res.status_code == 200:
@@ -108,7 +108,7 @@ class InpaintingManager:
                 files = {"image": ("image.jpg", f, "image/jpeg")}
                 data = {"text": text_prompt, "confidence": str(confidence)}
 
-                res = requests.post(f"{self.sam_url}/detect", files=files, data=data)
+                res = requests.post(f"{self.sam_url}/detect", files=files, data=data, timeout=120)
 
                 if res.status_code == 200:
                     return res.json()
@@ -148,11 +148,16 @@ class InpaintingManager:
                     pct = int((step / total) * 100)
                     update_job_progress(job_id, pct, f"In-Painting ({step}/{total})")
 
-            # Run Inference with progress callback
-            result = flux_inpainter.inpaint(
-                image, mask, prompt, 
-                guidance=2.0, enable_ae=True, enable_true_cfg=False,
-                step_callback=step_callback
+            # Flux is blocking; never run it on the event loop.
+            import asyncio
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: flux_inpainter.inpaint(
+                    image, mask, prompt,
+                    guidance=2.0, enable_ae=True, enable_true_cfg=False,
+                    step_callback=step_callback,
+                ),
             )
             
             # Save result

@@ -114,6 +114,7 @@ export interface Project {
     resolutionH: number;
     seed: number; // Global seed
     scriptContent?: string;
+    revision?: number;
 }
 
 export interface ProjectSlice {
@@ -123,6 +124,9 @@ export interface ProjectSlice {
     // Asset Management
     assetRefreshVersion: number;
     triggerAssetRefresh: () => void;
+
+    saveStatus: 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
+    saveError: string | null;
 
     // Async
     saveProject: () => Promise<void>;
@@ -146,7 +150,7 @@ export interface ShotSlice {
     removeConditioning: (shotId: string, itemId: string) => void;
 
     getShotStartTime: (shotId: string) => number;
-    generateShot: (shotId: string) => Promise<void>;
+    generateShot: (shotId: string, forceNewSeed?: boolean) => Promise<void>;
     inpaintShot: (shotId: string, frameDataUrl: string, maskDataUrl: string, prompt: string) => Promise<void>;
     cancelShotGeneration: (shotId: string) => Promise<void>;
 
@@ -161,7 +165,7 @@ export interface ShotSlice {
     batchGenerateThumbnails: (shotIds: string[]) => Promise<void>;
 
     // Phase 3: Timeline integration
-    pushStoryboardToTimeline: () => void;
+    pushStoryboardToTimeline: () => Promise<void>;
 }
 
 export interface PlaybackSlice {

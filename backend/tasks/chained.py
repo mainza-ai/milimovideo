@@ -211,7 +211,8 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     )
                     if enhanced:
                         chunk_prompt = enhanced
-                        active_jobs[job_id]["current_prompt"] = chunk_prompt
+                        if job_id in active_jobs:
+                            active_jobs[job_id]["current_prompt"] = chunk_prompt
                         
                         # CRITICAL FIX: Update the Global Story Goal!
                         logger.info(f"Updating Global Story Goal to match enhanced Chunk 0 prompt...")
@@ -248,12 +249,15 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             
             logger.info(f"Starting chunk {chunk_idx}: {chunk_prompt[:50]}...")
             
-            # Check cancellation again before expensive call
+            # Check cancellation again before expensive call. Never break into
+            # the stitch path: a partial chunk list must not be reported as a
+            # completed film.
             if job_id not in active_jobs or active_jobs[job_id].get("cancelled", False):
-                break
-            
+                raise RuntimeError(f"Job {job_id} cancelled by user.")
+
             # Update status
-            active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
+            if job_id in active_jobs:
+                active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
 
             # 2. Define Pipeline execution wrapper
             def _run_chunk_pipeline(images_arg, sequence_arg, current_prompt, pipeline_enhance):
@@ -340,14 +344,16 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     # Expecting [F, H, W, C] from decode_video output convention
                     video = video[frames_to_trim:]
                 
-                # Trim Audio: [B, C, Samples] or [C, Samples]
+                # Trim Audio at the START, matching the video. Trimming the end
+                # shifted every chunk's audio by ~1s and desynced the stitch.
                 if audio is not None:
                      fps = float(params.get("fps", 25.0))
                      trim_samples = int(frames_to_trim * (AUDIO_SAMPLE_RATE / fps))
-                     if audio.ndim == 3:
-                        audio = audio[:, :, :-trim_samples]
-                     elif audio.ndim == 2:
-                        audio = audio[:, :-trim_samples]
+                     if trim_samples > 0:
+                        if audio.ndim == 3:
+                            audio = audio[:, :, trim_samples:]
+                        elif audio.ndim == 2:
+                            audio = audio[:, trim_samples:]
             
             video_chunks_number = get_video_chunks_number(chunk_size, TilingConfig.default())
             
@@ -377,6 +383,13 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             del video
             del audio
             cleanup_memory()
+
+        if active_jobs.get(job_id, {}).get("cancelled", False):
+            raise RuntimeError(f"Job {job_id} cancelled by user.")
+        if len(files_to_stitch) != num_chunks:
+            raise RuntimeError(
+                f"Chained generation incomplete: {len(files_to_stitch)}/{num_chunks} chunks"
+            )
 
         # Final stitching complete
         logger.info(f"All chunks generated successfully. Stitching {len(files_to_stitch)} parts...")

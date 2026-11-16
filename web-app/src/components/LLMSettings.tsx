@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../config';
 import { Settings, ChevronDown, Cpu, Check, Loader2, AlertCircle, Eye } from 'lucide-react';
 
 interface LLMConfig {
@@ -39,8 +40,8 @@ export const LLMSettings: React.FC = () => {
         setLoading(true);
         setError(null);
         Promise.all([
-            fetch('http://localhost:8000/settings/llm').then(r => r.json()),
-            fetch('http://localhost:8000/settings/llm/models').then(r => r.json()).catch(() => ({ models: [] }))
+            fetch(API_BASE_URL + '/settings/llm').then(r => r.json()),
+            fetch(API_BASE_URL + '/settings/llm/models').then(r => r.json()).catch(() => ({ models: [] }))
         ]).then(([cfg, mdls]) => {
             setConfig(cfg);
             setModels(mdls.models || []);
@@ -50,7 +51,7 @@ export const LLMSettings: React.FC = () => {
 
     const updateConfig = async (patch: Partial<LLMConfig>) => {
         try {
-            const res = await fetch('http://localhost:8000/settings/llm', {
+            const res = await fetch(API_BASE_URL + '/settings/llm', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(patch)

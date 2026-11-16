@@ -67,9 +67,9 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
         setEditingField(null);
     }, [editingField, editValue, shot, patchShot]);
 
-    const handleGenerate = (e: React.MouseEvent) => {
+    const handleGenerate = (e: React.MouseEvent, forceNewSeed = false) => {
         e.stopPropagation();
-        generateShot(shot.id);
+        generateShot(shot.id, forceNewSeed);
     };
 
     const handleDelete = (e: React.MouseEvent) => {
@@ -263,7 +263,7 @@ export const StoryboardShotCard: React.FC<StoryboardShotCardProps> = ({
                         <>
                             <button
                                 className="flex-1 py-1.5 px-2 bg-white/5 hover:bg-white/10 text-white/80 font-bold rounded flex items-center justify-center gap-1.5 text-[10px] uppercase transition-colors"
-                                onClick={(e) => { e.stopPropagation(); handleGenerate(e); }}
+                                onClick={(e) => { e.stopPropagation(); handleGenerate(e, true); }}
                             >
                                 <RotateCcw size={12} /> Regen Video
                             </button>

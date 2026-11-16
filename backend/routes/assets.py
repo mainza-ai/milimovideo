@@ -1,13 +1,14 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from typing import Optional
-import shutil
 import os
+import re
 import uuid
 import config
 from file_utils import get_base_dir
 from sqlmodel import Session
 from database import get_session
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +26,11 @@ def upload_file(
     session: Session = Depends(get_session)
 ):
     upload_target_dir = UPLOAD_DIR
-    
+
     # Project-scoped uploads
     if project_id:
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", project_id):
+            raise HTTPException(status_code=400, detail="Invalid project id")
         project_dir = os.path.join(config.PROJECTS_DIR, project_id)
         if not os.path.exists(project_dir):
             raise HTTPException(status_code=404, detail="Project not found")
@@ -41,12 +44,50 @@ def upload_file(
         
         os.makedirs(upload_target_dir, exist_ok=True)
         
-    filename = f"{uuid.uuid4().hex[:8]}_{file.filename}"
+    # Never trust a client filename. Keep only the basename and enforce an
+    # extension allowlist before anything touches the filesystem.
+    original_name = Path(file.filename or "upload").name
+    original_name = re.sub(r"[\x00-\x1f]", "", original_name).strip()
+    if not original_name or original_name in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid upload filename")
+    extension = Path(original_name).suffix.lower()
+    if extension not in config.ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type '{extension or 'none'}'",
+        )
+
+    stem = Path(original_name).stem[:120]
+    filename = f"{uuid.uuid4().hex[:8]}_{stem}{extension}"
     file_path = os.path.join(upload_target_dir, filename)
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-        
+    temp_path = f"{file_path}.part"
+    max_bytes = config.MAX_UPLOAD_BYTES
+    written = 0
+    try:
+        with open(temp_path, "wb") as buffer:
+            while True:
+                chunk = file.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > max_bytes:
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Upload exceeds {config.MAX_UPLOAD_MB} MB limit",
+                    )
+                buffer.write(chunk)
+        os.replace(temp_path, file_path)
+    except Exception:
+        for path in (temp_path, file_path):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass
+        raise
+    finally:
+        file.file.close()
+
     # Create DB Record
     from database import Asset
     from datetime import datetime, timezone
@@ -60,19 +101,33 @@ def upload_file(
     else:
         access_url = f"/uploads/{filename}"
 
+    image_extensions = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"}
+    audio_extensions = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
+    asset_type = (
+        "image" if extension in image_extensions
+        else "audio" if extension in audio_extensions
+        else "video"
+    )
     new_asset = Asset(
         id=uuid.uuid4().hex,
         project_id=project_id,
-        type="image" if file.content_type.startswith("image") else "video",
+        type=asset_type,
         url=access_url,
         path=file_path,
-        filename=filename, # Original or safe filename? using the one on disk
-        created_at=datetime.now(timezone.utc)
+        filename=filename,
+        created_at=datetime.now(timezone.utc),
+        meta_json=None,
     )
     session.add(new_asset)
     session.commit()
 
-    return {"url": access_url, "asset_id": new_asset.id, "type": new_asset.type, "filename": new_asset.filename, "access_path": file_path}
+    return {
+        "url": access_url,
+        "asset_id": new_asset.id,
+        "type": new_asset.type,
+        "filename": new_asset.filename,
+        "size_bytes": written,
+    }
 
 @router.post("/shot/{job_id}/last-frame")
 async def get_shot_last_frame(job_id: str, session: Session = Depends(get_session)):

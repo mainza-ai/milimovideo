@@ -366,7 +366,6 @@ class ModelDownloader:
             repo_id=repo_id,
             filename=filename,
             local_dir=target_dir,
-            local_dir_use_symlinks=False,
             token=os.environ.get("HF_TOKEN"),
             tqdm_class=progress_cls,
         ))
@@ -406,7 +405,6 @@ class ModelDownloader:
             repo_id=repo_id,
             allow_patterns=[f"{subdir}/**"],
             local_dir=target_dir,
-            local_dir_use_symlinks=False,
             token=os.environ.get("HF_TOKEN"),
             tqdm_class=progress_cls,
         ))

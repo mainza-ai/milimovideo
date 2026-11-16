@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../config';
 import { useTimelineStore } from '../stores/timelineStore';
 import { X, Play, Download, Loader, Calendar } from 'lucide-react';
 
@@ -18,15 +19,17 @@ interface ExportModalProps {
 
 export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
     const project = useTimelineStore(state => state.project);
+    const trackStates = useTimelineStore(state => state.trackStates);
     const saveProject = useTimelineStore(state => state.saveProject);
     const addToast = useTimelineStore(state => state.addToast);
 
     const [renders, setRenders] = useState<RenderJob[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [preset, setPreset] = useState<'project' | '1080p' | '720p' | 'vertical'>('project');
 
     const fetchRenders = async () => {
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/renders`);
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/renders`);
             const data = await res.json();
             setRenders(data);
         } catch (e) {
@@ -52,8 +55,25 @@ export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
         addToast("Saving project configuration...", "info");
         await saveProject();
 
+        const dimensions = preset === '1080p'
+            ? { width: 1920, height: 1080 }
+            : preset === '720p'
+                ? { width: 1280, height: 720 }
+                : preset === 'vertical'
+                    ? { width: 1080, height: 1920 }
+                    : { width: project.resolutionW, height: project.resolutionH };
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/render`, { method: 'POST' });
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/render`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    settings: {
+                        ...dimensions,
+                        fps: project.fps,
+                    },
+                    track_states: trackStates,
+                }),
+            });
             if (!res.ok) {
                 const errorText = await res.text();
                 throw new Error(errorText);
@@ -83,8 +103,20 @@ export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
                         <Play size={16} fill="currentColor" /> Request New Export
                     </button>
                     <div className="flex flex-col justify-center text-xs text-white/50">
-                        <p>Exports combine all V1/V2 video tracks and A1 audio tracks.</p>
-                        <p>Resolution corresponds to Project Settings ({project.resolutionW}x{project.resolutionH}).</p>
+                        <p>Exports the computed V1/V2 cut with embedded audio, A1/A2 and captions.</p>
+                        <label className="mt-1 flex items-center gap-2">
+                            <span>Preset</span>
+                            <select
+                                value={preset}
+                                onChange={(e) => setPreset(e.target.value as typeof preset)}
+                                className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs"
+                            >
+                                <option value="project">Project ({project.resolutionW}×{project.resolutionH})</option>
+                                <option value="1080p">1080p (16:9)</option>
+                                <option value="720p">720p (16:9)</option>
+                                <option value="vertical">Vertical (9:16)</option>
+                            </select>
+                        </label>
                     </div>
                 </div>
 
@@ -114,7 +146,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({ onClose }) => {
                                     <div className="flex gap-2">
                                         {r.status === 'completed' && r.output_path && (
                                             <a
-                                                href={`http://localhost:8000${r.output_path}`}
+                                                href={`${API_BASE_URL}${r.output_path}`}
                                                 target="_blank" rel="noreferrer"
                                                 download
                                                 className="p-1.5 bg-white/10 hover:bg-white/20 rounded transition-colors"

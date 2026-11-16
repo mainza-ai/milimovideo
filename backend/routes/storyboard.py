@@ -147,7 +147,26 @@ async def commit_storyboard(project_id: str, req: CommitStoryboardRequest, sessi
     for s in existing_shots:
         if s.id not in kept_shot_ids:
             session.delete(s)
-    
+
+    session.flush()
+
+    # Rebuild the project-wide story order from scene order + shot order.
+    ordered = session.exec(
+        select(Shot)
+        .join(Scene, Shot.scene_id == Scene.id)
+        .where(Shot.project_id == project_id)
+        .order_by(Scene.index, Shot.index, Shot.created_at)
+    ).all()
+    for order, shot in enumerate(ordered):
+        shot.sequence_index = order
+        session.add(shot)
+
+    project = session.get(Project, project_id)
+    if project:
+        project.updated_at = datetime.utcnow()
+        project.revision = (project.revision or 0) + 1
+        session.add(project)
+
     session.commit()
     return {"status": "success", "message": f"Merged {len(req.scenes)} scenes."}
 
@@ -312,7 +331,7 @@ async def generate_thumbnails(
     3. Collecting element reference visuals for IP-Adapter conditioning
     4. Falling back to trigger-word scanning if no matches are persisted
     """
-    from tasks.image import generate_image_task
+    from job_utils import enqueue_gpu_job
     from managers.element_manager import element_manager
     from database import Element
     
@@ -410,6 +429,7 @@ async def generate_thumbnails(
             job = Job(
                 id=job_id,
                 project_id=project_id,
+                shot_id=shot_id,
                 type="thumbnail",
                 status="pending",
                 created_at=datetime.now(timezone.utc),
@@ -423,7 +443,7 @@ async def generate_thumbnails(
             session.add(shot)
             session.commit()
             
-            background_tasks.add_task(generate_image_task, job_id, params)
+            await enqueue_gpu_job(job_id, "image", params)
             results.append({"shot_id": shot_id, "status": "queued", "job_id": job_id})
             
         except Exception as e:
@@ -469,14 +489,23 @@ async def add_shot(project_id: str, req: AddShotRequest, session: Session = Depe
         select(Shot).where(Shot.scene_id == req.scene_id).order_by(Shot.index)
     ).all()
     next_index = (existing_shots[-1].index + 1) if existing_shots and existing_shots[-1].index is not None else 0
-    
+
+    project_shots = session.exec(
+        select(Shot).where(Shot.project_id == project_id)
+    ).all()
+    next_sequence = max(
+        [s.sequence_index for s in project_shots if s.sequence_index is not None],
+        default=-1,
+    ) + 1
+
     # Get project defaults
     project = session.get(Project, project_id)
-    
+
     new_shot = Shot(
         scene_id=req.scene_id,
         project_id=project_id,
         index=next_index,
+        sequence_index=next_sequence,
         action=req.action,
         dialogue=req.dialogue,
         character=req.character,
@@ -530,7 +559,17 @@ async def batch_generate(project_id: str, req: BatchGenerateRequest, background_
             if not shot:
                 results.append({"shot_id": shot_id, "status": "error", "detail": "Not found"})
                 continue
-            
+
+            existing = session.exec(
+                select(Job)
+                .where(Job.shot_id == shot_id)
+                .where(Job.status.in_(["pending", "processing"]))
+                .order_by(Job.created_at.desc())
+            ).first()
+            if existing:
+                results.append({"shot_id": shot_id, "status": "already_queued", "job_id": existing.id})
+                continue
+
             projects_dir = os.path.join(config.PROJECTS_DIR, project_id)
             manager = StoryboardManager(output_dir=projects_dir)
             
@@ -576,6 +615,7 @@ async def batch_generate(project_id: str, req: BatchGenerateRequest, background_
             job = Job(
                 id=job_id,
                 project_id=project_id,
+                shot_id=shot_id,
                 type="shot_generation",
                 status="pending",
                 created_at=datetime.now(timezone.utc),
@@ -584,8 +624,8 @@ async def batch_generate(project_id: str, req: BatchGenerateRequest, background_
             )
             session.add(job)
             session.commit()
-            from job_utils import queue_video_task
-            background_tasks.add_task(queue_video_task, job_id, worker_params)
+            from job_utils import enqueue_gpu_job
+            await enqueue_gpu_job(job_id, "video", worker_params)
             results.append({"shot_id": shot_id, "status": "queued", "job_id": job_id})
             
         except Exception as e:
@@ -596,21 +636,36 @@ async def batch_generate(project_id: str, req: BatchGenerateRequest, background_
 
 
 @router.post("/shots/{shot_id}/generate")
-async def generate_shot(shot_id: str, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
-    """Trigger generation for a single shot."""
+async def generate_shot(
+    shot_id: str,
+    background_tasks: BackgroundTasks,
+    randomize_seed: bool = False,
+    session: Session = Depends(get_session),
+):
+    """Trigger generation for a single shot. Seed is locked unless requested."""
     try:
         shot = session.get(Shot, shot_id)
         if not shot:
             raise HTTPException(status_code=404, detail="Shot not found")
-        
-        # 0. Randomize Seed for fresh generation
-        import random
-        new_seed = random.randint(0, 2**32 - 1)
-        shot.seed = new_seed
-        session.add(shot)
-        session.commit()
-        session.refresh(shot)
-        logger.info(f"Randomized seed for Shot {shot.index}: {new_seed}")
+
+        existing = session.exec(
+            select(Job)
+            .where(Job.shot_id == shot_id)
+            .where(Job.status.in_(["pending", "processing"]))
+            .order_by(Job.created_at.desc())
+        ).first()
+        if existing:
+            return {"status": "already_queued", "job_id": existing.id}
+
+        # Deterministic by default. Randomize only when the user explicitly
+        # asks for a fresh variation (the Regen action).
+        if randomize_seed:
+            import random
+            shot.seed = random.randint(0, 2**32 - 1)
+            session.add(shot)
+            session.commit()
+            session.refresh(shot)
+            logger.info(f"Randomized seed for Shot {shot.index}: {shot.seed}")
 
         project_id = shot.project_id
             
@@ -662,19 +717,20 @@ async def generate_shot(shot_id: str, background_tasks: BackgroundTasks, session
         job = Job(
             id=job_id,
             project_id=project_id,
+            shot_id=shot.id,
             type="shot_generation",
             status="pending",
             created_at=datetime.now(timezone.utc),
             prompt=worker_params["prompt"],
-            params_json=json.dumps(worker_params) 
+            params_json=json.dumps(worker_params)
         )
         session.add(job)
         session.commit()
         
         # Trigger Worker
-        from job_utils import queue_video_task
-        background_tasks.add_task(queue_video_task, job_id, worker_params)
-        
+        from job_utils import enqueue_gpu_job
+        await enqueue_gpu_job(job_id, "video", worker_params)
+
         return {"status": "queued", "job_id": job_id}
             
     except Exception as e:

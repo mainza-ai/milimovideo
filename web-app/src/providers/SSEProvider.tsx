@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { eventUrl } from '../config';
 import { useTimelineStore } from '../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 import { pollJobStatus } from '../utils/jobPoller';
@@ -38,12 +39,19 @@ const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             if (eventSourceRef.current?.readyState === EventSource.OPEN) return;
 
             console.log("[SSE] Connecting to /events...");
-            const es = new EventSource('http://localhost:8000/events');
+            const es = new EventSource(eventUrl('/events'));
 
             es.onopen = () => {
                 console.log("[SSE] Connected!");
                 setIsConnected(true);
                 retryCount = 0;
+                // A completion may have happened while the stream was down.
+                const { project } = useTimelineStore.getState();
+                for (const shot of project.shots) {
+                    if (shot.isGenerating && shot.lastJobId) {
+                        pollJobStatus(shot.lastJobId, shot.id);
+                    }
+                }
             };
 
             es.onerror = (err) => {

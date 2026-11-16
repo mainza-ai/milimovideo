@@ -1,4 +1,5 @@
 import { clsx } from 'clsx';
+import { API_BASE_URL } from '../../config';
 import { Trash2 } from 'lucide-react';
 import { useTimelineStore, type Shot } from '../../stores/timelineStore';
 
@@ -72,7 +73,7 @@ export const ConditioningEditor = ({ shot }: ConditioningEditorProps) => {
                             <div key={item.id} className="flex gap-2 items-center bg-white/5 p-2 rounded border border-white/5">
                                 <div className="w-8 h-8 bg-black rounded overflow-hidden relative">
                                     <img
-                                        src={item.path.startsWith('http') ? item.path : `http://localhost:8000${item.path}`}
+                                        src={item.path.startsWith('http') ? item.path : `${API_BASE_URL}${item.path}`}
                                         className="w-full h-full object-cover"
                                         onError={(e) => e.currentTarget.style.display = 'none'}
                                         alt="conditioning"

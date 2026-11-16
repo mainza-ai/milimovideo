@@ -100,7 +100,8 @@ class ModelLoaderService:
                 logger.warning("psutil not installed — skipping VRAM pre-check for MPS")
                 return True, "psutil not available — cannot check MPS memory"
 
-        return False, "No GPU device available"
+        # CPU is slow but valid for small models/tests; do not hard-block it.
+        return True, "CPU device available (generation will be slow)"
 
     # ── LoRA Management ───────────────────────────────────────────
 
@@ -324,8 +325,9 @@ class ModelLoaderService:
             from model_engine import manager
             await manager.load_pipeline("ti2vid")
         elif model.family == "flux2":
+            import asyncio
             from models.flux_wrapper import flux_inpainter
-            flux_inpainter.load_model()
+            await asyncio.to_thread(flux_inpainter.load_model)
 
         # Mark as active
         model_registry.update_model_status(model_id, ModelStatus.ACTIVE)
