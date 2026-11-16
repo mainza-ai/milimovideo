@@ -116,6 +116,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                         strength: t.strength
                     })),
                     last_job_id: s.lastJobId,
+                    selected_take_id: s.selectedTakeId,
                     thumbnail_url: s.thumbnailUrl,
                     video_url: s.videoUrl
                 })),
@@ -261,6 +262,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                         strength: t.strength ?? 1.0
                     })),
                     lastJobId: s.last_job_id,
+                    selectedTakeId: s.selected_take_id,
                     videoUrl: s.video_url ? getAssetUrl(s.video_url) : undefined,  // Use DB value
                     thumbnailUrl: getAssetUrl(s.thumbnail_url),
                     enhancedPromptResult: s.enhanced_prompt_result, // Map from backend

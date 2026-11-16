@@ -194,7 +194,7 @@ all GPU work now passes a durable `QueuedJob` ledger + one global semaphore,
 with startup resume/one retry and idempotent per-shot jobs. P3: real model
 activate/deactivate, corrected disk paths, queued/resumable download handling,
 requirements, `verify_setup.py`, debug artifact gating, VRAM preflight. P5:
-pytest suite (19 passing), vitest store/layout tests (3 passing), CI workflow,
+pytest suite (21 passing), vitest store/layout + shell tests (4 passing), CI workflow,
 pre-commit, `/health` device/queue/slots/disk. Verified: live server health, real
 FFmpeg render (4.0s video+audio), tsc, eslint 0 errors, vite build. Deferred: Alembic baseline, durable JobQueue,
 takes/version history, vitest/Playwright, and the F0–F5 studio shell refactor
@@ -204,7 +204,9 @@ with status.
 
 ## [2026-11-16] frontend | F0 studio shell + F1 board prototype
 
-Added the strangler `/studio` shell (lazy route; legacy editor preserved at `/`):
+Added the strangler `/studio` shell (lazy route; legacy editor preserved at `/`)
+and server-persisted board layout/view endpoints (`/projects/{id}/board`,
+`/projects/{id}/view`) with revision/CAS:
 design tokens/graphite+cyan CSS, mode rail, top bar, inspector, context-aware
 command dock with plan preview, status strip, persisted editor store. Story
 surface: scene/shot spine, infinite board with pan/zoom/card drag/LOD/minimap,
@@ -212,6 +214,8 @@ accessible shot-list view, script view, selection sync. Edit surface: stage
 monitor, legacy playback clock, V1/V2/A1 timeline shell, playhead, seeking,
 zoom. Generate/Review/Library/Deliver surfaces are real data-backed shells over
 existing endpoints, with explicit F3/F4 gaps rather than fake behavior. Added
+immutable take history/select via the job ledger (`/shots/{id}/takes`,
+`/shots/{id}/select-take`) and surfaced it in Generate/Inspector/Review. Added
 happy-dom + Testing Library mount test for the shell. Verified: tsc, eslint 0
 errors, 4 vitest tests, vite build (StudioApp chunk 58 kB). Updated the
 frontend-refactor and implementation-plan status tables.

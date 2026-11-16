@@ -12,12 +12,15 @@ import { ReviewSurface } from './surfaces/ReviewSurface';
 import { LibrarySurface } from './surfaces/LibrarySurface';
 import { DeliverSurface } from './surfaces/DeliverSurface';
 import { useStudioEditor, type StudioSurface } from './state/editorStore';
+import { useStudioProject, useStudioBoardSync } from './data/useStudioData';
 import { useTimelineStore } from '../stores/timelineStore';
 
 const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver'];
 
 export function StudioApp() {
     const { activeSurface, setSurface, inspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode } = useStudioEditor();
+    const project = useStudioProject();
+    useStudioBoardSync(project.id);
     const isPlaying = useTimelineStore((state) => state.isPlaying);
     const setIsPlaying = useTimelineStore((state) => state.setIsPlaying);
 

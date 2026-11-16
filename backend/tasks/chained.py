@@ -6,7 +6,7 @@ import logging
 import subprocess
 import torch
 import config
-from job_utils import active_jobs, broadcast_log, broadcast_progress, update_job_db
+from job_utils import active_jobs, broadcast_log, broadcast_progress, update_job_db, update_shot_db
 from file_utils import get_project_output_paths
 from ltx_pipelines.utils.media_io import encode_video
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE
@@ -496,7 +496,20 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             actual_frames=actual_frames,
             thumbnail_path=relative_thumb
         )
-        
+
+        shot_id = params.get("shot_id") or params.get("id")
+        if shot_id:
+            update_shot_db(
+                shot_id,
+                video_url=relative_output,
+                thumbnail_url=relative_thumb,
+                last_job_id=job_id,
+                selected_take_id=job_id,
+                actual_frames=actual_frames,
+                status="completed",
+            )
+            logger.info(f"Updated Shot {shot_id} with chained video: {relative_output}")
+
         await event_manager.broadcast("complete", {
             "job_id": job_id, 
             "url": relative_output,  # Use project-scoped URL

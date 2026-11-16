@@ -629,7 +629,8 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 shot_updates = {
                     "video_url": rel_path,
                     "status": "completed",
-                    "last_job_id": job_id
+                    "last_job_id": job_id,
+                    "selected_take_id": job_id,
                 }
                 # Also update thumbnail if we generated one and shot doesn't have a custom one?
                 # For now let's leave thumbnail alone unless we want to overwrite it.
@@ -654,6 +655,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     video_url=output_url,
                     thumbnail_url=thumbnail_web_path,
                     last_job_id=job_id,
+                    selected_take_id=job_id,
                     enhanced_prompt_result=enhanced_prompt_result,
                     status="completed"
                 )

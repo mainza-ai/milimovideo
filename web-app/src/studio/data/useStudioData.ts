@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, type Project, type Shot } from '../../stores/timelineStore';
 import { apiUrl, getAssetUrl } from '../../config';
+import { useStudioEditor, type BoardPosition, type Camera } from '../state/editorStore';
 
 export interface StudioHealth {
     status: string;
@@ -27,6 +28,20 @@ export interface StudioAsset {
     filename: string;
     type: string;
     created_at: number;
+}
+
+export interface StudioTake {
+    job_id: string;
+    url: string;
+    thumbnail_url?: string | null;
+    type: string;
+    prompt?: string | null;
+    enhanced_prompt?: string | null;
+    seed?: number | null;
+    model?: string | null;
+    num_frames?: number | null;
+    created_at?: string | null;
+    selected: boolean;
 }
 
 export interface StudioRender {
@@ -129,6 +144,55 @@ export function useStudioAssets() {
     }, []);
     useEffect(() => { void refresh(); }, [refresh]);
     return { assets, loading, refresh };
+}
+
+export function useStudioTakes(shotId: string | undefined) {
+    const [takes, setTakes] = useState<StudioTake[]>([]);
+    const [loading, setLoading] = useState(false);
+    const refresh = useCallback(async () => {
+        if (!shotId) {
+            setTakes([]);
+            return;
+        }
+        setLoading(true);
+        try {
+            const response = await fetch(apiUrl(`/shots/${shotId}/takes`));
+            const data = response.ok ? await response.json() : { takes: [] };
+            setTakes(Array.isArray(data.takes) ? data.takes : []);
+        } catch {
+            setTakes([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [shotId]);
+    useEffect(() => { void refresh(); }, [refresh]);
+    return { takes, loading, refresh };
+}
+
+export function useStudioSelectTake() {
+    const { addToast, updateShot } = useStudioSelection();
+    return useCallback(async (shot: Shot, take: StudioTake) => {
+        const response = await fetch(apiUrl(`/shots/${shot.id}/select-take`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_id: take.job_id }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Could not select take', 'error');
+            return false;
+        }
+        updateShot(shot.id, {
+            videoUrl: getAssetUrl(data.url) || take.url,
+            thumbnailUrl: getAssetUrl(take.thumbnail_url) || shot.thumbnailUrl,
+            lastJobId: take.job_id,
+            selectedTakeId: take.job_id,
+            status: 'completed',
+            isGenerating: false,
+        });
+        addToast('Take selected', 'success');
+        return true;
+    }, [addToast, updateShot]);
 }
 
 export function useStudioRenders(projectId: string) {
@@ -241,6 +305,92 @@ export function useStudioCreateRender(projectId: string) {
         addToast('Export queued', 'success');
         return data.job_id as string;
     }, [addToast, projectId, trackStates]);
+}
+
+export function useStudioBoardSync(projectId: string) {
+    const { boardPositions, boardPinned, boardCamera, hydrateBoard, setCamera } = useStudioEditor();
+    const addToast = useTimelineStore((state) => state.addToast);
+    const loaded = useRef(false);
+    const revision = useRef(0);
+    const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        let alive = true;
+        loaded.current = false;
+        Promise.all([
+            fetch(apiUrl(`/projects/${projectId}/board`)).then((response) => response.ok ? response.json() : null),
+            fetch(apiUrl(`/projects/${projectId}/view`)).then((response) => response.ok ? response.json() : null),
+        ]).then(([board, view]) => {
+            if (!alive || !board) return;
+            revision.current = board.revision || 0;
+            const nodes = Array.isArray(board.layout?.nodes) ? board.layout.nodes : [];
+            const positions: Record<string, BoardPosition> = {};
+            const pinned: Record<string, boolean> = {};
+            for (const node of nodes) {
+                if (!node?.id) continue;
+                positions[node.id] = {
+                    x: Number(node.x) || 0,
+                    y: Number(node.y) || 0,
+                    width: Number(node.width) || 300,
+                    height: Number(node.height) || 230,
+                };
+                if (node.pinned) pinned[node.id] = true;
+            }
+            const camera = view?.view?.camera as Camera | undefined;
+            if (Object.keys(positions).length > 0) {
+                hydrateBoard(positions, pinned, camera);
+            } else if (camera) {
+                setCamera(camera);
+            }
+            loaded.current = true;
+        }).catch(() => {
+            loaded.current = true;
+        });
+        return () => { alive = false; };
+    }, [hydrateBoard, projectId, setCamera]);
+
+    useEffect(() => {
+        if (!loaded.current) return;
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(async () => {
+            const nodes = Object.entries(boardPositions).map(([id, position]) => ({
+                id,
+                ...position,
+                pinned: !!boardPinned[id],
+            }));
+            try {
+                const response = await fetch(apiUrl(`/projects/${projectId}/board`), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nodes, areas: [], links: [], revision: revision.current }),
+                });
+                if (response.status === 409) {
+                    addToast('Board layout changed elsewhere; reload to merge.', 'error');
+                    return;
+                }
+                const data = await response.json().catch(() => ({}));
+                if (response.ok && typeof data.revision === 'number') revision.current = data.revision;
+            } catch {
+                addToast('Board layout save failed', 'error');
+            }
+        }, 700);
+        return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+    }, [addToast, boardPinned, boardPositions, projectId]);
+
+    useEffect(() => {
+        if (!loaded.current) return;
+        if (viewTimer.current) clearTimeout(viewTimer.current);
+        viewTimer.current = setTimeout(() => {
+            void fetch(apiUrl(`/projects/${projectId}/view`), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ camera: boardCamera, selection: [], surface: 'story' }),
+            }).catch(() => undefined);
+        }, 1200);
+        return () => { if (viewTimer.current) clearTimeout(viewTimer.current); };
+    }, [boardCamera, projectId]);
+
 }
 
 export function useAssetUrl(path?: string | null) {

@@ -25,6 +25,10 @@ class Project(SQLModel, table=True):
     # Optimistic concurrency. Clients send the revision they read; a mismatch
     # returns 409 instead of silently overwriting a newer project.
     revision: int = Field(default=0)
+    # Semantic board layout and ephemeral view are separate saves by design.
+    board_layout: Optional[str] = None
+    board_revision: int = Field(default=0)
+    view_state: Optional[str] = None
 
     shots: List["Shot"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     scenes: List["Scene"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
@@ -81,7 +85,8 @@ class Shot(SQLModel, table=True):
     enhanced_prompt_result: Optional[str] = None # For frontend display
     status: str = "pending" # pending, generating, completed, failed
     last_job_id: Optional[str] = None
-    
+    selected_take_id: Optional[str] = None  # Job id of the selected immutable take
+
     # Results
     video_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
@@ -170,9 +175,13 @@ def _add_missing_columns() -> None:
     migrations = {
         "project": {
             "revision": "INTEGER NOT NULL DEFAULT 0",
+            "board_layout": "TEXT",
+            "board_revision": "INTEGER NOT NULL DEFAULT 0",
+            "view_state": "TEXT",
         },
         "shot": {
             "sequence_index": "INTEGER",
+            "selected_take_id": "TEXT",
         },
         "job": {
             "resume_policy": "TEXT NOT NULL DEFAULT 'fail'",

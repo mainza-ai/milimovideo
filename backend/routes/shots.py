@@ -1,11 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlmodel import Session
-from database import get_session, Shot, Project
+from database import get_session, Shot, Project, Job
 from typing import Optional, List, Dict, Any
 import logging
 import json
 from datetime import datetime
-from schemas import TimelineItem
+from sqlmodel import select
+from schemas import TimelineItem, SelectTakeRequest
 
 logger = logging.getLogger(__name__)
 
@@ -48,3 +49,78 @@ async def update_shot_partial(shot_id: str, updates: dict, session: Session = De
     session.commit()
     session.refresh(shot)
     return shot
+
+
+@router.get("/shots/{shot_id}/takes")
+def list_takes(shot_id: str, session: Session = Depends(get_session)):
+    """Immutable take history from completed generation jobs.
+
+    No separate table is needed: the job ledger already owns model, seed, params,
+    output path, thumbnail, and timestamp. Selecting a take only repoints the shot.
+    """
+    shot = session.get(Shot, shot_id)
+    if not shot:
+        raise HTTPException(status_code=404, detail="Shot not found")
+
+    jobs = session.exec(
+        select(Job)
+        .where(Job.shot_id == shot_id)
+        .where(Job.status == "completed")
+        .where(Job.output_path.isnot(None))
+        .where(Job.type.in_(["shot_generation", "advanced", "video", "image"]))
+        .order_by(Job.created_at.desc())
+    ).all()
+
+    selected_id = shot.selected_take_id or shot.last_job_id
+    takes = []
+    for job in jobs:
+        params = {}
+        try:
+            params = json.loads(job.params_json or "{}")
+        except json.JSONDecodeError:
+            pass
+        takes.append({
+            "job_id": job.id,
+            "url": job.output_path,
+            "thumbnail_url": job.thumbnail_path,
+            "type": job.type,
+            "prompt": job.prompt,
+            "enhanced_prompt": job.enhanced_prompt,
+            "seed": params.get("seed"),
+            "model": params.get("pipeline_override") or params.get("pipeline_type"),
+            "num_frames": params.get("num_frames"),
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "selected": job.id == selected_id,
+        })
+    return {"shot_id": shot_id, "takes": takes}
+
+
+@router.post("/shots/{shot_id}/select-take")
+def select_take(
+    shot_id: str,
+    req: SelectTakeRequest,
+    session: Session = Depends(get_session),
+):
+    shot = session.get(Shot, shot_id)
+    if not shot:
+        raise HTTPException(status_code=404, detail="Shot not found")
+    job = session.get(Job, req.job_id)
+    if not job or job.shot_id != shot_id or job.status != "completed" or not job.output_path:
+        raise HTTPException(status_code=400, detail="Take is not a completed output for this shot")
+
+    shot.selected_take_id = job.id
+    shot.last_job_id = job.id
+    shot.video_url = job.output_path
+    if job.thumbnail_path:
+        shot.thumbnail_url = job.thumbnail_path
+    shot.status = "completed"
+
+    project = session.get(Project, shot.project_id)
+    if project:
+        project.updated_at = datetime.utcnow()
+        project.revision = (project.revision or 0) + 1
+        session.add(project)
+    session.add(shot)
+    session.commit()
+    session.refresh(shot)
+    return {"status": "selected", "shot_id": shot.id, "job_id": job.id, "url": shot.video_url}

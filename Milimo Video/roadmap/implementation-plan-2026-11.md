@@ -50,8 +50,8 @@ single-engineer guidance.
 | P2 scheduler | **Done for GPU work** (durable `QueuedJob` ledger, one retry, global semaphore, idempotency, startup resume) | `job_utils`, `QueuedJob`, `Job.shot_id`, startup recovery |
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, setup check |
 | P3 OOM retry | **Not started** | P3-03 deferred |
-| P4 UX trust | **Partial** (P4-02,03,05,06) | seed lock, save state/conflict, SSE reconnect |
-| P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health; no Playwright) | 19 backend tests, 3 frontend tests, lint 0 errors, build passes |
+| P4 UX trust | **Partial** (P4-01,02,03,05,06) | take history/select, seed lock, save state/conflict, SSE reconnect |
+| P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health; no Playwright) | 21 backend tests, 4 frontend tests, lint 0 errors, build passes |
 | Front-end F0/F1 | **Started** (shell, tokens, editor store, board canvas, list/script, timeline shell, lazy `/studio`) | `StudioApp.test` mounts the shell; tsc/lint/build pass |
 | Front-end F2–F5 | **Deferred** per plan risk note | one engineer, backend gates first |
 
@@ -63,7 +63,7 @@ change. OpenAPI-generated TS types (P1-06) remain open. The durable GPU ledger
 **Verification commands**
 
 ```bash
-./milimov/bin/python -m pytest        # 19 passed
+./milimov/bin/python -m pytest        # 21 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
 cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # clean
 curl http://127.0.0.1:8000/health     # device/queue/slots/disk

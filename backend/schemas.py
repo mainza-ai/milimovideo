@@ -199,6 +199,46 @@ class GenerateImageRequest(BaseModel):
     enable_ae: bool = True
     enable_true_cfg: bool = False
 
+class BoardNode(BaseModel):
+    id: str
+    x: float
+    y: float
+    width: float = 300
+    height: float = 230
+    pinned: bool = False
+
+
+class BoardArea(BaseModel):
+    id: str
+    title: str
+    x: float
+    y: float
+    width: float
+    height: float
+    color: Optional[str] = None
+
+
+class BoardLink(BaseModel):
+    id: str
+    source: str
+    target: str
+    kind: str = "thread"
+
+
+class BoardLayoutPayload(BaseModel):
+    nodes: List[BoardNode] = []
+    areas: List[BoardArea] = []
+    links: List[BoardLink] = []
+    revision: Optional[int] = None
+
+
+class BoardViewPayload(BaseModel):
+    camera: Optional[dict] = None
+    selection: List[str] = []
+    surface: Optional[str] = None
+    zoom: Optional[float] = None
+
+
 class RenderSettings(BaseModel):
     width: Optional[int] = None
     height: Optional[int] = None
@@ -211,6 +251,10 @@ class RenderSettings(BaseModel):
 class RenderRequest(BaseModel):
     settings: RenderSettings = RenderSettings()
     track_states: Dict[str, dict] = {}
+
+
+class SelectTakeRequest(BaseModel):
+    job_id: str
 
 
 class TrackingSaveRequest(BaseModel):

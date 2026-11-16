@@ -1,11 +1,14 @@
 import { Loader2, Play, RotateCcw, Sparkles, X } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
+import { getAssetUrl } from '../../config';
 import { useStudioEditor } from '../state/editorStore';
 import {
     useStudioCancel,
     useStudioElements,
     useStudioGenerate,
+    useStudioSelectTake,
     useStudioSelection,
+    useStudioTakes,
 } from '../data/useStudioData';
 
 const TABS = ['shot', 'prompt', 'takes', 'audio', 'review', 'history'] as const;
@@ -17,6 +20,8 @@ export function Inspector() {
     const elements = useStudioElements(project.id);
     const generate = useStudioGenerate();
     const cancel = useStudioCancel();
+    const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioTakes(shot?.id);
+    const selectTake = useStudioSelectTake();
     const { inspectorTab, setInspectorTab, setInspectorOpen, inspectorOpen } = useStudioEditor();
 
     const matchedElements = !shot?.matchedElements?.length
@@ -165,9 +170,41 @@ export function Inspector() {
 
                         {inspectorTab === 'takes' && (
                             <div className="st-inspector-section">
-                                <span className="st-label">Current take</span>
-                                <div className="st-value">
-                                    {shot.videoUrl ? 'One selected output. Immutable take history lands in F4.' : 'No generated take yet.'}
+                                <span className="st-label">Takes {takesLoading ? '· loading…' : `· ${takes.length}`}</span>
+                                <div className="st-take-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
+                                    {takes.map((take) => (
+                                        <article className="st-take" key={take.job_id} style={{ borderColor: take.selected ? 'var(--st-accent)' : undefined }}>
+                                            <div className="st-take-media">
+                                                {take.thumbnail_url || take.url ? (
+                                                    <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
+                                                ) : (
+                                                    <div className="st-stage-empty"><RotateCcw size={14} /></div>
+                                                )}
+                                            </div>
+                                            <div className="st-take-body">
+                                                <div className="st-mono" style={{ color: 'var(--st-secondary)' }}>{take.job_id.slice(0, 10)}</div>
+                                                <div>{take.model || take.type} · seed {take.seed ?? '—'}</div>
+                                                <button
+                                                    type="button"
+                                                    className="st-button"
+                                                    data-size="sm"
+                                                    style={{ marginTop: 6 }}
+                                                    disabled={take.selected}
+                                                    onClick={async () => {
+                                                        if (await selectTake(shot, take)) await refreshTakes();
+                                                    }}
+                                                >
+                                                    {take.selected ? 'Selected' : 'Select'}
+                                                </button>
+                                            </div>
+                                        </article>
+                                    ))}
+                                    {takes.length === 0 && !takesLoading && (
+                                        <div className="st-empty" style={{ minHeight: 100, gridColumn: '1 / -1' }}>
+                                            <strong>No takes yet</strong>
+                                            <span>Generate once; old outputs are kept as takes.</span>
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="st-button-row" style={{ marginTop: 10 }}>
                                     <button
@@ -187,7 +224,7 @@ export function Inspector() {
                                     )}
                                 </div>
                                 <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 10 }}>
-                                    Regeneration currently replaces the selected URL until the Take model lands.
+                                    Takes are completed jobs; selecting one repoints the shot without deleting the others.
                                 </p>
                             </div>
                         )}

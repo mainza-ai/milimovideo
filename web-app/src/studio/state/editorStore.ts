@@ -41,6 +41,7 @@ interface EditorState {
     selectScene: (sceneId: string | null) => void;
     setInspectorTab: (tab: EditorState['inspectorTab']) => void;
     setCamera: (camera: Camera) => void;
+    hydrateBoard: (positions: Record<string, BoardPosition>, pinned: Record<string, boolean>, camera?: Camera) => void;
     setBoardPosition: (shotId: string, position: Partial<BoardPosition>) => void;
     togglePin: (shotId: string) => void;
     setMinimapOpen: (open: boolean) => void;
@@ -83,6 +84,11 @@ export const useStudioEditor = create<EditorState>()(
             selectScene: (selectedSceneId) => set({ selectedSceneId }),
             setInspectorTab: (inspectorTab) => set({ inspectorTab }),
             setCamera: (boardCamera) => set({ boardCamera }),
+            hydrateBoard: (boardPositions, boardPinned, boardCamera) => set((state) => ({
+                boardPositions,
+                boardPinned,
+                boardCamera: boardCamera || state.boardCamera,
+            })),
             setBoardPosition: (shotId, position) => set((state) => ({
                 boardPositions: {
                     ...state.boardPositions,

@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Film, Image as ImageIcon, Loader2, Play, RotateCcw, Sparkles, Square } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
-import { useStudioCancel, useStudioElements, useStudioGenerate, useStudioSelection, useAssetUrl } from '../data/useStudioData';
+import { getAssetUrl } from '../../config';
+import {
+    useAssetUrl,
+    useStudioCancel,
+    useStudioElements,
+    useStudioGenerate,
+    useStudioSelectTake,
+    useStudioSelection,
+    useStudioTakes,
+} from '../data/useStudioData';
 
 export function GenerateSurface() {
     const project = useTimelineStore((state) => state.project);
@@ -13,6 +22,8 @@ export function GenerateSurface() {
 
     const shot = project.shots.find((item) => item.id === selectedShotId) || project.shots[0] || null;
     useEffect(() => { setPromptDraft(null); }, [shot?.id]);
+    const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioTakes(shot?.id);
+    const selectTake = useStudioSelectTake();
     const mediaUrl = useAssetUrl(shot?.videoUrl || shot?.thumbnailUrl);
     const isImage = !!mediaUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
 
@@ -100,13 +111,44 @@ export function GenerateSurface() {
                             <div style={{ marginTop: 4 }}>seed {shot.seed} · {shot.width}×{shot.height} · {shot.pipelineOverride || 'auto'}</div>
                         </div>
                     </article>
-                    <article className="st-take" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, borderStyle: 'dashed' }}>
-                        <div className="st-empty" style={{ minHeight: 0 }}>
-                            <Film size={20} />
-                            <strong>Immutable takes: F4</strong>
-                            <span>New takes will sit beside this one, not replace it.</span>
-                        </div>
-                    </article>
+                    {takes.filter((take) => !take.selected).map((take) => (
+                        <article className="st-take" key={take.job_id}>
+                            <div className="st-take-media">
+                                {take.thumbnail_url || take.url ? (
+                                    <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
+                                ) : (
+                                    <div className="st-stage-empty"><Film size={16} /></div>
+                                )}
+                            </div>
+                            <div className="st-take-body">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                                    <strong style={{ color: 'var(--st-text)' }}>{take.model || take.type}</strong>
+                                    <span className="st-mono">seed {take.seed ?? '—'}</span>
+                                </div>
+                                <div className="st-mono" style={{ marginTop: 4 }}>{take.job_id.slice(0, 12)}</div>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    style={{ marginTop: 6 }}
+                                    onClick={async () => {
+                                        if (shot && await selectTake(shot, take)) await refreshTakes();
+                                    }}
+                                >
+                                    Select take
+                                </button>
+                            </div>
+                        </article>
+                    ))}
+                    {!takesLoading && takes.length <= 1 && (
+                        <article className="st-take" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 180, borderStyle: 'dashed' }}>
+                            <div className="st-empty" style={{ minHeight: 0 }}>
+                                <Film size={20} />
+                                <strong>No older takes</strong>
+                                <span>Generate again; the previous output stays available here.</span>
+                            </div>
+                        </article>
+                    )}
                 </div>
 
                 <div className="st-panel" style={{ marginTop: 16 }}>

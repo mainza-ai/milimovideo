@@ -45,15 +45,15 @@ at `/`.
 | Stage | Status | What exists |
 |---|---|---|
 | **F0 Foundation** | **Started** | `studio.css` tokens, shell, mode rail, top bar, inspector, command dock, status strip, `editorStore` (persisted camera/layout), API base/token, `/studio` lazy route, component mount test |
-| **F1 Story** | **Partial** | Story spine, board canvas (pan/zoom/drag/LOD/minimap), list view, script view, selection sync, board-local positions |
+| **F1 Story** | **Partial** | Story spine, board canvas (pan/zoom/drag/LOD/minimap), list view, script view, selection sync, board layout persisted with revision/CAS + separate view save |
 | **F2 Edit** | **Partial** | Stage monitor, legacy playback clock, timeline shell with V1/V2/A1 clips, playhead, seeking, zoom; no tools/keyframes/audio/captions yet |
-| **F3 Generate** | **Shell** | Shot workspace, prompt/params, current take, generate/cancel through existing endpoints; no take history |
-| **F4 Review** | **Shell** | Current-cut review surface and honest empty state; no version stacks/comments/approvals |
+| **F3 Generate** | **Partial** | Shot workspace, prompt/params, generate/cancel, immutable take history from completed jobs with select-take |
+| **F4 Review** | **Partial** | Version stack reads the same take history; frame comments/approvals still open |
 | **F5 Shorts/lenses** | **Not started** | — |
 
-**Next:** persist board layout through `GET/PUT /projects/{id}/board`, add
-areas/links, wire the new command dock to a plan API, and move document state off
-the legacy store. Do not cut over `/` until F2 review/render parity.
+**Next:** add board areas/typed links, wire the command dock to a plan API, add
+frame comments/approvals, and move document state off the legacy store. Do not
+cut over `/` until F2 review/render parity.
 
 ## Why This Refactor
 

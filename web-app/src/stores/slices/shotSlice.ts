@@ -71,6 +71,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 else if (k === 'cfgScale') snakeUpdates['cfg_scale'] = v;
                 else if (k === 'enhancePrompt') snakeUpdates['enhance_prompt'] = v;
                 else if (k === 'lastJobId') snakeUpdates['last_job_id'] = v;
+                else if (k === 'selectedTakeId') snakeUpdates['selected_take_id'] = v;
                 else if (k === 'videoUrl') snakeUpdates['video_url'] = v;
                 else if (k === 'thumbnailUrl') snakeUpdates['thumbnail_url'] = v;
                 else if (k === 'pipelineOverride') snakeUpdates['pipeline_override'] = v;

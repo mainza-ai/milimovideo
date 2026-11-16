@@ -82,6 +82,67 @@ def test_stale_revision_returns_conflict(app_client, project):
     assert app_client.put(f"/projects/{pid}", json=base).status_code == 409
 
 
+def test_take_history_and_selection(app_client, project):
+    from datetime import datetime
+    from sqlmodel import Session
+    from database import Job, engine
+
+    pid = project["id"]
+    shot = _shot("take-shot", "take test")
+    payload = {
+        "id": pid, "name": "Takes", "fps": 25, "seed": 42,
+        "resolution_w": 768, "resolution_h": 512, "revision": 0,
+        "shots": [shot], "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+
+    with Session(engine) as session:
+        session.add(Job(
+            id="job_take_a", project_id=pid, shot_id="take-shot", type="shot_generation",
+            status="completed", progress=100, output_path=f"/projects/{pid}/generated/a.mp4",
+            thumbnail_path=f"/projects/{pid}/thumbnails/a.jpg", created_at=datetime.utcnow(),
+            params_json='{"seed": 7, "num_frames": 25}',
+        ))
+        session.add(Job(
+            id="job_take_b", project_id=pid, shot_id="take-shot", type="shot_generation",
+            status="completed", progress=100, output_path=f"/projects/{pid}/generated/b.mp4",
+            thumbnail_path=f"/projects/{pid}/thumbnails/b.jpg", created_at=datetime.utcnow(),
+            params_json='{"seed": 8, "num_frames": 25}',
+        ))
+        session.commit()
+
+    response = app_client.get("/shots/take-shot/takes")
+    assert response.status_code == 200, response.text
+    takes = response.json()["takes"]
+    assert len(takes) == 2
+    assert sum(1 for take in takes if take["selected"]) <= 1
+
+    select = app_client.post("/shots/take-shot/select-take", json={"job_id": "job_take_a"})
+    assert select.status_code == 200, select.text
+    selected = app_client.get("/shots/take-shot/takes").json()["takes"]
+    assert any(take["job_id"] == "job_take_a" and take["selected"] for take in selected)
+
+
+def test_board_layout_roundtrip_and_revision(app_client, project):
+    pid = project["id"]
+    layout = {
+        "nodes": [{"id": "one", "x": 10, "y": 20, "width": 300, "height": 230, "pinned": True}],
+        "areas": [],
+        "links": [],
+        "revision": 0,
+    }
+    response = app_client.put(f"/projects/{pid}/board", json=layout)
+    assert response.status_code == 200, response.text
+    assert response.json()["revision"] == 1
+
+    fetched = app_client.get(f"/projects/{pid}/board").json()
+    assert fetched["layout"]["nodes"][0]["id"] == "one"
+    assert fetched["layout"]["nodes"][0]["pinned"] is True
+
+    stale = {**layout, "revision": 0}
+    assert app_client.put(f"/projects/{pid}/board", json=stale).status_code == 409
+
+
 def test_split_shot_keeps_order_and_timeline(app_client, project):
     pid = project["id"]
     payload = {

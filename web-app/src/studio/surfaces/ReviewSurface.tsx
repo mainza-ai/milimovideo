@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { CheckCircle2, MessageSquare, Play } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getAssetUrl } from '../../config';
-import { useStudioSelection, useAssetUrl } from '../data/useStudioData';
+import { useStudioSelection, useStudioSelectTake, useStudioTakes, useAssetUrl } from '../data/useStudioData';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 export function ReviewSurface() {
@@ -12,6 +12,8 @@ export function ReviewSurface() {
     const mediaUrl = useAssetUrl(shot?.videoUrl || shot?.thumbnailUrl);
     const isImage = !!mediaUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
+    const { takes, refresh: refreshTakes } = useStudioTakes(shot?.id);
+    const selectTake = useStudioSelectTake();
 
     return (
         <div className="st-page">
@@ -65,6 +67,29 @@ export function ReviewSurface() {
                 </div>
 
                 <aside className="st-panel">
+                    <h3 className="st-panel-title">Version stack · {takes.length}</h3>
+                    <div className="st-comment-list" style={{ marginBottom: 14 }}>
+                        {takes.length === 0 && <div className="st-comment">No completed takes for this shot yet.</div>}
+                        {takes.map((take) => (
+                            <button
+                                key={take.job_id}
+                                type="button"
+                                className="st-take"
+                                style={{ textAlign: 'left', borderColor: take.selected ? 'var(--st-accent)' : undefined }}
+                                onClick={async () => {
+                                    if (shot && await selectTake(shot, take)) await refreshTakes();
+                                }}
+                            >
+                                <div className="st-take-media">
+                                    {take.thumbnail_url || take.url ? <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" /> : <div className="st-stage-empty"><Play size={12} /></div>}
+                                </div>
+                                <div className="st-take-body">
+                                    <strong style={{ color: 'var(--st-text)' }}>{take.selected ? 'Selected' : 'Take'} · {take.model || take.type}</strong>
+                                    <div className="st-mono">{take.job_id.slice(0, 12)} · seed {take.seed ?? '—'}</div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
                     <h3 className="st-panel-title">Comments</h3>
                     <div className="st-comment-list">
                         <div className="st-comment">

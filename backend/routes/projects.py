@@ -2,7 +2,15 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from typing import List, Optional
 from sqlmodel import Session, select, SQLModel
 from database import get_session, Project, Shot, Scene
-from schemas import CreateProjectRequest, ProjectState, TimelineItem, RenderRequest, RenderSettings
+from schemas import (
+    BoardLayoutPayload,
+    BoardViewPayload,
+    CreateProjectRequest,
+    ProjectState,
+    RenderRequest,
+    RenderSettings,
+    TimelineItem,
+)
 import uuid
 import os
 import shutil
@@ -61,6 +69,7 @@ def _shot_dict(shot: Shot) -> dict:
         "matched_elements": _parse_json_field(shot.matched_elements, None),
         "enhanced_prompt_result": shot.enhanced_prompt_result,
         "last_job_id": shot.last_job_id,
+        "selected_take_id": shot.selected_take_id,
         "created_at": shot.created_at.isoformat() if shot.created_at else None,
     }
 
@@ -381,6 +390,64 @@ async def _has_audio_stream(path: str) -> bool:
         return bool(stdout.strip())
     except Exception:
         return False
+
+
+@router.get("/projects/{project_id}/board")
+def get_board(project_id: str, session: Session = Depends(get_session)):
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    layout = _parse_json_field(project.board_layout, {"nodes": [], "areas": [], "links": []})
+    return {"layout": layout, "revision": project.board_revision or 0}
+
+
+@router.put("/projects/{project_id}/board")
+def save_board(
+    project_id: str,
+    payload: BoardLayoutPayload,
+    session: Session = Depends(get_session),
+):
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if payload.revision is not None and payload.revision != (project.board_revision or 0):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Board revision conflict: client has {payload.revision}, "
+                f"server has {project.board_revision}."
+            ),
+        )
+    layout = payload.model_dump(exclude={"revision"})
+    project.board_layout = json.dumps(layout)
+    project.board_revision = (project.board_revision or 0) + 1
+    project.updated_at = datetime.utcnow()
+    session.add(project)
+    session.commit()
+    return {"status": "saved", "revision": project.board_revision, "layout": layout}
+
+
+@router.get("/projects/{project_id}/view")
+def get_view(project_id: str, session: Session = Depends(get_session)):
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"view": _parse_json_field(project.view_state, {})}
+
+
+@router.put("/projects/{project_id}/view")
+def save_view(
+    project_id: str,
+    payload: BoardViewPayload,
+    session: Session = Depends(get_session),
+):
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    project.view_state = json.dumps(payload.model_dump())
+    session.add(project)
+    session.commit()
+    return {"status": "saved"}
 
 
 @router.post("/projects/{project_id}/render")
