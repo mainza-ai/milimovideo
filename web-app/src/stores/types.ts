@@ -107,6 +107,13 @@ export interface ParsedScene {
     shots: ParsedShot[];
 }
 
+export interface CaptionCue {
+    id: string;
+    startFrame: number;
+    endFrame: number;
+    text: string;
+}
+
 export interface Project {
     id: string;
     name: string;
@@ -118,6 +125,7 @@ export interface Project {
     seed: number; // Global seed
     scriptContent?: string;
     revision?: number;
+    captions?: CaptionCue[];
 }
 
 export interface ProjectSlice {

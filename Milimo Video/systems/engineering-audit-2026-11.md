@@ -112,6 +112,7 @@ problem; correctness is.
 | OPS-06 debug artifacts | **Fixed** | gated behind `MILIMO_DEBUG` |
 | Take/version history | **Fixed (v1)** | immutable takes from completed jobs; `GET /shots/{id}/takes` + select-take repoints the shot |
 | Review notes | **Fixed (v1)** | frame comments + per-shot approvals persisted in `review_item`; latest approval gates the shot |
+| Captions | **Fixed (v1)** | project caption cues persist; render writes ASS and burns it in after compositing |
 | NLE-01 timing | **Fixed** | render computes V1 starts from sequence order |
 | NLE-02 V2 black | **Fixed** | transparent pad + RGBA + alpha overlay |
 | NLE-03 track state | **Fixed** | `track_states` sent from ExportModal and applied |

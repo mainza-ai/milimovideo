@@ -63,11 +63,19 @@ class GenerateAdvancedRequest(BaseModel):
     project_id: str
     shot_config: ShotConfig
 
+class CaptionCue(BaseModel):
+    id: Optional[str] = None
+    start_frame: int = 0
+    end_frame: int = 0
+    text: str = ""
+
+
 class ProjectState(BaseModel):
     id: str
     name: str
     shots: List[dict]
     scenes: List[dict] = []
+    captions: List[CaptionCue] = []
     resolution_w: int = 768
     resolution_h: int = 512
     fps: int = 25

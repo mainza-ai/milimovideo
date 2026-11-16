@@ -1,13 +1,14 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-    Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal, UnfoldHorizontal,
+    Captions, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal, UnfoldHorizontal,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore, type Shot } from '../../stores/timelineStore';
+import { useTimelineStore, type CaptionCue, type Shot } from '../../stores/timelineStore';
 import { computeTimelineLayout, type TimelineClip } from '../../utils/timelineUtils';
 import { useStudioEditor } from '../state/editorStore';
 import { formatDuration } from '../data/useStudioData';
 import { bladeSourceFrame, rollCut, slipShot, trimShot } from '../timeline/ops';
+import { removeCue, upsertCue } from '../captions/cues';
 
 const TRACKS = [
     { id: 0, label: 'V1', tone: 'var(--st-v1)' },
@@ -39,7 +40,7 @@ export function StudioTimeline() {
     const project = useTimelineStore((state) => state.project);
     const {
         currentTime, selectedShotId, selectShot, setCurrentTime, updateShot,
-        splitShot, deleteShot, addToast,
+        splitShot, deleteShot, addToast, setProject,
     } = useTimelineStore(useShallow((state) => ({
         currentTime: state.currentTime,
         selectedShotId: state.selectedShotId,
@@ -49,12 +50,16 @@ export function StudioTimeline() {
         splitShot: state.splitShot,
         deleteShot: state.deleteShot,
         addToast: state.addToast,
+        setProject: state.setProject,
     })));
     const { timelineZoom, setTimelineZoom } = useStudioEditor();
     const [tool, setTool] = useState<Tool>('select');
     const [preview, setPreview] = useState<Preview | null>(null);
+    const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
     const gesture = useRef<Gesture | null>(null);
     const fps = project.fps || 25;
+    const captions = project.captions || [];
+    const selectedCue = captions.find((cue) => cue.id === selectedCueId) || null;
 
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
     const duration = Math.max(10, ...layout.map((clip) => clip.end), currentTime) + 2;
@@ -105,6 +110,35 @@ export function StudioTimeline() {
         }
         deleteShot(selectedShotId);
         addToast('Clip removed — V1 rippled', 'info');
+    };
+
+    const changeCaptions = (next: CaptionCue[]) => {
+        setProject({ ...project, captions: next });
+    };
+
+    const addCue = () => {
+        const startFrame = Math.max(0, Math.round(currentTime * fps));
+        const cue = {
+            id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
+                ? crypto.randomUUID()
+                : `cue_${Date.now()}`,
+            startFrame,
+            endFrame: startFrame + Math.max(1, Math.round(fps * 2)),
+            text: 'New caption',
+        };
+        changeCaptions(upsertCue(captions, cue));
+        setSelectedCueId(cue.id);
+    };
+
+    const editCue = (patch: Partial<CaptionCue>) => {
+        if (!selectedCue) return;
+        changeCaptions(upsertCue(captions, { ...selectedCue, ...patch }));
+    };
+
+    const deleteCue = () => {
+        if (!selectedCueId) return;
+        changeCaptions(removeCue(captions, selectedCueId));
+        setSelectedCueId(null);
     };
 
     const beginGesture = (
@@ -225,6 +259,9 @@ export function StudioTimeline() {
                 <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={rippleDelete} title="Ripple delete selected clip">
                     <Trash2 size={12} /> Ripple
                 </button>
+                <button type="button" className="st-button" data-size="sm" onClick={addCue} title="Add a caption cue at the playhead">
+                    <Captions size={12} /> Caption
+                </button>
 
                 <span style={{ width: 1, height: 18, background: 'var(--st-border-strong)', margin: '0 4px' }} />
                 <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={() => setTimelineZoom(timelineZoom / 1.2)}>
@@ -245,6 +282,48 @@ export function StudioTimeline() {
                     drag edges to trim · slip/roll move the source window
                 </span>
             </div>
+
+            {selectedCue && (
+                <div className="st-caption-editor">
+                    <Captions size={13} />
+                    <input
+                        className="st-input"
+                        style={{ flex: 1, minWidth: 160 }}
+                        value={selectedCue.text}
+                        aria-label="Caption text"
+                        onChange={(event) => editCue({ text: event.target.value })}
+                    />
+                    <label className="st-caption-time">
+                        in
+                        <input
+                            className="st-input st-mono"
+                            type="number"
+                            step={0.1}
+                            min={0}
+                            value={(selectedCue.startFrame / fps).toFixed(2)}
+                            onChange={(event) => editCue({
+                                startFrame: Math.round(Number(event.target.value) * fps),
+                            })}
+                        />
+                    </label>
+                    <label className="st-caption-time">
+                        out
+                        <input
+                            className="st-input st-mono"
+                            type="number"
+                            step={0.1}
+                            min={0}
+                            value={(selectedCue.endFrame / fps).toFixed(2)}
+                            onChange={(event) => editCue({
+                                endFrame: Math.round(Number(event.target.value) * fps),
+                            })}
+                        />
+                    </label>
+                    <button type="button" className="st-button" data-size="sm" onClick={deleteCue}>
+                        <Trash2 size={12} /> Delete cue
+                    </button>
+                </div>
+            )}
 
             <div className="st-timeline-scroll">
                 <div
@@ -333,6 +412,42 @@ export function StudioTimeline() {
                             </div>
                         </div>
                     ))}
+
+                    <div className="st-timeline-track">
+                        <div className="st-timeline-label">
+                            <strong style={{ color: 'var(--st-captions)' }}>C1</strong>
+                            <span>captions · {captions.length}</span>
+                        </div>
+                        <div className="st-timeline-lane" style={{ width }} onClick={seek} role="presentation">
+                            {captions.map((cue) => (
+                                <button
+                                    key={cue.id}
+                                    type="button"
+                                    className="st-timeline-clip st-caption-clip"
+                                    data-selected={cue.id === selectedCueId}
+                                    style={{
+                                        left: (cue.startFrame / fps) * timelineZoom,
+                                        width: Math.max(10, ((cue.endFrame - cue.startFrame) / fps) * timelineZoom),
+                                        top: 14,
+                                        bottom: 14,
+                                    }}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setSelectedCueId(cue.id);
+                                        setCurrentTime(cue.startFrame / fps);
+                                    }}
+                                    title={`${cue.text} · ${(cue.startFrame / fps).toFixed(2)}s–${(cue.endFrame / fps).toFixed(2)}s`}
+                                >
+                                    <span className="st-timeline-clip-title">{cue.text}</span>
+                                </button>
+                            ))}
+                            {captions.length === 0 && (
+                                <span className="st-caption-empty">
+                                    No captions — add a cue at the playhead
+                                </span>
+                            )}
+                        </div>
+                    </div>
 
                     <div
                         className="st-playhead"

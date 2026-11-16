@@ -283,3 +283,14 @@ selects the comment's shot, switches the dock to Direct, and loads the note
 (minus the mention) as a draft. The existing deterministic planner still owns
 the plan/approval boundary, so an agent note cannot spend GPU time on its own.
 Verified: 32 pytest, 11 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] captions | C1 cues and burned-in ASS
+
+Captions are now first-class project data: sanitized cues persist on `project`
+(`start_frame`, `end_frame`, `text`), the timeline has a C1 lane with an in-place
+cue editor and "add at playhead", and the render writes a styled ASS file and
+applies `ass=` after V1/V2 compositing, then cleans up the temp file. Deliver
+shows the cue count and gained 1:1 and 4:5 presets alongside 16:9/9:16. Added
+caption unit tests plus an end-to-end render assertion with a real cue. Verified:
+35 pytest, 14 vitest, tsc clean, eslint 0 errors, vite build. Live DB backed up
+and `project.captions` added.

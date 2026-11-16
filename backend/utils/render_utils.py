@@ -16,6 +16,7 @@ def build_complex_filtergraph(
     crf: int = 18,
     preset: str = "fast",
     audio_bitrate: str = "192k",
+    captions_path: Optional[str] = None,
 ) -> List[str]:
     """Build an FFmpeg filtergraph that matches the NLE timeline.
 
@@ -147,6 +148,16 @@ def build_complex_filtergraph(
         current_bg = next_bg
 
     final_video_label = current_bg
+    if captions_path:
+        escaped = (
+            str(captions_path)
+            .replace("\\", "\\\\")
+            .replace(":", "\\:")
+            .replace("'", "\\'")
+        )
+        filter_chains.append(f"{final_video_label}ass=filename='{escaped}'[v_captioned]")
+        final_video_label = "[v_captioned]"
+
     final_audio_label = None
     if len(audio_outputs) == 1:
         final_audio_label = audio_outputs[0]

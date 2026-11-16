@@ -66,6 +66,9 @@ def test_render_api_matches_computed_timeline(app_client, project):
         "revision": 0,
         "shots": shots,
         "scenes": [],
+        "captions": [
+            {"id": "cue-1", "start_frame": 0, "end_frame": 25, "text": "Captioned cut"},
+        ],
     }
     assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
 

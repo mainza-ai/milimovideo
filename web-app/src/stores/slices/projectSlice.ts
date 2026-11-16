@@ -127,6 +127,12 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     index: sc.index,
                     name: sc.name,
                     script_content: sc.scriptContent
+                })),
+                captions: (project.captions || []).map(cue => ({
+                    id: cue.id,
+                    start_frame: cue.startFrame,
+                    end_frame: cue.endFrame,
+                    text: cue.text
                 }))
             };
 
@@ -273,6 +279,12 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     matchedElements: s.matched_elements ? (typeof s.matched_elements === 'string' ? JSON.parse(s.matched_elements) : s.matched_elements) : undefined,
                 })),
                 scriptContent: data.script_content, // Load persisted script
+                captions: (data.captions || []).map((cue: any) => ({
+                    id: cue.id || uuidv4(),
+                    startFrame: cue.start_frame ?? 0,
+                    endFrame: cue.end_frame ?? 0,
+                    text: cue.text ?? '',
+                })),
                 scenes: (data.scenes || []).map((sc: any) => ({
                     id: sc.id,
                     index: sc.index,

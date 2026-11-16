@@ -1213,6 +1213,45 @@
     color: rgba(255, 255, 255, 0.55);
 }
 
+.st-caption-editor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--st-border);
+    background: rgba(245, 184, 75, 0.05);
+    color: var(--st-captions);
+}
+
+.st-caption-time {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--st-muted);
+    font-size: 9px;
+}
+
+.st-caption-time .st-input {
+    width: 62px;
+    height: 26px;
+    padding: 2px 5px;
+    font-size: 10px;
+}
+
+.st-caption-clip {
+    border-color: rgba(245, 184, 75, 0.42);
+    background: rgba(245, 184, 75, 0.15);
+    color: var(--st-text);
+}
+
+.st-caption-empty {
+    position: absolute;
+    left: 12px;
+    top: 24px;
+    color: var(--st-faint);
+    font-size: 9px;
+}
+
 .st-playhead {
     position: absolute;
     top: 0;

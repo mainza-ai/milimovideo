@@ -35,6 +35,25 @@ def _parse_json_field(value, default):
         return default
 
 
+def _sanitize_captions(captions) -> list:
+    cleaned = []
+    for cue in list(captions or [])[:500]:
+        raw = cue.model_dump() if hasattr(cue, "model_dump") else dict(cue or {})
+        text = str(raw.get("text") or "").strip()
+        if not text:
+            continue
+        start = max(0, int(raw.get("start_frame") or 0))
+        end = max(start + 1, int(raw.get("end_frame") or 0))
+        cleaned.append({
+            "id": str(raw.get("id") or uuid.uuid4().hex)[:40],
+            "start_frame": start,
+            "end_frame": end,
+            "text": text[:300],
+        })
+    cleaned.sort(key=lambda cue: cue["start_frame"])
+    return cleaned
+
+
 def _shot_dict(shot: Shot) -> dict:
     return {
         "id": shot.id,
@@ -165,6 +184,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         name=project.name,
         shots=[_shot_dict(s) for s in shots],
         scenes=scenes_data,
+        captions=_parse_json_field(project.captions, []),
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
         fps=project.fps,
@@ -236,6 +256,7 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     db_project.resolution_h = state.resolution_h
     db_project.fps = state.fps
     db_project.seed = state.seed
+    db_project.captions = json.dumps(_sanitize_captions(state.captions))
     
     db_project.updated_at = datetime.utcnow()
     db_project.revision = (db_project.revision or 0) + 1
@@ -508,9 +529,12 @@ async def _render_background(
     import asyncio
     from events import event_manager
     from utils.render_utils import build_complex_filtergraph
+    from utils.captions import cleanup as cleanup_captions, write_ass_file
     from file_utils import resolve_path
     from database import engine, Job
     from job_utils import active_jobs
+
+    captions_path = None
 
     active_jobs[render_id] = {
         "cancelled": False,
@@ -622,6 +646,12 @@ async def _render_background(
             if not v1_clips and not v2_clips and not a1_clips:
                 raise ValueError("No valid video or audio clips found to render.")
 
+            stored_project = session.get(Project, project_id)
+            captions = _parse_json_field(stored_project.captions, []) if stored_project else []
+            captions_path = write_ass_file(captions, width, height, fps)
+            if captions_path:
+                await emit_progress(4, f"Burning in {len(captions)} caption cue(s)...")
+
             await emit_progress(5, "Compiling FFmpeg filtergraph...")
             cmd = build_complex_filtergraph(
                 project_fps=fps,
@@ -635,6 +665,7 @@ async def _render_background(
                 crf=settings.crf,
                 preset=settings.preset,
                 audio_bitrate=settings.audio_bitrate,
+                captions_path=captions_path,
             )
 
             logger.info("Executing render FFmpeg: %s", " ".join(cmd))
@@ -687,6 +718,7 @@ async def _render_background(
             logger.error(f"Render failed: {e}")
             await emit_progress(0, str(e), status="failed")
         finally:
+            cleanup_captions(captions_path)
             active_jobs.pop(render_id, None)
 
 

@@ -123,6 +123,24 @@ def test_take_history_and_selection(app_client, project):
     assert any(take["job_id"] == "job_take_a" and take["selected"] for take in selected)
 
 
+def test_captions_roundtrip_sorted_and_sanitized(app_client, project):
+    pid = project["id"]
+    payload = {
+        "id": pid, "name": "Captions", "fps": 25, "seed": 42,
+        "resolution_w": 768, "resolution_h": 512, "revision": 0,
+        "shots": [], "scenes": [],
+        "captions": [
+            {"id": "late", "start_frame": 50, "end_frame": 75, "text": "later"},
+            {"id": "early", "start_frame": 0, "end_frame": 25, "text": " earlier "},
+            {"id": "blank", "start_frame": 10, "end_frame": 20, "text": "   "},
+        ],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    captions = app_client.get(f"/projects/{pid}").json()["captions"]
+    assert [cue["id"] for cue in captions] == ["early", "late"]
+    assert captions[0]["text"] == "earlier"
+
+
 def test_board_layout_roundtrip_and_revision(app_client, project):
     pid = project["id"]
     layout = {

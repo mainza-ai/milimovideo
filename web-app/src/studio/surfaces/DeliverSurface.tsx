@@ -8,6 +8,8 @@ const PRESETS = [
     { id: '1080p', label: '1080p', width: 1920, height: 1080 },
     { id: '720p', label: '720p', width: 1280, height: 720 },
     { id: 'vertical', label: 'Vertical 9:16', width: 1080, height: 1920 },
+    { id: 'square', label: 'Square 1:1', width: 1080, height: 1080 },
+    { id: 'portrait', label: 'Portrait 4:5', width: 1080, height: 1350 },
 ] as const;
 
 export function DeliverSurface() {
@@ -44,10 +46,15 @@ export function DeliverSurface() {
                         The render reads the same sequence order as the board and timeline.
                     </p>
                 </div>
-                <button type="button" className="st-button" data-variant="primary" disabled={busy} onClick={() => void start()}>
-                    {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                    {busy ? 'Queueing…' : 'Create export'}
-                </button>
+                <div className="st-button-row">
+                    <span className="st-status-pill" title="Caption cues are burned in by the render">
+                        {project.captions?.length || 0} caption cues
+                    </span>
+                    <button type="button" className="st-button" data-variant="primary" disabled={busy} onClick={() => void start()}>
+                        {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                        {busy ? 'Queueing…' : 'Create export'}
+                    </button>
+                </div>
             </div>
 
             <div className="st-panel" style={{ marginBottom: 14 }}>
