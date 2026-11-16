@@ -255,3 +255,13 @@ shot decisions; the version stack and approval badges read the same data. Added
 3 backend tests and a review-surface mount test. Verified: 28 pytest, 7 vitest,
 tsc clean, eslint 0 errors, vite build. Live DB backed up and `review_item`
 created.
+
+## [2026-11-16] frontend | frame-accurate timeline operations
+
+Added pure timeline ops with unit tests: trim in/out within source bounds, slip
+(source window moves, duration constant), roll (cut moves between adjacent V1
+clips), and blade-frame calculation. StudioTimeline now has Select/Slip/Roll
+tools, trim handles, blade at playhead via the existing split endpoint, ripple
+delete, and gesture previews that commit once on pointer-up so undo stays
+useful. V1 remains magnetic; ripple reflow comes from computeTimelineLayout.
+Verified: 28 pytest, 11 vitest, tsc clean, eslint 0 errors, vite build.

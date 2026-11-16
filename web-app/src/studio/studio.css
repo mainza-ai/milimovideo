@@ -1184,6 +1184,23 @@
     box-shadow: 0 0 0 1px var(--st-text);
 }
 
+.st-trim-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 7px;
+    z-index: 2;
+    cursor: ew-resize;
+    background: transparent;
+}
+
+.st-trim-handle:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.st-trim-in { left: 0; }
+.st-trim-out { right: 0; }
+
 .st-timeline-clip-title {
     display: block;
     overflow: hidden;
