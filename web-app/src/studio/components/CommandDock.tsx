@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowUp, Check, CornerDownLeft, Loader2, Sparkles, TriangleAlert, X } from 'lucide-react';
 import type { Shot } from '../../stores/timelineStore';
 import { apiUrl } from '../../config';
@@ -55,7 +55,7 @@ export function CommandDock() {
     const generate = useStudioGenerate();
     const {
         commandOpen, setCommandOpen, commandMode, setCommandMode,
-        setBoardQuery, setSurface,
+        setBoardQuery, setSurface, commandDraft, setCommandDraft,
     } = useStudioEditor();
     const [value, setValue] = useState('');
     const [plan, setPlan] = useState<Plan | null>(null);
@@ -65,6 +65,14 @@ export function CommandDock() {
     const shot = project.shots.find((item) => item.id === selectedShotId) || null;
     const mode = MODES.find((item) => item.id === commandMode) || MODES[1];
     const matched = useMemo(() => shot?.matchedElements || [], [shot]);
+
+    useEffect(() => {
+        if (!commandDraft) return;
+        setValue(commandDraft);
+        setCommandOpen(true);
+        setPlan(null);
+        setCommandDraft('');
+    }, [commandDraft, setCommandDraft, setCommandOpen]);
 
     if (!commandOpen) {
         return (

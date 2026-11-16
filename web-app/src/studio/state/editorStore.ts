@@ -57,6 +57,7 @@ interface EditorState {
     inspectorWidth: number;
     commandOpen: boolean;
     commandMode: 'ask' | 'direct' | 'generate' | 'find';
+    commandDraft: string;
     focusMode: 'none' | 'canvas' | 'stage';
     setSurface: (surface: StudioSurface) => void;
     setStoryView: (view: StoryView) => void;
@@ -90,6 +91,7 @@ interface EditorState {
     setInspectorWidth: (width: number) => void;
     setCommandOpen: (open: boolean) => void;
     setCommandMode: (mode: EditorState['commandMode']) => void;
+    setCommandDraft: (draft: string) => void;
     setFocusMode: (mode: EditorState['focusMode']) => void;
     resetBoard: () => void;
 }
@@ -128,6 +130,7 @@ export const useStudioEditor = create<EditorState>()(
             inspectorWidth: 360,
             commandOpen: true,
             commandMode: 'direct',
+            commandDraft: '',
             focusMode: 'none',
             setSurface: (activeSurface) => set({ activeSurface }),
             setStoryView: (storyView) => set({ storyView }),
@@ -204,6 +207,7 @@ export const useStudioEditor = create<EditorState>()(
             setInspectorWidth: (inspectorWidth) => set({ inspectorWidth: Math.max(300, Math.min(560, inspectorWidth)) }),
             setCommandOpen: (commandOpen) => set({ commandOpen }),
             setCommandMode: (commandMode) => set({ commandMode }),
+            setCommandDraft: (commandDraft) => set({ commandDraft }),
             setFocusMode: (focusMode) => set({ focusMode }),
             resetBoard: () => set({
                 boardPositions: {},

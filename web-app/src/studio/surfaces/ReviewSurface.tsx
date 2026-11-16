@@ -17,7 +17,7 @@ import { computeTimelineLayout } from '../../utils/timelineUtils';
 export function ReviewSurface() {
     const project = useTimelineStore((state) => state.project);
     const { selectedShotId, selectShot, setCurrentTime } = useStudioSelection();
-    const { setInspectorTab } = useStudioEditor();
+    const { setInspectorTab, setCommandDraft, setCommandMode } = useStudioEditor();
     const shot = project.shots.find((item) => item.id === selectedShotId) || project.shots[0] || null;
     const mediaUrl = useAssetUrl(shot?.videoUrl || shot?.thumbnailUrl);
     const isImage = !!mediaUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
@@ -189,7 +189,7 @@ export function ReviewSurface() {
                     <textarea
                         className="st-textarea"
                         style={{ minHeight: 64 }}
-                        placeholder="What needs to change at this frame?"
+                        placeholder="What needs to change at this frame? Mention @Agent to route it to the plan dock."
                         value={draft}
                         onChange={(event) => setDraft(event.target.value)}
                     />
@@ -269,6 +269,21 @@ export function ReviewSurface() {
                                     {comment.author} · {comment.status}
                                     {comment.created_at ? ` · ${new Date(comment.created_at).toLocaleString()}` : ''}
                                 </div>
+                                {/@agent/i.test(comment.body) && (
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        style={{ marginTop: 6 }}
+                                        onClick={() => {
+                                            if (comment.shot_id) selectShot(comment.shot_id);
+                                            setCommandMode('direct');
+                                            setCommandDraft(comment.body.replace(/@agent/gi, '').trim());
+                                        }}
+                                    >
+                                        <Check size={12} /> Plan fix in command dock
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>

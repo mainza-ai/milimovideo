@@ -275,3 +275,11 @@ Inspector audio tab now has a 0–200% gain slider, mute/reset, and trim/track
 readouts. Added filtergraph tests proving gain is emitted, muted clips keep video
 but drop audio, and hidden/muted track states win. Verified: 32 pytest, 11 vitest,
 tsc clean, eslint 0 errors, vite build. Live DB backed up and columns added.
+
+## [2026-11-16] review | @Agent comment handoff
+
+Comments that mention @Agent now expose "Plan fix in command dock": the editor
+selects the comment's shot, switches the dock to Direct, and loads the note
+(minus the mention) as a draft. The existing deterministic planner still owns
+the plan/approval boundary, so an agent note cannot spend GPU time on its own.
+Verified: 32 pytest, 11 vitest, tsc clean, eslint 0 errors, vite build.
