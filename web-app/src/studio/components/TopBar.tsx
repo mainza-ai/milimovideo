@@ -1,4 +1,7 @@
-import { CheckCircle2, CloudOff, HardDrive, MonitorPlay, Save, Share2, TriangleAlert } from 'lucide-react';
+import {
+    CheckCircle2, CloudOff, HardDrive, MonitorPlay, Redo2, Save, Share2, TriangleAlert, Undo2,
+} from 'lucide-react';
+import { useStore } from 'zustand';
 import { useStudioData } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
 import { useTimelineStore } from '../../stores/timelineStore';
@@ -16,6 +19,13 @@ export function TopBar() {
     const { project, health, error } = useStudioData();
     const { activeSurface, setSurface, inspectorOpen, setInspectorOpen } = useStudioEditor();
     const { saveStatus, saveError, saveProject } = useTimelineStore();
+    // zundo's temporal store is attached to the document store.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const temporalStore = (useTimelineStore as any).temporal;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const canUndo = useStore(temporalStore, (state: any) => state.pastStates.length > 0);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const canRedo = useStore(temporalStore, (state: any) => state.futureStates.length > 0);
 
     const saveLabel = saveStatus === 'saving' ? 'Saving…'
         : saveStatus === 'conflict' ? 'Conflict'
@@ -56,6 +66,26 @@ export function TopBar() {
             </nav>
 
             <div className="st-topbar-right">
+                <button
+                    type="button"
+                    className="st-icon-button"
+                    disabled={!canUndo}
+                    onClick={() => temporalStore.getState().undo()}
+                    title="Undo (⌘Z)"
+                    aria-label="Undo"
+                >
+                    <Undo2 size={15} />
+                </button>
+                <button
+                    type="button"
+                    className="st-icon-button"
+                    disabled={!canRedo}
+                    onClick={() => temporalStore.getState().redo()}
+                    title="Redo (⇧⌘Z)"
+                    aria-label="Redo"
+                >
+                    <Redo2 size={15} />
+                </button>
                 <button
                     type="button"
                     className="st-status-pill"

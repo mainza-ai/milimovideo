@@ -294,3 +294,11 @@ shows the cue count and gained 1:1 and 4:5 presets alongside 16:9/9:16. Added
 caption unit tests plus an end-to-end render assertion with a real cue. Verified:
 35 pytest, 14 vitest, tsc clean, eslint 0 errors, vite build. Live DB backed up
 and `project.captions` added.
+
+## [2026-11-16] shell | undo/redo for approved plans
+
+Surfaced the document temporal store in the studio: top-bar undo/redo buttons
+with disabled states and ⌘Z / ⇧⌘Z shortcuts that ignore text fields. Approved
+plan patches remain a single document step, satisfying the "one undo restores
+pre-plan state" contract; added a store test that applies a plan-shaped patch and
+undoes it. Verified: 35 pytest, 15 vitest, tsc clean, eslint 0 errors, vite build.

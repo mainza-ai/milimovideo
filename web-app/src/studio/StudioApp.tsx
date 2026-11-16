@@ -23,6 +23,8 @@ export function StudioApp() {
     useStudioBoardSync(project.id);
     const isPlaying = useTimelineStore((state) => state.isPlaying);
     const setIsPlaying = useTimelineStore((state) => state.setIsPlaying);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const temporalStore = (useTimelineStore as any).temporal;
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -34,6 +36,12 @@ export function StudioApp() {
                 return;
             }
             if (typing) return;
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
+                event.preventDefault();
+                if (event.shiftKey) temporalStore.getState().redo();
+                else temporalStore.getState().undo();
+                return;
+            }
             if (event.key === 'Escape') {
                 setFocusMode('none');
                 return;
@@ -51,7 +59,7 @@ export function StudioApp() {
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [activeSurface, commandOpen, isPlaying, setCommandOpen, setFocusMode, setIsPlaying, setSurface]);
+    }, [activeSurface, commandOpen, isPlaying, setCommandOpen, setFocusMode, setIsPlaying, setSurface, temporalStore]);
 
     const surface = (() => {
         switch (activeSurface) {
