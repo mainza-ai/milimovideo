@@ -415,6 +415,58 @@ async def _has_audio_stream(path: str) -> bool:
         return False
 
 
+@router.get("/projects/{project_id}/takes")
+def list_project_takes(
+    project_id: str,
+    limit: int = 200,
+    session: Session = Depends(get_session),
+):
+    """Every completed output in the project, with its shot and lineage."""
+    from database import Job
+
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    jobs = session.exec(
+        select(Job)
+        .where(Job.project_id == project_id)
+        .where(Job.status == "completed")
+        .where(Job.output_path.isnot(None))
+        .where(Job.type.in_(["shot_generation", "advanced", "video", "image", "chained"]))
+        .order_by(Job.created_at.desc())
+        .limit(max(1, min(1000, limit)))
+    ).all()
+
+    shots = session.exec(select(Shot).where(Shot.project_id == project_id)).all()
+    shot_map = {shot.id: shot for shot in shots}
+
+    takes = []
+    for job in jobs:
+        shot = shot_map.get(job.shot_id or "")
+        params = _parse_json_field(job.params_json, {})
+        takes.append({
+            "job_id": job.id,
+            "shot_id": job.shot_id,
+            "shot_label": (shot.action or shot.prompt or shot.id) if shot else None,
+            "sequence_index": shot.sequence_index if shot else None,
+            "url": job.output_path,
+            "thumbnail_url": job.thumbnail_path,
+            "type": job.type,
+            "prompt": job.prompt,
+            "enhanced_prompt": job.enhanced_prompt,
+            "seed": params.get("seed") if isinstance(params, dict) else None,
+            "model": (
+                params.get("pipeline_override") or params.get("pipeline_type")
+                if isinstance(params, dict) else None
+            ),
+            "num_frames": params.get("num_frames") if isinstance(params, dict) else None,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "selected": bool(shot and (shot.selected_take_id or shot.last_job_id) == job.id),
+        })
+    return {"takes": takes, "count": len(takes)}
+
+
 @router.get("/projects/{project_id}/board")
 def get_board(project_id: str, session: Session = Depends(get_session)):
     project = session.get(Project, project_id)

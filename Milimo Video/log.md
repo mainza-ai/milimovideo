@@ -310,3 +310,11 @@ visible/total count shown in the zoom pill. Areas, links, minimap, and selection
 still read the full layout, so culling changes cost, not semantics. This is the
 first half of the F1 500-card gate; a real 500-card perf measurement is still
 outstanding. Verified: 35 pytest, 15 vitest, tsc clean, eslint 0 errors, build.
+
+## [2026-11-16] library | project-wide take lineage
+
+Added `GET /projects/{id}/takes` returning every completed output with shot
+label, sequence index, seed/model/frames, selection state, and timestamp. The
+Library gained a Takes tab with local filtering and select-for-shot, so lineage
+is visible across the project instead of one shot at a time. Verified: 36 pytest,
+15 vitest, tsc clean, eslint 0 errors, vite build.

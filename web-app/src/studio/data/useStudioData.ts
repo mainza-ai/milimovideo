@@ -315,6 +315,31 @@ export function useStudioReview(projectId: string) {
     return { review, loading, refresh, addComment, updateComment, deleteComment, setApproval };
 }
 
+export interface StudioProjectTake extends StudioTake {
+    shot_id?: string | null;
+    shot_label?: string | null;
+    sequence_index?: number | null;
+}
+
+export function useStudioProjectTakes(projectId: string) {
+    const [takes, setTakes] = useState<StudioProjectTake[]>([]);
+    const [loading, setLoading] = useState(true);
+    const refresh = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await fetch(apiUrl(`/projects/${projectId}/takes`));
+            const data = response.ok ? await response.json() : { takes: [] };
+            setTakes(Array.isArray(data.takes) ? data.takes : []);
+        } catch {
+            setTakes([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [projectId]);
+    useEffect(() => { void refresh(); }, [refresh]);
+    return { takes, loading, refresh };
+}
+
 export function useStudioRenders(projectId: string) {
     const [renders, setRenders] = useState<StudioRender[]>([]);
     const refresh = useCallback(async () => {

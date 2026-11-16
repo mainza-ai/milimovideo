@@ -49,6 +49,7 @@ at `/`.
 | **F2 Edit** | **Partial** | Stage monitor, legacy playback clock, V1/V2/A1 clips, playhead, seeking, zoom; tested frame-accurate trim (in/out), slip, roll, blade at playhead, and ripple delete through pure ops; per-clip audio gain/mute persists and reaches the render filtergraph; caption cues persist in C1, edit in-place, and burn in through generated ASS; no keyframe UI yet |
 | **F3 Generate** | **Partial** | Shot workspace, prompt/params, generate/cancel, immutable take history from completed jobs with select-take |
 | **F4 Review** | **Partial** | Version stack reads the same take history; `POST /projects/{id}/plan` returns deterministic plan cards (diff, estimate, warnings) applied through the undoable store; frame-accurate comments with resolve/delete and per-shot approvals persist via `/projects/{id}/review`; `@Agent` comments route into the plan dock for approval; plan patches are one undo step via top-bar/⌘Z undo-redo; share links/activity stay open |
+| **F4 Library/Deliver** | **Partial** | Library assets/references/complete-take lineage with select; Deliver presets 16:9/9:16/1:1/4:5, render history, caption cue count; semantic search and share links open |
 | **F5 Shorts/lenses** | **Not started** | — |
 
 **Next:** share/“needs you” review links, then move document state off the

@@ -123,6 +123,42 @@ def test_take_history_and_selection(app_client, project):
     assert any(take["job_id"] == "job_take_a" and take["selected"] for take in selected)
 
 
+def test_project_takes_lists_completed_outputs(app_client, project):
+    from datetime import datetime
+    from sqlmodel import Session
+    from database import Job, engine
+
+    pid = project["id"]
+    shot = _shot("takes-shot", "take library", sequence_index=0)
+    payload = {
+        "id": pid, "name": "Take Library", "fps": 25, "seed": 42,
+        "resolution_w": 768, "resolution_h": 512, "revision": 0,
+        "shots": [shot], "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+
+    with Session(engine) as session:
+        session.add(Job(
+            id="library_take_1", project_id=pid, shot_id="takes-shot",
+            type="shot_generation", status="completed", progress=100,
+            output_path=f"/projects/{pid}/generated/one.mp4",
+            created_at=datetime.utcnow(), params_json='{"seed": 3}',
+        ))
+        session.add(Job(
+            id="library_take_2", project_id=pid, shot_id="takes-shot",
+            type="advanced", status="failed", progress=20,
+            output_path=None, created_at=datetime.utcnow(),
+        ))
+        session.commit()
+
+    response = app_client.get(f"/projects/{pid}/takes")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["count"] == 1
+    assert body["takes"][0]["job_id"] == "library_take_1"
+    assert body["takes"][0]["shot_label"] == "take library"
+
+
 def test_captions_roundtrip_sorted_and_sanitized(app_client, project):
     pid = project["id"]
     payload = {
