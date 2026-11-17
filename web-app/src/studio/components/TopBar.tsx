@@ -16,6 +16,7 @@ const SURFACES: Array<{ id: StudioSurface; label: string }> = [
     { id: 'review', label: 'Review' },
     { id: 'library', label: 'Library' },
     { id: 'deliver', label: 'Deliver' },
+    { id: 'shorts', label: 'Shorts' },
 ];
 
 export function TopBar() {

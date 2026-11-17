@@ -12,6 +12,7 @@ import { ReviewSurface } from './surfaces/ReviewSurface';
 import { LibrarySurface } from './surfaces/LibrarySurface';
 import { DeliverSurface } from './surfaces/DeliverSurface';
 import { SetupSurface } from './surfaces/SetupSurface';
+import { ShortsSurface } from './surfaces/ShortsSurface';
 import { useStudioEditor, type StudioSurface } from './state/editorStore';
 import { useStudioProject, useStudioBoardSync, useStudioProjectBootstrap } from './data/useStudioData';
 import { useTimelineStore } from '../stores/timelineStore';
@@ -19,7 +20,7 @@ import { SharedReviewPage } from './SharedReviewPage';
 import { studioQueryClient } from './state/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
 
-const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver', 'setup'];
+const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver', 'shorts', 'setup'];
 
 export function StudioApp() {
     const shareMatch = typeof window !== 'undefined'
@@ -88,6 +89,7 @@ function StudioShell() {
             case 'review': return <ReviewSurface />;
             case 'library': return <LibrarySurface />;
             case 'deliver': return <DeliverSurface />;
+            case 'shorts': return <ShortsSurface />;
             case 'setup': return <SetupSurface />;
             default: return <StorySurface />;
         }

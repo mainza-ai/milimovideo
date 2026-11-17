@@ -656,3 +656,11 @@ record into the agent store. Verified: 39 vitest, tsc clean, eslint 0 errors.
 in-memory running jobs, returning a queue position and a rough workload-based
 seconds estimate. Generate shows both. Added a backend test with a queued video
 job. Verified: 57 pytest, 39 vitest, tsc clean.
+
+## [2026-11-17] f5 | shorts candidate workspace
+
+Added a Shorts surface with a real local pipeline: import SRT/VTT (or fall back to
+shot text/timing), build 10–45s candidate windows with a hook/density/numbers
+score, select a candidate, choose 9:16 / 1:1 / 4:5, and export that range with
+transcript captions burned in. Recent exports read the same render history.
+Added candidate unit tests. Verified: 42 vitest, tsc clean, eslint 0 errors.

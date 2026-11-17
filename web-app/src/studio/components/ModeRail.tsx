@@ -1,4 +1,6 @@
-import { BookOpen, Clapperboard, FlaskConical, Library, PlaySquare, Send, Settings, Sparkles } from 'lucide-react';
+import {
+    BookOpen, Clapperboard, FlaskConical, Library, PlaySquare, Send, Settings, Sparkles, Zap,
+} from 'lucide-react';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
 
 const MODES: Array<{ id: StudioSurface; label: string; icon: typeof BookOpen }> = [
@@ -8,6 +10,7 @@ const MODES: Array<{ id: StudioSurface; label: string; icon: typeof BookOpen }> 
     { id: 'review', label: 'Review', icon: PlaySquare },
     { id: 'library', label: 'Library', icon: Library },
     { id: 'deliver', label: 'Deliver', icon: Send },
+    { id: 'shorts', label: 'Shorts', icon: Zap },
 ];
 
 export function ModeRail() {

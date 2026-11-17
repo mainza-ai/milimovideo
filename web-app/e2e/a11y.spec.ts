@@ -24,6 +24,6 @@ test('keyboard reaches the workspace and mode surfaces', async ({ page }) => {
 
     await page.keyboard.press('2');
     await expect(page.getByRole('heading', { name: /Shot/ })).toBeVisible();
-    await page.keyboard.press('7');
+    await page.keyboard.press('8');
     await expect(page.getByRole('heading', { name: 'Memory slots' })).toBeVisible();
 });
