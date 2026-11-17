@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-    CheckCircle2, Check, Film, MessageSquare, Play, Trash2, TriangleAlert, X,
+    CheckCircle2, Check, Columns2, Film, MessageSquare, Play, Trash2, TriangleAlert, X,
 } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getAssetUrl } from '../../config';
@@ -23,12 +23,17 @@ export function ReviewSurface() {
     const isImage = !!mediaUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
     const { takes, refresh: refreshTakes } = useStudioTakes(shot?.id);
+    const compareTake = takes.find((take) => take.job_id === compareTakeId) || null;
+    const compareUrl = useAssetUrl(compareTake?.url);
     const selectTake = useStudioSelectTake();
     const {
         review, loading, addComment, updateComment, deleteComment, setApproval,
     } = useStudioReview(project.id);
 
     const videoRef = useRef<HTMLVideoElement>(null);
+    const compareVideoRef = useRef<HTMLVideoElement>(null);
+    const [compareTakeId, setCompareTakeId] = useState<string | null>(null);
+    const [compareWipe, setCompareWipe] = useState(50);
     const [frame, setFrame] = useState(0);
     const [pendingFrame, setPendingFrame] = useState<number | null>(null);
     const [draft, setDraft] = useState('');
@@ -125,7 +130,13 @@ export function ReviewSurface() {
                                         controls
                                         playsInline
                                         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                        onTimeUpdate={(event) => setFrame(Math.floor(event.currentTarget.currentTime * fps))}
+                                        onTimeUpdate={(event) => {
+                                            const time = event.currentTarget.currentTime;
+                                            setFrame(Math.floor(time * fps));
+                                            if (compareVideoRef.current) {
+                                                try { compareVideoRef.current.currentTime = time; } catch { /* ignore */ }
+                                            }
+                                        }}
                                         onLoadedMetadata={(event) => {
                                             if (pendingFrame != null) {
                                                 try { event.currentTarget.currentTime = pendingFrame / fps; } catch { /* ignore */ }
@@ -137,6 +148,38 @@ export function ReviewSurface() {
                                 )
                             ) : (
                                 <div className="st-stage-empty"><Play size={18} /><strong>No media selected</strong></div>
+                            )}
+                            {compareUrl && (
+                                <>
+                                    <div
+                                        className="st-stage-compare-wipe"
+                                        style={{ clipPath: `inset(0 ${100 - compareWipe}% 0 0)` }}
+                                    >
+                                        <video ref={compareVideoRef} src={compareUrl} muted playsInline />
+                                        <span className="st-compare-badge">B · alternate take</span>
+                                    </div>
+                                    <div className="st-wipe-control">
+                                        <span>A</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={100}
+                                            value={compareWipe}
+                                            aria-label="Review compare wipe"
+                                            onChange={(event) => setCompareWipe(Number(event.target.value))}
+                                        />
+                                        <span>B</span>
+                                        <button
+                                            type="button"
+                                            className="st-button"
+                                            data-size="sm"
+                                            data-variant="ghost"
+                                            onClick={() => setCompareTakeId(null)}
+                                        >
+                                            Stop
+                                        </button>
+                                    </div>
+                                </>
                             )}
                             <div className="st-stage-overlay">
                                 <span className="st-status-pill st-mono">frame {frame}</span>
@@ -333,25 +376,44 @@ export function ReviewSurface() {
                     <div className="st-comment-list">
                         {takes.length === 0 && <div className="st-comment">No completed takes for this shot yet.</div>}
                         {takes.map((take) => (
-                            <button
+                            <div
                                 key={take.job_id}
-                                type="button"
                                 className="st-take"
                                 style={{ textAlign: 'left', borderColor: take.selected ? 'var(--st-accent)' : undefined }}
-                                onClick={async () => {
-                                    if (shot && await selectTake(shot, take)) await refreshTakes();
-                                }}
                             >
-                                <div className="st-take-media">
-                                    {take.thumbnail_url || take.url
-                                        ? <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
-                                        : <div className="st-stage-empty"><Play size={12} /></div>}
-                                </div>
-                                <div className="st-take-body">
-                                    <strong style={{ color: 'var(--st-text)' }}>{take.selected ? 'Selected' : 'Take'} · {take.model || take.type}</strong>
-                                    <div className="st-mono">{take.job_id.slice(0, 12)} · seed {take.seed ?? '—'}</div>
-                                </div>
-                            </button>
+                                <button
+                                    type="button"
+                                    style={{ display: 'block', width: '100%', border: 0, background: 'transparent', padding: 0, textAlign: 'left' }}
+                                    onClick={async () => {
+                                        if (shot && await selectTake(shot, take)) await refreshTakes();
+                                    }}
+                                >
+                                    <div className="st-take-media">
+                                        {take.thumbnail_url || take.url
+                                            ? <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
+                                            : <div className="st-stage-empty"><Play size={12} /></div>}
+                                    </div>
+                                    <div className="st-take-body">
+                                        <strong style={{ color: 'var(--st-text)' }}>{take.selected ? 'Selected' : 'Take'} · {take.model || take.type}</strong>
+                                        <div className="st-mono">{take.job_id.slice(0, 12)} · seed {take.seed ?? '—'}</div>
+                                    </div>
+                                </button>
+                                {!take.selected && (
+                                    <div style={{ padding: '0 8px 8px' }}>
+                                        <button
+                                            type="button"
+                                            className="st-button"
+                                            data-size="sm"
+                                            data-variant={take.job_id === compareTakeId ? 'primary' : 'ghost'}
+                                            onClick={() => setCompareTakeId(
+                                                take.job_id === compareTakeId ? null : take.job_id,
+                                            )}
+                                        >
+                                            <Columns2 size={11} /> Compare
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         ))}
                     </div>
                 </aside>

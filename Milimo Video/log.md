@@ -596,3 +596,9 @@ open the reviewer page, comment `@Agent prompt: …`, approve the shot, open the
 editor, use "Plan fix in command dock", plan, and approve the patch. The shot
 prompt updates through the undoable document path. Verified: 6 Playwright
 passes.
+
+## [2026-11-17] f4 | review take compare
+
+Version stack entries can now be compared against the selected take in Review
+with a synced wipe and stop control. This closes the review compare gap without
+leaving the surface. Verified: 36 vitest, tsc clean, eslint 0 errors.
