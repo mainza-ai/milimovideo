@@ -144,11 +144,12 @@ not just filtergraph strings.
   timeline table + keyboard edit, object tracking overlay, blocking lens,
   lazy 3D previz.
 - Generate: ingredients/@mentions, advanced params, preview frame, batch queue
-  and matrix, queue position/estimate/cancel, immutable takes/favorites, inpaint.
+  and matrix, queue position/estimate/cancel, immutable takes/favorites, inpaint,
+  editable pipeline lens with apply-to-shot.
 - Review/agent: frame comments/approvals, activity, needs-you pill, share links,
   deterministic plan previews, undoable apply, recipes, `@Agent` handoff.
-- Library/Deliver: assets/references/takes, ranked local search, presets, caption
-  toggle, render history.
+- Library/Deliver: direct uploads, assets/references/takes, ranked local search,
+  presets, pad/crop reframing, caption toggle/preview, render history.
 - Shorts: transcript/SRT/VTT candidates, scores, 9:16/1:1/4:5 range export.
 - Setup: device/slots/queue/disk, pipeline readiness, base/LoRA activation,
   LoRA strength, error budget.

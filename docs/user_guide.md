@@ -105,8 +105,9 @@ Useful shortcuts:
 
 ## 3. Projects and saving
 
-- The project switcher is next to the project name. It lists server projects and
-  creates new ones.
+- The project switcher is next to the project name. It lists server projects,
+  creates new ones, and deletes the current project with confirmation.
+- Renaming the project saves on blur; the Save control flushes any pending edits.
 - If the project remembered by the browser no longer exists, Studio opens the most
   recently updated server project instead of editing a phantom document.
 - Saves are serialized. The top bar shows **Unsaved / Saving / Saved / Save failed /
@@ -308,7 +309,7 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 
 ## 9. Library and search
 
-- **Assets** — uploaded/generated files.
+- **Assets** — upload directly with **Upload media**; images, video, audio, and caption files are supported.
 - **Master references** — Characters, Locations, Objects with trigger words.
 - **Takes** — every completed take with shot lineage, seed/model, and select action.
 - **Search** — local ranked token/prefix search across shots, assets, references,
