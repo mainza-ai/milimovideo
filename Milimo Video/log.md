@@ -746,3 +746,12 @@ durable GPU queue; the task loads the model, parses off-thread, writes a JSON
 result into the project workspace, and broadcasts completion. The Script view can
 queue it, poll, and commit the result. Added an endpoint test with enqueue
 stubbed. Verified: 59 pytest, tsc clean.
+
+## [2026-11-17] f5 | Tauri 2 desktop shell
+
+Added a Tauri 2 scaffold for the same studio shell: config, Rust entrypoint,
+capabilities, generated icons, `@tauri-apps/cli`, and a native `save_text_file`
+command with the dialog plugin. Storyboard backups and pipeline recipes now use a
+native Save dialog in Tauri and a download in the browser. `cargo check` and
+`tauri build --debug --no-bundle` both succeed, producing a desktop binary.
+The heavy sidecar/backend packaging remains a follow-up.

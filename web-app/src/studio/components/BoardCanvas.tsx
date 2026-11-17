@@ -6,6 +6,7 @@ import {
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { apiUrl, getAssetUrl } from '../../config';
+import { saveTextFile } from '../../desktop';
 import {
     useStudioEditor, type BoardArea, type BoardPosition, type LinkKind,
 } from '../state/editorStore';
@@ -1325,15 +1326,10 @@ export function BoardCanvas() {
                                         addToast('No pre-parse archive yet', 'info');
                                         return;
                                     }
-                                    const url = URL.createObjectURL(new Blob(
-                                        [JSON.stringify(data.archive, null, 2)],
-                                        { type: 'application/json' },
-                                    ));
-                                    const anchor = document.createElement('a');
-                                    anchor.href = url;
-                                    anchor.download = `${project.id}-storyboard-archive.json`;
-                                    anchor.click();
-                                    URL.revokeObjectURL(url);
+                                    await saveTextFile(
+                                        `${project.id}-storyboard-archive.json`,
+                                        JSON.stringify(data.archive, null, 2),
+                                    );
                                 }}
                             >
                                 Download backup

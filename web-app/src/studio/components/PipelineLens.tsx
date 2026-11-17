@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckCircle2, Copy, Loader2, TriangleAlert, X } from 'lucide-react';
 import type { Shot } from '../../stores/timelineStore';
 import { apiUrl } from '../../config';
+import { saveTextFile } from '../../desktop';
 import type { StudioElement } from '../data/useStudioData';
 
 interface Props {
@@ -119,6 +120,17 @@ export function PipelineLens({ projectId, shot, elements, onClose }: Props) {
                                 onClick={() => void navigator.clipboard.writeText(JSON.stringify(recipe, null, 2))}
                             >
                                 <Copy size={11} /> Copy JSON
+                            </button>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                onClick={() => void saveTextFile(
+                                    `recipe-${shot.id}.json`,
+                                    JSON.stringify(recipe, null, 2),
+                                )}
+                            >
+                                Save JSON
                             </button>
                             <button type="button" className="st-button" data-size="sm" onClick={() => void estimatePlan()}>
                                 {loading ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}

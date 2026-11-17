@@ -98,3 +98,7 @@ web-app/playwright-report/
 # Coverage
 .coverage
 htmlcov/
+
+# Tauri
+web-app/src-tauri/target/
+web-app/src-tauri/gen/schemas/

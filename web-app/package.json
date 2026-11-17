@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:e2e": "node e2e/clean.mjs && playwright test",
     "preview": "vite preview",
-    "gen:api": "node scripts/gen-api.mjs"
+    "gen:api": "node scripts/gen-api.mjs",
+    "tauri": "tauri"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -34,6 +35,7 @@
     "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^9.39.1",
     "@playwright/test": "^1.65.1",
+    "@tauri-apps/cli": "^2.12.5",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^24.10.1",
