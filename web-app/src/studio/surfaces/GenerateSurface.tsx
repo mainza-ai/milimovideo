@@ -229,7 +229,13 @@ export function GenerateSurface() {
                             {shot.isGenerating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                             {shot.isGenerating ? 'Generating…' : 'Generate'}
                         </button>
-                        <button type="button" className="st-button" disabled={shot.isGenerating} onClick={() => void generate(shot, true)}>
+                        <button
+                            type="button"
+                            className="st-button"
+                            disabled={shot.isGenerating || shot.seedLocked !== false}
+                            title={shot.seedLocked !== false ? 'Unlock the seed in Advanced parameters to vary this take' : 'Randomize the seed and keep the old take'}
+                            onClick={() => void generate(shot, true)}
+                        >
                             <RotateCcw size={13} /> New take
                         </button>
                         {shot.isGenerating && (
@@ -539,6 +545,14 @@ export function GenerateSurface() {
                                     <input className="st-input" type="number" value={shot.numFrames} onChange={(event) => updateShot(shot.id, { numFrames: Number(event.target.value) })} />
                                 </label>
                             </div>
+                            <label className="st-chip" style={{ marginTop: 8, textTransform: 'none', letterSpacing: 0 }}>
+                                <input
+                                    type="checkbox"
+                                    checked={shot.seedLocked !== false}
+                                    onChange={(event) => updateShot(shot.id, { seedLocked: event.target.checked })}
+                                />
+                                Lock seed · deterministic re-run
+                            </label>
                             <div className="st-row" style={{ marginTop: 8 }}>
                                 <label>
                                     <span className="st-label">Width</span>

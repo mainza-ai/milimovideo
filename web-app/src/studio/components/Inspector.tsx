@@ -162,6 +162,14 @@ export function Inspector() {
                                             />
                                         </label>
                                     </div>
+                                    <label className="st-chip" style={{ marginTop: 8, textTransform: 'none', letterSpacing: 0 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={shot.seedLocked !== false}
+                                            onChange={(event) => updateShot(shot.id, { seedLocked: event.target.checked })}
+                                        />
+                                        Lock seed · deterministic re-run
+                                    </label>
                                     <div className="st-row" style={{ marginTop: 8 }}>
                                         <label>
                                             <span className="st-label">Width</span>

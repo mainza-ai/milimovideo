@@ -192,7 +192,9 @@ when the count is invalid. The lens copies/saves a reproducible recipe as JSON a
 ### Generate, cancel, queue
 
 - **Generate** queues one shot through the durable GPU queue.
-- **New take** randomizes the seed while preserving old takes.
+- **Seed lock** is on by default: the same prompt and parameters reproduce the
+  same take. Unlock it in **Advanced parameters** (or the Inspector) to enable
+  **New take**, which randomizes the seed while preserving old takes.
 - **Cancel** requests cancellation; the queue state machine converges.
 - **Queue pending** batches all shots without completed takes.
 - **Batch matrix** shows status/progress and per-shot generate/cancel.

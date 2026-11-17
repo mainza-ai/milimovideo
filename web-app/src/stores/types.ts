@@ -24,6 +24,7 @@ export interface Shot {
     prompt: string;
     negativePrompt: string;
     seed: number;
+    seedLocked?: boolean;
     width: number;
     height: number;
     numFrames: number;

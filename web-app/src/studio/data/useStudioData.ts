@@ -692,6 +692,10 @@ export function useStudioGenerate() {
     const { addToast, updateShot } = useStudioSelection();
 
     return useCallback(async (shot: Shot, randomizeSeed = false) => {
+        if (randomizeSeed && shot.seedLocked !== false) {
+            addToast('Seed is locked. Unlock it in Advanced parameters to make a variation.', 'info');
+            return null;
+        }
         updateShot(shot.id, { isGenerating: true, progress: 0, statusMessage: 'Queued…' });
         try {
             if (shot.sceneId) {

@@ -2909,6 +2909,11 @@ export interface components {
              * @default 42
              */
             seed: number;
+            /**
+             * Seed Locked
+             * @default true
+             */
+            seed_locked: boolean;
             /** Selected Take Id */
             selected_take_id?: string | null;
             /** Sequence Index */

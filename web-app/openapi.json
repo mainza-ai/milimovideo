@@ -2092,6 +2092,11 @@
             "title": "Seed",
             "type": "integer"
           },
+          "seed_locked": {
+            "default": true,
+            "title": "Seed Locked",
+            "type": "boolean"
+          },
           "selected_take_id": {
             "anyOf": [
               {

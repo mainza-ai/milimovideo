@@ -146,9 +146,10 @@ not just filtergraph strings.
   fades/solo, caption lane + SRT/VTT import, motion keyframes, render range,
   timeline table + keyboard edit, object tracking, local depth overlay, blocking
   lens, lazy 3D previz.
-- Generate: ingredients/@mentions, advanced params, preview frame with start/end
-  conditioning, batch queue and matrix, queue position/estimate/cancel, immutable
-  takes/favorites, inpaint, editable pipeline lens with apply-to-shot.
+- Generate: ingredients/@mentions, advanced params, persistent seed lock,
+  preview frame with start/end conditioning, batch queue and matrix, queue
+  position/estimate/cancel, immutable takes/favorites, inpaint, editable pipeline
+  lens with apply-to-shot.
 - Review/agent: frame comments/approvals, activity, needs-you pill, share links,
   deterministic plan previews, undoable apply, recipes, `@Agent` handoff.
 - Library/Deliver: direct uploads, assets, master-reference CRUD (trigger,

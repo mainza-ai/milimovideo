@@ -91,6 +91,7 @@ class ShotState(BaseModel):
     width: int = 768
     height: int = 512
     seed: int = 42
+    seed_locked: bool = True
     num_frames: int = 121
     fps: Optional[int] = None
     cfg_scale: float = 2.0

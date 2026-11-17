@@ -76,6 +76,7 @@ class Shot(SQLModel, table=True):
     # Generation Params (Persisted from ShotConfig)
     negative_prompt: Optional[str] = ""
     seed: int = 42
+    seed_locked: bool = True
     width: int = 768
     height: int = 512
     num_frames: int = 121
@@ -245,6 +246,7 @@ def _add_missing_columns() -> None:
             "speed": "FLOAT NOT NULL DEFAULT 1.0",
             "audio_fade_in": "FLOAT NOT NULL DEFAULT 0",
             "audio_fade_out": "FLOAT NOT NULL DEFAULT 0",
+            "seed_locked": "BOOLEAN NOT NULL DEFAULT 1",
         },
         "job": {
             "resume_policy": "TEXT NOT NULL DEFAULT 'fail'",

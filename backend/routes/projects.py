@@ -116,6 +116,7 @@ def _shot_dict(shot: Shot) -> dict:
         "width": shot.width,
         "height": shot.height,
         "seed": shot.seed,
+        "seed_locked": shot.seed_locked,
         "num_frames": shot.num_frames,
         "fps": shot.fps,
         "cfg_scale": shot.cfg_scale,

@@ -1019,3 +1019,11 @@ path in the studio. Verified: 52 vitest, tsc clean, build + bundle check pass.
 Added `useStudioCancelJob` and wired it into Deliver and Shorts render history so
 both surfaces can cancel queued/running exports and refresh. Verified: 52 vitest,
 tsc clean, eslint 0 errors.
+
+## [2026-11-17] generate | persistent seed lock
+
+Added `Shot.seed_locked` (default on) with Alembic 0003 and round-trip coverage.
+The flag persists through save/reload, appears in Generate advanced parameters
+and the Inspector, and gates the New take action so deterministic re-runs are the
+default. Verified: 76 pytest, 52 vitest, ruff clean, tsc clean, build + bundle
+check pass.
