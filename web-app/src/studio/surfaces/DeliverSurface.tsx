@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Download, Film, Loader2, Send } from 'lucide-react';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { useStudioCreateRender, useStudioProject, useStudioRenders } from '../data/useStudioData';
-import { getAssetUrl } from '../../config';
+import { apiUrl, getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 const PRESETS = [
@@ -19,6 +19,7 @@ export function DeliverSurface() {
     const { renders, refresh } = useStudioRenders(project.id);
     const createRender = useStudioCreateRender(project.id);
     const setProject = useStudioDocumentStore((state) => state.setProject);
+    const addToast = useStudioDocumentStore((state) => state.addToast);
     const saveProject = useStudioDocumentStore((state) => state.saveProject);
     const [preset, setPreset] = useState<typeof PRESETS[number]['id']>(
         (PRESETS.find((item) => item.id === project.renderPreset)?.id || 'project'),
@@ -48,6 +49,18 @@ export function DeliverSurface() {
     const persistRenderSettings = (patch: Partial<typeof project>) => {
         setProject({ ...project, ...patch });
         void saveProject();
+    };
+
+    const cancelRender = async (renderId: string) => {
+        try {
+            const response = await fetch(apiUrl(`/jobs/${renderId}/cancel`), { method: 'POST' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Cancel failed');
+            addToast(`Render ${renderId} ${data.status || 'cancelled'}`, 'info');
+            await refresh();
+        } catch (error) {
+            addToast(error instanceof Error ? error.message : 'Cancel failed', 'error');
+        }
     };
 
     const start = async () => {
@@ -269,7 +282,7 @@ export function DeliverSurface() {
                 ) : (
                     <table className="st-table">
                         <thead>
-                            <tr><th>Render</th><th>Status</th><th>Progress</th><th>Created</th><th>Output</th></tr>
+                            <tr><th>Render</th><th>Status</th><th>Progress</th><th>Created</th><th>Output</th><th>Actions</th></tr>
                         </thead>
                         <tbody>
                             {renders.map((render) => (
@@ -286,6 +299,20 @@ export function DeliverSurface() {
                                         ) : render.error_message ? (
                                             <span style={{ color: 'var(--st-danger)' }}>{render.error_message}</span>
                                         ) : '—'}
+                                    </td>
+                                    <td>
+                                        {['queued', 'rendering', 'processing'].includes(render.status) && (
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                data-variant="ghost"
+                                                aria-label={`Cancel render ${render.id}`}
+                                                onClick={() => void cancelRender(render.id)}
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

@@ -335,7 +335,8 @@ Recipes save a plan by name and can be reloaded against the current selection. U
   loudness normalization. These values persist with the project.
 - **Burn captions** toggles ASS burn-in.
 - **Create export** queues a real FFmpeg render through the job ledger.
-- Render history shows status, progress, errors, and an output link.
+- Render history shows status, progress, errors, an output link, and **Cancel** for
+  queued/running renders.
 - The preset is stored with the project.
 
 Render truth includes V1/V2 compositing, alpha, embedded audio, A1 mix, trims,

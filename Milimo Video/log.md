@@ -1007,3 +1007,9 @@ Preview stills can now be attached as frame 0 or the final frame, replaced per
 frame, removed individually, and are listed with their frame index. Preview
 generation still attaches frame 0 automatically. Verified: 52 vitest, tsc clean,
 eslint 0 errors.
+
+## [2026-11-17] deliver | cancel in-flight renders
+
+Render history now exposes Cancel for queued/rendering/processing jobs and
+refreshes status after the cancel request. Completes the F2-10 progress/cancel
+path in the studio. Verified: 52 vitest, tsc clean, build + bundle check pass.
