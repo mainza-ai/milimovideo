@@ -118,6 +118,7 @@ problem; correctness is.
 | Store separation | **Fixed (v1)** | studio `/studio` owns its document/save/undo store; legacy `/` owns its own |
 | Performance | **Fixed (v1)** | 500-card board culling/pan ~58fps; 200-clip timeline culling/scroll ~275fps; headless specs committed |
 | Accessibility | **Fixed (v1)** | axe WCAG A/AA zero serious/critical; skip link; keyboard timeline editing |
+| Depth overlay | **Fixed (v1)** | queued local Depth Anything V2 Small job; frame capture + opacity overlay in Edit |
 | NLE-01 timing | **Fixed** | render computes V1 starts from sequence order |
 | NLE-02 V2 black | **Fixed** | transparent pad + RGBA + alpha overlay |
 | NLE-03 track state | **Fixed** | `track_states` sent from ExportModal and applied |

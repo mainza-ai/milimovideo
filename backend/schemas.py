@@ -366,6 +366,11 @@ class ReviewApprovalRequest(BaseModel):
     author: str = "local"
 
 
+class DepthRequest(BaseModel):
+    image_path: str
+    shot_id: Optional[str] = None
+
+
 class PlanRequest(BaseModel):
     text: str
     mode: str = "direct"  # ask | direct | generate | find

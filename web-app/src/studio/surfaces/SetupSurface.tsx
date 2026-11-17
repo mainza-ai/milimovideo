@@ -5,6 +5,8 @@ import {
 import {
     useStudioHealth, useStudioLoras, useStudioMetrics, useStudioModels,
 } from '../data/useStudioData';
+import { useStudioDocumentStore } from '../state/documentStore';
+import { apiUrl } from '../../config';
 
 function formatBytes(bytes?: number | null): string {
     if (!bytes || bytes <= 0) return '—';
@@ -17,9 +19,30 @@ export function SetupSurface() {
     const { models, pipelines, loading, refresh, setActive } = useStudioModels();
     const { loras, refresh: refreshLoras, setStrength } = useStudioLoras('video');
     const metrics = useStudioMetrics(7);
-    const [filter, setFilter] = useState<'all' | 'video' | 'image' | 'segmentation'>('all');
+    const addToast = useStudioDocumentStore((state) => state.addToast);
+
+    const downloadModel = async (modelId: string, name: string) => {
+        setDownloading(modelId);
+        try {
+            const response = await fetch(apiUrl(`/models/${modelId}/download`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ force: false }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Download failed');
+            addToast(data.message || `Queued ${name}`, 'success');
+            await refresh();
+        } catch (exc) {
+            addToast(exc instanceof Error ? exc.message : 'Download failed', 'error');
+        } finally {
+            setDownloading(null);
+        }
+    };
+    const [filter, setFilter] = useState<'all' | 'video' | 'image' | 'segmentation' | 'depth'>('all');
     const [kind, setKind] = useState<'base' | 'lora'>('base');
     const [busy, setBusy] = useState<string | null>(null);
+    const [downloading, setDownloading] = useState<string | null>(null);
 
     const visible = useMemo(() => {
         const matching = models.filter((model) => (
@@ -157,7 +180,7 @@ export function SetupSurface() {
                         >
                             LoRA
                         </button>
-                        {(['all', 'video', 'image', 'segmentation'] as const).map((item) => (
+                        {(['all', 'video', 'image', 'segmentation', 'depth'] as const).map((item) => (
                             <button
                                 key={item}
                                 type="button"
@@ -202,7 +225,10 @@ export function SetupSurface() {
                                 <td className="st-mono">{formatBytes(model.size_bytes)}</td>
                                 <td className="st-mono">{model.vram_estimate_gb ? `${model.vram_estimate_gb} GB` : '—'}</td>
                                 <td>
-                                    {model.status === 'downloaded' && (
+                                    {model.status === 'downloaded' && model.family === 'depth' && (
+                                        <span style={{ color: 'var(--st-success)', fontSize: 9 }}>ready · loads on demand</span>
+                                    )}
+                                    {model.status === 'downloaded' && model.family !== 'depth' && (
                                         <button
                                             type="button"
                                             className="st-button"
@@ -252,10 +278,24 @@ export function SetupSurface() {
                                             )}
                                         </>
                                     )}
-                                    {model.status !== 'downloaded' && model.status !== 'active' && (
-                                        <span style={{ color: 'var(--st-faint)', fontSize: 9 }}>
-                                            {model.status === 'incompatible' ? 'not for this device' : 'download in legacy Library'}
-                                        </span>
+                                    {model.status !== 'downloaded' && model.status !== 'active' && model.status !== 'downloading' && (
+                                        model.status === 'incompatible' ? (
+                                            <span style={{ color: 'var(--st-faint)', fontSize: 9 }}>not for this device</span>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                disabled={downloading === model.id}
+                                                onClick={() => void downloadModel(model.id, model.name)}
+                                            >
+                                                {downloading === model.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                                                {downloading === model.id ? 'Queueing…' : 'Download'}
+                                            </button>
+                                        )
+                                    )}
+                                    {model.status === 'downloading' && (
+                                        <span style={{ color: 'var(--st-warning)', fontSize: 9 }}>downloading…</span>
                                     )}
                                 </td>
                             </tr>

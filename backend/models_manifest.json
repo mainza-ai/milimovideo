@@ -754,6 +754,32 @@
       "recommended_dtype": "float32",
       "gated": false,
       "license": "apache-2.0"
+    },
+    {
+      "id": "depth-anything-v2-small",
+      "name": "Depth Anything V2 Small",
+      "family": "depth",
+      "role": "depth",
+      "type": "base",
+      "pipeline": "depth",
+      "pipeline_tag": "depth-estimation",
+      "required": false,
+      "size_bytes": 100000000,
+      "relative_path": "backend/models/depth-anything-v2-small",
+      "huggingface": {
+        "repo": "depth-anything/Depth-Anything-V2-Small-hf",
+        "subdir": ""
+      },
+      "device_compatibility": ["mps", "cuda", "cpu"],
+      "description": "Monocular depth estimation used for stage depth overlays.",
+      "depends_on": [],
+      "alternatives": [],
+      "requires_base": false,
+      "base_repo_id": null,
+      "vram_estimate_gb": 2.0,
+      "recommended_dtype": "float32",
+      "gated": false,
+      "license": "apache-2.0"
     }
   ]
 }

@@ -401,9 +401,10 @@ class ModelDownloader:
             broadcast_fn=sync_broadcast,
         )
 
+        patterns = [f"{subdir}/**"] if subdir else None
         await loop.run_in_executor(None, lambda: snapshot_download(
             repo_id=repo_id,
-            allow_patterns=[f"{subdir}/**"],
+            allow_patterns=patterns,
             local_dir=target_dir,
             token=os.environ.get("HF_TOKEN"),
             tqdm_class=progress_cls,

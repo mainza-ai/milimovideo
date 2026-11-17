@@ -53,13 +53,14 @@ single-engineer guidance.
 | P4 UX trust | **Done** (P4-01–P4-07) | takes/favorites, seed lock, save conflict, reconnect, review, plan approval, undo, zero serious/critical axe, 500-card/200-clip perf specs, tracking overlay |
 | P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI) | 61 backend, 44 frontend, 10 Playwright (incl. axe/perf/visual); new modules >80%; total 37%; lint 0 errors |
 | Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent + separate document stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 9 Playwright incl. visual; store separation covered by E2E |
-| Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip 274fps perf; depth overlay has no source |
+| Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking + depth overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip ~275fps perf; depth uses optional Depth Anything V2 Small |
 | Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview/batch/inpaint/favorites, queue position, plan/recipes, review compare/comments/share, ranked search, LoRA strength, deliver presets) | contract tests + Playwright CRUD/export/reviewer-agent; deeper shorts polish open |
 | Front-end F5 | **Mostly done** | shorts candidates+range export, pipeline lens, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native save/build; sidecar bundling and depth/lens polish open |
 
-**Still open:** depth stage overlay (no depth source exists), Tauri sidecar/backend
-bundling, and deeper F5 shorts/lens polish. The studio now has its own document
-store; legacy `/` retains its own store until cutover. Measured perf is
+**Still open:** Tauri sidecar/backend bundling and deeper F5 shorts/lens polish.
+Depth uses an optional local Depth Anything V2 Small model downloaded in Setup.
+The studio now has its own document store; legacy `/` retains its own store until
+cutover. Measured perf is
 58 fps for 500-card pan and 275 fps for 200-clip scroll (headless, frame-limit
 off). Alembic, OpenAPI types, OOM retry, tracking, visual regression, and the
 durable ledger are adopted.

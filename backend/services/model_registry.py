@@ -279,7 +279,7 @@ class ModelRegistry:
                 ...
             }
         """
-        pipelines_to_check = [pipeline] if pipeline else ["video", "image", "segmentation"]
+        pipelines_to_check = [pipeline] if pipeline else ["video", "image", "segmentation", "depth"]
         result = {}
 
         for pipe in pipelines_to_check:

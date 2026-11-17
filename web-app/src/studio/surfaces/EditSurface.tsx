@@ -31,6 +31,9 @@ export function EditSurface() {
     const [wipe, setWipe] = useState(50);
     const [guides, setGuides] = useState({ grid: false, safe: false, thirds: false });
     const [inpaintOpen, setInpaintOpen] = useState(false);
+    const [depthUrl, setDepthUrl] = useState<string | null>(null);
+    const [depthOpacity, setDepthOpacity] = useState(55);
+    const [depthBusy, setDepthBusy] = useState(false);
     const [blockingOpen, setBlockingOpen] = useState(false);
     const [previzOpen, setPrevizOpen] = useState(false);
     const [trackingOpen, setTrackingOpen] = useState(false);
@@ -125,6 +128,66 @@ export function EditSurface() {
     }, [compareIsImage, compareUrl, fps, isImage, layout, mediaUrl, selectedShotId]);
 
     const updateShot = useStudioDocumentStore((state) => state.updateShot);
+
+    const estimateDepth = async () => {
+        if (!active) return;
+        setDepthBusy(true);
+        try {
+            let blob: Blob | null = null;
+            const video = videoRef.current;
+            if (!isImage && video && video.videoWidth > 0) {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d')?.drawImage(video, 0, 0);
+                blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+            } else if (mediaUrl) {
+                blob = await fetch(mediaUrl).then((response) => response.blob());
+            }
+            if (!blob) throw new Error('Could not capture the current frame');
+
+            const form = new FormData();
+            form.append('file', blob, 'depth-frame.jpg');
+            form.append('project_id', project.id);
+            form.append('type', 'reference');
+            const upload = await fetch(apiUrl('/upload'), { method: 'POST', body: form });
+            const uploaded = await upload.json().catch(() => ({}));
+            if (!upload.ok) throw new Error(uploaded.detail || 'Upload failed');
+
+            const response = await fetch(apiUrl(`/projects/${project.id}/depth`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image_path: uploaded.url || uploaded.path,
+                    shot_id: active.shot.id,
+                }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Depth request failed');
+            const jobId = data.job_id as string;
+
+            for (let attempt = 0; attempt < 120; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 1500));
+                const status = await fetch(apiUrl(`/status/${jobId}`)).then((res) => res.json()).catch(() => ({}));
+                if (status.status === 'completed' && status.video_url) {
+                    setDepthUrl(getAssetUrl(status.video_url) || null);
+                    useStudioDocumentStore.getState().addToast('Depth overlay ready', 'success');
+                    return;
+                }
+                if (status.status === 'failed' || status.status === 'cancelled') {
+                    throw new Error(status.error || 'Depth estimation failed');
+                }
+            }
+            throw new Error('Depth estimation timed out');
+        } catch (exc) {
+            useStudioDocumentStore.getState().addToast(
+                exc instanceof Error ? exc.message : 'Depth estimation failed',
+                'error',
+            );
+        } finally {
+            setDepthBusy(false);
+        }
+    };
 
     const submitInpaint = async () => {
         if (!active || !maskPrompt.trim() || !inpaintPrompt.trim()) return;
@@ -228,6 +291,15 @@ export function EditSurface() {
                         </div>
                     )}
 
+                    {depthUrl && (
+                        <img
+                            src={depthUrl}
+                            alt="Depth overlay"
+                            className="st-depth-overlay"
+                            style={{ opacity: depthOpacity / 100 }}
+                        />
+                    )}
+
                     {compareMode !== 'off' && compareUrl && (
                         <div
                             className={compareMode === 'side' ? 'st-stage-compare-side' : 'st-stage-compare-wipe'}
@@ -285,6 +357,23 @@ export function EditSurface() {
                             </button>
                         ))}
                     </div>
+
+                    {depthUrl && (
+                        <div className="st-depth-control">
+                            <span>Depth</span>
+                            <input
+                                type="range"
+                                min={10}
+                                max={100}
+                                value={depthOpacity}
+                                aria-label="Depth overlay opacity"
+                                onChange={(event) => setDepthOpacity(Number(event.target.value))}
+                            />
+                            <button type="button" className="st-icon-button" aria-label="Close depth overlay" onClick={() => setDepthUrl(null)}>
+                                <X size={11} />
+                            </button>
+                        </div>
+                    )}
 
                     {trackingOpen && active?.shot.videoUrl && !isImage && (
                         <TrackingPanel
@@ -444,6 +533,17 @@ export function EditSurface() {
                     title="Track and mask objects in this shot"
                 >
                     Track
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={depthUrl ? 'primary' : 'ghost'}
+                    disabled={!active || depthBusy}
+                    onClick={() => void estimateDepth()}
+                    title="Estimate a local depth map for this frame"
+                >
+                    {depthBusy ? 'Depth…' : 'Depth'}
                 </button>
                 <span className="st-status-pill"><Volume2 size={11} /> embedded audio mixed</span>
                 <button type="button" className="st-icon-button" aria-label="Fullscreen (F2)">

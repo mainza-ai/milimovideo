@@ -66,6 +66,11 @@ async def queue_ai_parse_task(job_id: str, params: dict):
     await gpu_job_wrapper(ai_parse_task(job_id, params))
 
 
+async def queue_depth_task(job_id: str, params: dict):
+    from tasks.depth import depth_task
+    await gpu_job_wrapper(depth_task(job_id, params))
+
+
 async def queue_element_visual_task(job_id: str, element_id: str, prompt_override=None,
                                     guidance: float = 2.0, enable_ae: bool = False):
     from managers.element_manager import element_manager
@@ -184,6 +189,8 @@ async def run_queued_job(queue_id: str) -> None:
             )
         elif kind == "ai_parse":
             await queue_ai_parse_task(job_id, params)
+        elif kind == "depth":
+            await queue_depth_task(job_id, params)
         else:
             raise ValueError(f"Unknown queued job kind: {kind}")
         status = "completed"

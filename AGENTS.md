@@ -141,8 +141,8 @@ not just filtergraph strings.
   task cards, board undo/pin, viewport culling, revisioned layout save.
 - Edit: compare/wipe, guides, trim/slip/roll/blade/ripple/rate/slide, waveform,
   fades/solo, caption lane + SRT/VTT import, motion keyframes, render range,
-  timeline table + keyboard edit, object tracking overlay, blocking lens,
-  lazy 3D previz.
+  timeline table + keyboard edit, object tracking, local depth overlay, blocking
+  lens, lazy 3D previz.
 - Generate: ingredients/@mentions, advanced params, preview frame, batch queue
   and matrix, queue position/estimate/cancel, immutable takes/favorites, inpaint,
   editable pipeline lens with apply-to-shot.
@@ -152,14 +152,13 @@ not just filtergraph strings.
   presets, pad/crop reframing, caption toggle/preview, render history.
 - Shorts: transcript/SRT/VTT candidates, scores, 9:16/1:1/4:5 range export.
 - Setup: device/slots/queue/disk, pipeline readiness, base/LoRA activation,
-  LoRA strength, error budget.
+  LoRA strength, model downloads, depth model, error budget.
 - Desktop: Tauri 2 shell with native save dialog; backend sidecar packaging is
   still a follow-up.
 - Collaboration: opt-in Yjs board sync spike over BroadcastChannel (same machine).
 
 ### Known gaps (do not claim these are done)
 
-- Depth stage overlay (no depth source exists yet); mask/tracking is integrated.
 - Tauri sidecar/backend bundling (native shell and save are real).
 - Visual baselines are platform-tolerant but still local-generated.
 - Deeper shorts/lens packaging polish.

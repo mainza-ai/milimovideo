@@ -226,6 +226,8 @@ and selected as a new take. This uses the same GPU queue.
 - **Blocking** opens the top-down diagram.
 - **3D** opens the lazy three.js previz.
 - **Track** opens object tracking/masks over the live stage.
+- **Depth** estimates a local depth map for the current frame and overlays it
+  with an opacity control. Download Depth Anything V2 Small in Setup first.
 
 ### Timeline
 
@@ -348,8 +350,9 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 
 - Device, active slots, GPU busy/queued, auth mode, free disk.
 - Pipeline readiness with missing counts.
-- Base model table: real status, size, VRAM estimate, Activate/Unload.
+- Base model table: real status, size, VRAM estimate, Activate/Unload or Download.
 - LoRA table: real downloaded/active state, activation, and strength.
+- Depth Anything V2 Small is optional; download it here before using the Depth overlay.
 - Error budget: 7-day job counts by status and recent failures.
 
 Activation loads the real model through the loader and respects the one-slot rule.
@@ -405,10 +408,11 @@ Common issues:
 
 - Studio and the legacy editor now use separate document stores against the same
   backend; legacy `/` remains until the final cutover.
-- Depth overlay is not implemented because no depth source exists yet. Object
+- Depth overlay requires the optional Depth Anything V2 Small model; object
   tracking and masks are integrated.
 - Tauri packages a native shell and save dialog, but the Python backend is not yet
   bundled as a sidecar.
 - Visual baselines are platform-tolerant; performance is measured in headless
   Chromium and may differ on a desktop compositor.
 - Shorts and lenses are functional v1s, not the full F5 polish.
+- The depth model is downloaded separately; it is not shipped with the repo.
