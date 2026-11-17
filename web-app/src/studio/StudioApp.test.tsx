@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StudioApp } from './StudioApp';
+import { useStudioEditor } from './state/editorStore';
 
 function json(data: unknown, status = 200): Response {
     return new Response(JSON.stringify(data), {
@@ -11,6 +12,11 @@ function json(data: unknown, status = 200): Response {
 
 describe('StudioApp shell', () => {
     beforeEach(() => {
+        useStudioEditor.setState({
+            activeSurface: 'story',
+            commandOpen: true,
+            commandDraft: '',
+        });
         vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
             const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
             if (url.includes('/health')) {
@@ -46,5 +52,12 @@ describe('StudioApp shell', () => {
         fireEvent.click(screen.getAllByText('Review')[0]);
         await waitFor(() => expect(screen.getByText(/Comment at frame/)).toBeTruthy());
         expect(screen.getByText(/Approve shot/)).toBeTruthy();
+    });
+
+    it('opens setup with real device and model status', async () => {
+        render(<StudioApp />);
+        fireEvent.click(screen.getByText('Setup'));
+        await waitFor(() => expect(screen.getByText('Memory slots')).toBeTruthy());
+        expect(screen.getByText('Models')).toBeTruthy();
     });
 });

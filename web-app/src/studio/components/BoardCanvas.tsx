@@ -116,6 +116,23 @@ export function BoardCanvas() {
         return () => observer.disconnect();
     }, []);
 
+    // Follow selection centers the camera on the selected card, but only when
+    // the selection or follow toggle changes — panning afterwards is stable.
+    const hasSelectedPosition = Boolean(selectedShotId && boardPositions[selectedShotId]);
+    useEffect(() => {
+        if (!boardFollowSelection || !selectedShotId) return;
+        const state = useStudioEditor.getState();
+        const position = state.boardPositions[selectedShotId];
+        if (!position) return;
+        const zoom = state.boardCamera.zoom;
+        state.setCamera({
+            zoom,
+            x: size.width / 2 - (position.x + position.width / 2) * zoom,
+            y: size.height / 2 - (position.y + position.height / 2) * zoom,
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedShotId, boardFollowSelection, hasSelectedPosition, size.width, size.height]);
+
     const fit = useCallback(() => {
         const positions = Object.values(boardPositions);
         if (positions.length === 0) {

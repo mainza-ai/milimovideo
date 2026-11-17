@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type StudioSurface = 'story' | 'generate' | 'edit' | 'review' | 'library' | 'deliver';
+export type StudioSurface = 'story' | 'generate' | 'edit' | 'review' | 'library' | 'deliver' | 'setup';
 export type StoryView = 'board' | 'list' | 'script';
 
 export interface Camera {

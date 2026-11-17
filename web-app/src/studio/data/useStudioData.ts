@@ -19,6 +19,72 @@ export interface StudioHealth {
     auth_required: boolean;
 }
 
+export interface StudioModel {
+    id: string;
+    name: string;
+    family: string;
+    role: string;
+    pipeline: string;
+    type: string;
+    status: 'downloaded' | 'active' | 'not_downloaded' | 'downloading' | 'incompatible' | 'error';
+    size_bytes: number;
+    vram_estimate_gb?: number;
+    required?: boolean;
+    description?: string;
+    requires_base?: boolean;
+    device_compatibility?: string[];
+}
+
+export interface PipelineReadiness {
+    ready: boolean;
+    missing: string[];
+    total: number;
+    downloaded: number;
+}
+
+export function useStudioModels() {
+    const addToast = useTimelineStore((state) => state.addToast);
+    const [models, setModels] = useState<StudioModel[]>([]);
+    const [pipelines, setPipelines] = useState<Record<string, PipelineReadiness>>({});
+    const [loading, setLoading] = useState(true);
+
+    const refresh = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [modelsResponse, pipelineResponse] = await Promise.all([
+                fetch(apiUrl('/models')),
+                fetch(apiUrl('/models/pipelines')),
+            ]);
+            const modelData = modelsResponse.ok ? await modelsResponse.json() : { models: [] };
+            const pipelineData = pipelineResponse.ok ? await pipelineResponse.json() : {};
+            setModels(Array.isArray(modelData.models) ? modelData.models : []);
+            setPipelines(pipelineData && typeof pipelineData === 'object' ? pipelineData : {});
+        } catch {
+            setModels([]);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { void refresh(); }, [refresh]);
+
+    const setActive = useCallback(async (model: StudioModel, active: boolean) => {
+        const response = await fetch(apiUrl(`/models/${model.id}/${active ? 'activate' : 'deactivate'}`), {
+            method: 'POST',
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || `Could not ${active ? 'activate' : 'deactivate'} ${model.name}`, 'error');
+            return false;
+        }
+        addToast(data.message || `${model.name} ${active ? 'activated' : 'deactivated'}`, 'success');
+        await refresh();
+        return true;
+    }, [addToast, refresh]);
+
+    return { models, pipelines, loading, refresh, setActive };
+}
+
 export interface StudioElement {
     id: string;
     name: string;

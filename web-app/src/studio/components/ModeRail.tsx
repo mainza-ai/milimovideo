@@ -43,7 +43,14 @@ export function ModeRail() {
                 <FlaskConical size={16} strokeWidth={1.8} />
                 <span>Legacy</span>
             </button>
-            <button type="button" className="st-rail-button" title="Settings (coming in F0.5)">
+            <button
+                type="button"
+                className="st-rail-button"
+                data-active={activeSurface === 'setup'}
+                onClick={() => setSurface('setup')}
+                title="Setup and model status"
+                aria-current={activeSurface === 'setup' ? 'page' : undefined}
+            >
                 <Settings size={16} strokeWidth={1.8} />
                 <span>Setup</span>
             </button>

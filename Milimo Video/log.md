@@ -318,3 +318,12 @@ label, sequence index, seed/model/frames, selection state, and timestamp. The
 Library gained a Takes tab with local filtering and select-for-shot, so lineage
 is visible across the project instead of one shot at a time. Verified: 36 pytest,
 15 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] setup | real device, pipeline and model status
+
+Replaced the dead Setup rail button with a Setup surface backed by `/health`,
+`/models`, and `/models/pipelines`: device, active slots, queue, auth mode, disk,
+per-pipeline readiness with missing counts, and a base-model table showing real
+status, size, and VRAM estimate. Activation/unload call the real endpoints and
+are explicit, single-slot operations. Added a mount test that reaches Setup.
+Verified: 36 pytest, 16 vitest, tsc clean, eslint 0 errors, vite build.

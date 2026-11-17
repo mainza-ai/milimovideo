@@ -11,11 +11,12 @@ import { EditSurface } from './surfaces/EditSurface';
 import { ReviewSurface } from './surfaces/ReviewSurface';
 import { LibrarySurface } from './surfaces/LibrarySurface';
 import { DeliverSurface } from './surfaces/DeliverSurface';
+import { SetupSurface } from './surfaces/SetupSurface';
 import { useStudioEditor, type StudioSurface } from './state/editorStore';
 import { useStudioProject, useStudioBoardSync } from './data/useStudioData';
 import { useTimelineStore } from '../stores/timelineStore';
 
-const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver'];
+const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver', 'setup'];
 
 export function StudioApp() {
     const { activeSurface, setSurface, inspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode } = useStudioEditor();
@@ -69,6 +70,7 @@ export function StudioApp() {
             case 'review': return <ReviewSurface />;
             case 'library': return <LibrarySurface />;
             case 'deliver': return <DeliverSurface />;
+            case 'setup': return <SetupSurface />;
             default: return <StorySurface />;
         }
     })();
