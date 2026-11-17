@@ -186,7 +186,8 @@ Open **Advanced parameters** for negative prompt, seed, frame count, width/heigh
 CFG, pipeline override, prompt enhancement, and upscale.
 
 Keep LTX frame counts at `8k+1` (for example 49, 81, 121). The pipeline lens warns
-when the count is invalid.
+when the count is invalid. The lens copies/saves a reproducible recipe as JSON and
+**Import JSON** loads one back into the draft before you apply it.
 
 ### Generate, cancel, queue
 
@@ -344,9 +345,11 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 2. Pick a reframe preset: 9:16, 1:1, or 4:5.
 3. Review scored candidate windows (10–45 s). Score combines word density, hook
    words, and numbers; long silences break windows.
-4. Select a candidate and export. The render uses the candidate range, transcript
-   captions, the chosen preset, and center-crop reframing.
-5. Recent exports read the same render history.
+4. Select a candidate and adjust **In/Out** seconds if the suggested window is not
+   exactly right; **Reset range** restores the candidate.
+5. Export. The render uses the edited range, transcript captions, the chosen
+   preset, and center-crop reframing.
+6. Recent exports read the same render history.
 
 ---
 
@@ -414,9 +417,10 @@ Common issues:
   backend; legacy `/` remains until the final cutover.
 - Depth overlay requires the optional Depth Anything V2 Small model; object
   tracking and masks are integrated.
-- Tauri packages a native shell and save dialog, but the Python backend is not yet
-  bundled as a sidecar.
+- Tauri packages a native shell and save dialog and can launch a `milimo-backend`
+  sidecar binary if one is shipped; no Python runtime is bundled yet.
 - Visual baselines are platform-tolerant; performance is measured in headless
   Chromium and may differ on a desktop compositor.
-- Shorts and lenses are functional v1s, not the full F5 polish.
+- Shorts and lenses are scoped F5: candidate ranges are editable and recipes
+  import/export, but there are no template packs.
 - The depth model is downloaded separately; it is not shipped with the repo.

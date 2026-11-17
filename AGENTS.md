@@ -151,7 +151,8 @@ not just filtergraph strings.
 - Library/Deliver: direct uploads, assets, master-reference CRUD (trigger,
   image, description), takes, ranked local search, presets, pad/crop reframing,
   caption toggle/preview, render history.
-- Shorts: transcript/SRT/VTT candidates, scores, 9:16/1:1/4:5 range export.
+- Shorts: transcript/SRT/VTT candidates, scores, editable in/out range,
+  9:16/1:1/4:5 export, direct export from uploaded sources.
 - Setup: device/slots/queue/disk, pipeline readiness, base/LoRA activation,
   LoRA strength, model downloads, depth model, error budget.
 - Desktop: Tauri 2 shell with native save dialog and a backend supervisor that

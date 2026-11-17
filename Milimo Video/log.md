@@ -918,3 +918,12 @@ description, and an uploaded reference image. Backend trigger words are normaliz
 to one leading `@`. Added element CRUD contract tests and a Playwright create/edit/
 delete path. Verified: 67 pytest, 44 vitest, 12 Playwright, tsc clean, build pass,
 `verify_setup` 0 failures.
+
+## [2026-11-17] polish | shorts ranges, recipe import, sidecar hook
+
+Shorts candidates now expose editable in/out seconds with validation and reset
+before export. The pipeline lens can import a saved recipe JSON (normalized
+resolution/frames/model fields) back into its draft. The Tauri supervisor prefers a
+bundled `milimo-backend` binary when present, then falls back to `run_backend.sh`;
+a Python sidecar is still not built. Added recipe parser tests. Verified: 47
+vitest, 17 test files, tsc clean, build pass, cargo check.

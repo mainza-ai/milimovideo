@@ -27,14 +27,34 @@ fn start_backend(app: tauri::AppHandle) -> Result<String, String> {
     }
 
     for root in candidates {
-        let script = root.join("run_backend.sh");
-        if script.exists() {
-            let log_path = root.join("backend.desktop.log");
-            let stdout = std::fs::OpenOptions::new()
+        let log_path = root.join("backend.desktop.log");
+        let open_log = || {
+            std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
                 .open(&log_path)
-                .map_err(|error| error.to_string())?;
+        };
+
+        // Prefer a bundled sidecar binary when one is shipped. No binary is
+        // currently bundled, but this makes a packaged runtime a drop-in.
+        for name in ["milimo-backend", "milimo-backend.exe", "bin/milimo-backend"] {
+            let sidecar = root.join(name);
+            if sidecar.is_file() {
+                let stdout = open_log().map_err(|error| error.to_string())?;
+                let stderr = stdout.try_clone().map_err(|error| error.to_string())?;
+                Command::new(&sidecar)
+                    .current_dir(&root)
+                    .stdout(Stdio::from(stdout))
+                    .stderr(Stdio::from(stderr))
+                    .spawn()
+                    .map_err(|error| error.to_string())?;
+                return Ok(root.to_string_lossy().to_string());
+            }
+        }
+
+        let script = root.join("run_backend.sh");
+        if script.exists() {
+            let stdout = open_log().map_err(|error| error.to_string())?;
             let stderr = stdout.try_clone().map_err(|error| error.to_string())?;
             Command::new("bash")
                 .arg(&script)

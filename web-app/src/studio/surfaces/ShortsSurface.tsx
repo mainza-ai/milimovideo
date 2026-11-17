@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, Loader2, Scissors, Upload, Zap } from 'lucide-react';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
@@ -54,6 +54,20 @@ export function ShortsSurface() {
         [sourceCues],
     );
     const selected = candidates.find((candidate) => candidate.id === selectedId) || candidates[0] || null;
+    const [trim, setTrim] = useState<{ id: string; start: number; end: number } | null>(null);
+    useEffect(() => {
+        if (!selected) {
+            setTrim(null);
+            return;
+        }
+        setTrim({ id: selected.id, start: selected.start, end: selected.end });
+    }, [selected]);
+    const activeRange = selected
+        ? trim && trim.id === selected.id
+            ? trim
+            : { id: selected.id, start: selected.start, end: selected.end }
+        : null;
+    const rangeValid = !!activeRange && activeRange.end > activeRange.start;
 
     const importTranscript = async (file: File) => {
         const parsed = parseCaptions(await file.text(), fps);
@@ -69,7 +83,7 @@ export function ShortsSurface() {
     };
 
     const exportShort = async (allPresets = false) => {
-        if (!selected) return;
+        if (!activeRange || !rangeValid) return;
         const targets = allPresets ? [...PRESETS] : [PRESETS.find((item) => item.id === preset) || PRESETS[0]];
         setBusy(true);
         try {
@@ -91,8 +105,8 @@ export function ShortsSurface() {
                     width: target.width,
                     height: target.height,
                     fps,
-                    start_frame: Math.round(selected.start * fps),
-                    end_frame: Math.round(selected.end * fps),
+                    start_frame: Math.round(activeRange.start * fps),
+                    end_frame: Math.round(activeRange.end * fps),
                     fit: 'crop',
                     source_path: sourceUrl || undefined,
                     crf: 18,
@@ -182,7 +196,7 @@ export function ShortsSurface() {
                         className="st-button"
                         data-size="sm"
                         data-variant="primary"
-                        disabled={!selected || busy}
+                        disabled={!selected || !rangeValid || busy}
                         onClick={() => void exportShort()}
                     >
                         {busy ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />}
@@ -192,7 +206,7 @@ export function ShortsSurface() {
                         type="button"
                         className="st-button"
                         data-size="sm"
-                        disabled={!selected || busy}
+                        disabled={!selected || !rangeValid || busy}
                         onClick={() => void exportShort(true)}
                     >
                         <Zap size={12} /> Export all presets
@@ -204,14 +218,67 @@ export function ShortsSurface() {
                             data-size="sm"
                             data-variant="ghost"
                             onClick={() => {
-                                setCurrentTime(selected.start);
+                                setCurrentTime(activeRange?.start ?? selected.start);
                                 setSurface('edit');
                             }}
                         >
-                            <Zap size={12} /> Open at {selected.start.toFixed(1)}s
+                            <Zap size={12} /> Open at {(activeRange?.start ?? selected.start).toFixed(1)}s
                         </button>
                     )}
                 </div>
+                {activeRange && (
+                    <div className="st-button-row" style={{ marginTop: 8, alignItems: 'end' }}>
+                        <label className="st-field" style={{ width: 92 }}>
+                            <span>In · s</span>
+                            <input
+                                className="st-input"
+                                type="number"
+                                min={0}
+                                step={0.1}
+                                aria-label="Short start seconds"
+                                value={activeRange.start}
+                                onChange={(event) => setTrim({
+                                    id: activeRange.id,
+                                    start: Math.max(0, Number(event.target.value) || 0),
+                                    end: activeRange.end,
+                                })}
+                            />
+                        </label>
+                        <label className="st-field" style={{ width: 92 }}>
+                            <span>Out · s</span>
+                            <input
+                                className="st-input"
+                                type="number"
+                                min={0}
+                                step={0.1}
+                                aria-label="Short end seconds"
+                                value={activeRange.end}
+                                onChange={(event) => setTrim({
+                                    id: activeRange.id,
+                                    start: activeRange.start,
+                                    end: Math.max(0, Number(event.target.value) || 0),
+                                })}
+                            />
+                        </label>
+                        <span className="st-value" style={{ color: rangeValid ? 'var(--st-muted)' : 'var(--st-danger)', fontSize: 10 }}>
+                            {(activeRange.end - activeRange.start).toFixed(1)}s {rangeValid ? '' : '· out must be after in'}
+                        </span>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="ghost"
+                            disabled={!selected}
+                            onClick={() => selected && setTrim({
+                                id: selected.id,
+                                start: selected.start,
+                                end: selected.end,
+                            })}
+                        >
+                            Reset range
+                        </button>
+                    </div>
+                )}
                 {!fromTranscript && (
                     <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
                         No transcript: candidates are built from shot text and timing. Import an SRT/VTT for real caption-aware scoring.
