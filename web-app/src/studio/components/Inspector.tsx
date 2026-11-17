@@ -29,7 +29,7 @@ export function Inspector() {
     const favoriteTake = useStudioFavoriteTake();
     const {
         inspectorTab, setInspectorTab, setInspectorOpen, inspectorOpen,
-        inspectorWidth, setInspectorWidth,
+        inspectorWidth, setInspectorWidth, setSurface,
     } = useStudioEditor(useShallow((state) => ({
         inspectorTab: state.inspectorTab,
         setInspectorTab: state.setInspectorTab,
@@ -37,6 +37,7 @@ export function Inspector() {
         inspectorOpen: state.inspectorOpen,
         inspectorWidth: state.inspectorWidth,
         setInspectorWidth: state.setInspectorWidth,
+        setSurface: state.setSurface,
     })));
     const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -343,7 +344,7 @@ export function Inspector() {
                             <div className="st-inspector-section">
                                 <span className="st-label">Review</span>
                                 <div className="st-value">
-                                    Version stacks, frame comments, and approvals arrive in F4. The current shot is still the source of truth.
+                                    Compare takes, comment at the current frame, and approve the selected version in Review.
                                 </div>
                                 <dl className="st-meta-grid" style={{ marginTop: 10 }}>
                                     <dt>Status</dt><dd>{shot.status || 'pending'}</dd>
@@ -436,7 +437,7 @@ export function Inspector() {
                         {inspectorTab === 'history' && (
                             <div className="st-inspector-section">
                                 <span className="st-label">History</span>
-                                <div className="st-value">Project revision {project.revision ?? 0}. Undo is document-scoped in the legacy adapter; immutable takes are next.</div>
+                                <div className="st-value">Project revision {project.revision ?? 0}. Document undo is scoped per route; completed takes are immutable and remain in Review.</div>
                             </div>
                         )}
 
@@ -449,7 +450,10 @@ export function Inspector() {
                                 <button
                                     type="button"
                                     className="st-button"
-                                    onClick={() => addToast('Open the legacy inspector for masking/tracking tools', 'info')}
+                                    onClick={() => {
+                                        setSurface('edit');
+                                        addToast('Tracking, masks, depth, and inpaint are in Edit', 'info');
+                                    }}
                                 >
                                     <Sparkles size={12} /> Edit frame
                                 </button>

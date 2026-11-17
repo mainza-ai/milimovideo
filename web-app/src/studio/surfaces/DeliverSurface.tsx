@@ -175,7 +175,7 @@ export function DeliverSurface() {
                     <div className="st-empty" style={{ minHeight: 120 }}>
                         <Film size={18} />
                         <strong>No exports yet</strong>
-                        <span>Create one from the computed cut. The old export modal remains available in the legacy editor.</span>
+                        <span>Create one from the computed cut with the controls above.</span>
                     </div>
                 ) : (
                     <table className="st-table">

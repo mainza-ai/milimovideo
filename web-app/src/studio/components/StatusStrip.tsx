@@ -18,7 +18,7 @@ export function StatusStrip() {
             <span><strong>Queue</strong> {health?.gpu?.queued ?? 0}</span>
             <span><strong>Disk</strong> {formatBytes(health?.disk_free_bytes)}</span>
             <span><strong>Save</strong> {saveStatus}</span>
-            <span style={{ marginLeft: 'auto' }}>Studio shell F0 · <strong>legacy editor preserved</strong></span>
+            <span style={{ marginLeft: 'auto' }}>Studio · <strong>local-first</strong></span>
         </footer>
     );
 }

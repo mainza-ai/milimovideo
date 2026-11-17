@@ -2,6 +2,7 @@ import {
     BookOpen, Clapperboard, FlaskConical, Library, PlaySquare, Send, Settings, Sparkles, Zap,
 } from 'lucide-react';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
+import { isStudioSurfaceEnabled } from '../features';
 
 const MODES: Array<{ id: StudioSurface; label: string; icon: typeof BookOpen }> = [
     { id: 'story', label: 'Story', icon: BookOpen },
@@ -19,7 +20,7 @@ export function ModeRail() {
 
     return (
         <aside className="st-rail" aria-label="Studio modes">
-            {MODES.map((mode) => {
+            {MODES.filter((mode) => isStudioSurfaceEnabled(mode.id)).map((mode) => {
                 const Icon = mode.icon;
                 return (
                     <button
@@ -46,17 +47,19 @@ export function ModeRail() {
                 <FlaskConical size={16} strokeWidth={1.8} />
                 <span>Legacy</span>
             </button>
-            <button
-                type="button"
-                className="st-rail-button"
-                data-active={activeSurface === 'setup'}
-                onClick={() => setSurface('setup')}
-                title="Setup and model status"
-                aria-current={activeSurface === 'setup' ? 'page' : undefined}
-            >
-                <Settings size={16} strokeWidth={1.8} />
-                <span>Setup</span>
-            </button>
+            {isStudioSurfaceEnabled('setup') && (
+                <button
+                    type="button"
+                    className="st-rail-button"
+                    data-active={activeSurface === 'setup'}
+                    onClick={() => setSurface('setup')}
+                    title="Setup and model status"
+                    aria-current={activeSurface === 'setup' ? 'page' : undefined}
+                >
+                    <Settings size={16} strokeWidth={1.8} />
+                    <span>Setup</span>
+                </button>
+            )}
         </aside>
     );
 }

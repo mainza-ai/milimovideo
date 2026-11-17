@@ -414,7 +414,9 @@ Common issues:
 ## 15. Known limitations
 
 - Studio and the legacy editor now use separate document stores against the same
-  backend; legacy `/` remains until the final cutover.
+  backend; legacy `/` remains until the final cutover. Set
+  `VITE_STUDIO_ENABLED=false` to serve legacy at `/studio`, or
+  `VITE_STUDIO_DISABLED_SURFACES=shorts,setup` to hide specific studio surfaces.
 - Depth overlay requires the optional Depth Anything V2 Small model; object
   tracking and masks are integrated.
 - Tauri packages a native shell and save dialog and can launch a `milimo-backend`

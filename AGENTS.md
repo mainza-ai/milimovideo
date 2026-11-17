@@ -93,10 +93,12 @@ unless the human explicitly asks. The LLM owns `Milimo Video/`.
 
 ### Two frontends, one project model
 
-- **Legacy NLE** — `/`. Frozen while the studio reaches parity. It remains the
-  fallback and owns some advanced tools until the cutover.
+- **Legacy NLE** — `/`. Frozen fallback for the cutover window.
 - **Studio** — `/studio`. Strangler shell with Story, Generate, Edit, Review,
   Library, Deliver, Shorts, and Setup. The legacy header links to it.
+- **Rollback flags** — `VITE_STUDIO_ENABLED=false` serves legacy at `/studio`;
+  `VITE_STUDIO_DISABLED_SURFACES=shorts,setup` hides individual surfaces.
+  See `web-app/.env.example`.
 
 Studio has its **own document store** at
 `web-app/src/studio/state/documentStore.ts` (`milimo-studio-document`), built from
@@ -161,9 +163,10 @@ not just filtergraph strings.
 
 ### Known gaps (do not claim these are done)
 
-- Tauri sidecar/backend bundling (native shell and save are real).
+- No bundled Python sidecar binary (the native shell can launch one, but none is
+  built).
+- Legacy `/` cutover is gated on the documented two-clean-release window.
 - Visual baselines are platform-tolerant but still local-generated.
-- Deeper shorts/lens packaging polish.
 - Legacy `/` cutover.
 
 ---

@@ -44,7 +44,7 @@ at `/`.
 
 | Stage | Status | What exists |
 |---|---|---|
-| **F0 Foundation** | **Done for scoped F0** | Tokens, shell, inspector, dock, editor/job/agent + separate document stores, Query, generated types + Zod, axe serious/critical clean, visual baseline, attribution, project switcher, Setup, Playwright flows, Tauri shell |
+| **F0 Foundation** | **Done for scoped F0** | Tokens, shell, inspector, dock, editor/job/agent + separate document stores, Query, generated types + Zod, global/surface rollback flags, axe serious/critical clean, visual baseline, attribution, project switcher, Setup, Playwright flows, Tauri shell |
 | **F1 Story** | **Done for scoped F1** | Spine/filter, board camera/marquee/multi-select/resize/align/distribute/LOD/minimap, areas, typed links, notes, reference cards, review task cards, editable list/script, undo/pin, culling, revision/CAS save. 500-card pan measured ~58fps |
 | **F2 Edit** | **Done for scoped F2** | Compare/wipe/guides; isolated clock; trim/slip/roll/blade/ripple/rate/slide; tracking/mask overlay; audio gain/mute/fades/solo/waveform/A1; captions import+burn; full motion keyframes; render range/presets; table+keyboard; effects tab. 200-clip scroll measured ~275fps; depth has no source |
 | **F3 Generate** | **Done for scoped F3** | Workspace, composer/@mentions, advanced params, preview frame, batch queue+matrix, queue position/estimate/cancel, takes/favorites, inpaint-as-take |
@@ -52,9 +52,9 @@ at `/`.
 | **F4 Library/Deliver** | **Done for scoped F4** | Assets/references/takes/search tabs, master-reference CRUD with image/trigger, ranked local search, take lineage + select/favorite, presets, render history, caption burn toggle |
 | **F5 Shorts/lenses** | **Done for scoped F5** | Shorts candidates/scores/editable range/source export; pipeline lens recipe import/export; blocking lens; lazy 3D previz; Yjs board spike; Tauri shell with native save, a built debug binary, and sidecar-binary resolution. A bundled Python runtime is not shipped |
 
-**Next:** close the remaining measurements (axe serious, 500-card/200-clip FPS),
-decide whether Tauri sidecar packaging belongs in scope, and keep `/` until the
-final cutover gates are green.
+**Next:** keep `/` until the final cutover gates are green. A bundled Python
+sidecar binary remains the only F5 packaging gap; the supervisor resolves one
+when it exists and falls back to `run_backend.sh`.
 
 ## Why This Refactor
 

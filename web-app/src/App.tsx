@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { CinematicPlayer } from './components/Player/CinematicPlayer';
 import { Layout } from './components/Layout';
 import { useTimelineStore } from './stores/timelineStore';
+import { STUDIO_FLAGS } from './studio/features';
 
 import { useShallow } from 'zustand/react/shallow';
 
@@ -11,8 +12,12 @@ function App() {
   const toasts = useTimelineStore(useShallow(state => state.toasts));
 
   // Strangler shell: the legacy editor remains at /, the new studio lives at
-  // /studio until the F1-F4 surfaces reach parity.
-  if (typeof window !== 'undefined' && window.location.pathname.startsWith('/studio')) {
+  // /studio. VITE_STUDIO_ENABLED=false is a one-release rollback to legacy.
+  if (
+    STUDIO_FLAGS.enabled
+    && typeof window !== 'undefined'
+    && window.location.pathname.startsWith('/studio')
+  ) {
     return (
       <Suspense fallback={<div className="h-screen w-screen bg-[#08090a] text-white/50 flex items-center justify-center text-xs">Opening studio…</div>}>
         <StudioApp />

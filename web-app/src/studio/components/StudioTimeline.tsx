@@ -480,7 +480,7 @@ export function StudioTimeline() {
                     </div>
                     {audioAssets.length === 0 ? (
                         <div style={{ color: 'var(--st-muted)', fontSize: 10 }}>
-                            No audio uploads yet. Upload music or voice in the legacy Library.
+                            No audio uploads yet. Upload music or voice in Library.
                         </div>
                     ) : (
                         <div className="st-audio-list">

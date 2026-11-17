@@ -64,7 +64,7 @@ export function StorySurface() {
                     {groups.length === 0 && (
                         <div className="st-empty" style={{ minHeight: 120 }}>
                             <strong>No story yet</strong>
-                            <span>Parse a script in the legacy editor; the spine will populate here.</span>
+                            <span>Use Add shot on the board, or import a screenplay in Story → Script.</span>
                         </div>
                     )}
                     {groups.map((group) => (

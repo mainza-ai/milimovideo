@@ -936,7 +936,7 @@ export function BoardCanvas() {
                     {shots.length === 0 ? (
                         <div className="st-empty">
                             <strong>No shots yet</strong>
-                            <span>Import a script in Story → Script, or add a shot in the legacy editor while F1 lands.</span>
+                            <span>Use Add shot above, or import a screenplay in Story → Script.</span>
                         </div>
                     ) : (
                         <div

@@ -20,8 +20,9 @@ import { SharedReviewPage } from './SharedReviewPage';
 import { studioQueryClient } from './state/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
+import { enabledStudioSurfaces, isStudioSurfaceEnabled } from './features';
 
-const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver', 'shorts', 'setup'];
+const SURFACES: StudioSurface[] = enabledStudioSurfaces();
 
 export function StudioApp() {
     const shareMatch = typeof window !== 'undefined'
@@ -58,6 +59,12 @@ function StudioShell() {
     const temporalStore = (useStudioDocumentStore as any).temporal;
 
     useEffect(() => {
+        if (!isStudioSurfaceEnabled(activeSurface) && SURFACES.length > 0) {
+            setSurface(SURFACES[0]);
+        }
+    }, [activeSurface, setSurface]);
+
+    useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             const target = event.target as HTMLElement;
             const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || '') || target?.isContentEditable;
@@ -91,6 +98,19 @@ function StudioShell() {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [activeSurface, commandOpen, isPlaying, setCommandOpen, setFocusMode, setIsPlaying, setSurface, temporalStore]);
+
+    if (SURFACES.length === 0) {
+        return (
+            <div className="studio-root">
+                <main className="st-main" style={{ display: 'grid', placeItems: 'center' }}>
+                    <div className="st-empty">
+                        <strong>Studio surfaces are disabled</strong>
+                        <span>Enable a surface with VITE_STUDIO_DISABLED_SURFACES, or use the legacy editor at /.</span>
+                    </div>
+                </main>
+            </div>
+        );
+    }
 
     const surface = (() => {
         switch (activeSurface) {

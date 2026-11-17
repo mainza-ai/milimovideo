@@ -927,3 +927,13 @@ resolution/frames/model fields) back into its draft. The Tauri supervisor prefer
 bundled `milimo-backend` binary when present, then falls back to `run_backend.sh`;
 a Python sidecar is still not built. Added recipe parser tests. Verified: 68
 pytest, 47 vitest, 17 test files, tsc clean, build pass, cargo check.
+
+## [2026-11-17] shell | surface rollback flags and current guidance
+
+Implemented F0-05 rollback flags: `VITE_STUDIO_ENABLED=false` serves the legacy
+editor at `/studio`, and `VITE_STUDIO_DISABLED_SURFACES` hides individual
+surfaces while preserving their data. ModeRail, keyboard surface switching, the
+active-surface guard, and the root route all honor the flags. Added `.env.example`
+and parser tests. Removed stale "use the legacy editor" guidance now that Studio
+owns script import, audio uploads, exports, tracking, masks, and inpaint.
+Verified: 50 vitest, tsc clean, eslint 0 errors, build pass.
