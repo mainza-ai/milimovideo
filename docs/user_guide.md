@@ -320,6 +320,7 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 
 - Presets: project, 1080p, 720p, vertical 9:16, square 1:1, portrait 4:5.
 - **Render range**: in/out seconds; full-cut reset.
+- **Fit** chooses letterbox (**Pad**) or center-crop (**Crop**) for a different output aspect.
 - **Burn captions** toggles ASS burn-in.
 - **Create export** queues a real FFmpeg render through the job ledger.
 - Render history shows status, progress, errors, and an output link.
@@ -337,7 +338,7 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 3. Review scored candidate windows (10–45 s). Score combines word density, hook
    words, and numbers; long silences break windows.
 4. Select a candidate and export. The render uses the candidate range, transcript
-   captions, and the chosen preset.
+   captions, the chosen preset, and center-crop reframing.
 5. Recent exports read the same render history.
 
 ---
