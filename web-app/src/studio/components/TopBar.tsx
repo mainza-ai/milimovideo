@@ -6,6 +6,7 @@ import {
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { apiUrl } from '../../config';
+import { isDesktop, startDesktopBackend } from '../../desktop';
 import { useStudioData, useStudioReview } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
 import { useStudioDocumentStore } from '../state/documentStore';
@@ -230,7 +231,28 @@ export function TopBar() {
                         {health.gpu.queued > 0 ? ` · ${health.gpu.queued} queued` : ''}
                     </span>
                 )}
-                {error && <span className="st-status-pill" data-tone="bad">Backend offline</span>}
+                {error && (
+                    <button
+                        type="button"
+                        className="st-status-pill"
+                        data-tone="bad"
+                        title={error}
+                        onClick={async () => {
+                            if (!isDesktop()) {
+                                addToast('Start the backend with ./run_backend.sh', 'info');
+                                return;
+                            }
+                            try {
+                                const root = await startDesktopBackend();
+                                addToast(`Starting backend from ${root}`, 'success');
+                            } catch (exc) {
+                                addToast(exc instanceof Error ? exc.message : String(exc), 'error');
+                            }
+                        }}
+                    >
+                        {isDesktop() ? 'Start backend' : 'Backend offline'}
+                    </button>
+                )}
                 <button type="button" className="st-icon-button" title="Toggle inspector" onClick={() => setInspectorOpen(!inspectorOpen)}>
                     <MonitorPlay size={15} />
                 </button>

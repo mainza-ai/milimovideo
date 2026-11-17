@@ -102,3 +102,6 @@ htmlcov/
 # Tauri
 web-app/src-tauri/target/
 web-app/src-tauri/gen/schemas/
+
+# Desktop backend log
+backend.desktop.log

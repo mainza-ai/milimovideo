@@ -61,8 +61,9 @@ npm run tauri build
 ```
 
 The desktop shell uses the same Studio UI and provides a native Save dialog for
-storyboard backups and pipeline recipes. The Python backend is still launched
-separately; bundled sidecar packaging is a follow-up.
+storyboard backups and pipeline recipes. If the backend is offline, the top-bar
+status offers **Start backend**, which runs `run_backend.sh` from the checkout.
+Bundled Python sidecar packaging is still a follow-up.
 
 ### Health
 

@@ -885,3 +885,11 @@ shot→scene references, missing sequence indices, empty scenes, orphan board
 nodes/links, and invalid caption ranges. Setup has a "Scan project" panel with
 severity counts and the issue list. Added backend coverage. Verified: 44 vitest,
 tsc clean.
+
+## [2026-11-17] desktop | backend supervisor
+
+Tauri exposes `start_backend`: it locates `run_backend.sh` from `MILIMO_REPO_ROOT`,
+the current directory/ancestors, or the app resource dir, then spawns it with logs
+written to `backend.desktop.log`. The studio's offline top-bar pill becomes a
+"Start backend" action on desktop. `cargo check` passes; bundled Python sidecar
+packaging remains open. Verified: 44 vitest, tsc clean, eslint 0 errors.

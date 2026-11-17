@@ -21,6 +21,12 @@ export function isDesktop(): boolean {
     return tauri() !== null;
 }
 
+export async function startDesktopBackend(): Promise<string | null> {
+    const api = tauri();
+    if (!api?.core) return null;
+    return api.core.invoke<string>('start_backend');
+}
+
 /** Native save in Tauri, browser download everywhere else. */
 export async function saveTextFile(
     defaultName: string,
