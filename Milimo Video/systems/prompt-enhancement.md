@@ -1,7 +1,7 @@
 ---
 type: systems
 created: 2026-10-09
-updated: 2026-10-09
+updated: 2026-11-17
 tags: llm prompt-enhancement gemma ollama
 sources:
   - docs/03_ai_pipelines.md
@@ -46,6 +46,9 @@ linger into the generation phase. See [[../concepts/memory-slots.md]].
   reference art would otherwise break generation.
 - Settings surface: `GET/PATCH /settings/llm`, `GET /settings/llm/models`;
   frontend `LLMSettings.tsx` (provider select, model dropdown, keep_alive toggle).
+- **Current gaps:** runtime-only settings, legacy-only UI, no roles/fallback,
+  no provider discovery/verification, no key posture, and vision models are
+  advertised without sending image input. See [[llm-settings-audit-2026-11]].
 
 ## Gotchas
 

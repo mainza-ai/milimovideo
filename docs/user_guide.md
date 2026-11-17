@@ -455,5 +455,8 @@ Common issues:
 - Scoped v1 cut: no transitions, LUTs, titles, or A2 track; search is ranked
   lexical matching, not embeddings.
 - The depth model is downloaded separately; it is not shipped with the repo.
+- LLM provider settings still live in the legacy AI Settings popover; the Studio
+  Setup AI/LLM panel and persisted role routing are planned in
+  `Milimo Video/systems/llm-settings-audit-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is a separate
   program and is not part of scoped v1.

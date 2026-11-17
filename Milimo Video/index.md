@@ -45,6 +45,9 @@ navigate, then drills into pages.
 - [systems/studio-media-audit-2026-11](systems/studio-media-audit-2026-11.md) —
   2026-11 media-open audit: passive media, missing preview paths, legacy localhost
   URLs, caption misclassification, and the global image/video/audio/text viewer.
+- [systems/llm-settings-audit-2026-11](systems/llm-settings-audit-2026-11.md) —
+  LLM configuration audit: current Gemma/Ollama switch, Kubona reference patterns,
+  missing persistence/roles/providers/security, and the L0–L4 implementation plan.
 
 ## Models
 - [models/ltx-2](models/ltx-2.md) — LTX-2 19B dual-stream transformer: the three

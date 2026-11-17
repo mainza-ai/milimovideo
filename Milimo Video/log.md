@@ -1138,3 +1138,16 @@ generated render posters. Added `MediaThumb` with poster-first cards, muted loop
 hover playback, play badges, and fallback behavior, used across Library, Story,
 Generate, Inspector, Review, Deliver, and Shorts. Verified: 84 pytest, 56 Vitest,
 17 Playwright, axe/tsc/ESLint/build/bundle clean.
+
+## [2026-11-17] audit | LLM configuration plane
+
+Reviewed Kubona at `0dbf31c` (Apache-2.0): typed provider/wire/role config, local
+discovery, provider verify/model catalog, revisioned redacted settings, sealed
+keys, air-gap, budget guard, and the rich LLM Settings surface. Audited Milimo:
+legacy-only Gemma/Ollama popover, runtime-only PATCH, no Studio panel, no
+persistence/revision, no roles/fallback, no discovery/verify, no key posture,
+hardcoded provider branches, and vision badges not wired to image input.
+
+Filed [[systems/llm-settings-audit-2026-11]] with the provider/role design, API,
+security rules, L0–L4 plan, and verification gates. Updated the implementation
+plan, frontend roadmap, AGENTS, user guide, and index.
