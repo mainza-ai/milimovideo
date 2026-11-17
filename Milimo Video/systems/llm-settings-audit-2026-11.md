@@ -416,20 +416,19 @@ the fallback chain.
 
 ### Still open
 
-The next-step plan is [[llm-local-first-next-2026-11]]. It replaces the old L4
-shortcut with local-first phases L5–L9, grounded in live measurements from
-Ollama, oMLX, and Strata. Headline findings: provider identity collides when two
-OpenAI-compatible engines run (oMLX and Strata both map to one slot), image
-enhancement can pass a raw JSON wrapper to Flux, defaults seed a model the
-machine may not have, and cold model loads are invisible.
+The local-first follow-up plan [[llm-local-first-next-2026-11]] is now
+**implemented (L5–L9)**: provider instances, capability truth, wrapper-safe
+prompt parsing, discovery-seeded defaults, warm-up/timeouts/streaming, context
+preflight, eval + recommended plan, pre-pipeline enhancement, LLM/VRAM release,
+vision payloads, and cloud budget/eval-gate/profiles. Verified live against
+Ollama, oMLX, and Strata.
 
-- L4 telemetry/budget/eval-gate/profiles (deferred behind L5–L8).
-- Image-conditioned Ollama/OpenAI vision requests are still not sent.
-- The legacy `/` popover edits only the `prompt_video` role; everything else is
-  Studio-only until cutover.
-- Per-provider `timeout_sec`, `keep_alive`, and per-role sampling exist in the
-  API and UI model but only the default/temperature/max-token fields are edited
-  in the panel.
+- Cancelling a non-stream HTTP call is timeout-bounded, not an instant socket
+  abort.
+- Chained chunk-0 enhancement still runs after the pipeline load.
+- The legacy `/` popover edits only the `prompt_video` role.
+- Existing v1 documents keep their stored role models; **Check plan** and
+  `verify_setup` name every model missing from a live catalog.
 
 ## Related
 

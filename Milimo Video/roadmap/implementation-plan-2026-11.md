@@ -51,7 +51,7 @@ single-engineer guidance.
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, queued/cancellable downloads, setup check |
 | P3 OOM retry | **Done** | one retry at 75% resolution / 8k+1 frames, cache clear, shot params updated, unit tests |
 | P4 UX trust | **Done** (P4-01–P4-07) | takes/favorites, persistent seed lock, save conflict, reconnect, review, plan approval, undo, zero serious/critical axe, 500-card/200-clip perf specs, tracking overlay |
-| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 104 backend, 61 frontend, 20 Playwright (incl. axe/perf/visual/reference CRUD/LLM settings); new modules >80%; total 37%; lint 0 errors |
+| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 125 backend, 61 frontend, 21 Playwright (incl. axe/perf/visual/reference CRUD/LLM settings); new modules >80%; total 37%; lint 0 errors |
 | Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent + separate document stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 12 Playwright incl. visual; store separation covered by E2E |
 | Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking + depth overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip ~275fps perf; depth uses optional Depth Anything V2 Small |
 | Front-end F4 integrity | **Done** | scan + repair for missing media, orphan scene/board references, sequence order, and caption ranges |
@@ -361,16 +361,17 @@ evidence, findings F1–F11, and gates G-LLM-1…6:
 
 | Phase | Scope | Gate |
 |---|---|---|
-| **L5** | Provider instances (`openai_compatible@8787` vs `@47831`), schema v2 migration, discovery identity, response-shape probing, capability catalog (context/vision/embedding/non-chat), role gating | Three engines attached at once; every model row has context or explicit unknown; non-chat models refused |
-| **L6** | Wrapper-safe enhancement parsing, discovery-seeded defaults, warm-up + per-provider timeout/keep_alive, streaming negotiation with non-stream fallback, context preflight, load/latency health | No JSON wrapper reaches Flux; no `llama3.1` default on a machine without it; cold load visible; no call exceeds timeout |
-| **L7** | Local eval fixtures per role, `POST /settings/llm/eval`, results table, recommended local plan, stale-eval warning | 3B/27B/Strata compared per role with pass rate and p50 |
-| **L8** | LLM/VRAM policy with `MemoryManager`, take provenance in Inspector, cancel propagation, local vision (or remove the badge), `verify_setup` role readiness | 32 GB machine never holds two heavy models; image bytes actually sent or claim removed |
-| **L9** | Cloud spend/budget/eval gate/profiles | Only after L5–L8 pass |
+| **L5** ✅ | Provider instances (`openai_compatible@8787` vs `@47831`), schema v2 migration, discovery identity, response-shape probing, capability catalog (context/vision/embedding/non-chat), role gating | Three engines attached at once; every model row has context or explicit unknown; non-chat models refused |
+| **L6** ✅ | Wrapper-safe enhancement parsing, discovery-seeded defaults, warm-up + per-provider timeout/keep_alive, streaming negotiation with non-stream fallback, context preflight, load/latency health | No JSON wrapper reaches Flux; no `llama3.1` default on a machine without it; cold load visible; no call exceeds timeout |
+| **L7** ✅ | Local eval fixtures per role, `POST /settings/llm/eval`, results table, recommended local plan, stale-eval warning | 3B/27B/Strata compared per role with pass rate and p50 |
+| **L8** ✅ | LLM/VRAM policy with `MemoryManager`, take provenance in Inspector, cancel propagation, local vision (or remove the badge), `verify_setup` role readiness | 32 GB machine never holds two heavy models; image bytes actually sent or claim removed |
+| **L9** ✅ | Cloud spend/budget/eval gate/profiles | Fail-closed pricing, spend ledger, eval gate, three profiles |
 
-**Immediate three commits:** (1) fix prompt-wrapper parsing + seed real models;
-(2) provider instances + discovery shape + capability gating; (3) warm-up,
-timeouts, streaming/progress. Do not advertise vision until the image path sends
-image bytes.
+**Delivered:** L5–L9. Provider instances, capability truth, wrapper-safe
+parsing, discovery seeding, warm/timeout/streaming, context preflight, eval +
+recommended plan, pre-pipeline enhancement, LLM/VRAM release, vision payloads,
+and cloud budget/eval-gate/profiles are in and verified against Ollama, oMLX, and
+Strata. Remaining caveats live in [[../systems/llm-local-first-next-2026-11]].
 
 ## Quality Gates
 

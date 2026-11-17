@@ -389,29 +389,43 @@ A 32 GB Mac may refuse a model that cannot fit; that is a correct result, not a 
 
 ### AI & LLM
 
-Studio Setup → **AI & LLM** is the persisted LLM configuration plane. Settings
+Studio Setup → **AI & LLM** is the local-first LLM configuration plane. Settings
 survive restarts; every write is revision-checked and a stale save is refused with
 a conflict instead of overwriting newer state.
 
-- **Active provider/model** drive unassigned work. Roles override it:
-  `prompt_video`, `prompt_image`, `script_parse`, `agent_plan`, `review_critic`,
-  `continuity`.
-- **Providers:** Gemma (in-process LTX text encoder), Ollama, LM Studio,
-  OpenAI-compatible local servers, plus opt-in OpenAI/Anthropic. Enable a card,
-  set its base URL and default model, then **List models** and **Verify**.
-- **Scan local servers** probes loopback ports (11434, 1234, 8080, 8081, 8899,
-  8000, 8787, 47831). **Attach** writes the discovered URL into the matching
-  provider card.
-- **Role routing** assigns a provider/model per role and supports ordered
-  fallbacks. Gemma is only valid for `prompt_video` inside a loaded LTX pipeline;
-  `prompt_image` must use an HTTP provider because Flux has no LTX text encoder.
-- **Air-gapped** is on by default. Cloud providers stay unreachable unless
-  `MILIMO_LLM_CLOUD=1` is set in the backend environment **and** the switch is off.
-- **API keys** are returned only as `has_key`/`secret_source`/`key_status`. With
-  `MILIMO_SECRET_KEY` set (32-byte hex or base64) keys are sealed with AES-256-GCM;
-  without it they are stored as local plaintext, and the panel says so.
-- **Test saved configuration** sends a prompt through the saved role plan and
-  reports provider/model/latency. Save first to test edits.
+- **Providers are instances.** Ollama, oMLX, Strata, LM Studio, vLLM, and
+  llama.cpp can run at the same time: each endpoint gets its own card (`ollama`,
+  `openai_compatible@127.0.0.1:8787`, …). **Scan local servers** identifies real
+  engines by their model catalog, and **Attach** adds or refreshes one. **Add
+  endpoint** takes a URL for anything on another port.
+- **Capabilities are visible.** **List models** shows context window, parameter
+  size, vision, and whether an entry is chat-capable. Embedding and tool/audio
+  models are flagged and cannot be assigned to a text role. **Set default** picks
+  the model for that endpoint.
+- **Roles** (`prompt_video`, `prompt_image`, `script_parse`, `agent_plan`,
+  `review_critic`, `continuity`) route independently, support ordered fallbacks,
+  and can be left **unassigned**. Gemma only serves `prompt_video` inside a loaded
+  LTX pipeline; image and script roles need a local HTTP model.
+- **Warm**, **timeout**, and **keep-alive** are per provider. A cold 27B load can
+  take ~36 s; warming separates that from inference. `keep_alive: 0` releases the
+  model immediately after a call.
+- **Check plan** reads live catalogs and names any role model that no longer
+  exists on its engine.
+- **Run eval** executes shot, image, and script fixtures through the saved plan
+  and records pass rate and p50 per role. **Apply recommended** assigns the tested
+  models. The evidence is stamped with the settings revision, so a later change
+  marks it stale.
+- **Budget & profiles.** Cloud roles need `MILIMO_LLM_CLOUD=1`, air-gap off, a
+  positive daily budget, and a known per-model rate; unknown prices fail closed.
+  With **eval gate** on, a cloud assignment also needs a passing eval for that role.
+  **Sovereign local** pulls every role back to a local engine and zeroes the
+  budget; **Local preferred** keeps cloud configured but unrouted; **Hybrid**
+  allows cloud agent/review fallbacks only when a key, budget, and eval exist.
+- **Test saved configuration** streams the reply when the engine supports SSE and
+  falls back to one response when it does not (oMLX has done both). It reports the
+  provider, model, and latency.
+- **Image input** is sent on local HTTP wires (Ollama images, OpenAI image_url,
+  Anthropic blocks), so a vision model can analyse a reference frame.
 - The legacy header gear remains a two-provider quick switch (`prompt_video` only)
   and links here for everything else.
 
@@ -427,8 +441,8 @@ a conflict instead of overwriting newer state.
 - Media paths are confined and served with Range support.
 - Debug artifacts are off unless `MILIMO_DEBUG` is set.
 - No project data leaves the machine by default. LLM cloud providers additionally
-  require `MILIMO_LLM_CLOUD=1` and air-gap off; a configured cloud role refuses
-  otherwise.
+  require `MILIMO_LLM_CLOUD=1`, air-gap off, a positive daily budget, and a known
+  price; a configured cloud role refuses otherwise.
 
 ---
 

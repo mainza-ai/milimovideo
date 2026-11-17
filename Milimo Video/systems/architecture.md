@@ -37,17 +37,19 @@ microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell
   Frozen except for P0 fixes. `VITE_STUDIO_ENABLED=false` serves it at `/studio`.
 - **Backend (Python / FastAPI, port 8000)** — inference dispatch, project/assets,
   durable GPU queue, SQLite via SQLModel, Alembic migrations, SSE. **Twelve routers
-  / 124 operations** (verified 2026-11-17): projects, jobs, assets, storyboard,
+  / 133 operations** (verified 2026-11-17): projects, jobs, assets, storyboard,
   elements, shots, models, planner, review, share, depth, settings.
 - **Task engine** — `tasks/video.py`, `tasks/chained.py`, `tasks/image.py`,
   `tasks/depth.py`, `tasks/ai_parse.py`; `ModelManager` loads LTX-2; `FluxInpainter`
   wraps Flux 2; `StoryboardManager` coordinates chunks; managers handle elements,
   masks, and SAM tracking.
-- **LLM plane** — `services/llm/`: persisted settings (`store.py`), wire adapters
-  (`providers.py`), role execution with fallback (`runtime.py`), loopback discovery
-  (`discovery.py`), AES-GCM credential sealing (`secretbox.py`). `backend/llm.py` is
-  a compatibility facade over the runtime. See
-  [[llm-settings-audit-2026-11]].
+- **LLM plane** — `services/llm/`: persisted settings with provider **instances**
+  (`store.py`, `instances.py`), wire adapters with capability parsing, images, and
+  streaming (`providers.py`), role execution with preflight/fallback/cancel
+  (`runtime.py`), loopback discovery (`discovery.py`), role eval (`eval.py`,
+  `fixtures.py`), cloud budget ledger (`budget.py`), profiles (`profiles.py`), and
+  AES-GCM credential sealing (`secretbox.py`). `backend/llm.py` is a compatibility
+  facade. See [[llm-local-first-next-2026-11]].
 - **GPU scheduler** — `QueuedJob` ledger + one global semaphore + one OOM retry +
   startup recovery + pause/resume + idempotent shot jobs.
 - **SAM 3 microservice (port 8001)** — health, mask prediction, detection, text
@@ -69,7 +71,8 @@ microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell
 | Worker → LTX-2 / Flux 2 | Direct Python import | One heavy model at a time; MemoryManager gates swaps |
 | Prompt enhancement | `llm.py` → role runtime | `prompt_video`/`prompt_image` resolve to persisted provider/model hops with ordered fallback |
 | LLM settings | `GET/PUT/PATCH /settings/llm` | Redacted snapshot, revision CAS, air-gap patch; writes persist in `app_setting` |
-| Provider health | `/settings/llm/{models,discover,verify,test,health}` | Model catalog, loopback scan, live verify, saved-config test prompt |
+| Provider health | `/settings/llm/{models,discover,verify,warm,health}` | Model catalog with context/vision/chat flags, loopback scan, live verify, warm-up, saved-config test |
+| LLM eval / budget | `/settings/llm/{eval,eval/apply,profiles,spend}` | Role fixtures with pass rate/p50, recommended plan, staged profiles, cloud spend ledger |
 | Prompt provenance | `Job.params_json.llm` | role, provider, model, latency, token usage |
 | Render | FFmpeg subprocess | Storyboard renders from computed layout; progress parsed from FFmpeg |
 | Media serving | HTTP Range requests | `206 Partial Content` for Safari-compatible mp4/mp3 |
@@ -135,7 +138,9 @@ SQLite or the model layer directly.
   caches, then reloads.
 - `num_frames == 1` delegates video generation to Flux 2 image generation.
 - Ollama defaults to `keep_alive: 0`; a 27B model otherwise sits on VRAM. The
-  active role plan, not `config.LLM_PROVIDER`, chooses the provider now.
+  active role plan, not `config.LLM_PROVIDER`, chooses the provider now. HTTP
+  enhancement runs before the video pipeline loads and releases every local role
+  model afterwards; chained chunk-0 is the remaining overlap.
 - Gemma is in-process only: a role that resolves to Gemma needs the loaded LTX
   text encoder, so `prompt_image` must use an HTTP provider.
 - Cloud providers are unreachable unless `MILIMO_LLM_CLOUD=1` **and** the air-gap

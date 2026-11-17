@@ -1198,3 +1198,36 @@ wrapper-safe prompt parsing (granite returned JSON to `prompt_image`),
 discovery-seeded defaults (default `llama3.1` 404s here), warm-up/keep-alive/
 timeouts, streaming negotiation, context preflight, local role eval, and
 LLM/VRAM coordination. Cloud (L9) stays behind the local gates.
+
+## [2026-11-17] implement | local-first LLM completion (L5–L9)
+
+Implemented the whole local-first plan. Provider **instances** replace the single
+type slot: `ollama`, `openai_compatible@127.0.0.1:8787`, and
+`openai_compatible@127.0.0.1:47831` coexist, with a schema v2 migration and
+attach-by-URL idempotence. Discovery now validates a model-catalog shape (so a
+Docker console on :8080 is not offered), reports `needs_key`, and marks attached
+instances. The catalog carries context (`/api/show`, `max_model_len`, `meta`),
+parameter size, quantization, vision, and chat/embedding flags with separator-aware
+matching.
+
+Runtime: wrapper-safe enhancement parsing (granite's `{"prompt": …}` now yields
+prose), discovery-seeded defaults with a mid-size instruct picker and explicit
+unassigned roles, warm-up with measured load time, per-provider timeout/keep-alive,
+streaming negotiation with a first-byte timeout and non-stream fallback,
+context preflight, token/latency telemetry, and cancellation checks. Eval fixtures
+for shot/image/script roles produce pass rate and p50, persist `last_eval`, and
+drive an apply-recommended plan. Cloud now has a fail-closed daily budget with a
+spend ledger, an eval gate for cloud role assignments, and sovereign/local/hybrid
+profiles.
+
+Generation: HTTP enhancement runs before the video pipeline loads and releases
+every local role model afterwards; `llm_http` is a MemoryManager slot; image input
+is sent over Ollama/OpenAI/Anthropic wires; takes show their enhancing model in the
+Inspector; `verify_setup` reports engines, role readiness, and missing models.
+
+Verified live against Ollama, oMLX, and Strata: seeded plan with real models,
+capability catalogs, warm, streaming (Strata first delta 155 ms; oMLX streamed warm
+and fell back when stalled), eval 100% (1.9 s / 6.4 s / 17.0 s), apply plan,
+air-gap + eval-gate refusals, 131072-token preflight, unload to empty `/api/ps`,
+and Strata vision describing a generated image. 125 backend, 61 Vitest, 21
+Playwright, ruff/tsc/ESLint/build/bundle clean.

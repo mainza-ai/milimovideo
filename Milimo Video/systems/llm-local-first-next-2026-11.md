@@ -2,7 +2,7 @@
 type: systems
 created: 2026-11-17
 updated: 2026-11-17
-tags: llm local-first ollama omlx strata roles roadmap
+tags: llm local-first ollama omlx strata roles roadmap implemented
 sources:
   - llm-settings-audit-2026-11.md
   - ../../backend/services/llm/
@@ -17,6 +17,60 @@ related:
 ---
 
 # LLM Local-First Next Steps — 2026-11-17
+
+## Implementation status (2026-11-17, same day)
+
+L5–L9 shipped after the measurements above. The findings are kept as the record
+that motivated the work; each one now has a fix and a test.
+
+| Phase | Status | What landed |
+|---|---|---|
+| **L5** | Done | Provider **instances** (`ollama`, `openai_compatible@host:port`) with schema v2 migration; shape-based discovery with 401/403 `needs_key`; capability catalog (context, vision, chat, embedding-only) incl. Ollama `/api/show`, oMLX `max_model_len`, Strata `meta`; attach-by-URL idempotence; remove-with-usage guard; role/capability gating |
+| **L6** | Done | Wrapper-safe `parse_enhancement`; discovery-seeded defaults with a sensible model picker and explicit unassigned roles; warm endpoint + per-provider timeout/keep_alive; streaming negotiation with first-byte timeout and non-stream fallback; context preflight; load/latency/tok-s telemetry; health check |
+| **L7** | Done | Fixture pack (shot/image/script), `POST /settings/llm/eval`, persisted `last_eval` with staleness, recommended-plan apply, panel eval table |
+| **L8** | Done | HTTP enhancement runs **before** the pipeline loads; `llm_http` memory slot + unload of every role model; take provenance in the Inspector; cancel checks at call boundaries; image input over Ollama/OpenAI/Anthropic wires; `verify_setup` engine/role readiness incl. missing models |
+| **L9** | Done | Daily cloud budget with fail-closed pricing, spend ledger + `GET /settings/llm/spend` + panel spend strip, eval gate for cloud role assignments, three profiles (sovereign / local preferred / hybrid) |
+
+### Live evidence (2026-11-17)
+
+All three engines were running; a scratch backend seeded from discovery:
+
+- First boot produced `gemma`, `ollama` (llama3.2:3b), `openai_compatible@127.0.0.1:8787`
+  (Llama-3.2-3B), `openai_compatible@127.0.0.1:47831` (Qwen3.8-Flash-Next) — no
+  `llama3.1`, no phantom endpoint.
+- oMLX catalog reported context 131072/262144 and flagged `MarkItDown` and the
+  music model as non-chat; Ollama flagged the nomic embed model; the "fable5"
+  model is correctly chat (separator-aware matching).
+- Discovery found ports 8787/11434/47831, marked all three attached, and omitted
+  the Kubona console on 8080.
+- Streaming: Strata first delta in 155–4.2 s; oMLX streamed warm (962 ms) and fell
+  back to non-stream when it stalled (14.5 s total).
+- Eval: prompt_video oMLX 1.9 s, prompt_image Ollama 6.4 s, script_parse Strata
+  17.0 s, pass rate 1.0; applying the recommendation reassigned the roles.
+- granite's `{"prompt": …}` answer now yields plain prose (wrapper fixed).
+- Strata vision: a generated image was described correctly (navy field, crimson
+  square) through the OpenAI image payload.
+- Ollama unload: with `keep_alive: 5m` the model stayed warm; `release_local()`
+  emptied `/api/ps` within 3 s, including a non-default role model.
+- Guards: air-gap refuses a cloud call, the eval gate refuses a cloud assignment,
+  a 600k-char prompt fails preflight with the 131072 limit, and an in-use
+  instance cannot be removed.
+
+### Still open
+
+- Cancelling a non-stream HTTP call cannot abort the socket mid-flight; it is
+  bounded by the provider timeout and no further work runs.
+- Chained chunk-0 enhancement still happens after the pipeline load (bounded
+  overlap, then unload); the single-shot path now pre-enhances.
+- Strata does not expose a context window; preflight skips it as `unknown`.
+- Cloud pricing is reference data; override with `MILIMO_LLM_RATE_CARD`.
+- Vision capability detection is heuristic; image bytes are sent regardless when
+  the caller supplies an image.
+- The legacy `/` popover still edits only `prompt_video`.
+- Existing v1 documents keep their stored role models; Studio **Check plan** and
+  `verify_setup` now name any model that is missing from a live catalog. The
+  scratch machine's dev DB still carries `llama3.1` from the old seeder — apply
+  the eval recommendation or reassign it.
 
 ## Verdict
 

@@ -50,9 +50,10 @@ navigate, then drills into pages.
   the old Gemma/Ollama gaps, the shipped L0–L3 plane (persisted providers/roles,
   discovery, verify, sealed keys, air-gap, Studio panel), and the deferred L4 work.
 - [systems/llm-local-first-next-2026-11](systems/llm-local-first-next-2026-11.md) —
-  local-first LLM next steps: live measurements from Ollama/oMLX/Strata, findings
-  F1–F11 (provider identity collision, JSON wrapper leak, bad default model,
-  cold-start blindness, capability gaps), and phases L5–L9 with gates.
+  local-first LLM audit **and implementation record**: live measurements from
+  Ollama/oMLX/Strata, findings F1–F11, phases L5–L9 (instances, capability truth,
+  warm-up/streaming, eval, memory discipline, cloud budget/profiles), and the
+  remaining caveats.
 
 ## Models
 - [models/ltx-2](models/ltx-2.md) — LTX-2 19B dual-stream transformer: the three

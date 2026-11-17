@@ -122,9 +122,11 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 
 ### Backend contracts
 
-- LLM settings: typed `LLMSettings` document in `app_setting`, revisioned
-  `PUT`, redacted reads, role plans resolved by `services/llm`. `backend/llm.py`
-  is a compatibility facade; never branch on `config.LLM_PROVIDER` in new code.
+- LLM settings: typed `LLMSettings` v2 document in `app_setting` (provider
+  instances, budget, last eval), revisioned `PUT`, redacted reads, role plans
+  resolved by `services/llm`. `backend/llm.py` is a compatibility facade; never
+  branch on `config.LLM_PROVIDER` in new code. `GET /settings/llm/health?check=true`
+  loads local catalogs and names missing role models.
 - Pydantic boundaries: typed `ProjectState`, `ShotState`, `SceneState`,
   `TimelineItem`, `RenderSettings`, `BoardLayoutPayload`, review/share/plan/depth
   payloads.
@@ -175,15 +177,19 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Setup: device/slots/queue/disk, queue pause/resume, pipeline readiness,
   base/LoRA activation, LoRA strength, resumable/cancellable downloads, depth
   model, integrity scan/repair, error budget.
-- AI & LLM: persisted provider/role settings with revision CAS, redacted
-  snapshots, loopback discovery, model catalog, provider verify, saved-config
-  test prompt, air-gap + cloud opt-in, sealed keys, and per-job prompt
-  provenance. Roles: `prompt_video`, `prompt_image`, `script_parse`,
+- AI & LLM: persisted settings with revision CAS and provider **instances**
+  (`ollama`, `openai_compatible@host:port`), capability catalog (context,
+  vision, chat, embedding-only), shape-based discovery + attach, verify, warm,
+  timeouts/keep-alive, streaming test with non-stream fallback, role routing with
+  fallbacks and explicit unassigned roles, local role eval + recommended plan,
+  air-gap + `MILIMO_LLM_CLOUD` + daily budget + eval gate, spend ledger, and
+  staged profiles. Roles: `prompt_video`, `prompt_image`, `script_parse`,
   `agent_plan`, `review_critic`, `continuity`. Providers: Gemma (in-process),
   Ollama, LM Studio, OpenAI-compatible, optional OpenAI/Anthropic. See
-  `Milimo Video/systems/llm-settings-audit-2026-11.md`; local-first completion
-  (provider instances, capability truth, warm-up, eval) is planned in
   `Milimo Video/systems/llm-local-first-next-2026-11.md`.
+- LLM generation discipline: single-shot HTTP enhancement runs before the video
+  pipeline loads; `llm_http` is a MemoryManager slot; every local role model is
+  unloaded after enhancement; images are sent on HTTP wires when available.
 - Desktop: Tauri 2 shell with native open/save dialogs and a backend supervisor
   that prefers a `milimo-backend` sidecar and otherwise starts `run_backend.sh`.
   Bundled Python/Torch runtime remains a follow-up.
@@ -195,7 +201,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 104 backend tests, 61 Vitest tests, and 20 Playwright tests, plus
+baseline is 125 backend tests, 61 Vitest tests, and 21 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -205,14 +211,12 @@ Do not claim these are done:
 - Legacy `/` cutover is gated on the documented two-clean-release window.
 - Scoped-v1 gaps: no transitions/LUT/titles/A2 track, lexical rather than
   embedding search, and no shorts/lens template packs.
-- LLM local-first completion (L5–L8): provider instances (oMLX and Strata both
-  map to one `openai_compatible` slot today), capability truth, wrapper-safe
-  image-prompt parsing, discovery-seeded defaults, warm-up/keep-alive, streaming
-  negotiation, local role evaluation, and LLM/VRAM coordination are not built.
-  See `Milimo Video/systems/llm-local-first-next-2026-11.md`.
-- LLM L9 (cloud on top): spend telemetry, cloud budget guard, eval-gated changes,
-  and profiles. Air-gap and `MILIMO_LLM_CLOUD` are enforced. Cloud stays optional
-  and later than the local path.
+- LLM caveats: non-stream HTTP cancellation is timeout-bounded (not a socket
+  abort), chained chunk-0 enhancement still follows the pipeline load, Strata
+  exposes no context window, cloud prices are reference data overrideable with
+  `MILIMO_LLM_RATE_CARD`, vision detection is heuristic, and the legacy `/`
+  popover edits only `prompt_video`. See
+  `Milimo Video/systems/llm-local-first-next-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
 
@@ -271,7 +275,7 @@ npm run lint
 npm test                                       # 61 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 20 Playwright tests
+npm run test:e2e                               # 21 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```

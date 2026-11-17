@@ -40,10 +40,14 @@ model frees memory immediately instead of lingering on Ollama's default 5-minute
 timeout. `keep_alive: 5m` is a real speed win (7.4 s → 2.2 s for a 3B on the
 reference machine) but pins that model through denoising.
 
-HTTP engines other than Ollama (oMLX, Strata, LM Studio, llama.cpp) are **outside**
-`MemoryManager` today: their load/unload is owned by their own server. A warm 27B
-MLX model plus LTX-2 19B does not fit on 32 GB. See
-[[../systems/llm-local-first-next-2026-11.md]] (F10, L8-01).
+HTTP engines other than Ollama (oMLX, Strata, LM Studio, llama.cpp) own their own
+residency. Milimo now marks an `llm_http` slot while a local HTTP call is in
+flight, unloads every local role model after enhancement (Ollama explicitly;
+other engines are reported as still resident), and `prepare_for("video"/"image")`
+drops the slot first. Single-shot video enhancement also runs before the pipeline
+loads. A warm 27B MLX model plus LTX-2 19B still does not fit on 32 GB; the
+remaining chained chunk-0 overlap is documented in
+[[../systems/llm-local-first-next-2026-11.md]].
 
 ## Why It Matters
 
