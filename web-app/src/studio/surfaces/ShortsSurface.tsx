@@ -63,9 +63,9 @@ export function ShortsSurface() {
         setSelectedId(null);
     };
 
-    const exportShort = async () => {
+    const exportShort = async (allPresets = false) => {
         if (!selected) return;
-        const target = PRESETS.find((item) => item.id === preset) || PRESETS[0];
+        const targets = allPresets ? [...PRESETS] : [PRESETS.find((item) => item.id === preset) || PRESETS[0]];
         setBusy(true);
         try {
             setProject({
@@ -81,16 +81,18 @@ export function ShortsSurface() {
                     : project.captions,
             });
             await saveProject();
-            await createRender({
-                width: target.width,
-                height: target.height,
-                fps,
-                start_frame: Math.round(selected.start * fps),
-                end_frame: Math.round(selected.end * fps),
-                fit: 'crop',
-                crf: 18,
-                preset: 'fast',
-            });
+            for (const target of targets) {
+                await createRender({
+                    width: target.width,
+                    height: target.height,
+                    fps,
+                    start_frame: Math.round(selected.start * fps),
+                    end_frame: Math.round(selected.end * fps),
+                    fit: 'crop',
+                    crf: 18,
+                    preset: 'fast',
+                });
+            }
             await refresh();
         } finally {
             setBusy(false);
@@ -167,6 +169,15 @@ export function ShortsSurface() {
                     >
                         {busy ? <Loader2 size={12} className="animate-spin" /> : <Scissors size={12} />}
                         Export selected short
+                    </button>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        disabled={!selected || busy}
+                        onClick={() => void exportShort(true)}
+                    >
+                        <Zap size={12} /> Export all presets
                     </button>
                     {selected && (
                         <button

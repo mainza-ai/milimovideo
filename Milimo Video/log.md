@@ -844,3 +844,8 @@ Library now uploads images, video, audio, and caption files through the existing
 sanitized `/upload` endpoint with project scoping, then refreshes assets. Removed
 the legacy-only empty-state handoff. Added a real-backend Playwright upload test.
 Verified: 61 pytest (backend unchanged), 44 vitest, 10 Playwright.
+
+## [2026-11-17] shorts | export all reframe variants
+
+Shorts can export the selected candidate at 9:16, 1:1, and 4:5 in one action, each
+as a true crop reframe. Verified: 44 vitest, tsc clean, eslint 0 errors.
