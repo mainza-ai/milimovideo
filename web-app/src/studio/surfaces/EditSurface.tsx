@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Columns2, Loader2, Maximize, Pause, Play, SkipBack, SkipForward, SquareSplitHorizontal,
     Volume2, Wand2, X,
@@ -10,6 +10,8 @@ import { computeTimelineLayout } from '../../utils/timelineUtils';
 import { PlaybackEngine } from '../../components/Player/PlaybackEngine';
 import { StudioTimeline } from '../components/StudioTimeline';
 import { BlockingLens } from '../components/BlockingLens';
+
+const Previz3D = lazy(() => import('../components/Previz3D'));
 import { formatDuration, useAssetUrl, useStudioTakes } from '../data/useStudioData';
 
 export function EditSurface() {
@@ -27,6 +29,7 @@ export function EditSurface() {
     const [guides, setGuides] = useState({ grid: false, safe: false, thirds: false });
     const [inpaintOpen, setInpaintOpen] = useState(false);
     const [blockingOpen, setBlockingOpen] = useState(false);
+    const [previzOpen, setPrevizOpen] = useState(false);
     const [maskPrompt, setMaskPrompt] = useState('');
     const [inpaintPrompt, setInpaintPrompt] = useState('');
     const [inpaintStatus, setInpaintStatus] = useState<string | null>(null);
@@ -381,6 +384,16 @@ export function EditSurface() {
                 >
                     Blocking
                 </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={previzOpen ? 'primary' : 'ghost'}
+                    disabled={!active}
+                    onClick={() => setPrevizOpen(true)}
+                >
+                    3D
+                </button>
                 <span className="st-status-pill"><Volume2 size={11} /> embedded audio mixed</span>
                 <button type="button" className="st-icon-button" aria-label="Fullscreen (F2)">
                     <Maximize size={14} />
@@ -396,6 +409,16 @@ export function EditSurface() {
                     updateShot={updateShot}
                     onClose={() => setBlockingOpen(false)}
                 />
+            )}
+
+            {previzOpen && active && (
+                <Suspense fallback={<div className="st-lens-backdrop"><div className="st-lens"><div className="st-empty">Loading 3D previz…</div></div></div>}>
+                    <Previz3D
+                        shot={active.shot}
+                        project={project}
+                        onClose={() => setPrevizOpen(false)}
+                    />
+                </Suspense>
             )}
         </div>
     );

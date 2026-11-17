@@ -685,3 +685,11 @@ Replaced `List[dict]` in ProjectState with typed `ShotState` and `SceneState`
 models (extra fields allowed for forward compatibility). Save uses
 `exclude_unset` so partial clients still patch rather than overwrite with
 defaults. Regenerated OpenAPI/client types. Verified: 58 pytest, tsc clean.
+
+## [2026-11-17] f5 | lazy 3D previz
+
+Added a lazy-loaded three.js previz modal: floor/grid stage, blocking characters,
+objects, camera bodies, camera path across shot order, orbit controls, and a PNG
+snapshot. WebGL failure is caught and fails closed with an explanation. Three is
+code-split into its own chunk so the editor does not pay for it at boot. Verified:
+42 vitest, tsc clean, eslint 0 errors, build passes.
