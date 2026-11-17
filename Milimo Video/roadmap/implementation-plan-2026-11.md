@@ -51,7 +51,7 @@ single-engineer guidance.
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, setup check |
 | P3 OOM retry | **Not started** | P3-03 deferred |
 | P4 UX trust | **Partial** (P4-01,02,03,05,06) | take history/select, seed lock, save state/conflict, SSE reconnect, frame review, plan approval, undo |
-| P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health + Playwright shell + real-backend CRUD) | 41 backend tests, 23 frontend tests, 2 Playwright tests, lint 0 errors, build passes |
+| P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health + full Playwright flow) | 41 backend tests, 23 frontend tests, 3 Playwright tests (shell, CRUD, export), lint 0 errors, build passes |
 | Front-end F0/F1 | **Mostly done** (shell, tokens, editor store, board canvas + culling/areas/links, list/script, Setup, lazy `/studio`) | vitest + Playwright smoke; tsc/lint/build pass |
 | Front-end F2 | **Mostly done** (trim/slip/roll/blade/ripple, audio gain/mute + A1 placement, captions + ASS burn-in, opacity keyframes) | pure-op tests, filtergraph tests, real FFmpeg render with V1/V2/A1/captions/keyframes |
 | Front-end F3/F4 | **Partial** (takes, generate/cancel, plan approval, frame comments/approvals, share links, library takes, deliver presets) | backend contract tests + shell smoke; activity feed and full CRUD/export E2E open |
@@ -250,7 +250,7 @@ recoverable queue with no zombie `processing`/`pending`.
 |---|---|---|---|
 | P5-01 | `pytest` suite: schemas, save/load round-trip, render graph, queue, cancellation, security limits | >80% on changed modules; no network/GPU required for unit tests | L |
 | P5-02 | `vitest` store tests: ordering, conditioning, split, push, undo | Contract tests catch snake/camel regressions | M |
-| P5-03 | Playwright smoke: create project → add clips → save/reload → export → verify duration | Shell/board/review/setup smoke with a stubbed API; real-backend create→add shot→save→clear local state→reload passes; export duration remains covered by pytest | M |
+| P5-03 | Playwright smoke: create project → add clips → save/reload → export → verify duration | Shell/board/review/setup smoke; real-backend create→add shot→save→clear local state→reload; export completes with a real 1s clip and an output link | M |
 | P5-04 | CI: ruff + pytest + tsc + eslint (fix the 117 problems or baseline them explicitly) + vitest | PR cannot merge red | M |
 | P5-05 | Pre-commit hooks: ruff format/check, tsc, no large files | Local parity with CI | S |
 | P5-06 | Structured logs with job/request IDs; `/health` includes device, model slots, queue depth, disk | One curl explains a stuck studio | S |

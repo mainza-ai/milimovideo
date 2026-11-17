@@ -169,7 +169,10 @@ export function useStudioProjectBootstrap() {
             .then((projects) => {
                 if (!alive || !Array.isArray(projects) || projects.length === 0) return;
                 if (projects.some((item) => item.id === projectId)) return;
-                void loadProject(projects[0].id);
+                const newest = [...projects].sort(
+                    (a, b) => (b.updated_at || 0) - (a.updated_at || 0),
+                )[0];
+                void loadProject(newest.id);
             })
             .catch(() => undefined);
         return () => { alive = false; };

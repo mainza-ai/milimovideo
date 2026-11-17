@@ -415,3 +415,13 @@ the shot still present. Each run uses a unique DB path so Playwright's startup
 order cannot delete a live database. CI now installs the frontend/browser in the
 backend job and runs both E2E tests; `MILIMO_E2E_PYTHON` overrides the interpreter.
 Verified: 2 Playwright, 41 pytest, 23 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-16] e2e | export leg and deterministic run dirs
+
+Added the export E2E: create a project via API, write a real 1s clip into its
+generated dir, save a shot, open Deliver, queue an export, and wait for the
+completed output link. E2E paths are fixed and cleaned by a pre-Playwright
+`node e2e/clean.mjs`, so a startup-order race can no longer leave SQLite without
+tables; the local venv path is detected from the repo root. Boot hydration now
+picks the most recently updated project. Verified: 3 Playwright, 41 pytest,
+23 vitest, tsc clean, eslint 0 errors.

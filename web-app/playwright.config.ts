@@ -1,19 +1,18 @@
 import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 
-// Local installs have a venv; CI installs into the active interpreter.
+// Local installs have a repo-root venv; CI installs into the active interpreter.
+// The command runs after `cd ..`, so the local path is repo-root relative.
 const python = process.env.MILIMO_E2E_PYTHON
-    || (existsSync('./milimov/bin/python') ? './milimov/bin/python' : 'python');
-const runId = Date.now();
-const e2eDatabase = `/tmp/milimo-e2e-${runId}.db`;
-const e2eProjects = `/tmp/milimo-e2e-projects-${runId}`;
+    || (existsSync('../milimov/bin/python') ? './milimov/bin/python' : 'python');
+const e2eDatabase = '/tmp/milimo-e2e.db';
+const e2eProjects = '/tmp/milimo-e2e-projects';
 
 export default defineConfig({
     testDir: './e2e',
     timeout: 45_000,
     fullyParallel: false,
     workers: 1,
-    globalSetup: './e2e/global-setup.ts',
     reporter: [['list']],
     use: {
         baseURL: 'http://127.0.0.1:5173',
