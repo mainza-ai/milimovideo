@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ChevronDown, ChevronRight, Grid3X3, Link2, List, Maximize2, Map, Minus, MousePointer2,
-    Plus, RotateCcw, Search, SquareDashed, Trash2, Pin,
+    Plus, RotateCcw, Search, SquareDashed, Trash2, Pin, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
@@ -54,12 +54,14 @@ function linkGeometry(source: { x: number; y: number; width: number; height: num
 export function BoardCanvas() {
     const project = useTimelineStore((state) => state.project);
     const {
-        selectedShotId, selectShot, setCurrentTime, addShot,
+        selectedShotId, selectShot, setCurrentTime, addShot, updateShot, deleteShot,
     } = useTimelineStore(useShallow((state) => ({
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,
         addShot: state.addShot,
+        updateShot: state.updateShot,
+        deleteShot: state.deleteShot,
     })));
     const {
         storyView, setStoryView, boardCamera, setCamera, boardPositions,
@@ -903,10 +905,48 @@ export function BoardCanvas() {
                 </div>
             ) : storyView === 'list' ? (
                 <div className="st-list-wrap">
+                    <div className="st-button-row" style={{ marginBottom: 8 }}>
+                        <span className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                            {selectedShotIds.length} selected
+                        </span>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="ghost"
+                            onClick={() => selectShots(shots.map((shot) => shot.id))}
+                        >
+                            Select all
+                        </button>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="danger"
+                            disabled={selectedShotIds.length === 0}
+                            onClick={() => {
+                                if (!window.confirm(`Delete ${selectedShotIds.length} shot(s)?`)) return;
+                                for (const id of selectedShotIds) deleteShot(id);
+                                selectShots([]);
+                            }}
+                        >
+                            <Trash2 size={12} /> Delete selected
+                        </button>
+                    </div>
                     <table className="st-table">
                         <caption>Shot list — text equivalent of the board</caption>
                         <thead>
                             <tr>
+                                <th scope="col">
+                                    <input
+                                        type="checkbox"
+                                        aria-label="Select all shots"
+                                        checked={shots.length > 0 && selectedShotIds.length === shots.length}
+                                        onChange={(event) => {
+                                            selectShots(event.target.checked ? shots.map((shot) => shot.id) : []);
+                                        }}
+                                    />
+                                </th>
                                 <th scope="col">#</th>
                                 <th scope="col">Shot</th>
                                 <th scope="col">Type</th>
@@ -919,12 +959,43 @@ export function BoardCanvas() {
                             {shots.map((shot, index) => (
                                 <tr
                                     key={shot.id}
-                                    data-selected={selectedShotId === shot.id}
+                                    data-selected={selectedShotIds.includes(shot.id)}
                                     onClick={() => selectShot(shot.id)}
                                 >
+                                    <td onClick={(event) => event.stopPropagation()}>
+                                        <input
+                                            type="checkbox"
+                                            aria-label={`Select shot ${index + 1}`}
+                                            checked={selectedShotIds.includes(shot.id)}
+                                            onChange={() => toggleShotSelection(shot.id)}
+                                        />
+                                    </td>
                                     <td className="st-mono">{index + 1}</td>
-                                    <td><strong>{shot.action || shot.prompt || 'Untitled'}</strong></td>
-                                    <td>{shot.shotType || 'medium'}</td>
+                                    <td>
+                                        <input
+                                            className="st-input"
+                                            style={{ height: 28, padding: '3px 7px' }}
+                                            value={shot.action || shot.prompt || ''}
+                                            aria-label={`Shot ${index + 1} prompt`}
+                                            onClick={(event) => event.stopPropagation()}
+                                            onChange={(event) => updateShot(shot.id, { prompt: event.target.value })}
+                                        />
+                                    </td>
+                                    <td onClick={(event) => event.stopPropagation()}>
+                                        <select
+                                            className="st-select"
+                                            style={{ height: 28, padding: '2px 5px' }}
+                                            value={shot.shotType || 'medium'}
+                                            aria-label={`Shot ${index + 1} type`}
+                                            onChange={(event) => updateShot(shot.id, {
+                                                shotType: event.target.value as typeof shot.shotType,
+                                            })}
+                                        >
+                                            {['close_up', 'medium', 'wide', 'establishing', 'insert', 'tracking'].map((type) => (
+                                                <option key={type} value={type}>{type}</option>
+                                            ))}
+                                        </select>
+                                    </td>
                                     <td className="st-mono">{shot.numFrames}</td>
                                     <td>{shot.status || 'pending'}</td>
                                     <td>{shot.videoUrl ? 'selected' : '—'}</td>
@@ -932,6 +1003,38 @@ export function BoardCanvas() {
                             ))}
                         </tbody>
                     </table>
+
+                    <div className="st-panel" style={{ marginTop: 14 }}>
+                        <h3 className="st-panel-title">Typed links · {boardLinks.length}</h3>
+                        {boardLinks.length === 0 ? (
+                            <span className="st-value" style={{ color: 'var(--st-muted)' }}>
+                                No links yet. Use Link mode on the board.
+                            </span>
+                        ) : (
+                            <div className="st-link-list">
+                                {boardLinks.map((link) => {
+                                    const source = project.shots.find((shot) => shot.id === link.source);
+                                    const target = project.shots.find((shot) => shot.id === link.target);
+                                    return (
+                                        <div className="st-link-row" key={link.id}>
+                                            <span className="st-chip">{link.kind}</span>
+                                            <span>{source?.action || source?.prompt || link.source}</span>
+                                            <span aria-hidden="true">→</span>
+                                            <span>{target?.action || target?.prompt || link.target}</span>
+                                            <button
+                                                type="button"
+                                                className="st-icon-button"
+                                                aria-label={`Remove ${link.kind} link`}
+                                                onClick={() => removeLink(link.id)}
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
             ) : (
                 <div className="st-script-wrap">

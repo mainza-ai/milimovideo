@@ -457,3 +457,10 @@ Areas persist a `collapsed` flag (backend schema + board payload). Collapsing
 hides contained cards and their links; expanding restores them. Dragging an area
 moves every card whose center sits inside it, with positions committed through
 the same revisioned layout save. Verified: 41 pytest, 28 vitest, tsc clean.
+
+## [2026-11-17] f1 | editable shot list, bulk actions, links
+
+The list equivalent now supports multi-select checkboxes, select-all, bulk
+delete with confirmation, inline prompt and shot-type editing, and a typed-link
+list with source → target and remove actions. Board and list selection share the
+same multi-selection state. Verified: 28 vitest, tsc clean, eslint 0 errors.

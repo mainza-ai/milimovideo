@@ -1121,6 +1121,27 @@
     background: var(--st-accent-soft);
 }
 
+.st-link-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.st-link-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 7px;
+    border: 1px solid var(--st-border);
+    border-radius: var(--st-radius-sm);
+    color: var(--st-secondary);
+    font-size: 10px;
+}
+
+.st-link-row .st-icon-button {
+    margin-left: auto;
+}
+
 .st-script {
     max-width: 820px;
     margin: 0 auto;
