@@ -13,6 +13,7 @@ describe('studio editor board semantics', () => {
             selectedShotIds: [],
             boardPositions: {},
             boardPinned: {},
+            boardNotes: [],
             boardPast: [],
             boardFuture: [],
         });
@@ -75,6 +76,20 @@ describe('studio editor board semantics', () => {
 
         useStudioEditor.getState().deleteRecipe(useStudioEditor.getState().recipes[0].id);
         expect(useStudioEditor.getState().recipes).toEqual([]);
+    });
+
+    it('adds, updates and removes board notes under undo', () => {
+        useStudioEditor.setState({ boardNotes: [], boardPast: [], boardFuture: [] });
+        const id = useStudioEditor.getState().addNote({
+            text: 'look', x: 0, y: 0, width: 240, height: 130,
+        });
+        useStudioEditor.getState().pushBoardHistory();
+        useStudioEditor.getState().updateNote(id, { text: 'changed' });
+        expect(useStudioEditor.getState().boardNotes[0].text).toBe('changed');
+        useStudioEditor.getState().undoBoard();
+        expect(useStudioEditor.getState().boardNotes[0].text).toBe('look');
+        useStudioEditor.getState().removeNote(id);
+        expect(useStudioEditor.getState().boardNotes).toEqual([]);
     });
 
     it('dedupes typed links and rejects self links', () => {

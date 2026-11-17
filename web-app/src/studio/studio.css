@@ -865,6 +865,58 @@
 .st-board-link-blocking .st-board-link-node { stroke: var(--st-danger); }
 .st-board-link-reference .st-board-link-node { stroke: var(--st-v2); }
 
+.st-board-note {
+    position: absolute;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(245, 184, 75, 0.4);
+    border-radius: var(--st-radius);
+    background: rgba(245, 184, 75, 0.1);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.st-board-note[data-selected="true"] {
+    border-color: var(--st-warning);
+    box-shadow: 0 0 0 1px var(--st-warning), 0 12px 28px rgba(0, 0, 0, 0.35);
+}
+
+.st-board-note-head {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 4px 4px 7px;
+    color: var(--st-warning);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: grab;
+    user-select: none;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.st-board-note-head .st-icon-button {
+    margin-left: auto;
+}
+
+.st-board-note-text {
+    flex: 1;
+    width: 100%;
+    resize: none;
+    border: 0;
+    background: transparent;
+    color: var(--st-text);
+    padding: 7px 8px;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.st-board-note-text:focus {
+    outline: none;
+}
+
 .st-shot-card {
     position: absolute;
     z-index: 2;

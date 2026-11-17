@@ -725,3 +725,9 @@ stage with the live video ref and measured stage size, so masks overlay the cut
 instead of handing off to the legacy editor. Inspector gained an Effects tab
 summarizing speed, keyframes, fades, gain/mute, with edit shortcuts and a safe
 reset. Verified: 43 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f1 | board note cards
+
+Added draggable, editable, deletable note cards on the board, created at the
+viewport center. Notes are included in board-scoped undo/redo and the persisted
+editor layout. Added store tests. Verified: 44 vitest, tsc clean.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ChevronDown, ChevronRight, Grid3X3, Link2, List, Maximize2, Map, Minus, MousePointer2,
-    Plus, Redo2, RotateCcw, Search, SquareDashed, Trash2, Pin, Undo2, X,
+    Plus, Redo2, RotateCcw, Search, SquareDashed, StickyNote, Trash2, Pin, Undo2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
@@ -80,6 +80,7 @@ export function BoardCanvas() {
         boardQuery, setBoardQuery, selectedShotIds, selectShots, toggleShotSelection,
         boardPast, boardFuture, pushBoardHistory, undoBoard, redoBoard, togglePin,
         collabEnabled, setCollabEnabled, hydrateBoard,
+        boardNotes, addNote, updateNote, removeNote,
     } = useStudioEditor();
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
@@ -107,6 +108,8 @@ export function BoardCanvas() {
     } | null>(null);
     const [areaDraft, setAreaDraft] = useState<BoardArea | null>(null);
     const [linkSource, setLinkSource] = useState<string | null>(null);
+    const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+    const noteDrag = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
     const [scriptDraft, setScriptDraft] = useState(project.scriptContent || '');
     const [scriptBusy, setScriptBusy] = useState(false);
     const collabRef = useRef<BoardCollab | null>(null);
@@ -338,6 +341,7 @@ export function BoardCanvas() {
         if (event.button !== 0) return;
         const target = event.target as HTMLElement;
         if (target.closest('.st-shot-card') || target.closest('button')) return;
+        if (target.closest('.st-board-note')) return;
         if (target.closest('.st-board-area')) {
             selectArea(null);
             return;
@@ -453,6 +457,14 @@ export function BoardCanvas() {
                 });
             }
         }
+        if (noteDrag.current) {
+            const dx = (event.clientX - noteDrag.current.startX) / boardCamera.zoom;
+            const dy = (event.clientY - noteDrag.current.startY) / boardCamera.zoom;
+            updateNote(noteDrag.current.id, {
+                x: Math.round((noteDrag.current.origX + dx) / 8) * 8,
+                y: Math.round((noteDrag.current.origY + dy) / 8) * 8,
+            });
+        }
         if (cardResize.current) {
             const deltaX = (event.clientX - cardResize.current.startX) / boardCamera.zoom;
             const deltaY = (event.clientY - cardResize.current.startY) / boardCamera.zoom;
@@ -517,6 +529,7 @@ export function BoardCanvas() {
             setMarquee(null);
         }
         cardResize.current = null;
+        noteDrag.current = null;
         if (areaDrag.current?.mode === 'create' && areaDraft) {
             if (areaDraft.width > 40 && areaDraft.height > 40) {
                 pushBoardHistory();
@@ -681,6 +694,29 @@ export function BoardCanvas() {
                     title="Add a shot to the story"
                 >
                     <Plus size={13} /> Add shot
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    onClick={() => {
+                        const rect = hostRef.current?.getBoundingClientRect();
+                        const world = rect
+                            ? toWorld(rect.left + rect.width / 2, rect.top + rect.height / 2)
+                            : { x: 0, y: 0 };
+                        pushBoardHistory();
+                        addNote({
+                            text: 'New note',
+                            x: Math.round(world.x - 120),
+                            y: Math.round(world.y - 60),
+                            width: 240,
+                            height: 130,
+                        });
+                    }}
+                    title="Add a board note"
+                >
+                    <StickyNote size={13} /> Note
                 </button>
                 <button type="button" className="st-button" data-size="sm" onClick={arrange} title="Arrange cards">
                     <Grid3X3 size={13} /> Arrange
@@ -928,6 +964,61 @@ export function BoardCanvas() {
                                     </svg>
                                 );
                             })}
+
+                            {boardNotes.map((note) => (
+                                <div
+                                    key={note.id}
+                                    className="st-board-note"
+                                    data-selected={selectedNoteId === note.id}
+                                    style={{
+                                        left: note.x,
+                                        top: note.y,
+                                        width: note.width,
+                                        height: note.height,
+                                    }}
+                                    onPointerDown={(event) => {
+                                        event.stopPropagation();
+                                        setSelectedNoteId(note.id);
+                                        selectArea(null);
+                                    }}
+                                >
+                                    <div
+                                        className="st-board-note-head"
+                                        onPointerDown={(event) => {
+                                            event.stopPropagation();
+                                            pushBoardHistory();
+                                            noteDrag.current = {
+                                                id: note.id,
+                                                startX: event.clientX,
+                                                startY: event.clientY,
+                                                origX: note.x,
+                                                origY: note.y,
+                                            };
+                                            (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+                                        }}
+                                    >
+                                        <StickyNote size={11} />
+                                        <span>Note</span>
+                                        <button
+                                            type="button"
+                                            className="st-icon-button"
+                                            aria-label="Delete note"
+                                            onClick={() => {
+                                                pushBoardHistory();
+                                                removeNote(note.id);
+                                            }}
+                                        >
+                                            <Trash2 size={11} />
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        className="st-board-note-text"
+                                        value={note.text}
+                                        aria-label="Board note"
+                                        onChange={(event) => updateNote(note.id, { text: event.target.value })}
+                                    />
+                                </div>
+                            ))}
 
                             {visibleShots.map(({ shot, index, position }) => {
                                 return (

@@ -43,11 +43,21 @@ export interface PlanRecipe {
     created: number;
 }
 
+export interface BoardNote {
+    id: string;
+    text: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
+
 export interface BoardSnapshot {
     boardPositions: Record<string, BoardPosition>;
     boardPinned: Record<string, boolean>;
     boardAreas: Record<string, BoardArea>;
     boardLinks: BoardLink[];
+    boardNotes: BoardNote[];
 }
 
 interface EditorState {
@@ -64,6 +74,7 @@ interface EditorState {
     boardPinned: Record<string, boolean>;
     boardAreas: Record<string, BoardArea>;
     boardLinks: BoardLink[];
+    boardNotes: BoardNote[];
     boardQuery: string;
     collabEnabled: boolean;
     boardMode: BoardMode;
@@ -110,6 +121,9 @@ interface EditorState {
     removeArea: (areaId: string) => void;
     addLink: (source: string, target: string, kind: LinkKind) => void;
     removeLink: (linkId: string) => void;
+    addNote: (note: Omit<BoardNote, 'id'>) => string;
+    updateNote: (noteId: string, patch: Partial<BoardNote>) => void;
+    removeNote: (noteId: string) => void;
     setMinimapOpen: (open: boolean) => void;
     setFollowSelection: (follow: boolean) => void;
     setTimelineZoom: (zoom: number) => void;
@@ -133,6 +147,7 @@ function snapshotBoard(state: BoardSnapshot): BoardSnapshot {
         boardPinned: { ...state.boardPinned },
         boardAreas: { ...state.boardAreas },
         boardLinks: [...state.boardLinks],
+        boardNotes: [...state.boardNotes],
     };
 }
 
@@ -159,6 +174,7 @@ export const useStudioEditor = create<EditorState>()(
             boardPinned: {},
             boardAreas: {},
             boardLinks: [],
+            boardNotes: [],
             boardQuery: '',
             collabEnabled: false,
             boardMode: 'select',
@@ -284,6 +300,19 @@ export const useStudioEditor = create<EditorState>()(
             removeLink: (linkId) => set((state) => ({
                 boardLinks: state.boardLinks.filter((link) => link.id !== linkId),
             })),
+            addNote: (note) => {
+                const id = makeId('note');
+                set((state) => ({ boardNotes: [...state.boardNotes, { ...note, id }] }));
+                return id;
+            },
+            updateNote: (noteId, patch) => set((state) => ({
+                boardNotes: state.boardNotes.map((note) => (
+                    note.id === noteId ? { ...note, ...patch } : note
+                )),
+            })),
+            removeNote: (noteId) => set((state) => ({
+                boardNotes: state.boardNotes.filter((note) => note.id !== noteId),
+            })),
             setMinimapOpen: (boardMinimapOpen) => set({ boardMinimapOpen }),
             setFollowSelection: (boardFollowSelection) => set({ boardFollowSelection }),
             setTimelineZoom: (timelineZoom) => set({ timelineZoom: Math.max(8, Math.min(240, timelineZoom)) }),
@@ -308,6 +337,7 @@ export const useStudioEditor = create<EditorState>()(
                 boardPinned: {},
                 boardAreas: {},
                 boardLinks: [],
+                boardNotes: [],
                 boardCamera: DEFAULT_CAMERA,
                 selectedAreaId: null,
             }),
@@ -325,6 +355,7 @@ export const useStudioEditor = create<EditorState>()(
                 boardPinned: state.boardPinned,
                 boardAreas: state.boardAreas,
                 boardLinks: state.boardLinks,
+                boardNotes: state.boardNotes,
                 boardQuery: state.boardQuery,
                 collabEnabled: state.collabEnabled,
                 boardMode: state.boardMode,
