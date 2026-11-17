@@ -1769,6 +1769,130 @@
     color: var(--st-secondary);
 }
 
+/* ── Lenses ──────────────────────────────────────────────── */
+.st-lens-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(3px);
+}
+
+.st-lens {
+    width: min(980px, 100%);
+    max-height: 88dvh;
+    overflow-y: auto;
+    border: 1px solid var(--st-border-strong);
+    border-radius: var(--st-radius-lg);
+    background: var(--st-panel);
+    box-shadow: var(--st-shadow);
+}
+
+.st-lens-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px;
+    border-bottom: 1px solid var(--st-border);
+    color: var(--st-text);
+    font-size: 13px;
+}
+
+.st-lens-graph {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    padding: 14px;
+    border-bottom: 1px solid var(--st-border);
+}
+
+.st-lens-node {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--st-border);
+    border-radius: var(--st-radius-sm);
+    background: rgba(255, 255, 255, 0.025);
+    color: var(--st-muted);
+    font-size: 10px;
+}
+
+.st-lens-node[data-ok="true"] svg { color: var(--st-success); }
+.st-lens-node[data-ok="false"] { border-color: rgba(245, 184, 75, 0.4); }
+.st-lens-node[data-ok="false"] svg { color: var(--st-warning); }
+
+.st-lens-node span {
+    white-space: nowrap;
+    color: var(--st-secondary);
+}
+
+.st-lens-node strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--st-text);
+    font-weight: 600;
+}
+
+.st-lens-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 18px;
+    padding: 14px;
+}
+
+.st-lens-body h4 {
+    margin: 0 0 6px;
+    color: var(--st-secondary);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.st-lens-ok {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--st-success);
+    font-size: 11px;
+}
+
+.st-lens-warnings {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--st-warning);
+    font-size: 10px;
+}
+
+.st-lens-code {
+    max-height: 170px;
+    overflow: auto;
+    margin: 0 0 8px;
+    padding: 8px;
+    border: 1px solid var(--st-border);
+    border-radius: var(--st-radius-sm);
+    background: rgba(0, 0, 0, 0.24);
+    color: var(--st-secondary);
+    font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+    font-size: 9px;
+}
+
+.st-lens-estimate {
+    margin-top: 8px;
+    color: var(--st-accent);
+    font-size: 10px;
+}
+
 /* ── Command dock ────────────────────────────────────────── */
 .st-command-dock {
     flex: 0 0 auto;

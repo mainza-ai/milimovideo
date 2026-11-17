@@ -16,6 +16,7 @@ import {
     useStudioTakes,
 } from '../data/useStudioData';
 import type { StudioElement } from '../data/useStudioData';
+import { PipelineLens } from '../components/PipelineLens';
 
 export function GenerateSurface() {
     const project = useTimelineStore((state) => state.project);
@@ -26,6 +27,7 @@ export function GenerateSurface() {
     const [promptDraft, setPromptDraft] = useState<string | null>(null);
     const [batchBusy, setBatchBusy] = useState(false);
     const [preview, setPreview] = useState<{ url: string | null; status: string } | null>(null);
+    const [lensOpen, setLensOpen] = useState(false);
     const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(project.id);
 
     const videoShots = project.shots.filter((item) => item.trackIndex !== 2);
@@ -224,6 +226,9 @@ export function GenerateSurface() {
                         <button type="button" className="st-button" disabled={batchBusy} onClick={() => void queueReadyShots()}>
                             {batchBusy ? <Loader2 size={12} className="animate-spin" /> : <ListChecks size={12} />}
                             Queue pending
+                        </button>
+                        <button type="button" className="st-button" data-variant="ghost" onClick={() => setLensOpen(true)}>
+                            <Film size={12} /> Lens
                         </button>
                     </div>
                 </div>
@@ -550,6 +555,15 @@ export function GenerateSurface() {
                     </p>
                 </div>
             </aside>
+
+            {lensOpen && (
+                <PipelineLens
+                    projectId={project.id}
+                    shot={shot}
+                    elements={elements}
+                    onClose={() => setLensOpen(false)}
+                />
+            )}
         </div>
     );
 }

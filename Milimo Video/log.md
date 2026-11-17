@@ -664,3 +664,10 @@ shot text/timing), build 10–45s candidate windows with a hook/density/numbers
 score, select a candidate, choose 9:16 / 1:1 / 4:5, and export that range with
 transcript captions burned in. Recent exports read the same render history.
 Added candidate unit tests. Verified: 42 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f5 | pipeline lens
+
+Generate gained a read-only pipeline lens: node summary (prompt, ingredients,
+model, frames, resolution, upscale, take), validation warnings including the
+LTX 8k+1 frame rule, a copyable reproducible recipe JSON, and a plan-API cost
+estimate. No cloud calls. Verified: 42 vitest, tsc clean, eslint 0 errors.
