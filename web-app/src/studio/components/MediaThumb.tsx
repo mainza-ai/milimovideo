@@ -36,7 +36,7 @@ export function MediaThumb({ src, poster, alt = '', hovered }: Props) {
     }, [active, video]);
 
     if (!src && !poster) {
-        return <div className="st-media-thumb st-media-thumb-empty" aria-label={alt} />;
+        return <div className="st-media-thumb st-media-thumb-empty" role="img" aria-label={alt || 'No media'} />;
     }
 
     return (
