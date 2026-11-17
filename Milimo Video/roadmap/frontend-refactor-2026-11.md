@@ -49,7 +49,7 @@ at `/`.
 | **F2 Edit** | **Done for scoped F2** | Compare/wipe/guides; isolated clock; trim/slip/roll/blade/ripple/rate/slide; tracking/mask overlay; audio gain/mute/fades/solo/waveform/A1; captions import+burn; full motion keyframes; render range/presets; table+keyboard; effects tab. 200-clip scroll measured ~275fps; depth has no source |
 | **F3 Generate** | **Done for scoped F3** | Workspace, composer/@mentions, advanced params, preview frame, batch queue+matrix, queue position/estimate/cancel, takes/favorites, inpaint-as-take |
 | **F4 Review** | **Done for scoped F4** | Plan cards/approval/undo, recipes, comments/approvals/activity, needs-you, share links, compare, ranked search, takes, deliver presets, LoRA activation/strength, reviewer→agent E2E |
-| **F4 Library/Deliver** | **Mostly done** | Assets/references/takes/search tabs, ranked local search, take lineage + select/favorite, presets, render history, caption burn toggle |
+| **F4 Library/Deliver** | **Done for scoped F4** | Assets/references/takes/search tabs, master-reference CRUD with image/trigger, ranked local search, take lineage + select/favorite, presets, render history, caption burn toggle |
 | **F5 Shorts/lenses** | **Mostly done** | Shorts candidates/scores/export; pipeline lens; blocking lens; lazy 3D previz; Yjs board spike; Tauri shell with native save and a built debug binary. Open: sidecar bundling and deeper F5 polish |
 
 **Next:** close the remaining measurements (axe serious, 500-card/200-clip FPS),
