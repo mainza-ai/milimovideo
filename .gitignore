@@ -94,3 +94,7 @@ web-app/frontend.log
 # Playwright
 web-app/test-results/
 web-app/playwright-report/
+
+# Coverage
+.coverage
+htmlcov/

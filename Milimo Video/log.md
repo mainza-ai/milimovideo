@@ -700,3 +700,11 @@ Added an opt-in Collab toggle for the storyboard: Yjs maps for card positions an
 pins, BroadcastChannel transport between tabs on the same machine, remote
 transactions applied without echo loops. No server/cloud. Added a two-doc
 convergence test with a fake channel. Verified: 43 vitest, tsc clean.
+
+## [2026-11-17] ci | coverage reporting
+
+Added pytest-cov to requirements and CI runs `pytest --cov=backend` with a term
+report. New modules land above 80% (planner 89%, review 89%, share 86%,
+render_utils 95%, captions 90%, alembic baseline exercised); total repo coverage
+remains 37% because the legacy GPU/model modules are not unit-testable without
+weights. Ignored local coverage artifacts.

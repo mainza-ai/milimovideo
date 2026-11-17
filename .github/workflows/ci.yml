@@ -23,7 +23,7 @@ jobs:
       - name: Compile
         run: python -m compileall -q backend
       - name: Tests
-        run: python -m pytest
+        run: python -m pytest --cov=backend --cov-report=term
       - name: Lint (non-blocking while legacy code is frozen)
         run: ruff check backend --output-format=github || true
       - uses: actions/setup-node@v4
