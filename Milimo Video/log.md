@@ -464,3 +464,12 @@ The list equivalent now supports multi-select checkboxes, select-all, bulk
 delete with confirmation, inline prompt and shot-type editing, and a typed-link
 list with source → target and remove actions. Board and list selection share the
 same multi-selection state. Verified: 28 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f1 | board undo/redo and pin control
+
+Added a board-scoped history (separate from document undo) with undo/redo
+buttons. Moves, resizes, area moves/resizes/creates, links, align/distribute,
+arrange, pin toggles, and reset push one snapshot per gesture/action. Added the
+missing pin/unpin control for a single selection. Board undo restores positions,
+pins, areas, and links without touching document edits. Verified: 29 vitest,
+tsc clean, eslint 0 errors.

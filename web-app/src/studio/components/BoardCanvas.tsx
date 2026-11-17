@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ChevronDown, ChevronRight, Grid3X3, Link2, List, Maximize2, Map, Minus, MousePointer2,
-    Plus, RotateCcw, Search, SquareDashed, Trash2, Pin, X,
+    Plus, Redo2, RotateCcw, Search, SquareDashed, Trash2, Pin, Undo2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
@@ -70,6 +70,7 @@ export function BoardCanvas() {
         boardAreas, boardLinks, boardMode, setBoardMode, linkKind, setLinkKind,
         selectedAreaId, selectArea, addArea, updateArea, removeArea, addLink, removeLink,
         boardQuery, setBoardQuery, selectedShotIds, selectShots, toggleShotSelection,
+        boardPast, boardFuture, pushBoardHistory, undoBoard, redoBoard, togglePin,
     } = useStudioEditor();
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
@@ -174,6 +175,7 @@ export function BoardCanvas() {
     }, [boardPositions, setCamera, size.height, size.width]);
 
     const arrange = useCallback(() => {
+        pushBoardHistory();
         project.shots.forEach((shot, index) => {
             setBoardPosition(shot.id, {
                 x: (index % COLS) * (CARD_W + GAP_X),
@@ -182,7 +184,7 @@ export function BoardCanvas() {
                 height: CARD_H,
             });
         });
-    }, [project.shots, setBoardPosition]);
+    }, [project.shots, pushBoardHistory, setBoardPosition]);
 
     const selectedPositions = useCallback(() => selectedShotIds
         .map((id, index) => ({ id, position: boardPositions[id] || fallbackPosition(index) }))
@@ -191,6 +193,7 @@ export function BoardCanvas() {
     const alignSelected = (mode: 'left' | 'top' | 'center-h' | 'center-v' | 'right' | 'bottom') => {
         const items = selectedPositions();
         if (items.length < 2) return;
+        pushBoardHistory();
         const minX = Math.min(...items.map(({ position }) => position.x));
         const maxX = Math.max(...items.map(({ position }) => position.x + position.width));
         const minY = Math.min(...items.map(({ position }) => position.y));
@@ -208,6 +211,7 @@ export function BoardCanvas() {
     const distributeSelected = (axis: 'h' | 'v') => {
         const items = selectedPositions();
         if (items.length < 3) return;
+        pushBoardHistory();
         const sorted = [...items].sort((a, b) => (
             axis === 'h' ? a.position.x - b.position.x : a.position.y - b.position.y
         ));
@@ -248,6 +252,7 @@ export function BoardCanvas() {
         event.stopPropagation();
         selectArea(area.id);
         setBoardMode('area');
+        pushBoardHistory();
         const world = toWorld(event.clientX, event.clientY);
         const members = project.shots
             .map((shot, index) => ({
@@ -270,6 +275,7 @@ export function BoardCanvas() {
     const startAreaResize = (event: React.PointerEvent, area: BoardArea) => {
         event.stopPropagation();
         selectArea(area.id);
+        pushBoardHistory();
         const world = toWorld(event.clientX, event.clientY);
         areaDrag.current = {
             mode: 'resize', id: area.id, startWorldX: world.x, startWorldY: world.y, orig: area, members: [],
@@ -347,6 +353,7 @@ export function BoardCanvas() {
             if (!linkSource) {
                 setLinkSource(shotId);
             } else if (linkSource !== shotId) {
+                pushBoardHistory();
                 addLink(linkSource, shotId, linkKind);
                 setLinkSource(null);
             } else {
@@ -357,6 +364,7 @@ export function BoardCanvas() {
         if (event.shiftKey) return;
         const ids = selectedShotIds.includes(shotId) ? selectedShotIds : [shotId];
         if (!selectedShotIds.includes(shotId)) selectShot(shotId);
+        pushBoardHistory();
         cardDrag.current = {
             startX: event.clientX,
             startY: event.clientY,
@@ -372,6 +380,7 @@ export function BoardCanvas() {
         const position = boardPositions[shotId];
         if (!position) return;
         if (!selectedShotIds.includes(shotId)) selectShot(shotId);
+        pushBoardHistory();
         cardResize.current = {
             id: shotId,
             startX: event.clientX,
@@ -476,6 +485,7 @@ export function BoardCanvas() {
         cardResize.current = null;
         if (areaDrag.current?.mode === 'create' && areaDraft) {
             if (areaDraft.width > 40 && areaDraft.height > 40) {
+                pushBoardHistory();
                 addArea({
                     title: areaDraft.title,
                     x: Math.round(areaDraft.x),
@@ -693,7 +703,51 @@ export function BoardCanvas() {
                 <button type="button" className="st-button" data-size="sm" data-variant={boardFollowSelection ? 'primary' : 'ghost'} onClick={() => setFollowSelection(!boardFollowSelection)} title="Follow selection">
                     <Pin size={13} />
                 </button>
-                <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={resetBoard} title="Reset board layout">
+                {selectedShotIds.length === 1 && (
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant={boardPinned[selectedShotIds[0]] ? 'primary' : 'ghost'}
+                        title="Pin selected card"
+                        onClick={() => {
+                            pushBoardHistory();
+                            togglePin(selectedShotIds[0]);
+                        }}
+                    >
+                        <Pin size={13} /> {boardPinned[selectedShotIds[0]] ? 'Unpin' : 'Pin'}
+                    </button>
+                )}
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    disabled={boardPast.length === 0}
+                    onClick={undoBoard}
+                    title="Undo board change"
+                >
+                    <Undo2 size={13} />
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    disabled={boardFuture.length === 0}
+                    onClick={redoBoard}
+                    title="Redo board change"
+                >
+                    <Redo2 size={13} />
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    onClick={() => { pushBoardHistory(); resetBoard(); }}
+                    title="Reset board layout"
+                >
                     <RotateCcw size={13} />
                 </button>
             </div>

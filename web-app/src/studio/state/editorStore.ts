@@ -35,6 +35,13 @@ export interface BoardLink {
 
 export type BoardMode = 'select' | 'area' | 'link';
 
+export interface BoardSnapshot {
+    boardPositions: Record<string, BoardPosition>;
+    boardPinned: Record<string, boolean>;
+    boardAreas: Record<string, BoardArea>;
+    boardLinks: BoardLink[];
+}
+
 interface EditorState {
     activeSurface: StudioSurface;
     storyView: StoryView;
@@ -43,6 +50,8 @@ interface EditorState {
     selectedSceneId: string | null;
     inspectorTab: 'shot' | 'prompt' | 'motion' | 'takes' | 'audio' | 'review' | 'history';
     boardCamera: Camera;
+    boardPast: BoardSnapshot[];
+    boardFuture: BoardSnapshot[];
     boardPositions: Record<string, BoardPosition>;
     boardPinned: Record<string, boolean>;
     boardAreas: Record<string, BoardArea>;
@@ -78,6 +87,9 @@ interface EditorState {
     ) => void;
     setBoardPosition: (shotId: string, position: Partial<BoardPosition>) => void;
     togglePin: (shotId: string) => void;
+    pushBoardHistory: () => void;
+    undoBoard: () => void;
+    redoBoard: () => void;
     setBoardMode: (mode: BoardMode) => void;
     setBoardQuery: (query: string) => void;
     setLinkKind: (kind: LinkKind) => void;
@@ -102,6 +114,15 @@ interface EditorState {
 
 const DEFAULT_CAMERA: Camera = { x: 48, y: 48, zoom: 0.85 };
 
+function snapshotBoard(state: BoardSnapshot): BoardSnapshot {
+    return {
+        boardPositions: { ...state.boardPositions },
+        boardPinned: { ...state.boardPinned },
+        boardAreas: { ...state.boardAreas },
+        boardLinks: [...state.boardLinks],
+    };
+}
+
 function makeId(prefix: string): string {
     const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
         ? crypto.randomUUID()
@@ -119,6 +140,8 @@ export const useStudioEditor = create<EditorState>()(
             selectedSceneId: null,
             inspectorTab: 'shot',
             boardCamera: DEFAULT_CAMERA,
+            boardPast: [],
+            boardFuture: [],
             boardPositions: {},
             boardPinned: {},
             boardAreas: {},
@@ -162,6 +185,28 @@ export const useStudioEditor = create<EditorState>()(
             selectScene: (selectedSceneId) => set({ selectedSceneId }),
             setInspectorTab: (inspectorTab) => set({ inspectorTab }),
             setCamera: (boardCamera) => set({ boardCamera }),
+            pushBoardHistory: () => set((state) => ({
+                boardPast: [...state.boardPast.slice(-19), snapshotBoard(state)],
+                boardFuture: [],
+            })),
+            undoBoard: () => set((state) => {
+                const previous = state.boardPast[state.boardPast.length - 1];
+                if (!previous) return state;
+                return {
+                    ...snapshotBoard(previous),
+                    boardPast: state.boardPast.slice(0, -1),
+                    boardFuture: [snapshotBoard(state), ...state.boardFuture].slice(0, 20),
+                };
+            }),
+            redoBoard: () => set((state) => {
+                const next = state.boardFuture[0];
+                if (!next) return state;
+                return {
+                    ...snapshotBoard(next),
+                    boardFuture: state.boardFuture.slice(1),
+                    boardPast: [...state.boardPast.slice(-19), snapshotBoard(state)],
+                };
+            }),
             hydrateBoard: (boardPositions, boardPinned, boardCamera, boardAreas, boardLinks) => set((state) => ({
                 boardPositions,
                 boardPinned,

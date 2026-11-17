@@ -11,6 +11,10 @@ describe('studio editor board semantics', () => {
             selectedAreaId: null,
             selectedShotId: null,
             selectedShotIds: [],
+            boardPositions: {},
+            boardPinned: {},
+            boardPast: [],
+            boardFuture: [],
         });
     });
 
@@ -47,6 +51,19 @@ describe('studio editor board semantics', () => {
         useStudioEditor.getState().toggleShotSelection('b');
         expect(useStudioEditor.getState().selectedShotIds).toEqual([]);
         expect(useStudioEditor.getState().selectedShotId).toBeNull();
+    });
+
+    it('undoes and redoes board layout changes', () => {
+        const state = useStudioEditor.getState();
+        state.setBoardPosition('undo-shot', { x: 10, y: 10, width: 300, height: 238 });
+        useStudioEditor.getState().pushBoardHistory();
+        useStudioEditor.getState().setBoardPosition('undo-shot', { x: 240, y: 80 });
+
+        expect(useStudioEditor.getState().boardPositions['undo-shot'].x).toBe(240);
+        useStudioEditor.getState().undoBoard();
+        expect(useStudioEditor.getState().boardPositions['undo-shot']).toMatchObject({ x: 10, y: 10 });
+        useStudioEditor.getState().redoBoard();
+        expect(useStudioEditor.getState().boardPositions['undo-shot'].x).toBe(240);
     });
 
     it('dedupes typed links and rejects self links', () => {
