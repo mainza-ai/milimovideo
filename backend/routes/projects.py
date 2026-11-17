@@ -840,10 +840,14 @@ async def _render_background(
 
             if source_path:
                 resolved_source = resolve_path(source_path)
-                probe = subprocess.check_output([
-                    "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                    "-of", "default=nw=1:nk=1", str(resolved_source),
-                ], text=True).strip()
+                probe = (await asyncio.to_thread(
+                    subprocess.check_output,
+                    [
+                        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                        "-of", "default=nw=1:nk=1", str(resolved_source),
+                    ],
+                    text=True,
+                )).strip()
                 source_frames = max(1, round(float(probe or 0) * fps))
                 v1_clips = [{
                     "path": resolved_source,

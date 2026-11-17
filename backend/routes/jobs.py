@@ -4,6 +4,7 @@ from database import get_session, Job, Shot, Project
 from schemas import GenerateAdvancedRequest, GenerateImageRequest
 from tasks.video import generate_video_task
 from job_utils import active_jobs, update_job_db, update_shot_db
+import asyncio
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -272,10 +273,16 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
                                  import subprocess
                                  if not os.path.exists(last_frame_path):
                                      os.makedirs(os.path.dirname(last_frame_path), exist_ok=True)
-                                     subprocess.run([
-                                         "ffmpeg", "-y", "-sseof", "-1.0", "-i", fs_cond_path, 
-                                         "-q:v", "2", "-update", "1", last_frame_path
-                                     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                     await asyncio.to_thread(
+                                        subprocess.run,
+                                        [
+                                            "ffmpeg", "-y", "-sseof", "-1.0", "-i", fs_cond_path,
+                                            "-q:v", "2", "-update", "1", last_frame_path,
+                                        ],
+                                        check=True,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL,
+                                    )
                                  
                                  cond_path = last_frame_path
 

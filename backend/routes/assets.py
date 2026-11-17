@@ -1,5 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from typing import Optional
+import asyncio
 import os
 import re
 import shutil
@@ -175,10 +176,14 @@ async def get_shot_last_frame(job_id: str, session: Session = Depends(get_sessio
         out_path = os.path.join(out_dir, out_name)
         
         # Extract last frame using ffmpeg
-        subprocess.run([
-            "ffmpeg", "-y", "-sseof", "-1.0", "-i", video_path,
-            "-q:v", "2", "-update", "1", out_path
-        ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        await asyncio.to_thread(
+            subprocess.run,
+            ["ffmpeg", "-y", "-sseof", "-1.0", "-i", video_path,
+             "-q:v", "2", "-update", "1", out_path],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         
         # Build URL based on original path pattern
         parts = job.output_path.split("/")

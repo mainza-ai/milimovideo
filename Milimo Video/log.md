@@ -993,3 +993,10 @@ dispatch, and downloader progress broadcasts. Fire-and-forget `create_task` call
 can be garbage-collected before completion; they now live in tracked sets and are
 discarded on done. Added a queue task-lifetime test. Verified: 74 pytest,
 compileall, ruff clean.
+
+## [2026-11-17] async | move ffmpeg helpers off the event loop
+
+Enabled ASYNC221. Stitching, duration probes, thumbnail generation, last-frame
+extraction, and source probing now run through `asyncio.to_thread` instead of
+blocking the loop inside async routes/tasks. Added a real last-frame extraction
+test. Verified: 75 pytest, ruff clean, compileall.

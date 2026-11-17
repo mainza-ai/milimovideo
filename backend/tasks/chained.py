@@ -426,7 +426,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         ]
         
         try:
-            subprocess.run(cmd, cwd=output_dir, check=True)
+            await asyncio.to_thread(subprocess.run, cmd, cwd=output_dir, check=True)
             logger.info(f"Stitched video saved to {final_output_path}")
         except subprocess.CalledProcessError as e:
             logger.error(f"Stitching failed with audio: {e}. Retrying video only...")
@@ -440,7 +440,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 "-movflags", "+faststart",
                 "-y", final_output_path
             ]
-            subprocess.run(cmd_v, cwd=output_dir, check=True)
+            await asyncio.to_thread(subprocess.run, cmd_v, cwd=output_dir, check=True)
             logger.info(f"Stitched video (video-only) saved to {final_output_path}")
         
         # Detect actual frame count (DURATION PROBE) to sync UI for Chained Generation
@@ -449,7 +449,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Probe the file DURATION (more accurate for player sync than packet count)
             # -show_entries format=duration
             cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", final_output_path]
-            res = subprocess.check_output(cmd).decode("utf-8").strip()
+            res = (await asyncio.to_thread(subprocess.check_output, cmd)).decode("utf-8").strip()
             
             if res:
                 duration_sec = float(res)
@@ -468,9 +468,14 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         # Generate thumbnail from final video
         thumb_path = paths["thumbnail_path"]
         try:
-            subprocess.run([
-                "ffmpeg", "-y", "-i", final_output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            await asyncio.to_thread(
+                subprocess.run,
+                ["ffmpeg", "-y", "-i", final_output_path, "-ss", "00:00:00.500",
+                 "-vframes", "1", thumb_path],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             logger.info(f"Generated thumbnail: {thumb_path}")
         except Exception as e:
             logger.warning(f"Failed to generate thumbnail: {e}")

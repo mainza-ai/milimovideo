@@ -14,4 +14,5 @@ select = [
     "B023", # closures must bind loop variables they capture
     "F841", # unused locals often hide incomplete wiring
     "RUF006", # keep references to fire-and-forget asyncio tasks
+    "ASYNC221", # async functions must not block the loop with subprocesses
 ]

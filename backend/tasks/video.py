@@ -597,7 +597,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             actual_frames = num_frames
             try:
                 cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets", "-show_entries", "stream=nb_read_packets", "-of", "csv=p=0", output_path]
-                res = subprocess.check_output(cmd).decode("utf-8").strip()
+                res = (await asyncio.to_thread(subprocess.check_output, cmd)).decode("utf-8").strip()
                 if res and res.isdigit():
                     actual_frames = int(res)
                     if job_id in active_jobs:
@@ -608,9 +608,14 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             thumbnail_web_path = None
             try:
                 thumb_path = paths["thumbnail_path"]
-                subprocess.run([
-                    "ffmpeg", "-y", "-i", output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
-                ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["ffmpeg", "-y", "-i", output_path, "-ss", "00:00:00.500",
+                     "-vframes", "1", thumb_path],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
                 thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}"
             except Exception as e:
                 logger.warning(f"Failed to generate thumbnail: {e}")
