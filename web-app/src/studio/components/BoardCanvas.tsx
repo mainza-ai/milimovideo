@@ -13,7 +13,7 @@ import {
 import { ShotCard } from './ShotCard';
 import { cullCards } from '../board/culling';
 import { startBoardCollab, type BoardCollab } from '../collab/boardSync';
-import { useStudioElements } from '../data/useStudioData';
+import { useStudioElements, useStudioReview } from '../data/useStudioData';
 
 const CARD_W = 300;
 const CARD_H = 238;
@@ -105,8 +105,10 @@ export function BoardCanvas() {
         collabEnabled, setCollabEnabled, hydrateBoard,
         boardNotes, addNote, updateNote, removeNote,
         referencePositions, showReferenceCards, setReferencePosition, setShowReferenceCards,
+        setInspectorTab, setSurface,
     } = useStudioEditor();
     const elements = useStudioElements(project.id);
+    const { review } = useStudioReview(project.id);
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
     const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
@@ -624,6 +626,28 @@ export function BoardCanvas() {
         }));
     }, [boardPositions, elements, referencePositions, showReferenceCards]);
 
+    const boardTasks = useMemo(() => {
+        const comments = review.comments
+            .filter((item) => item.status === 'open' && item.shot_id)
+            .map((item) => ({
+                id: `comment-${item.id}`,
+                shotId: item.shot_id as string,
+                frame: item.frame,
+                text: item.body,
+                tone: 'comment',
+            }));
+        const approvals = review.approvals
+            .filter((item) => item.status === 'changes_requested' && item.shot_id)
+            .map((item) => ({
+                id: `approval-${item.id}`,
+                shotId: item.shot_id as string,
+                frame: 0,
+                text: item.body || 'Changes requested',
+                tone: 'approval',
+            }));
+        return [...approvals, ...comments];
+    }, [review.approvals, review.comments]);
+
     const hiddenShotIds = useMemo(() => {
         const collapsed = Object.values(boardAreas).filter((area) => area.collapsed);
         if (collapsed.length === 0) return new Set<string>();
@@ -1122,6 +1146,37 @@ export function BoardCanvas() {
                                     </div>
                                 </div>
                             ))}
+
+                            {boardTasks.map((task, taskIndex) => {
+                                const position = boardPositions[task.shotId];
+                                if (!position || hiddenShotIds.has(task.shotId)) return null;
+                                const stack = boardTasks
+                                    .slice(0, taskIndex)
+                                    .filter((item) => item.shotId === task.shotId).length;
+                                return (
+                                    <button
+                                        key={task.id}
+                                        type="button"
+                                        className="st-board-task"
+                                        data-tone={task.tone}
+                                        style={{
+                                            left: position.x + position.width + 10,
+                                            top: position.y + stack * 74,
+                                        }}
+                                        onClick={() => {
+                                            selectShot(task.shotId);
+                                            setInspectorTab('review');
+                                            setSurface('review');
+                                        }}
+                                        title={task.text}
+                                    >
+                                        <span className="st-board-task-frame">
+                                            {task.tone === 'approval' ? 'changes' : `f${task.frame}`}
+                                        </span>
+                                        <span className="st-board-task-text">{task.text}</span>
+                                    </button>
+                                );
+                            })}
 
                             {visibleShots.map(({ shot, index, position }) => {
                                 return (

@@ -787,3 +787,10 @@ Added an opt-in Refs layer that renders draggable element/reference cards with
 image, name, trigger, and type. Positions persist in the editor store; the layer
 resets with board layout. This extends the board beyond shot cards without
 changing sequence semantics. Verified: 44 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f1 | review task cards on the board
+
+Open review comments and change-request approvals now appear as small task cards
+beside their shot card. Clicking one selects the shot and opens Review. Tasks
+respect collapsed areas and use the live review contract. Verified: 44 vitest,
+tsc clean, eslint 0 errors.
