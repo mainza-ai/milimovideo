@@ -386,6 +386,17 @@ def update_job_db(job_id: str, status: str, output_path: str = None, error: str 
                     job.error_message = str(error)
                 if enhanced_prompt:
                     job.enhanced_prompt = enhanced_prompt
+                    # Record which role/provider/model produced this prompt, so a
+                    # take can be traced back to the LLM configuration that made it.
+                    try:
+                        from llm import last_enhancement
+                        provenance = last_enhancement()
+                        if provenance:
+                            params = json.loads(job.params_json or "{}")
+                            params["llm"] = provenance
+                            job.params_json = json.dumps(params)
+                    except Exception:
+                        pass
                 if status_message:
                     job.status_message = status_message
                 if actual_frames is not None:

@@ -119,7 +119,9 @@ FILTER_PRESETS = [
 ]
 
 # ── LLM Configuration ─────────────────────────────────────────────
-# Provider: "gemma" (built-in LTX text encoder) or "ollama" (local LLM)
+# Legacy env defaults. These only seed the first-boot persisted settings
+# document; the live plane is services/llm (Studio Setup -> AI & LLM). Do not
+# branch on these values in new code.
 LLM_PROVIDER = os.environ.get("MILIMO_LLM_PROVIDER", "gemma")
 OLLAMA_BASE_URL = os.environ.get("MILIMO_OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("MILIMO_OLLAMA_MODEL", "llama3.1")

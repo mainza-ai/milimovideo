@@ -288,21 +288,24 @@ async def ai_parse_job(project_id: str, req: ScriptParseRequest, session: Sessio
 
 @router.post("/projects/{project_id}/storyboard/ai-parse")
 async def ai_parse(project_id: str, req: ScriptParseRequest):
-    """AI-powered script parsing using Gemma 3.
-    
-    Falls back to regex parser if Gemma is unavailable.
-    Both paths include element matching.
+    """AI-powered script parsing through the `script_parse` role.
+
+    Local HTTP providers (Ollama/LM Studio) need no model load. The LTX Gemma
+    text encoder is only fetched when the role actually resolves to Gemma.
+    Falls back to the regex parser if no provider is usable.
     """
     from managers.element_manager import element_manager
     project_elements = element_manager.get_elements(project_id)
-    
+
+    text_encoder = None
     try:
-        from model_engine import manager
-        
-        # Load pipeline (needed to access text encoder)
-        pipeline = await manager.load_pipeline("ti2vid")
-        text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-        
+        from llm import role_uses_gemma
+
+        if role_uses_gemma("script_parse"):
+            from model_engine import manager
+            pipeline = await manager.load_pipeline("ti2vid")
+            text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+
         import asyncio
         parsed_scenes = await asyncio.to_thread(
             ai_parse_script,
@@ -311,12 +314,12 @@ async def ai_parse(project_id: str, req: ScriptParseRequest):
             seed=42,
             project_elements=project_elements if project_elements else None,
         )
-        
-        # Cleanup
-        del text_encoder
-        from ltx_pipelines.utils.helpers import cleanup_memory
-        cleanup_memory()
-        
+
+        if text_encoder is not None:
+            del text_encoder
+            from ltx_pipelines.utils.helpers import cleanup_memory
+            cleanup_memory()
+
         return {"scenes": parsed_scenes, "mode": "ai"}
         
     except Exception as e:

@@ -940,6 +940,365 @@
         "title": "InpaintRequest",
         "type": "object"
       },
+      "LLMModelTarget": {
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model"
+        ],
+        "title": "LLMModelTarget",
+        "type": "object"
+      },
+      "LLMProviderConfig": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "base_url": {
+            "default": "",
+            "title": "Base Url",
+            "type": "string"
+          },
+          "clear_key": {
+            "default": false,
+            "title": "Clear Key",
+            "type": "boolean"
+          },
+          "default_model": {
+            "default": "",
+            "title": "Default Model",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "has_key": {
+            "default": false,
+            "title": "Has Key",
+            "type": "boolean"
+          },
+          "is_local": {
+            "default": true,
+            "title": "Is Local",
+            "type": "boolean"
+          },
+          "keep_alive": {
+            "default": "0",
+            "title": "Keep Alive",
+            "type": "string"
+          },
+          "key_status": {
+            "default": "none",
+            "title": "Key Status",
+            "type": "string"
+          },
+          "last_fault": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Fault"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secret_source": {
+            "default": "none",
+            "title": "Secret Source",
+            "type": "string"
+          },
+          "timeout_sec": {
+            "default": 120,
+            "title": "Timeout Sec",
+            "type": "integer"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "wire": {
+            "default": "openai_chat",
+            "title": "Wire",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "name"
+        ],
+        "title": "LLMProviderConfig",
+        "type": "object"
+      },
+      "LLMRoleAssignment": {
+        "properties": {
+          "fallback": {
+            "items": {
+              "$ref": "#/components/schemas/LLMModelTarget"
+            },
+            "title": "Fallback",
+            "type": "array"
+          },
+          "max_tokens": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tokens"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "reasoning_effort": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning Effort"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "temperature": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature"
+          },
+          "top_p": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top P"
+          }
+        },
+        "required": [
+          "role",
+          "provider",
+          "model"
+        ],
+        "title": "LLMRoleAssignment",
+        "type": "object"
+      },
+      "LLMSettings": {
+        "properties": {
+          "active_model": {
+            "default": "ltx-gemma3",
+            "title": "Active Model",
+            "type": "string"
+          },
+          "active_provider": {
+            "default": "gemma",
+            "title": "Active Provider",
+            "type": "string"
+          },
+          "air_gapped": {
+            "default": true,
+            "title": "Air Gapped",
+            "type": "boolean"
+          },
+          "max_tokens": {
+            "default": 400,
+            "title": "Max Tokens",
+            "type": "integer"
+          },
+          "providers": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LLMProviderConfig"
+            },
+            "title": "Providers",
+            "type": "object"
+          },
+          "revision": {
+            "default": 0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "roles": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LLMRoleAssignment"
+            },
+            "title": "Roles",
+            "type": "object"
+          },
+          "schema_version": {
+            "default": 1,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "temperature": {
+            "default": 0.7,
+            "title": "Temperature",
+            "type": "number"
+          }
+        },
+        "title": "LLMSettings",
+        "type": "object"
+      },
+      "LLMTestRequest": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "prompt": {
+            "default": "Confirm you are active and describe the current shot.",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "role": {
+            "default": "prompt_video",
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "title": "LLMTestRequest",
+        "type": "object"
+      },
+      "LLMVerifyResult": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "fault": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fault"
+          },
+          "latency_ms": {
+            "default": 0,
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "wire": {
+            "default": "",
+            "title": "Wire",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "provider"
+        ],
+        "title": "LLMVerifyResult",
+        "type": "object"
+      },
       "LoRARequest": {
         "properties": {
           "strength": {
@@ -5635,7 +5994,7 @@
     },
     "/projects/{project_id}/storyboard/ai-parse": {
       "post": {
-        "description": "AI-powered script parsing using Gemma 3.\n\nFalls back to regex parser if Gemma is unavailable.\nBoth paths include element matching.",
+        "description": "AI-powered script parsing through the `script_parse` role.\n\nLocal HTTP providers (Ollama/LM Studio) need no model load. The LTX Gemma\ntext encoder is only fetched when the role actually resolves to Gemma.\nFalls back to the regex parser if no provider is usable.",
         "operationId": "ai_parse_projects__project_id__storyboard_ai_parse_post",
         "parameters": [
           {
@@ -6529,7 +6888,7 @@
     },
     "/settings/llm": {
       "get": {
-        "description": "Return current LLM configuration.",
+        "description": "Redacted LLM settings snapshot. Keys are never returned.",
         "operationId": "get_llm_settings_settings_llm_get",
         "responses": {
           "200": {
@@ -6543,12 +6902,12 @@
         },
         "summary": "Get Llm Settings",
         "tags": [
-          "projects"
+          "settings"
         ]
       },
       "patch": {
-        "description": "Update LLM settings at runtime.",
-        "operationId": "update_llm_settings_settings_llm_patch",
+        "description": "Field-level update. Only the air-gap switch is patched independently.",
+        "operationId": "patch_llm_settings_settings_llm_patch",
         "requestBody": {
           "content": {
             "application/json": {
@@ -6581,16 +6940,72 @@
             "description": "Validation Error"
           }
         },
+        "summary": "Patch Llm Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "description": "Whole-document update guarded by the revision the client read.",
+        "operationId": "update_llm_settings_settings_llm_put",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Revision"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LLMSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
         "summary": "Update Llm Settings",
         "tags": [
-          "projects"
+          "settings"
         ]
       }
     },
-    "/settings/llm/models": {
-      "get": {
-        "description": "Query Ollama for available models, tagging vision-capable ones.",
-        "operationId": "list_ollama_models_settings_llm_models_get",
+    "/settings/llm/discover": {
+      "post": {
+        "description": "Scan loopback ports for running local inference servers.",
+        "operationId": "discover_llm_servers_settings_llm_discover_post",
         "responses": {
           "200": {
             "content": {
@@ -6601,9 +7016,199 @@
             "description": "Successful Response"
           }
         },
-        "summary": "List Ollama Models",
+        "summary": "Discover Llm Servers",
         "tags": [
-          "projects"
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/health": {
+      "get": {
+        "description": "Resolution status for every role plus per-provider last success/fault.",
+        "operationId": "llm_health_settings_llm_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Llm Health",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/models": {
+      "get": {
+        "description": "Model catalog for one provider (defaults to the active role's provider).",
+        "operationId": "list_llm_models_settings_llm_models_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Llm Models",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/providers/{provider_id}/key": {
+      "delete": {
+        "operationId": "clear_llm_provider_key_settings_llm_providers__provider_id__key_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Llm Provider Key",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/providers/{provider_id}/verify": {
+      "post": {
+        "operationId": "verify_llm_provider_settings_llm_providers__provider_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LLMVerifyResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify Llm Provider",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/test": {
+      "post": {
+        "description": "Send a test prompt through the role plan or an explicit provider/model.",
+        "operationId": "test_llm_settings_llm_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LLMTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Llm",
+        "tags": [
+          "settings"
         ]
       }
     },

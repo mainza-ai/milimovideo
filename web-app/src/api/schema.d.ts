@@ -1246,10 +1246,11 @@ export interface paths {
         put?: never;
         /**
          * Ai Parse
-         * @description AI-powered script parsing using Gemma 3.
+         * @description AI-powered script parsing through the `script_parse` role.
          *
-         *     Falls back to regex parser if Gemma is unavailable.
-         *     Both paths include element matching.
+         *     Local HTTP providers (Ollama/LM Studio) need no model load. The LTX Gemma
+         *     text encoder is only fetched when the role actually resolves to Gemma.
+         *     Falls back to the regex parser if no provider is usable.
          */
         post: operations["ai_parse_projects__project_id__storyboard_ai_parse_post"];
         delete?: never;
@@ -1620,19 +1621,63 @@ export interface paths {
         };
         /**
          * Get Llm Settings
-         * @description Return current LLM configuration.
+         * @description Redacted LLM settings snapshot. Keys are never returned.
          */
         get: operations["get_llm_settings_settings_llm_get"];
-        put?: never;
+        /**
+         * Update Llm Settings
+         * @description Whole-document update guarded by the revision the client read.
+         */
+        put: operations["update_llm_settings_settings_llm_put"];
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /**
-         * Update Llm Settings
-         * @description Update LLM settings at runtime.
+         * Patch Llm Settings
+         * @description Field-level update. Only the air-gap switch is patched independently.
          */
-        patch: operations["update_llm_settings_settings_llm_patch"];
+        patch: operations["patch_llm_settings_settings_llm_patch"];
+        trace?: never;
+    };
+    "/settings/llm/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Llm Servers
+         * @description Scan loopback ports for running local inference servers.
+         */
+        post: operations["discover_llm_servers_settings_llm_discover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Llm Health
+         * @description Resolution status for every role plus per-provider last success/fault.
+         */
+        get: operations["llm_health_settings_llm_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/settings/llm/models": {
@@ -1643,12 +1688,66 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List Ollama Models
-         * @description Query Ollama for available models, tagging vision-capable ones.
+         * List Llm Models
+         * @description Model catalog for one provider (defaults to the active role's provider).
          */
-        get: operations["list_ollama_models_settings_llm_models_get"];
+        get: operations["list_llm_models_settings_llm_models_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/providers/{provider_id}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Clear Llm Provider Key */
+        delete: operations["clear_llm_provider_key_settings_llm_providers__provider_id__key_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/providers/{provider_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Llm Provider */
+        post: operations["verify_llm_provider_settings_llm_providers__provider_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Llm
+         * @description Send a test prompt through the role plan or an explicit provider/model.
+         */
+        post: operations["test_llm_settings_llm_test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2465,6 +2564,188 @@ export interface components {
             shot_id?: string | null;
             /** Text Mask */
             text_mask?: string | null;
+        };
+        /** LLMModelTarget */
+        LLMModelTarget: {
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
+        };
+        /** LLMProviderConfig */
+        LLMProviderConfig: {
+            /** Api Key */
+            api_key?: string | null;
+            /**
+             * Base Url
+             * @default
+             */
+            base_url: string;
+            /**
+             * Clear Key
+             * @default false
+             */
+            clear_key: boolean;
+            /**
+             * Default Model
+             * @default
+             */
+            default_model: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Has Key
+             * @default false
+             */
+            has_key: boolean;
+            /**
+             * Is Local
+             * @default true
+             */
+            is_local: boolean;
+            /**
+             * Keep Alive
+             * @default 0
+             */
+            keep_alive: string;
+            /**
+             * Key Status
+             * @default none
+             */
+            key_status: string;
+            /** Last Fault */
+            last_fault?: string | null;
+            /** Last Success At */
+            last_success_at?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Secret Source
+             * @default none
+             */
+            secret_source: string;
+            /**
+             * Timeout Sec
+             * @default 120
+             */
+            timeout_sec: number;
+            /** Type */
+            type: string;
+            /**
+             * Wire
+             * @default openai_chat
+             */
+            wire: string;
+        };
+        /** LLMRoleAssignment */
+        LLMRoleAssignment: {
+            /** Fallback */
+            fallback?: components["schemas"]["LLMModelTarget"][];
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
+            /** Reasoning Effort */
+            reasoning_effort?: string | null;
+            /** Role */
+            role: string;
+            /** Seed */
+            seed?: number | null;
+            /** Temperature */
+            temperature?: number | null;
+            /** Top P */
+            top_p?: number | null;
+        };
+        /** LLMSettings */
+        LLMSettings: {
+            /**
+             * Active Model
+             * @default ltx-gemma3
+             */
+            active_model: string;
+            /**
+             * Active Provider
+             * @default gemma
+             */
+            active_provider: string;
+            /**
+             * Air Gapped
+             * @default true
+             */
+            air_gapped: boolean;
+            /**
+             * Max Tokens
+             * @default 400
+             */
+            max_tokens: number;
+            /** Providers */
+            providers?: {
+                [key: string]: components["schemas"]["LLMProviderConfig"];
+            };
+            /**
+             * Revision
+             * @default 0
+             */
+            revision: number;
+            /** Roles */
+            roles?: {
+                [key: string]: components["schemas"]["LLMRoleAssignment"];
+            };
+            /**
+             * Schema Version
+             * @default 1
+             */
+            schema_version: number;
+            /**
+             * Temperature
+             * @default 0.7
+             */
+            temperature: number;
+        };
+        /** LLMTestRequest */
+        LLMTestRequest: {
+            /** Model */
+            model?: string | null;
+            /**
+             * Prompt
+             * @default Confirm you are active and describe the current shot.
+             */
+            prompt: string;
+            /** Provider */
+            provider?: string | null;
+            /**
+             * Role
+             * @default prompt_video
+             */
+            role: string;
+        };
+        /** LLMVerifyResult */
+        LLMVerifyResult: {
+            /** Error */
+            error?: string | null;
+            /** Fault */
+            fault?: string | null;
+            /**
+             * Latency Ms
+             * @default 0
+             */
+            latency_ms: number;
+            /** Models */
+            models?: string[];
+            /** Ok */
+            ok: boolean;
+            /** Provider */
+            provider: string;
+            /**
+             * Wire
+             * @default
+             */
+            wire: string;
         };
         /** LoRARequest */
         LoRARequest: {
@@ -6141,7 +6422,42 @@ export interface operations {
             };
         };
     };
-    update_llm_settings_settings_llm_patch: {
+    update_llm_settings_settings_llm_put: {
+        parameters: {
+            query?: {
+                expected_revision?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LLMSettings"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_llm_settings_settings_llm_patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -6176,7 +6492,7 @@ export interface operations {
             };
         };
     };
-    list_ollama_models_settings_llm_models_get: {
+    discover_llm_servers_settings_llm_discover_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -6192,6 +6508,152 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    llm_health_settings_llm_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_llm_models_settings_llm_models_get: {
+        parameters: {
+            query?: {
+                provider?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_llm_provider_key_settings_llm_providers__provider_id__key_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_llm_provider_settings_llm_providers__provider_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LLMVerifyResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_llm_settings_llm_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LLMTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

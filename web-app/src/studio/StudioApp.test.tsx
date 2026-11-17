@@ -29,6 +29,31 @@ describe('StudioApp shell', () => {
                     auth_required: false,
                 });
             }
+            if (url.includes('/settings/llm')) {
+                return json({
+                    schema_version: 1,
+                    revision: 0,
+                    active_provider: 'gemma',
+                    active_model: 'ltx-gemma3',
+                    air_gapped: true,
+                    temperature: 0.7,
+                    max_tokens: 400,
+                    cloud_enabled: false,
+                    role_catalog: [],
+                    providers: {
+                        gemma: {
+                            type: 'gemma', name: 'Gemma 3 (LTX text encoder)', base_url: '',
+                            default_model: 'ltx-gemma3', wire: 'gemma_native', enabled: true,
+                            is_local: true, timeout_sec: 120, keep_alive: '0', api_key: null,
+                            has_key: false, secret_source: 'none', key_status: 'none',
+                            last_success_at: null, last_fault: null,
+                        },
+                    },
+                    roles: {
+                        prompt_video: { role: 'prompt_video', provider: 'gemma', model: 'ltx-gemma3', fallback: [] },
+                    },
+                });
+            }
             return json([]);
         }));
     });

@@ -196,20 +196,20 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             logger.info(f"Detected single-frame generation. Delegating to Flux 2 (T2I mode)...")
             from models.flux_wrapper import flux_inpainter
             
-            # Prompt Enhancement for single-frame (image) mode
-            # NOTE: Flux doesn't use LTX text_encoder — only Ollama can enhance here.
+            # Prompt Enhancement for single-frame (image) mode.
+            # Flux has no LTX text encoder, so the `prompt_image` role must
+            # resolve to an HTTP provider (Ollama/LM Studio/compatible).
             if enhance_prompt:
                 try:
-                    from llm import enhance_prompt as llm_enhance
-                    provider = config.LLM_PROVIDER.lower()
-                    if provider == "gemma":
+                    from llm import enhance_prompt as llm_enhance, role_uses_gemma
+                    if role_uses_gemma("prompt_image"):
                         logger.warning(
-                            "Gemma cannot enhance single-frame prompts (Flux has no LTX text_encoder). "
-                            "Skipping enhancement. Use Ollama for image prompt enhancement."
+                            "The prompt_image role resolves to Gemma, but Flux has no LTX text "
+                            "encoder. Skipping enhancement; assign prompt_image to a local HTTP "
+                            "provider in Studio Setup."
                         )
                     else:
-                        logger.info(f"Enhancing single-frame prompt via {provider}...")
-                        enhanced = llm_enhance(prompt=prompt, is_video=False, seed=seed)
+                        enhanced, _ = llm_enhance(prompt=prompt, is_video=False, seed=seed)
                         if enhanced and enhanced != prompt:
                             prompt = enhanced
                             update_job_db(job_id, "processing", enhanced_prompt=prompt)
@@ -358,16 +358,14 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 run_prompt = prompt
                 if enhance_prompt:
                     update_job_progress(job_id, 5, "Enhancing Prompt...")
-                    logger.info(f"Enhancing prompt with {config.LLM_PROVIDER}...")
+                    logger.info("Enhancing prompt with the resolved LLM role plan...")
                     try:
-                        from llm import enhance_prompt as llm_enhance
+                        from llm import enhance_prompt as llm_enhance, prepare_text_encoder
                         is_image_mode = (num_frames == 1)
-                        
-                        # For Gemma, we need the text encoder
-                        text_encoder = None
-                        if config.LLM_PROVIDER.lower() == "gemma":
-                            text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-                        
+
+                        # Only load the LTX text encoder when the role needs Gemma.
+                        text_encoder = prepare_text_encoder(pipeline, is_video=not is_image_mode)
+
                         image_for_llm = None
                         
                         # PRIORITY: Inspiration Images (Concept Art) -> Input Images (Frame 0)
@@ -451,10 +449,8 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 ic_prompt = prompt
                 if enhance_prompt:
                     try:
-                        from llm import enhance_prompt as llm_enhance
-                        text_encoder = None
-                        if config.LLM_PROVIDER.lower() == "gemma":
-                            text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                        from llm import enhance_prompt as llm_enhance, prepare_text_encoder
+                        text_encoder = prepare_text_encoder(pipeline, is_video=True)
                         ic_prompt, is_ref = llm_enhance(
                             prompt=prompt, is_video=True,
                             text_encoder=text_encoder,
@@ -494,10 +490,8 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 kf_prompt = prompt
                 if enhance_prompt:
                     try:
-                        from llm import enhance_prompt as llm_enhance
-                        text_encoder = None
-                        if config.LLM_PROVIDER.lower() == "gemma":
-                            text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+                        from llm import enhance_prompt as llm_enhance, prepare_text_encoder
+                        text_encoder = prepare_text_encoder(pipeline, is_video=True)
                         kf_prompt, is_ref = llm_enhance(
                             prompt=prompt, is_video=True,
                             text_encoder=text_encoder,

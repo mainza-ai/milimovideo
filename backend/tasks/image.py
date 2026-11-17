@@ -56,23 +56,21 @@ async def generate_image_task(job_id: str, params: dict):
         
         logger.info(f"DEBUG: Task received guidance_scale={cfg_scale}, negative_prompt='{negative_prompt}', AE={enable_ae}, TrueCFG={enable_true_cfg}")
 
-        # Prompt Enhancement (via configurable LLM)
-        # NOTE: Image gen uses Flux (not LTX), so Gemma text_encoder is NOT available.
-        # Only Ollama can enhance image prompts. Gemma selection will log a warning.
+        # Prompt Enhancement through the `prompt_image` role.
+        # Flux has no LTX text encoder, so this role must resolve to an HTTP
+        # provider (Ollama, LM Studio, or an OpenAI-compatible server).
         enhance = params.get("enhance_prompt", True)
         if enhance:
             try:
-                from llm import enhance_prompt as llm_enhance
-                provider = config.LLM_PROVIDER.lower()
-                if provider == "gemma":
+                from llm import enhance_prompt as llm_enhance, role_uses_gemma
+                if role_uses_gemma("prompt_image"):
                     logger.warning(
-                        "Gemma cannot enhance image prompts (requires LTX text_encoder, "
-                        "but image gen uses Flux). Skipping enhancement. "
-                        "Switch to Ollama in AI Settings for image prompt enhancement."
+                        "The prompt_image role resolves to Gemma, but image generation uses "
+                        "Flux and has no LTX text encoder. Skipping enhancement; assign "
+                        "prompt_image to a local HTTP provider in Studio Setup."
                     )
                 else:
-                    logger.info(f"Enhancing image prompt via {provider}...")
-                    enhanced = llm_enhance(prompt=prompt, is_video=False, seed=seed)
+                    enhanced, _ = llm_enhance(prompt=prompt, is_video=False, seed=seed)
                     if enhanced and enhanced != prompt:
                         logger.info(f"Enhanced image prompt: {enhanced[:100]}...")
                         update_job_db(job_id, "processing", enhanced_prompt=enhanced)

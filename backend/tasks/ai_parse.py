@@ -37,10 +37,14 @@ async def ai_parse_task(job_id: str, params: dict) -> None:
         mode = "fallback"
 
         try:
-            from model_engine import manager
-            update_job_progress(job_id, 15, "Loading text encoder…")
-            pipeline = await manager.load_pipeline("ti2vid")
-            text_encoder = pipeline.stage_1_model_ledger.text_encoder()
+            from llm import role_uses_gemma
+
+            text_encoder = None
+            if role_uses_gemma("script_parse"):
+                from model_engine import manager
+                update_job_progress(job_id, 15, "Loading text encoder…")
+                pipeline = await manager.load_pipeline("ti2vid")
+                text_encoder = pipeline.stage_1_model_ledger.text_encoder()
             update_job_progress(job_id, 35, "Parsing script…")
             parsed_scenes = await asyncio.to_thread(
                 ai_parse_script,

@@ -6,6 +6,7 @@ import {
     useStudioHealth, useStudioIntegrity, useStudioLoras, useStudioMetrics, useStudioModels, useStudioProject,
 } from '../data/useStudioData';
 import { useStudioDocumentStore } from '../state/documentStore';
+import { LLMSettingsPanel } from './LLMSettingsPanel';
 import { apiUrl } from '../../config';
 
 function formatBytes(bytes?: number | null): string {
@@ -190,6 +191,8 @@ export function SetupSurface() {
                     </p>
                 </div>
             </div>
+
+            <LLMSettingsPanel />
 
             <div className="st-panel" style={{ marginBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>

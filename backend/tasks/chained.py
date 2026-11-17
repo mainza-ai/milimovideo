@@ -118,8 +118,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Force auto_continue if enhance_prompt is active (Smart Prompt Evolution)
             should_auto_continue = params.get("auto_continue", False) or params.get("enhance_prompt", False)
 
-            if chunk_idx > 0 and should_auto_continue and config.LLM_PROVIDER.lower() == "gemma":
-                 if hasattr(pipeline, "stage_1_model_ledger"):
+            if chunk_idx > 0 and should_auto_continue:
+                 from llm import prepare_text_encoder
+                 if prepare_text_encoder(pipeline, is_video=True) is not None:
                      logger.info("Retrieving text encoder for narrative prompt generation (Gemma)...")
                      try:
                          text_encoder = pipeline.stage_1_model_ledger.text_encoder()
@@ -161,12 +162,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             if chunk_idx == 0 and params.get("enhance_prompt", True):
                 from llm import enhance_prompt as llm_enhance
                 
-                # For Gemma, we need the text encoder
-                text_encoder = None
-                if config.LLM_PROVIDER.lower() == "gemma" and hasattr(pipeline, "stage_1_model_ledger"):
-                     try:
-                         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-                     except: pass
+                # Only load the LTX text encoder when the role resolves to Gemma.
+                from llm import prepare_text_encoder
+                text_encoder = prepare_text_encoder(pipeline, is_video=True)
                 
                 # Detect extend mode
                 is_extend = (chunk_idx == 0 and chunk_images)
@@ -196,7 +194,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                      )
 
                 try:
-                    logger.info(f"Enhancing Chunk 0 prompt via {config.LLM_PROVIDER} (Extend={is_extend})...")
+                    logger.info(f"Enhancing Chunk 0 prompt via the resolved LLM role (Extend={is_extend})...")
                     enhanced, _ = llm_enhance(
                         prompt=effective_prompt,
                         system_prompt=sys_prompt,

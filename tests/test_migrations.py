@@ -8,7 +8,7 @@ def test_alembic_baseline_is_stamped(app_client):
     assert "alembic_version" in inspector.get_table_names()
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == "0004_asset_thumbnail"
+    assert version == "0005_app_settings"
 
 
 def test_current_schema_columns_are_present(app_client):
@@ -22,6 +22,10 @@ def test_current_schema_columns_are_present(app_client):
 
     asset_columns = {column["name"] for column in inspector.get_columns("asset")}
     assert "thumbnail_url" in asset_columns
+
+    assert "app_setting" in inspector.get_table_names()
+    setting_columns = {column["name"] for column in inspector.get_columns("app_setting")}
+    assert {"key", "value_json", "updated_at"} <= setting_columns
 
     project_columns = {column["name"] for column in inspector.get_columns("project")}
     assert {
