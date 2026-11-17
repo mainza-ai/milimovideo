@@ -1049,3 +1049,11 @@ tsc clean, build + bundle check pass.
 Setup now exposes Cancel download for active downloads (the API also removes
 queued downloads). Added active, queued, and missing-download tests. Verified:
 82 pytest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] verification | full matrix after remaining plan work
+
+Re-ran the complete gate after the plan follow-ups: 82 pytest, 52 Vitest across
+19 files, 12 Playwright (axe all surfaces, CRUD, export, references, review
+agent, perf, visual), `compileall`, ruff correctness lint, tsc, ESLint 0 errors,
+Vite build, 1,524 KiB bundle budget, `cargo check`, and `verify_setup` with 0
+failures / 0 warnings. Measured 500-card pan ~58fps and 200-clip scroll ~279fps.

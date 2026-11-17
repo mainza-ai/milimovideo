@@ -1,7 +1,7 @@
 ---
 type: roadmap
 created: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 tags: frontend refactor ux canvas timeline studio shell plan
 sources:
   - wiki/research/frontend-video-platforms-2026.md
