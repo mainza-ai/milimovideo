@@ -50,10 +50,12 @@ single-engineer guidance.
 | P2 scheduler | **Done for GPU work** (durable `QueuedJob` ledger, one retry, global semaphore, idempotency, startup resume) | `job_utils`, `QueuedJob`, `Job.shot_id`, startup recovery |
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, setup check |
 | P3 OOM retry | **Not started** | P3-03 deferred |
-| P4 UX trust | **Partial** (P4-01,02,03,05,06) | take history/select, seed lock, save state/conflict, SSE reconnect |
+| P4 UX trust | **Partial** (P4-01,02,03,05,06) | take history/select, seed lock, save state/conflict, SSE reconnect, frame review, plan approval, undo |
 | P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health + Playwright shell smoke) | 41 backend tests, 23 frontend tests, 1 Playwright smoke, lint 0 errors, build passes |
-| Front-end F0/F1 | **Started** (shell, tokens, editor store, board canvas, list/script, timeline shell, lazy `/studio`) | `StudioApp.test` mounts the shell; tsc/lint/build pass |
-| Front-end F2–F5 | **Deferred** per plan risk note | one engineer, backend gates first |
+| Front-end F0/F1 | **Mostly done** (shell, tokens, editor store, board canvas + culling/areas/links, list/script, Setup, lazy `/studio`) | vitest + Playwright smoke; tsc/lint/build pass |
+| Front-end F2 | **Mostly done** (trim/slip/roll/blade/ripple, audio gain/mute + A1 placement, captions + ASS burn-in, opacity keyframes) | pure-op tests, filtergraph tests, real FFmpeg render with V1/V2/A1/captions/keyframes |
+| Front-end F3/F4 | **Partial** (takes, generate/cancel, plan approval, frame comments/approvals, share links, library takes, deliver presets) | backend contract tests + shell smoke; activity feed and full CRUD/export E2E open |
+| Front-end F5 | **Deferred** until F2/F4 gates | shorts/lenses/packaging |
 
 **Not adopted:** Alembic (P1-02) — a small idempotent schema repair/backfill runs
 in `init_db()`; a real Alembic baseline is still required before the next schema

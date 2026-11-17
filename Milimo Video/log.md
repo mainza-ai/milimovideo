@@ -383,3 +383,10 @@ references, Review frame-comment surface, and Setup memory/model panels. Wired
 and added the browser-install + e2e steps to CI. Also extended the real render
 test with a V2 overlay carrying opacity keyframes. Verified locally: 1
 Playwright pass, 41 pytest, 23 vitest, tsc clean, build.
+
+## [2026-11-16] status | front-end plan table refreshed
+
+Updated the implementation-plan status table to match the landed studio work:
+F0/F1 mostly done, F2 mostly done (render-verified), F3/F4 partial, F5 still
+deferred, P4 evidence expanded. Remaining named gaps: activity feed, full CRUD
+Playwright flow, Alembic baseline, OpenAPI-generated types, P3 OOM retry.
