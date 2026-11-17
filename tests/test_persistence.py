@@ -324,3 +324,22 @@ def test_render_quality_settings_roundtrip_and_clamp(app_client, project):
     clamped = app_client.get(f"/projects/{pid}").json()
     assert clamped["render_crf"] == 51
     assert clamped["render_speed"] == "fast"
+
+
+def test_seed_lock_roundtrip(app_client, project):
+    pid = project["id"]
+    shot = _shot("locked-shot", "locked", seed_locked=False)
+    payload = {
+        "id": pid, "name": "Seed lock", "fps": 25, "seed": 42,
+        "resolution_w": 768, "resolution_h": 512, "revision": 0,
+        "shots": [shot], "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    body = app_client.get(f"/projects/{pid}").json()
+    assert body["shots"][0]["seed_locked"] is False
+
+    shot["seed_locked"] = True
+    payload["revision"] = body["revision"]
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    body = app_client.get(f"/projects/{pid}").json()
+    assert body["shots"][0]["seed_locked"] is True

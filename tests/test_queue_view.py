@@ -43,3 +43,40 @@ async def test_spawn_background_tracks_and_releases_tasks():
     await task
     await asyncio.sleep(0)
     assert task not in job_utils._background_tasks
+
+
+def test_queue_pause_and_resume_endpoints(app_client):
+    paused = app_client.post("/jobs/queue/pause")
+    assert paused.status_code == 200
+    assert paused.json()["paused"] is True
+    assert app_client.get("/jobs/queue").json()["paused"] is True
+    assert app_client.get("/health").json()["queue_paused"] is True
+
+    resumed = app_client.post("/jobs/queue/resume")
+    assert resumed.status_code == 200
+    assert resumed.json()["paused"] is False
+    assert app_client.get("/jobs/queue").json()["paused"] is False
+
+
+@pytest.mark.asyncio
+async def test_paused_queue_does_not_dispatch(app_client):
+    import asyncio
+    from database import QueuedJob
+    import job_utils
+
+    with Session(engine) as session:
+        session.add(QueuedJob(id="queue-pause-test", job_id="job-pause", kind="unknown", status="queued"))
+        session.commit()
+
+    job_utils.set_queue_paused(True)
+    task = asyncio.create_task(job_utils.run_queued_job("queue-pause-test"))
+    try:
+        await asyncio.sleep(0.1)
+        with Session(engine) as session:
+            assert session.get(QueuedJob, "queue-pause-test").status == "queued"
+    finally:
+        job_utils.set_queue_paused(False)
+
+    await task
+    with Session(engine) as session:
+        assert session.get(QueuedJob, "queue-pause-test").status == "failed"

@@ -8,7 +8,7 @@ def test_alembic_baseline_is_stamped(app_client):
     assert "alembic_version" in inspector.get_table_names()
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == "0002_render_settings"
+    assert version == "0003_seed_lock"
 
 
 def test_current_schema_columns_are_present(app_client):
@@ -17,6 +17,7 @@ def test_current_schema_columns_are_present(app_client):
     assert {
         "sequence_index", "selected_take_id", "favorite_take_id", "keyframes", "blocking",
         "speed", "audio_gain", "audio_muted", "audio_fade_in", "audio_fade_out",
+        "seed_locked",
     } <= shot_columns
 
     project_columns = {column["name"] for column in inspector.get_columns("project")}
