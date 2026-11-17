@@ -43,3 +43,14 @@ def test_element_update_rejects_empty_payload(app_client, project):
 
     response = app_client.put(f"/elements/{created['id']}", json={})
     assert response.status_code == 400
+
+
+def test_element_trigger_defaults_from_name(app_client, project):
+    pid = project["id"]
+    created = app_client.post(f"/projects/{pid}/elements", json={
+        "name": "Red Harbor",
+        "type": "location",
+        "description": "Docks at dusk",
+    })
+    assert created.status_code == 200, created.text
+    assert created.json()["trigger_word"] == "@RedHarbor"

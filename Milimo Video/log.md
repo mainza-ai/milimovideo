@@ -925,5 +925,5 @@ Shorts candidates now expose editable in/out seconds with validation and reset
 before export. The pipeline lens can import a saved recipe JSON (normalized
 resolution/frames/model fields) back into its draft. The Tauri supervisor prefers a
 bundled `milimo-backend` binary when present, then falls back to `run_backend.sh`;
-a Python sidecar is still not built. Added recipe parser tests. Verified: 47
-vitest, 17 test files, tsc clean, build pass, cargo check.
+a Python sidecar is still not built. Added recipe parser tests. Verified: 68
+pytest, 47 vitest, 17 test files, tsc clean, build pass, cargo check.
