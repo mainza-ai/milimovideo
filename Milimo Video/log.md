@@ -772,3 +772,11 @@ role from the card resize handle, and upgraded the axe gate to fail on serious a
 well as critical violations. Studio shell now reports zero violations under the
 WCAG A/AA rule set. Excluded Tauri build output from ESLint. Verified: 44 vitest,
 tsc clean, eslint 0 errors, axe 0 violations.
+
+## [2026-11-17] test | visual regression baseline
+
+Added a 1440×900 Playwright visual baseline for the studio shell with a
+platform-neutral snapshot path and 20% pixel tolerance, plus deterministic
+minimap hiding and card-visible waits. Verified locally against the committed
+baseline. E2E count now includes shell, CRUD, export, reviewer-agent, axe,
+keyboard, perf board/timeline, and visual.

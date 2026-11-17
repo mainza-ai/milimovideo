@@ -10,6 +10,7 @@ const e2eProjects = '/tmp/milimo-e2e-projects';
 
 export default defineConfig({
     testDir: './e2e',
+    snapshotPathTemplate: '{testDir}/{testFilePath}-snapshots/{arg}{ext}',
     timeout: 45_000,
     fullyParallel: false,
     workers: 1,
