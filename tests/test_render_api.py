@@ -11,6 +11,20 @@ import config
 pytestmark = pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
 
 
+def _make_audio(path: Path, seconds: float = 2.0):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "ffmpeg", "-y",
+            "-f", "lavfi", "-i", f"sine=frequency=330:sample_rate=48000:duration={seconds}",
+            "-c:a", "aac", "-b:a", "128k", str(path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def _make_clip(path: Path, color: str, seconds: float = 1.0):
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
@@ -32,6 +46,7 @@ def test_render_api_matches_computed_timeline(app_client, project):
     generated = Path(config.PROJECTS_DIR) / pid / "generated"
     _make_clip(generated / "red.mp4", "red")
     _make_clip(generated / "blue.mp4", "blue")
+    _make_audio(generated / "music.m4a")
 
     shots = []
     for i, (name, color) in enumerate((("red", "red"), ("blue", "blue"))):
@@ -56,6 +71,27 @@ def test_render_api_matches_computed_timeline(app_client, project):
             "video_url": f"/projects/{pid}/generated/{name}.mp4",
             "status": "completed",
         })
+    shots.append({
+        "id": "music",
+        "prompt": "music",
+        "negative_prompt": "",
+        "seed": 42,
+        "width": 320,
+        "height": 180,
+        "fps": 25,
+        "num_frames": 50,
+        "cfg_scale": 1.0,
+        "enhance_prompt": False,
+        "upscale": False,
+        "pipeline_override": "auto",
+        "track_index": 2,
+        "start_frame": 0,
+        "trim_in": 0,
+        "trim_out": 0,
+        "timeline": [],
+        "video_url": f"/projects/{pid}/generated/music.m4a",
+        "status": "completed",
+    })
     payload = {
         "id": pid,
         "name": "Render",

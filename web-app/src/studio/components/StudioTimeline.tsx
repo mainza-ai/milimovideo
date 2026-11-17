@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-    Captions, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal, UnfoldHorizontal,
+    Captions, Music, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal, UnfoldHorizontal,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, type CaptionCue, type Shot } from '../../stores/timelineStore';
@@ -9,6 +9,8 @@ import { useStudioEditor } from '../state/editorStore';
 import { formatDuration } from '../data/useStudioData';
 import { bladeSourceFrame, rollCut, slipShot, trimShot } from '../timeline/ops';
 import { removeCue, upsertCue } from '../captions/cues';
+import { getAssetUrl } from '../../config';
+import { useStudioAssets } from '../data/useStudioData';
 
 const TRACKS = [
     { id: 0, label: 'V1', tone: 'var(--st-v1)' },
@@ -40,7 +42,7 @@ export function StudioTimeline() {
     const project = useTimelineStore((state) => state.project);
     const {
         currentTime, selectedShotId, selectShot, setCurrentTime, updateShot,
-        splitShot, deleteShot, addToast, setProject,
+        splitShot, deleteShot, addToast, setProject, addShot,
     } = useTimelineStore(useShallow((state) => ({
         currentTime: state.currentTime,
         selectedShotId: state.selectedShotId,
@@ -51,11 +53,15 @@ export function StudioTimeline() {
         deleteShot: state.deleteShot,
         addToast: state.addToast,
         setProject: state.setProject,
+        addShot: state.addShot,
     })));
     const { timelineZoom, setTimelineZoom } = useStudioEditor();
     const [tool, setTool] = useState<Tool>('select');
     const [preview, setPreview] = useState<Preview | null>(null);
     const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
+    const [audioPickerOpen, setAudioPickerOpen] = useState(false);
+    const { assets } = useStudioAssets();
+    const audioAssets = useMemo(() => assets.filter((asset) => asset.type === 'audio'), [assets]);
     const gesture = useRef<Gesture | null>(null);
     const fps = project.fps || 25;
     const captions = project.captions || [];
@@ -139,6 +145,27 @@ export function StudioTimeline() {
         if (!selectedCueId) return;
         changeCaptions(removeCue(captions, selectedCueId));
         setSelectedCueId(null);
+    };
+
+    const addAudioClip = (asset: { url: string; filename: string }) => {
+        const audio = new Audio(getAssetUrl(asset.url));
+        audio.addEventListener('loadedmetadata', () => {
+            const frames = Math.max(1, Math.round((audio.duration || 1) * fps));
+            addShot({
+                prompt: asset.filename,
+                trackIndex: 2,
+                startFrame: Math.max(0, Math.round(currentTime * fps)),
+                numFrames: frames,
+                videoUrl: asset.url,
+                status: 'completed',
+                isGenerating: false,
+            });
+            addToast(`Added audio: ${asset.filename}`, 'success');
+            setAudioPickerOpen(false);
+        });
+        audio.addEventListener('error', () => {
+            addToast(`Could not read ${asset.filename}`, 'error');
+        });
     };
 
     const beginGesture = (
@@ -262,6 +289,16 @@ export function StudioTimeline() {
                 <button type="button" className="st-button" data-size="sm" onClick={addCue} title="Add a caption cue at the playhead">
                     <Captions size={12} /> Caption
                 </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={audioPickerOpen ? 'primary' : undefined}
+                    onClick={() => setAudioPickerOpen(!audioPickerOpen)}
+                    title="Place an uploaded audio asset on A1 at the playhead"
+                >
+                    <Music size={12} /> Audio
+                </button>
 
                 <span style={{ width: 1, height: 18, background: 'var(--st-border-strong)', margin: '0 4px' }} />
                 <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={() => setTimelineZoom(timelineZoom / 1.2)}>
@@ -282,6 +319,43 @@ export function StudioTimeline() {
                     drag edges to trim · slip/roll move the source window
                 </span>
             </div>
+
+            {audioPickerOpen && (
+                <div className="st-audio-picker">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Music size={12} />
+                        <strong style={{ fontSize: 10 }}>Place audio on A1</strong>
+                        <button
+                            type="button"
+                            className="st-icon-button"
+                            style={{ marginLeft: 'auto' }}
+                            onClick={() => setAudioPickerOpen(false)}
+                            aria-label="Close audio picker"
+                        >
+                            ×
+                        </button>
+                    </div>
+                    {audioAssets.length === 0 ? (
+                        <div style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                            No audio uploads yet. Upload music or voice in the legacy Library.
+                        </div>
+                    ) : (
+                        <div className="st-audio-list">
+                            {audioAssets.map((asset) => (
+                                <button
+                                    key={asset.id}
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    onClick={() => addAudioClip(asset)}
+                                >
+                                    <Music size={11} /> {asset.filename}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {selectedCue && (
                 <div className="st-caption-editor">

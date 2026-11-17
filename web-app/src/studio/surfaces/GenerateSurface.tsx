@@ -20,7 +20,9 @@ export function GenerateSurface() {
     const cancel = useStudioCancel();
     const [promptDraft, setPromptDraft] = useState<string | null>(null);
 
-    const shot = project.shots.find((item) => item.id === selectedShotId) || project.shots[0] || null;
+    const videoShots = project.shots.filter((item) => item.trackIndex !== 2);
+    const selectedVideoShot = videoShots.find((item) => item.id === selectedShotId);
+    const shot = selectedVideoShot || videoShots[0] || null;
     useEffect(() => { setPromptDraft(null); }, [shot?.id]);
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioTakes(shot?.id);
     const selectTake = useStudioSelectTake();
@@ -48,11 +50,11 @@ export function GenerateSurface() {
                 <div className="st-spine-head">
                     <div className="st-spine-title">Shot queue</div>
                     <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
-                        {project.shots.filter((item) => item.status === 'completed').length}/{project.shots.length} with takes
+                        {videoShots.filter((item) => item.status === 'completed').length}/{videoShots.length} with takes
                     </div>
                 </div>
                 <div className="st-spine-list">
-                    {project.shots.map((item, index) => (
+                    {videoShots.map((item, index) => (
                         <button
                             key={item.id}
                             type="button"

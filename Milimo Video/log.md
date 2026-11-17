@@ -346,3 +346,12 @@ approve/changes decisions. Links are revocable and disabled when
 Share copies the link. Added backend lifecycle/read-only tests and a shared-page
 mount test. Verified: 39 pytest, 17 vitest, tsc clean, eslint 0 errors, build.
 Live DB backed up and `sharelink` created.
+
+## [2026-11-16] audio | place uploaded audio on A1
+
+Audio-only shots now work end to end: the timeline Audio picker lists real
+uploaded audio, reads duration from metadata, and adds an A1 clip at the
+playhead; the render path already handled standalone A1 and now is covered by a
+real FFmpeg render test with an audio-only input. Generate excludes A1 clips from
+the shot queue so audio cannot be accidentally sent to a video pipeline.
+Verified: 39 pytest, 17 vitest, tsc clean, eslint 0 errors, vite build.
