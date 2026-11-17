@@ -588,3 +588,11 @@ ranking and prefix behavior. Verified: 36 vitest, tsc clean, eslint 0 errors.
 Setup now switches between base models and LoRAs, filtering by pipeline. LoRAs
 use the real activation endpoint (which enforces an active base) and show real
 status, size, and VRAM estimates. Verified: tsc clean, eslint 0 errors.
+
+## [2026-11-17] e2e | reviewer @Agent to approved plan
+
+Added a real-backend Playwright flow: create project/shot, mint a share link,
+open the reviewer page, comment `@Agent prompt: …`, approve the shot, open the
+editor, use "Plan fix in command dock", plan, and approve the patch. The shot
+prompt updates through the undoable document path. Verified: 6 Playwright
+passes.
