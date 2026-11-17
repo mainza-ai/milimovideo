@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
-import { CheckCircle2, Film, Image as ImageIcon, Library, RefreshCw, Search, Video } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import {
+    CheckCircle2, Film, Image as ImageIcon, Library, RefreshCw, Search, Upload, Video,
+} from 'lucide-react';
 import { rankSearch, type SearchRecord } from '../search/localSearch';
 import { useStudioEditor } from '../state/editorStore';
 import { useStudioDocumentStore, type Shot } from '../state/documentStore';
@@ -17,6 +19,7 @@ import {
     useStudioProject,
     useStudioProjectTakes,
     useStudioSelectTake,
+    useStudioUploadAsset,
 } from '../data/useStudioData';
 
 export function LibrarySurface() {
@@ -25,6 +28,9 @@ export function LibrarySurface() {
     const { assets, loading, refresh } = useStudioAssets();
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioProjectTakes(project.id);
     const selectTake = useStudioSelectTake();
+    const uploadAsset = useStudioUploadAsset(project.id);
+    const uploadRef = useRef<HTMLInputElement>(null);
+    const [uploading, setUploading] = useState(false);
     const [tab, setTab] = useState<'assets' | 'references' | 'takes' | 'search'>('assets');
     const [query, setQuery] = useState('');
 
@@ -85,6 +91,35 @@ export function LibrarySurface() {
                         type="button"
                         className="st-button"
                         data-size="sm"
+                        data-variant="primary"
+                        disabled={uploading}
+                        onClick={() => uploadRef.current?.click()}
+                    >
+                        <Upload size={12} /> {uploading ? 'Uploading…' : 'Upload media'}
+                    </button>
+                    <input
+                        ref={uploadRef}
+                        type="file"
+                        accept="image/*,video/*,audio/*,.srt,.vtt"
+                        style={{ display: 'none' }}
+                        aria-label="Upload media"
+                        onChange={async (event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = '';
+                            if (!file) return;
+                            setUploading(true);
+                            try {
+                                const result = await uploadAsset(file);
+                                if (result) await refresh();
+                            } finally {
+                                setUploading(false);
+                            }
+                        }}
+                    />
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
                         onClick={() => void Promise.all([refresh(), refreshTakes()])}
                     >
                         <RefreshCw size={12} className={loading || takesLoading ? 'animate-spin' : ''} /> Refresh
@@ -116,7 +151,7 @@ export function LibrarySurface() {
 
             {tab === 'assets' ? (
                 filteredAssets.length === 0 ? (
-                    <div className="st-empty"><strong>No assets</strong><span>Upload media in the legacy library while F1 lands.</span></div>
+                    <div className="st-empty"><strong>No assets</strong><span>Upload images, video, audio, or caption files.</span></div>
                 ) : (
                     <div className="st-grid">
                         {filteredAssets.map((asset) => (

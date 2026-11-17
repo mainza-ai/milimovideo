@@ -241,6 +241,24 @@ export function useStudioElements(projectId: string) {
     return elements;
 }
 
+export function useStudioUploadAsset(projectId: string) {
+    const addToast = useStudioDocumentStore((state) => state.addToast);
+    return useCallback(async (file: File) => {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('project_id', projectId);
+        form.append('type', 'general');
+        const response = await fetch(apiUrl('/upload'), { method: 'POST', body: form });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Upload failed', 'error');
+            return null;
+        }
+        addToast(`Uploaded ${file.name}`, 'success');
+        return data as { url: string; type: string; filename: string; asset_id: string };
+    }, [addToast, projectId]);
+}
+
 export function useStudioAssets() {
     const [assets, setAssets] = useState<StudioAsset[]>([]);
     const [loading, setLoading] = useState(true);

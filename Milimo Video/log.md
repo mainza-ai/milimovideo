@@ -837,3 +837,10 @@ reference/task cards, LoRA strength, queued AI parsing, Tauri shell, axe and per
 work: 61 pytest, 44 vitest, 9 Playwright, tsc clean, eslint 0 errors, Vite build
 pass, verify_setup 0 failures, axe zero serious/critical, 500-card pan 57.8 fps,
 200-clip scroll 277.9 fps. Working tree clean.
+
+## [2026-11-17] library | direct studio upload
+
+Library now uploads images, video, audio, and caption files through the existing
+sanitized `/upload` endpoint with project scoping, then refreshes assets. Removed
+the legacy-only empty-state handoff. Added a real-backend Playwright upload test.
+Verified: 61 pytest (backend unchanged), 44 vitest, 10 Playwright.
