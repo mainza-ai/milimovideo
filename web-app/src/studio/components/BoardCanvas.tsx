@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Grid3X3, Link2, List, Maximize2, Map, Minus, MousePointer2, Plus,
-    RotateCcw, Search, SquareDashed, Trash2, Pin,
+    ChevronDown, ChevronRight, Grid3X3, Link2, List, Maximize2, Map, Minus, MousePointer2,
+    Plus, RotateCcw, Search, SquareDashed, Trash2, Pin,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
@@ -91,6 +91,7 @@ export function BoardCanvas() {
         startWorldX: number;
         startWorldY: number;
         orig: BoardArea;
+        members: Array<{ id: string; x: number; y: number }>;
     } | null>(null);
     const [areaDraft, setAreaDraft] = useState<BoardArea | null>(null);
     const [linkSource, setLinkSource] = useState<string | null>(null);
@@ -246,7 +247,21 @@ export function BoardCanvas() {
         selectArea(area.id);
         setBoardMode('area');
         const world = toWorld(event.clientX, event.clientY);
-        areaDrag.current = { mode: 'move', id: area.id, startWorldX: world.x, startWorldY: world.y, orig: area };
+        const members = project.shots
+            .map((shot, index) => ({
+                id: shot.id,
+                position: boardPositions[shot.id] || fallbackPosition(index),
+            }))
+            .filter(({ position }) => {
+                const cx = position.x + position.width / 2;
+                const cy = position.y + position.height / 2;
+                return cx >= area.x && cx <= area.x + area.width
+                    && cy >= area.y && cy <= area.y + area.height;
+            })
+            .map(({ id, position }) => ({ id, x: position.x, y: position.y }));
+        areaDrag.current = {
+            mode: 'move', id: area.id, startWorldX: world.x, startWorldY: world.y, orig: area, members,
+        };
         hostRef.current?.setPointerCapture(event.pointerId);
     };
 
@@ -254,7 +269,9 @@ export function BoardCanvas() {
         event.stopPropagation();
         selectArea(area.id);
         const world = toWorld(event.clientX, event.clientY);
-        areaDrag.current = { mode: 'resize', id: area.id, startWorldX: world.x, startWorldY: world.y, orig: area };
+        areaDrag.current = {
+            mode: 'resize', id: area.id, startWorldX: world.x, startWorldY: world.y, orig: area, members: [],
+        };
         hostRef.current?.setPointerCapture(event.pointerId);
     };
 
@@ -294,7 +311,9 @@ export function BoardCanvas() {
                 height: 1,
                 color: AREA_COLORS[Object.keys(boardAreas).length % AREA_COLORS.length],
             };
-            areaDrag.current = { mode: 'create', startWorldX: world.x, startWorldY: world.y, orig: draft };
+            areaDrag.current = {
+                mode: 'create', startWorldX: world.x, startWorldY: world.y, orig: draft, members: [],
+            };
             setAreaDraft(draft);
             (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
             return;
@@ -410,10 +429,18 @@ export function BoardCanvas() {
                 });
             } else if (dragState.id) {
                 if (dragState.mode === 'move') {
+                    const dx = world.x - dragState.startWorldX;
+                    const dy = world.y - dragState.startWorldY;
                     updateArea(dragState.id, {
-                        x: Math.round(dragState.orig.x + world.x - dragState.startWorldX),
-                        y: Math.round(dragState.orig.y + world.y - dragState.startWorldY),
+                        x: Math.round(dragState.orig.x + dx),
+                        y: Math.round(dragState.orig.y + dy),
                     });
+                    for (const member of dragState.members) {
+                        setBoardPosition(member.id, {
+                            x: Math.round(member.x + dx),
+                            y: Math.round(member.y + dy),
+                        });
+                    }
                 } else {
                     updateArea(dragState.id, {
                         width: Math.max(160, Math.round(dragState.orig.width + world.x - dragState.startWorldX)),
@@ -472,8 +499,37 @@ export function BoardCanvas() {
             index,
             position: boardPositions[shot.id] || fallbackPosition(index),
         }));
-        return cullCards(cards, boardCamera, size);
-    }, [boardCamera, boardPositions, shots, size]);
+        const culled = cullCards(cards, boardCamera, size);
+        const collapsed = Object.values(boardAreas).filter((area) => area.collapsed);
+        if (collapsed.length === 0) return culled;
+        return culled.filter(({ position }) => {
+            const cx = position.x + position.width / 2;
+            const cy = position.y + position.height / 2;
+            return !collapsed.some((area) => (
+                cx >= area.x && cx <= area.x + area.width
+                && cy >= area.y && cy <= area.y + area.height
+            ));
+        });
+    }, [boardAreas, boardCamera, boardPositions, shots, size]);
+
+    const hiddenShotIds = useMemo(() => {
+        const collapsed = Object.values(boardAreas).filter((area) => area.collapsed);
+        if (collapsed.length === 0) return new Set<string>();
+        return new Set(project.shots
+            .map((shot, index) => ({
+                id: shot.id,
+                position: boardPositions[shot.id] || fallbackPosition(index),
+            }))
+            .filter(({ position }) => {
+                const cx = position.x + position.width / 2;
+                const cy = position.y + position.height / 2;
+                return collapsed.some((area) => (
+                    cx >= area.x && cx <= area.x + area.width
+                    && cy >= area.y && cy <= area.y + area.height
+                ));
+            })
+            .map(({ id }) => id));
+    }, [boardAreas, boardPositions, project.shots]);
 
     const lod = boardCamera.zoom < 0.55 ? 'summary' : boardCamera.zoom < 0.95 ? 'compact' : 'detail';
     const minimap = useMemo(() => {
@@ -671,9 +727,9 @@ export function BoardCanvas() {
                                         left: area.x,
                                         top: area.y,
                                         width: area.width,
-                                        height: area.height,
+                                        height: area.collapsed ? 30 : area.height,
                                         borderColor: area.color || 'var(--st-border-strong)',
-                                        background: `${area.color || '#06b2eb'}12`,
+                                        background: `${area.color || '#06b2eb'}${area.collapsed ? '08' : '12'}`,
                                     }}
                                     onPointerDown={(event) => {
                                         if ((event.target as HTMLElement).closest('input, button')) return;
@@ -686,6 +742,16 @@ export function BoardCanvas() {
                                         style={{ color: area.color || 'var(--st-secondary)' }}
                                         onPointerDown={(event) => startAreaMove(event, area)}
                                     >
+                                        <button
+                                            type="button"
+                                            className="st-icon-button"
+                                            aria-label={area.collapsed ? `Expand ${area.title}` : `Collapse ${area.title}`}
+                                            aria-expanded={!area.collapsed}
+                                            onPointerDown={(event) => event.stopPropagation()}
+                                            onClick={() => updateArea(area.id, { collapsed: !area.collapsed })}
+                                        >
+                                            {area.collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                                        </button>
                                         <input
                                             className="st-board-area-title"
                                             value={area.title}
@@ -703,12 +769,14 @@ export function BoardCanvas() {
                                             <Trash2 size={12} />
                                         </button>
                                     </div>
-                                    <button
-                                        type="button"
-                                        className="st-board-area-resize"
-                                        aria-label="Resize area"
-                                        onPointerDown={(event) => startAreaResize(event, area)}
-                                    />
+                                    {!area.collapsed && (
+                                        <button
+                                            type="button"
+                                            className="st-board-area-resize"
+                                            aria-label="Resize area"
+                                            onPointerDown={(event) => startAreaResize(event, area)}
+                                        />
+                                    )}
                                 </div>
                             ))}
 
@@ -727,6 +795,7 @@ export function BoardCanvas() {
                             )}
 
                             {boardLinks.map((link) => {
+                                if (hiddenShotIds.has(link.source) || hiddenShotIds.has(link.target)) return null;
                                 const source = boardPositions[link.source];
                                 const target = boardPositions[link.target];
                                 if (!source || !target) return null;

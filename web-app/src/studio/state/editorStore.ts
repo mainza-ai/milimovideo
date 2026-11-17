@@ -21,6 +21,7 @@ export interface BoardArea extends BoardPosition {
     id: string;
     title: string;
     color?: string;
+    collapsed?: boolean;
 }
 
 export type LinkKind = 'thread' | 'blocking' | 'reference';

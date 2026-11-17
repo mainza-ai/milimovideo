@@ -224,6 +224,7 @@ class BoardArea(BaseModel):
     width: float
     height: float
     color: Optional[str] = None
+    collapsed: bool = False
 
 
 class BoardLink(BaseModel):

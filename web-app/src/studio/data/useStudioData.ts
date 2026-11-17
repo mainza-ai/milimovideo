@@ -599,6 +599,7 @@ export function useStudioBoardSync(projectId: string) {
                     width: Number(area.width) || 480,
                     height: Number(area.height) || 320,
                     color: area.color || undefined,
+                    collapsed: !!area.collapsed,
                 };
             }
             const links: BoardLink[] = (Array.isArray(board.layout?.links) ? board.layout.links : [])
@@ -631,8 +632,8 @@ export function useStudioBoardSync(projectId: string) {
                 ...position,
                 pinned: !!boardPinned[id],
             }));
-            const areas = Object.values(boardAreas).map(({ id, title, x, y, width, height, color }) => ({
-                id, title, x, y, width, height, color: color || null,
+            const areas = Object.values(boardAreas).map(({ id, title, x, y, width, height, color, collapsed }) => ({
+                id, title, x, y, width, height, color: color || null, collapsed: !!collapsed,
             }));
             const links = boardLinks.map(({ id, source, target, kind }) => ({ id, source, target, kind }));
             try {

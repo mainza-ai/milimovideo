@@ -450,3 +450,10 @@ toggles, Shift-drag marquee selects intersecting cards, dragging any selected
 card moves the whole set, cards have a resize handle with live width/height, and
 the toolbar can align left/center/right/top/middle/bottom and distribute H/V for
 3+ cards. Verified: 28 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f1 | collapsible areas that carry their cards
+
+Areas persist a `collapsed` flag (backend schema + board payload). Collapsing
+hides contained cards and their links; expanding restores them. Dragging an area
+moves every card whose center sits inside it, with positions committed through
+the same revisioned layout save. Verified: 41 pytest, 28 vitest, tsc clean.
