@@ -877,3 +877,11 @@ mode, caption preview, uploads, and project management: 61 pytest, 44 vitest,
 10 Playwright (shell, CRUD, export, upload, reviewer-agent, axe, keyboard, perf
 board/timeline, visual), tsc clean, eslint 0 errors, Vite build pass,
 verify_setup 0 failures. Board pan 57.8 fps; timeline scroll 230.7 fps.
+
+## [2026-11-17] ops | project integrity scan
+
+Added `/projects/{id}/integrity`, reporting missing video/thumbnail files, orphan
+shot→scene references, missing sequence indices, empty scenes, orphan board
+nodes/links, and invalid caption ranges. Setup has a "Scan project" panel with
+severity counts and the issue list. Added backend coverage. Verified: 44 vitest,
+tsc clean.

@@ -333,6 +333,45 @@ const EMPTY_REVIEW: ReviewPayload = {
     summary: { comments: 0, open: 0, approved: 0, changes_requested: 0 },
 };
 
+export interface IntegrityIssue {
+    kind: string;
+    severity: 'error' | 'warning' | 'info';
+    message: string;
+    shot_id?: string | null;
+    path?: string | null;
+}
+
+export interface IntegrityReport {
+    project_id: string;
+    ok: boolean;
+    counts: {
+        shots: number;
+        scenes: number;
+        issues: number;
+        errors: number;
+        warnings: number;
+    };
+    issues: IntegrityIssue[];
+}
+
+export function useStudioIntegrity(projectId: string) {
+    const [report, setReport] = useState<IntegrityReport | null>(null);
+    const [loading, setLoading] = useState(false);
+    const scan = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await fetch(apiUrl(`/projects/${projectId}/integrity`));
+            const data = response.ok ? await response.json() : null;
+            setReport(data);
+        } catch {
+            setReport(null);
+        } finally {
+            setLoading(false);
+        }
+    }, [projectId]);
+    return { report, loading, scan };
+}
+
 export interface JobMetrics {
     window_days: number;
     total: number;

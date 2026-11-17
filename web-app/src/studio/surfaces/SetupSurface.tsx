@@ -3,7 +3,7 @@ import {
     CheckCircle2, Cpu, HardDrive, Loader2, RefreshCw, ShieldCheck, TriangleAlert,
 } from 'lucide-react';
 import {
-    useStudioHealth, useStudioLoras, useStudioMetrics, useStudioModels,
+    useStudioHealth, useStudioIntegrity, useStudioLoras, useStudioMetrics, useStudioModels, useStudioProject,
 } from '../data/useStudioData';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { apiUrl } from '../../config';
@@ -19,6 +19,8 @@ export function SetupSurface() {
     const { models, pipelines, loading, refresh, setActive } = useStudioModels();
     const { loras, refresh: refreshLoras, setStrength } = useStudioLoras('video');
     const metrics = useStudioMetrics(7);
+    const project = useStudioProject();
+    const { report: integrity, loading: integrityLoading, scan: scanIntegrity } = useStudioIntegrity(project.id);
     const addToast = useStudioDocumentStore((state) => state.addToast);
 
     const downloadModel = async (modelId: string, name: string) => {
@@ -124,6 +126,44 @@ export function SetupSurface() {
                         {activeCount} base/LoRA active. Activate a downloaded base below.
                     </p>
                 </div>
+            </div>
+
+            <div className="st-panel" style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <h3 className="st-panel-title" style={{ margin: 0 }}>Project integrity</h3>
+                    <button type="button" className="st-button" data-size="sm" disabled={integrityLoading} onClick={() => void scanIntegrity()}>
+                        {integrityLoading ? <Loader2 size={12} className="animate-spin" /> : null}
+                        {integrityLoading ? 'Scanning…' : 'Scan project'}
+                    </button>
+                </div>
+                {!integrity ? (
+                    <p className="st-value" style={{ color: 'var(--st-muted)', marginTop: 8 }}>
+                        Scan for missing media, orphan shots/scenes, orphan board links, and bad caption ranges.
+                    </p>
+                ) : (
+                    <>
+                        <div className="st-button-row" style={{ marginTop: 8 }}>
+                            <span className="st-chip" data-tone={integrity.ok ? 'good' : 'bad'}>
+                                {integrity.ok ? 'no blocking issues' : `${integrity.counts.errors} error(s)`}
+                            </span>
+                            <span className="st-chip">{integrity.counts.shots} shots</span>
+                            <span className="st-chip">{integrity.counts.scenes} scenes</span>
+                            <span className="st-chip">{integrity.counts.issues} issue(s)</span>
+                        </div>
+                        {integrity.issues.length > 0 && (
+                            <div className="st-link-list" style={{ marginTop: 8 }}>
+                                {integrity.issues.slice(0, 20).map((issue, index) => (
+                                    <div className="st-link-row" key={`${issue.kind}-${index}`}>
+                                        <span className="st-chip" data-tone={issue.severity === 'error' ? 'bad' : undefined}>
+                                            {issue.kind}
+                                        </span>
+                                        <span style={{ flex: 1 }}>{issue.message}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
 
             <div className="st-panel" style={{ marginBottom: 14 }}>

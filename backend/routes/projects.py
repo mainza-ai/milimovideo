@@ -487,6 +487,96 @@ async def _has_audio_stream(path: str) -> bool:
         return False
 
 
+@router.get("/projects/{project_id}/integrity")
+def project_integrity(project_id: str, session: Session = Depends(get_session)):
+    """Report orphaned data, missing media, and ordering problems without mutating."""
+    from file_utils import resolve_path
+
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    shots = session.exec(select(Shot).where(Shot.project_id == project_id)).all()
+    scenes = session.exec(select(Scene).where(Scene.project_id == project_id)).all()
+    shot_ids = {shot.id for shot in shots}
+    scene_ids = {scene.id for scene in scenes}
+    issues = []
+
+    for shot in shots:
+        for field, label in (("video_url", "video"), ("thumbnail_url", "thumbnail")):
+            value = getattr(shot, field)
+            if not value:
+                continue
+            resolved = resolve_path(value)
+            if not resolved or not os.path.exists(resolved):
+                issues.append({
+                    "kind": f"missing_{label}",
+                    "severity": "error",
+                    "shot_id": shot.id,
+                    "path": value,
+                    "message": f"Missing {label} for shot {shot.id}",
+                })
+        if shot.scene_id and shot.scene_id not in scene_ids:
+            issues.append({
+                "kind": "orphan_shot_scene",
+                "severity": "warning",
+                "shot_id": shot.id,
+                "message": f"Shot {shot.id} references a missing scene",
+            })
+        if shot.sequence_index is None:
+            issues.append({
+                "kind": "missing_sequence_index",
+                "severity": "warning",
+                "shot_id": shot.id,
+                "message": f"Shot {shot.id} has no sequence index",
+            })
+
+    for scene in scenes:
+        if not any(shot.scene_id == scene.id for shot in shots):
+            issues.append({
+                "kind": "empty_scene",
+                "severity": "info",
+                "message": f"Scene {scene.id} has no shots",
+            })
+
+    layout = _parse_json_field(project.board_layout, {})
+    for node in layout.get("nodes", []) if isinstance(layout, dict) else []:
+        if node.get("id") not in shot_ids:
+            issues.append({
+                "kind": "orphan_board_node",
+                "severity": "warning",
+                "message": f"Board node {node.get('id')} has no shot",
+            })
+    for link in layout.get("links", []) if isinstance(layout, dict) else []:
+        if link.get("source") not in shot_ids or link.get("target") not in shot_ids:
+            issues.append({
+                "kind": "orphan_board_link",
+                "severity": "warning",
+                "message": f"Link {link.get('id')} points at a missing shot",
+            })
+
+    for cue in _parse_json_field(project.captions, []):
+        if cue.get("end_frame", 0) <= cue.get("start_frame", 0):
+            issues.append({
+                "kind": "invalid_caption",
+                "severity": "warning",
+                "message": f"Caption {cue.get('id')} has an empty time range",
+            })
+
+    return {
+        "project_id": project_id,
+        "ok": not any(issue["severity"] == "error" for issue in issues),
+        "counts": {
+            "shots": len(shots),
+            "scenes": len(scenes),
+            "issues": len(issues),
+            "errors": sum(1 for issue in issues if issue["severity"] == "error"),
+            "warnings": sum(1 for issue in issues if issue["severity"] == "warning"),
+        },
+        "issues": issues,
+    }
+
+
 @router.get("/projects/{project_id}/takes")
 def list_project_takes(
     project_id: str,
