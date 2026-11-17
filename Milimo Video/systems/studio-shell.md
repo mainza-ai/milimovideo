@@ -30,7 +30,8 @@ with one canonical project graph and synchronized lenses:
 - **Review** — versions, compare, comments, approvals.
 - **Library / Deliver** — assets, master references, takes, exports.
 - **Shorts** — transcript candidates, reframe, variants.
-- **Setup** — device, queue, models, integrity, error budget.
+- **Setup** — device, queue, models, integrity, error budget, and the AI & LLM
+  configuration plane.
 
 The reference implementation for the canvas interaction vocabulary is
 [Kubona](https://github.com/mainza-ai/kubona) (Apache 2.0, inspected at
@@ -87,7 +88,7 @@ search, no shorts/lens template packs, and no bundled Python sidecar runtime. Le
 | **Library** | What do I own? | Assets / Elements / Takes / Models |
 | **Deliver** | How does it go out? | Presets + Variants + Render queue |
 | **Shorts** | How do I repurpose the cut? | Transcript + candidates + reframe |
-| **Setup** | How is the studio configured? | Device / Models / Queue / Integrity |
+| **Setup** | How is the studio configured? | Device / Models / Queue / Integrity / AI & LLM |
 
 The mode rail is intentionally small (six icons + settings). Every surface is
 reachable from the command palette and from contextual links (“Open in Edit”,

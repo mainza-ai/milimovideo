@@ -1151,3 +1151,29 @@ hardcoded provider branches, and vision badges not wired to image input.
 Filed [[systems/llm-settings-audit-2026-11]] with the provider/role design, API,
 security rules, L0–L4 plan, and verification gates. Updated the implementation
 plan, frontend roadmap, AGENTS, user guide, and index.
+
+## [2026-11-17] implement | LLM configuration plane (L0–L3)
+
+Executed the audit plan. Added the `app_setting` table with Alembic
+`0005_app_settings`; built `backend/services/llm/` (`models`, `defaults`,
+`prompts`, `secretbox`, `store`, `providers`, `runtime`, `discovery`) for typed
+persisted settings with revision CAS, redacted reads, six providers, six roles
+with ordered fallback, per-role sampling, loopback discovery, model catalog,
+provider verify, async/sync transports, AES-GCM credential sealing, and air-gap
+plus `MILIMO_LLM_CLOUD` enforcement. Replaced the in-memory `/settings/llm`
+endpoints with `routes/settings.py`, rewrote `backend/llm.py` as a compatibility
+facade, and removed every `config.LLM_PROVIDER` branch from video/chained/image/
+storyboard tasks. AI script parsing now runs through `script_parse` and only loads
+the LTX encoder when the role resolves to Gemma. Job params record
+role/provider/model/latency provenance.
+
+Studio Setup gained the AI & LLM panel: provider cards, list models, verify,
+discovery + attach, role matrix with fallbacks, defaults, air-gap/cloud state,
+save/revert/conflict, and a saved-config test prompt. The legacy popover now saves
+through the revisioned `PUT` and links to Studio. Regenerated OpenAPI types.
+
+Verification: compileall clean; 104 backend tests (17 new LLM tests); ruff clean;
+verify_setup 0 failures; 61 Vitest tests (5 new panel tests); 20 Playwright tests
+(3 new LLM specs incl. axe); tsc, ESLint 0 errors, Vite build, bundle budget; live
+API check on a scratch DB including restart persistence and a 409 stale write.
+L4 governance remains deferred. See [[systems/llm-settings-audit-2026-11]].

@@ -387,6 +387,34 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 Activation loads the real model through the loader and respects the one-slot rule.
 A 32 GB Mac may refuse a model that cannot fit; that is a correct result, not a bug.
 
+### AI & LLM
+
+Studio Setup → **AI & LLM** is the persisted LLM configuration plane. Settings
+survive restarts; every write is revision-checked and a stale save is refused with
+a conflict instead of overwriting newer state.
+
+- **Active provider/model** drive unassigned work. Roles override it:
+  `prompt_video`, `prompt_image`, `script_parse`, `agent_plan`, `review_critic`,
+  `continuity`.
+- **Providers:** Gemma (in-process LTX text encoder), Ollama, LM Studio,
+  OpenAI-compatible local servers, plus opt-in OpenAI/Anthropic. Enable a card,
+  set its base URL and default model, then **List models** and **Verify**.
+- **Scan local servers** probes loopback ports (11434, 1234, 8080, 8081, 8899,
+  8000, 8787, 47831). **Attach** writes the discovered URL into the matching
+  provider card.
+- **Role routing** assigns a provider/model per role and supports ordered
+  fallbacks. Gemma is only valid for `prompt_video` inside a loaded LTX pipeline;
+  `prompt_image` must use an HTTP provider because Flux has no LTX text encoder.
+- **Air-gapped** is on by default. Cloud providers stay unreachable unless
+  `MILIMO_LLM_CLOUD=1` is set in the backend environment **and** the switch is off.
+- **API keys** are returned only as `has_key`/`secret_source`/`key_status`. With
+  `MILIMO_SECRET_KEY` set (32-byte hex or base64) keys are sealed with AES-256-GCM;
+  without it they are stored as local plaintext, and the panel says so.
+- **Test saved configuration** sends a prompt through the saved role plan and
+  reports provider/model/latency. Save first to test edits.
+- The legacy header gear remains a two-provider quick switch (`prompt_video` only)
+  and links here for everything else.
+
 ---
 
 ## 13. Data, privacy, and security
@@ -398,7 +426,9 @@ A 32 GB Mac may refuse a model that cannot fit; that is a correct result, not a 
 - Uploads are extension/size checked and streamed; filenames are sanitized.
 - Media paths are confined and served with Range support.
 - Debug artifacts are off unless `MILIMO_DEBUG` is set.
-- No project data leaves the machine by default.
+- No project data leaves the machine by default. LLM cloud providers additionally
+  require `MILIMO_LLM_CLOUD=1` and air-gap off; a configured cloud role refuses
+  otherwise.
 
 ---
 
@@ -455,8 +485,8 @@ Common issues:
 - Scoped v1 cut: no transitions, LUTs, titles, or A2 track; search is ranked
   lexical matching, not embeddings.
 - The depth model is downloaded separately; it is not shipped with the repo.
-- LLM provider settings still live in the legacy AI Settings popover; the Studio
-  Setup AI/LLM panel and persisted role routing are planned in
-  `Milimo Video/systems/llm-settings-audit-2026-11.md`.
+- LLM L4 governance (spend telemetry, budget guard, eval gate, profiles) is not
+  built. Cloud providers are unreachable unless `MILIMO_LLM_CLOUD=1` and the
+  air-gap switch is off. See `Milimo Video/systems/llm-settings-audit-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is a separate
   program and is not part of scoped v1.

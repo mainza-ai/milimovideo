@@ -36,13 +36,18 @@ microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell
 - **Legacy frontend** — the original NLE at `/`, using `timelineStore` and 7 slices.
   Frozen except for P0 fixes. `VITE_STUDIO_ENABLED=false` serves it at `/studio`.
 - **Backend (Python / FastAPI, port 8000)** — inference dispatch, project/assets,
-  durable GPU queue, SQLite via SQLModel, Alembic migrations, SSE. **Eleven routers
-  / 113 routes** (verified 2026-11-17): projects, jobs, assets, storyboard, elements,
-  shots, models, planner, review, share, depth.
+  durable GPU queue, SQLite via SQLModel, Alembic migrations, SSE. **Twelve routers
+  / 124 operations** (verified 2026-11-17): projects, jobs, assets, storyboard,
+  elements, shots, models, planner, review, share, depth, settings.
 - **Task engine** — `tasks/video.py`, `tasks/chained.py`, `tasks/image.py`,
   `tasks/depth.py`, `tasks/ai_parse.py`; `ModelManager` loads LTX-2; `FluxInpainter`
   wraps Flux 2; `StoryboardManager` coordinates chunks; managers handle elements,
   masks, and SAM tracking.
+- **LLM plane** — `services/llm/`: persisted settings (`store.py`), wire adapters
+  (`providers.py`), role execution with fallback (`runtime.py`), loopback discovery
+  (`discovery.py`), AES-GCM credential sealing (`secretbox.py`). `backend/llm.py` is
+  a compatibility facade over the runtime. See
+  [[llm-settings-audit-2026-11]].
 - **GPU scheduler** — `QueuedJob` ledger + one global semaphore + one OOM retry +
   startup recovery + pause/resume + idempotent shot jobs.
 - **SAM 3 microservice (port 8001)** — health, mask prediction, detection, text
@@ -62,10 +67,13 @@ microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell
 | Studio job recovery | `GET /status/{job_id}` | Polls in-flight jobs on reconnect/mount; 404 means not running |
 | Backend → SAM 3 | HTTP REST (port 8001) | Segmentation and tracking calls, off the event loop |
 | Worker → LTX-2 / Flux 2 | Direct Python import | One heavy model at a time; MemoryManager gates swaps |
-| Prompt enhancement | `llm.py` dispatcher | Gemma built-in or Ollama with `keep_alive: 0` |
+| Prompt enhancement | `llm.py` → role runtime | `prompt_video`/`prompt_image` resolve to persisted provider/model hops with ordered fallback |
+| LLM settings | `GET/PUT/PATCH /settings/llm` | Redacted snapshot, revision CAS, air-gap patch; writes persist in `app_setting` |
+| Provider health | `/settings/llm/{models,discover,verify,test,health}` | Model catalog, loopback scan, live verify, saved-config test prompt |
+| Prompt provenance | `Job.params_json.llm` | role, provider, model, latency, token usage |
 | Render | FFmpeg subprocess | Storyboard renders from computed layout; progress parsed from FFmpeg |
 | Media serving | HTTP Range requests | `206 Partial Content` for Safari-compatible mp4/mp3 |
-| DB schema | Alembic | Baseline + render settings + seed lock; legacy DBs repaired/stamped |
+| DB schema | Alembic | Baseline + render settings + seed lock + asset thumbnail + app settings; legacy DBs repaired/stamped |
 
 ## Current Studio vs Legacy
 
@@ -89,10 +97,11 @@ documents. Switching routes does not share unsaved edits.
 `/health`), `config.py`, `database.py` (SQLModel + Alembic init), `events.py`
 (SSE), `job_utils.py` (queue ledger, semaphore, retry, pause, cancellation),
 `schemas.py` (Pydantic boundaries), `model_engine.py` / `memory_manager.py`,
-`llm.py`, `models/flux_wrapper.py`, `managers/` (element/inpainting/tracking),
-`services/` (script/ai storyboard, matcher, model registry/downloader), `tasks/`
-(video, chained, image, depth, ai_parse), `routes/` (11 routers), `alembic/`
-(baseline, render settings, seed lock), `utils/` (render filtergraph, captions,
+`llm.py` (facade), `models/flux_wrapper.py`, `managers/` (element/inpainting/
+tracking), `services/` (script/ai storyboard, matcher, model registry/downloader,
+`llm/` settings+providers+runtime+discovery), `tasks/` (video, chained, image,
+depth, ai_parse), `routes/` (12 routers), `alembic/` (baseline, render settings,
+seed lock, asset thumbnail, app settings), `utils/` (render filtergraph, captions,
 paths).
 
 **Frontend** (`web-app/src/`): `main.tsx` → `App.tsx` (Studio lazy route + legacy),
@@ -125,7 +134,12 @@ SQLite or the model layer directly.
 - Only one LTX-2 pipeline is cached at a time; switching types unloads, clears
   caches, then reloads.
 - `num_frames == 1` delegates video generation to Flux 2 image generation.
-- Ollama uses `keep_alive: 0`; a 27B model otherwise sits on VRAM.
+- Ollama defaults to `keep_alive: 0`; a 27B model otherwise sits on VRAM. The
+  active role plan, not `config.LLM_PROVIDER`, chooses the provider now.
+- Gemma is in-process only: a role that resolves to Gemma needs the loaded LTX
+  text encoder, so `prompt_image` must use an HTTP provider.
+- Cloud providers are unreachable unless `MILIMO_LLM_CLOUD=1` **and** the air-gap
+  switch is off; both checks live in `store.plans()`.
 - MPS casts the VAE to float32 to prevent black output; FP8 is CUDA-only.
 - Safari needs Range serving and muted-start playback.
 - Do not add schema columns without an Alembic revision.

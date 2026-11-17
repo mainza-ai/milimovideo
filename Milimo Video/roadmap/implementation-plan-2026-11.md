@@ -51,22 +51,22 @@ single-engineer guidance.
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, queued/cancellable downloads, setup check |
 | P3 OOM retry | **Done** | one retry at 75% resolution / 8k+1 frames, cache clear, shot params updated, unit tests |
 | P4 UX trust | **Done** (P4-01–P4-07) | takes/favorites, persistent seed lock, save conflict, reconnect, review, plan approval, undo, zero serious/critical axe, 500-card/200-clip perf specs, tracking overlay |
-| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 84 backend, 56 frontend, 17 Playwright (incl. axe/perf/visual/reference CRUD); new modules >80%; total 37%; lint 0 errors |
+| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 104 backend, 61 frontend, 20 Playwright (incl. axe/perf/visual/reference CRUD/LLM settings); new modules >80%; total 37%; lint 0 errors |
 | Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent + separate document stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 12 Playwright incl. visual; store separation covered by E2E |
 | Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking + depth overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip ~275fps perf; depth uses optional Depth Anything V2 Small |
 | Front-end F4 integrity | **Done** | scan + repair for missing media, orphan scene/board references, sequence order, and caption ranges |
 | Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview with start/end conditioning/batch/inpaint/favorites, queue position, pause/resume, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets, encoding controls, and in-flight render cancel) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; shorts/lens packaging remains scoped v1 |
 | Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native open/save/build + sidecar-binary resolution |
 | Front-end F6 | **Done — 2026-11-17** | responsive surface switcher, grouped toolbars, Inspector primary tabs + More, readable type/control sizes, card actions/bulk/context menu, command palette/shortcuts, density, responsive layout tests |
-| LLM configuration plane | **Planned — P0** | audit + plan in [[../systems/llm-settings-audit-2026-11]]; current settings are legacy-only and runtime-only, with two providers and no roles/persistence |
+| LLM configuration plane | **Done — L0–L3, 2026-11-17** | persisted `app_setting` document with revision CAS, six providers, six roles with fallback, discovery/verify/model catalog, sealed keys, air-gap + cloud opt-in, Studio AI & LLM panel, legacy popover compatibility; L4 governance deferred. See [[../systems/llm-settings-audit-2026-11]] |
 
 **Still open / deferred:**
 
 - **Bundled Python sidecar binary** — not shipped or built. The desktop supervisor
   prefers one if present and otherwise runs `run_backend.sh`.
 - **Legacy `/` cutover** — retained until the documented two-clean-release window.
-- **LLM configuration plane** — Studio has no LLM settings panel; the existing
-  Gemma/Ollama switch is legacy-only and process-memory-only. See
+- **LLM L4 governance** — token/cost telemetry, cloud budget guard, eval gate, and
+  staged profiles are not built. Air-gap and the cloud opt-in are enforced. See
   [[../systems/llm-settings-audit-2026-11]].
 - **Phase 6 v2 lane** — eval harness, model swaps, MLX/FP8 lanes, and the agent
   crew remain a separate model-artifact program.
@@ -339,20 +339,22 @@ Phase 1 start moves behind G2/G3.
 
 ---
 
-## LLM Configuration Plane (Planned)
+## LLM Configuration Plane (L0–L3 shipped 2026-11-17)
 
 Full audit and design: [[../systems/llm-settings-audit-2026-11]].
 
 | Phase | Scope | Gate |
 |---|---|---|
-| **L0** | Typed persisted settings, `revision`/CAS, redacted read, air-gap PATCH, migration `0005_llm_settings`, tests | Restart preserves settings; stale write returns 409; no key leakage |
-| **L1** | Provider registry (Gemma, Ollama, LM Studio, OpenAI-compatible), async runtime, discovery, model catalog, verify/test, sealed credentials, URL validation | Local discovery/verify works; slow providers do not block the loop; non-local plaintext HTTP refuses |
-| **L2** | Role catalog (`prompt_video`, `prompt_image`, `script_parse`, `agent_plan`, future review/continuity), fallbacks, per-role sampling, call-site integration, prompt provenance | No hardcoded `if provider == gemma` outside the router; AI parse can run on Ollama |
-| **L3** | Studio Setup → AI & LLM panel: provider cards, discovery, roles, fallbacks, defaults, save conflict, test prompt | All settings reachable in Studio; axe/keyboard green; one source of truth |
-| **L4** | Cloud opt-in + air-gap, token/cost telemetry, budget guard, eval gate, profiles | Cloud refuses unless explicitly enabled; budget/eval evidence is visible |
+| **L0** ✅ | Typed persisted settings in `app_setting`, Alembic `0005_app_settings`, `revision`/CAS, redacted read, air-gap PATCH, tests | Restart preserves settings; stale write returns 409; no key leakage |
+| **L1** ✅ | Provider registry (Gemma, Ollama, LM Studio, OpenAI-compatible), async runtime, discovery, model catalog, verify/test, sealed credentials, URL validation | Local discovery/verify works; slow providers do not block the loop; non-local plaintext HTTP refuses |
+| **L2** ✅ | Role catalog (`prompt_video`, `prompt_image`, `script_parse`, `agent_plan`, future review/continuity), fallbacks, per-role sampling, call-site integration, prompt provenance | No hardcoded `if provider == gemma` outside the router; AI parse can run on Ollama |
+| **L3** ✅ | Studio Setup → AI & LLM panel: provider cards, discovery, roles, fallbacks, defaults, save conflict, test prompt | All settings reachable in Studio; axe/keyboard green; one source of truth |
+| **L4** ⏳ | Cloud opt-in + air-gap (enforced), token/cost telemetry, budget guard, eval gate, profiles | Cloud refuses unless explicitly enabled; budget/eval evidence is visible |
 
-**Immediate priority:** L0 + L1 + the Studio provider/role UI. Do not advertise
-vision/Ollama capabilities until the image path actually sends image input.
+**Delivered:** L0–L3. Cloud egress already requires `MILIMO_LLM_CLOUD=1` **and**
+air-gap off; both live in `store.plans()`. Remaining: L4 telemetry/budget/eval/
+profiles and image-conditioned vision requests. Do not advertise vision support
+until the image path actually sends image input.
 
 ## Quality Gates
 

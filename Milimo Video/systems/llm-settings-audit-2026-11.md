@@ -18,6 +18,69 @@ related:
 
 # LLM Configuration Audit & Implementation Plan — 2026-11-17
 
+## Implementation status (2026-11-17)
+
+L0–L3 shipped in the same pass; L4 is deliberately deferred. The audit below is
+kept as written so the gap that motivated the work stays legible.
+
+| Phase | Status | What landed |
+|---|---|---|
+| **L0** | Done | `app_setting` table + Alembic `0005_app_settings`; typed `LLMSettings`/`LLMProviderConfig`/`LLMRoleAssignment`; `revision` CAS (`PUT ?expected_revision=`); redacted `GET`; field-level air-gap `PATCH`; tests for persistence, conflict, redaction, env seeding, validation |
+| **L1** | Done | `services/llm/`: `store.py`, `providers.py`, `runtime.py`, `discovery.py`, `secretbox.py`, `defaults.py`, `prompts.py`; Gemma/Ollama/LM Studio/OpenAI-compatible plus opt-in OpenAI/Anthropic; async and sync transports; loopback discovery; verify/model catalog; URL validation; AES-GCM sealing with `MILIMO_SECRET_KEY` |
+| **L2** | Done | Six roles (`prompt_video`, `prompt_image`, `script_parse`, `agent_plan`, `review_critic`, `continuity`), ordered fallback, per-role sampling, no `config.LLM_PROVIDER` branches remain in tasks, AI parse runs on Ollama without loading LTX, job params record role/provider/model/latency |
+| **L3** | Done | Studio Setup → **AI & LLM** panel: active provider/model, provider cards with enable/URL/model/key posture, list models, verify, discovery + attach, role matrix with fallbacks, air-gap and cloud state, revision/save/revert/conflict, saved-config test prompt; legacy popover now saves through `PUT` and links to Studio |
+| **L4** | Deferred | No token/cost telemetry, budget guard, eval gate, or profiles. Air-gap and the `MILIMO_LLM_CLOUD` opt-in are enforced in `store.plans()`, so cloud egress is already impossible without both switches |
+
+### Deviations from the plan above
+
+- Storage is a generic `app_setting(key, value_json, updated_at)` row instead of
+  a dedicated `llm_settings` table. Revision lives inside the document, matching
+  Kubona and keeping one source of truth.
+- `PUT /settings/llm` takes `expected_revision` as a **query parameter**;
+  `PATCH /settings/llm` accepts only `{"air_gapped": bool}` and rejects anything
+  else with 400.
+- `LLMProviderConfig.api_key` is input-only: reads always return `null` plus
+  `has_key`, `secret_source`, and `key_status`. A blank input never deletes a
+  stored key; `clear_key` or `DELETE /settings/llm/providers/{id}/key` does.
+- Provider types are `gemma | ollama | lmstudio | openai_compatible | openai |
+  anthropic`. Kubona's other cloud slots were not copied.
+- Secrets are plaintext in SQLite when `MILIMO_SECRET_KEY` is unset (documented
+  local single-user posture, reported as `secret_source: plaintext_db`), and
+  AES-256-GCM sealed when it is set.
+- Vision is not advertised as wired: the panel notes that image input is only
+  sent on the video-prompt path.
+
+### Verification evidence
+
+```bash
+./milimov/bin/python -m compileall -q backend        # clean
+./milimov/bin/python -m pytest                       # 104 passed
+./milimov/bin/python -m ruff check backend           # clean
+./milimov/bin/python backend/verify_setup.py
+cd web-app && npx tsc -b && npm run lint && npm test # 61 passed
+npm run build && npm run check:bundle
+npm run test:e2e                                     # 20 passed
+npm run gen:api                                      # openapi + schema.d.ts
+```
+
+Live on a scratch DB (`MILIMO_API_PORT=8020`): `GET /settings/llm` (revision 0,
+six providers, six roles, no key material), `PUT` → revision 1, stale `PUT` →
+409 with the current document, `PATCH {"air_gapped": false}` → revision 2,
+non-air-gap `PATCH` → 400, gemma model list works with no network, Ollama
+verify fails actionably (`unreachable`), gemma test refuses with a named reason,
+and a process restart preserved revision 2, the air-gap state, the model, and
+the fallback chain.
+
+### Still open
+
+- L4 telemetry/budget/eval-gate/profiles.
+- Image-conditioned Ollama/OpenAI vision requests are still not sent.
+- The legacy `/` popover edits only the `prompt_video` role; everything else is
+  Studio-only until cutover.
+- Per-provider `timeout_sec`, `keep_alive`, and per-role sampling exist in the
+  API and UI model but only the default/temperature/max-token fields are edited
+  in the panel.
+
 ## Verdict
 
 Milimo has a working **two-provider prompt-enhancement switch** (Gemma and

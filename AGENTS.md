@@ -122,13 +122,16 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 
 ### Backend contracts
 
+- LLM settings: typed `LLMSettings` document in `app_setting`, revisioned
+  `PUT`, redacted reads, role plans resolved by `services/llm`. `backend/llm.py`
+  is a compatibility facade; never branch on `config.LLM_PROVIDER` in new code.
 - Pydantic boundaries: typed `ProjectState`, `ShotState`, `SceneState`,
   `TimelineItem`, `RenderSettings`, `BoardLayoutPayload`, review/share/plan/depth
   payloads.
 - Alembic baseline (`0001_baseline`) plus `0002_render_settings`,
-  `0003_seed_lock`, and `0004_asset_thumbnail`, with startup upgrade; legacy DBs
-  are repaired and stamped. Do not add schema columns without a migration and
-  migration test.
+  `0003_seed_lock`, `0004_asset_thumbnail`, and `0005_app_settings`, with startup
+  upgrade; legacy DBs are repaired and stamped. Do not add schema columns without
+  a migration and migration test.
 - Generated OpenAPI client types: `npm run gen:api`; CI checks drift.
 - Durable GPU queue: `QueuedJob` ledger + one global semaphore + one OOM retry
   + pause/resume dispatch.
@@ -172,6 +175,13 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Setup: device/slots/queue/disk, queue pause/resume, pipeline readiness,
   base/LoRA activation, LoRA strength, resumable/cancellable downloads, depth
   model, integrity scan/repair, error budget.
+- AI & LLM: persisted provider/role settings with revision CAS, redacted
+  snapshots, loopback discovery, model catalog, provider verify, saved-config
+  test prompt, air-gap + cloud opt-in, sealed keys, and per-job prompt
+  provenance. Roles: `prompt_video`, `prompt_image`, `script_parse`,
+  `agent_plan`, `review_critic`, `continuity`. Providers: Gemma (in-process),
+  Ollama, LM Studio, OpenAI-compatible, optional OpenAI/Anthropic. See
+  `Milimo Video/systems/llm-settings-audit-2026-11.md`.
 - Desktop: Tauri 2 shell with native open/save dialogs and a backend supervisor
   that prefers a `milimo-backend` sidecar and otherwise starts `run_backend.sh`.
   Bundled Python/Torch runtime remains a follow-up.
@@ -183,7 +193,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 84 backend tests, 56 Vitest tests, and 17 Playwright tests, plus
+baseline is 104 backend tests, 61 Vitest tests, and 20 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -193,9 +203,9 @@ Do not claim these are done:
 - Legacy `/` cutover is gated on the documented two-clean-release window.
 - Scoped-v1 gaps: no transitions/LUT/titles/A2 track, lexical rather than
   embedding search, and no shorts/lens template packs.
-- LLM configuration plane: Studio has no LLM panel; Gemma/Ollama settings are
-  legacy-only and runtime-only. See
-  `Milimo Video/systems/llm-settings-audit-2026-11.md`.
+- LLM L4 governance: token/cost telemetry, cloud budget guard, eval gate, and
+  staged profiles are not built. Air-gap and `MILIMO_LLM_CLOUD` are enforced.
+  See `Milimo Video/systems/llm-settings-audit-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
 
@@ -251,10 +261,10 @@ Run from the repo root unless noted:
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 56 Vitest tests
+npm test                                       # 61 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 17 Playwright tests
+npm run test:e2e                               # 20 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```
