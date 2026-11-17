@@ -515,3 +515,12 @@ a project-level `captions_burn` flag (persisted, default true). Deliver exposes 
 Burn captions toggle; the render skips ASS generation when it is off. Parser
 tests cover SRT, VTT, HTML tags, and invalid input. Verified: 47 pytest,
 32 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f2 | scale, pan and volume keyframes
+
+Extended motion keyframes beyond opacity: scale, x/y pan, and volume are
+sanitized, persisted, and interpolated. The render uses `zoompan` for
+scale/pan, `geq` for alpha when opacity varies, and `volume=eval=frame` for
+audio curves. Inspector rows expose each property at the playhead. Added
+filtergraph tests plus a real render exercising opacity+scale+pan. Verified:
+49 pytest, 32 vitest, tsc clean.

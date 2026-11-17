@@ -1,15 +1,19 @@
 import type { OpacityKeyframe } from '../../stores/types';
 
 export function sanitizeKeyframes(keyframes: OpacityKeyframe[]): OpacityKeyframe[] {
-    const points = new Map<number, number>();
+    const points = new Map<number, OpacityKeyframe>();
     for (const keyframe of keyframes || []) {
         const frame = Math.max(0, Math.round(keyframe.frame || 0));
-        const opacity = Math.max(0, Math.min(1, Number(keyframe.opacity ?? 1)));
-        points.set(frame, opacity);
+        points.set(frame, {
+            frame,
+            opacity: Math.max(0, Math.min(1, Number(keyframe.opacity ?? 1))),
+            scale: Math.max(0.1, Math.min(4, Number(keyframe.scale ?? 1))),
+            x: Math.max(-1, Math.min(1, Number(keyframe.x ?? 0))),
+            y: Math.max(-1, Math.min(1, Number(keyframe.y ?? 0))),
+            volume: Math.max(0, Math.min(2, Number(keyframe.volume ?? 1))),
+        });
     }
-    return [...points.entries()]
-        .sort(([a], [b]) => a - b)
-        .map(([frame, opacity]) => ({ frame, opacity }));
+    return [...points.values()].sort((a, b) => a.frame - b.frame);
 }
 
 export function upsertKeyframe(

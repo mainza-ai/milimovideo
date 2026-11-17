@@ -502,6 +502,34 @@
     gap: 8px;
 }
 
+.st-keyframe {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 7px;
+    border: 1px solid var(--st-border);
+    border-radius: var(--st-radius-sm);
+    background: rgba(0, 0, 0, 0.14);
+}
+
+.st-keyframe-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--st-muted);
+    font-size: 9px;
+}
+
+.st-keyframe-row span {
+    width: 48px;
+    flex: 0 0 48px;
+}
+
+.st-keyframe-row input {
+    flex: 1;
+    accent-color: var(--st-accent);
+}
+
 .st-meta-grid {
     display: grid;
     grid-template-columns: auto 1fr;

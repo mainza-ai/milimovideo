@@ -123,7 +123,10 @@ def test_render_api_matches_computed_timeline(app_client, project):
             "video_url": f"/projects/{pid}/generated/{name}.mp4",
             "status": "completed",
             "keyframes": (
-                [{"frame": 0, "opacity": 0.2}, {"frame": 24, "opacity": 1.0}]
+                [
+                    {"frame": 0, "opacity": 0.2, "scale": 1.0, "x": 0, "y": 0},
+                    {"frame": 24, "opacity": 1.0, "scale": 1.1, "x": 0.05, "y": 0},
+                ]
                 if name == "red" else []
             ),
         })

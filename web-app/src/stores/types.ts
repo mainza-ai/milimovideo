@@ -114,6 +114,10 @@ export interface ParsedScene {
 export interface OpacityKeyframe {
     frame: number;
     opacity: number;
+    scale?: number;
+    x?: number;
+    y?: number;
+    volume?: number;
 }
 
 export interface CaptionCue {

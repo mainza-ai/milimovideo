@@ -42,12 +42,22 @@ def _sanitize_keyframes(keyframes) -> list:
         try:
             frame = max(0, int(data.get("frame") or 0))
             opacity = max(0.0, min(1.0, float(data.get("opacity", 1.0))))
+            scale = max(0.1, min(4.0, float(data.get("scale", 1.0))))
+            x = max(-1.0, min(1.0, float(data.get("x", 0.0))))
+            y = max(-1.0, min(1.0, float(data.get("y", 0.0))))
+            volume = max(0.0, min(2.0, float(data.get("volume", 1.0))))
         except (TypeError, ValueError):
             continue
-        points[frame] = opacity  # last keyframe on a frame wins
+        points[frame] = {
+            "opacity": opacity,
+            "scale": scale,
+            "x": x,
+            "y": y,
+            "volume": volume,
+        }  # last keyframe on a frame wins
     return [
-        {"frame": frame, "opacity": opacity}
-        for frame, opacity in sorted(points.items())
+        {"frame": frame, **values}
+        for frame, values in sorted(points.items())
     ]
 
 

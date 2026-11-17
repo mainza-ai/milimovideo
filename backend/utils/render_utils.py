@@ -4,24 +4,15 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 
-def opacity_expression(keyframes: List[Dict[str, Any]], fps: float) -> Optional[str]:
-    """Piecewise-linear opacity curve in clip-local seconds.
-
-    Frames are local to the visible clip (0 = first visible frame), which is why
-    this is evaluated before the clip's PTS is shifted onto the timeline.
-    """
-    points: Dict[int, float] = {}
-    for raw in keyframes or []:
-        try:
-            frame = max(0, int(raw.get("frame") or 0))
-            opacity = max(0.0, min(1.0, float(raw.get("opacity", 1.0))))
-        except (TypeError, ValueError):
-            continue
-        points[frame] = opacity
-    if not points:
+def _curve_expression(
+    values: List[tuple],
+    fps: float,
+    default: float,
+    variable: str,
+) -> Optional[str]:
+    if not values:
         return None
-
-    ordered = sorted(points.items())
+    ordered = sorted(values)
     if len(ordered) == 1:
         return f"{ordered[0][1]:.4f}"
 
@@ -34,12 +25,71 @@ def opacity_expression(keyframes: List[Dict[str, Any]], fps: float) -> Optional[
         if t1 <= t0:
             continue
         slope = (o1 - o0) / (t1 - t0)
-        segment = f"({o0:.4f}+({slope:.6f})*(T-{t0:.6f}))"
-        expr = f"if(lt(T,{t1:.6f}),{segment},{expr})"
+        segment = f"({o0:.4f}+({slope:.6f})*({variable}-{t0:.6f}))"
+        expr = f"if(lt({variable},{t1:.6f}),{segment},{expr})"
 
     f0, o0 = ordered[0]
     t0 = f0 / fps
-    return f"if(lt(T,{t0:.6f}),{o0:.4f},{expr})"
+    return f"if(lt({variable},{t0:.6f}),{o0:.4f},{expr})"
+
+
+def _keyframe_points(
+    keyframes: List[Dict[str, Any]],
+    key: str,
+    default: float,
+    clamp_min: float,
+    clamp_max: float,
+) -> List[tuple]:
+    points: Dict[int, float] = {}
+    for raw in keyframes or []:
+        try:
+            frame = max(0, int(raw.get("frame") or 0))
+            value = max(clamp_min, min(clamp_max, float(raw.get(key, default))))
+        except (TypeError, ValueError):
+            continue
+        points[frame] = value
+    return sorted(points.items())
+
+
+def opacity_expression(keyframes: List[Dict[str, Any]], fps: float) -> Optional[str]:
+    """Piecewise-linear opacity curve in clip-local seconds.
+
+    Frames are local to the visible clip (0 = first visible frame), which is why
+    this is evaluated before the clip's PTS is shifted onto the timeline.
+    """
+    points = _keyframe_points(keyframes, "opacity", 1.0, 0.0, 1.0)
+    if all(abs(value - 1.0) < 1e-6 for _, value in points):
+        return None
+    return _curve_expression(points, fps, 1.0, "T")
+
+
+def volume_expression(keyframes: List[Dict[str, Any]], fps: float) -> Optional[str]:
+    points = _keyframe_points(keyframes, "volume", 1.0, 0.0, 2.0)
+    if all(abs(value - 1.0) < 1e-6 for _, value in points):
+        return None
+    return _curve_expression(points, fps, 1.0, "t")
+
+
+def transform_expressions(
+    keyframes: List[Dict[str, Any]],
+    fps: float,
+) -> Optional[Dict[str, str]]:
+    scales = _keyframe_points(keyframes, "scale", 1.0, 0.1, 4.0)
+    xs = _keyframe_points(keyframes, "x", 0.0, -1.0, 1.0)
+    ys = _keyframe_points(keyframes, "y", 0.0, -1.0, 1.0)
+    if not scales and not xs and not ys:
+        return None
+    if (
+        all(abs(value - 1.0) < 1e-6 for _, value in scales)
+        and all(abs(value) < 1e-6 for _, value in xs)
+        and all(abs(value) < 1e-6 for _, value in ys)
+    ):
+        return None
+    return {
+        "scale": _curve_expression(scales, fps, 1.0, "time") or "1.0000",
+        "x": _curve_expression(xs, fps, 0.0, "time") or "0.0000",
+        "y": _curve_expression(ys, fps, 0.0, "time") or "0.0000",
+    }
 
 
 def build_complex_filtergraph(
@@ -129,6 +179,9 @@ def build_complex_filtergraph(
         output_duration = duration_frames / project_fps
         fade_in = min(output_duration, max(0.0, float(shot.get("fade_in", 0) or 0)))
         fade_out = min(output_duration, max(0.0, float(shot.get("fade_out", 0) or 0)))
+        volume_expr = volume_expression(shot.get("keyframes") or [], project_fps)
+        if volume_expr:
+            chain += f",volume=eval=frame:volume='{volume_expr}'"
         if fade_in > 0:
             chain += f",afade=t=in:st=0:d={fade_in:.3f}"
         if fade_out > 0:
@@ -176,9 +229,20 @@ def build_complex_filtergraph(
             else:
                 fc += f",pad={project_width}:{project_height}:(ow-iw)/2:(oh-ih)/2:color=black"
 
-            opacity = opacity_expression(shot.get("keyframes") or [], project_fps)
+            keyframes = shot.get("keyframes") or []
+            transform = transform_expressions(keyframes, project_fps)
+            if transform:
+                fc += (
+                    f",zoompan=z='clip({transform['scale']},0.1,4)'"
+                    f":x='max(0,min(iw-iw/zoom,(iw-iw/zoom)/2+({transform['x']})*iw/2))'"
+                    f":y='max(0,min(ih-ih/zoom,(ih-ih/zoom)/2+({transform['y']})*ih/2))'"
+                    f":d=1:s={project_width}x{project_height}:fps={project_fps}"
+                    ",format=rgba"
+                )
+
+            opacity = opacity_expression(keyframes, project_fps)
             if opacity:
-                if not overlay:
+                if not overlay and not transform:
                     fc += ",format=rgba"
                 fc += (
                     ",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"

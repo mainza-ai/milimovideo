@@ -225,9 +225,9 @@ export function Inspector() {
 
                         {inspectorTab === 'motion' && (
                             <div className="st-inspector-section">
-                                <span className="st-label">Opacity keyframes · frame {localFrame}</span>
+                                <span className="st-label">Motion keyframes · frame {localFrame}</span>
                                 <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
-                                    Piecewise-linear alpha, burned into the render. V2 fades over V1; V1 fades through black.
+                                    Piecewise-linear opacity, scale, pan (x/y), and volume. Opacity/transform are burned into video; volume drives audio.
                                 </div>
                                 <div className="st-button-row" style={{ marginTop: 8 }}>
                                     <button
@@ -261,41 +261,94 @@ export function Inspector() {
                                             No keyframes. The clip stays fully opaque.
                                         </span>
                                     )}
-                                    {keyframes.map((keyframe) => (
-                                        <div key={keyframe.frame} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                            <span className="st-mono" style={{ width: 44, fontSize: 10 }}>
-                                                f{keyframe.frame}
-                                            </span>
-                                            <input
-                                                type="range"
-                                                min={0}
-                                                max={100}
-                                                step={1}
-                                                value={Math.round(keyframe.opacity * 100)}
-                                                aria-label={`Opacity at frame ${keyframe.frame}`}
-                                                style={{ flex: 1, accentColor: 'var(--st-accent)' }}
-                                                onChange={(event) => updateShot(shot.id, {
-                                                    keyframes: upsertKeyframe(keyframes, {
-                                                        frame: keyframe.frame,
-                                                        opacity: Number(event.target.value) / 100,
-                                                    }),
-                                                })}
-                                            />
-                                            <span className="st-mono" style={{ width: 34, fontSize: 10, textAlign: 'right' }}>
-                                                {Math.round(keyframe.opacity * 100)}%
-                                            </span>
-                                            <button
-                                                type="button"
-                                                className="st-icon-button"
-                                                aria-label={`Remove keyframe at ${keyframe.frame}`}
-                                                onClick={() => updateShot(shot.id, {
-                                                    keyframes: removeKeyframeAt(keyframes, keyframe.frame),
-                                                })}
-                                            >
-                                                <X size={11} />
-                                            </button>
-                                        </div>
-                                    ))}
+                                    {keyframes.map((keyframe) => {
+                                        const patchKeyframe = (patch: Partial<typeof keyframe>) => updateShot(shot.id, {
+                                            keyframes: upsertKeyframe(keyframes, { ...keyframe, ...patch }),
+                                        });
+                                        return (
+                                            <div key={keyframe.frame} className="st-keyframe">
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <span className="st-mono" style={{ width: 44, fontSize: 10 }}>
+                                                        f{keyframe.frame}
+                                                    </span>
+                                                    <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, flex: 1 }}>
+                                                        opacity {Math.round((keyframe.opacity ?? 1) * 100)}% · scale {Math.round((keyframe.scale ?? 1) * 100)}%
+                                                    </span>
+                                                    <button
+                                                        type="button"
+                                                        className="st-icon-button"
+                                                        aria-label={`Remove keyframe at ${keyframe.frame}`}
+                                                        onClick={() => updateShot(shot.id, {
+                                                            keyframes: removeKeyframeAt(keyframes, keyframe.frame),
+                                                        })}
+                                                    >
+                                                        <X size={11} />
+                                                    </button>
+                                                </div>
+                                                <label className="st-keyframe-row">
+                                                    <span>Opacity</span>
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={100}
+                                                        value={Math.round((keyframe.opacity ?? 1) * 100)}
+                                                        aria-label={`Opacity at frame ${keyframe.frame}`}
+                                                        onChange={(event) => patchKeyframe({ opacity: Number(event.target.value) / 100 })}
+                                                    />
+                                                </label>
+                                                <label className="st-keyframe-row">
+                                                    <span>Scale</span>
+                                                    <input
+                                                        type="range"
+                                                        min={25}
+                                                        max={400}
+                                                        value={Math.round((keyframe.scale ?? 1) * 100)}
+                                                        aria-label={`Scale at frame ${keyframe.frame}`}
+                                                        onChange={(event) => patchKeyframe({ scale: Number(event.target.value) / 100 })}
+                                                    />
+                                                </label>
+                                                <label className="st-keyframe-row">
+                                                    <span>Volume</span>
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={200}
+                                                        value={Math.round((keyframe.volume ?? 1) * 100)}
+                                                        aria-label={`Volume at frame ${keyframe.frame}`}
+                                                        onChange={(event) => patchKeyframe({ volume: Number(event.target.value) / 100 })}
+                                                    />
+                                                </label>
+                                                <div className="st-row">
+                                                    <label>
+                                                        <span className="st-label">Pan X · {Math.round((keyframe.x ?? 0) * 100)}</span>
+                                                        <input
+                                                            className="st-input"
+                                                            type="number"
+                                                            min={-100}
+                                                            max={100}
+                                                            value={Math.round((keyframe.x ?? 0) * 100)}
+                                                            onChange={(event) => patchKeyframe({
+                                                                x: Math.max(-1, Math.min(1, Number(event.target.value) / 100)),
+                                                            })}
+                                                        />
+                                                    </label>
+                                                    <label>
+                                                        <span className="st-label">Pan Y · {Math.round((keyframe.y ?? 0) * 100)}</span>
+                                                        <input
+                                                            className="st-input"
+                                                            type="number"
+                                                            min={-100}
+                                                            max={100}
+                                                            value={Math.round((keyframe.y ?? 0) * 100)}
+                                                            onChange={(event) => patchKeyframe({
+                                                                y: Math.max(-1, Math.min(1, Number(event.target.value) / 100)),
+                                                            })}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}

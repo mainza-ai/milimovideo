@@ -10,16 +10,17 @@ describe('opacity keyframes', () => {
             { frame: 0, opacity: -1 },
             { frame: 10, opacity: 0.5 },
         ]);
-        expect(points).toEqual([
-            { frame: 0, opacity: 0 },
-            { frame: 10, opacity: 0.5 },
-        ]);
+        expect(points).toHaveLength(2);
+        expect(points[0]).toMatchObject({ frame: 0, opacity: 0 });
+        expect(points[1]).toMatchObject({ frame: 10, opacity: 0.5 });
     });
 
     it('upserts and removes by frame', () => {
         const points = upsertKeyframe([{ frame: 0, opacity: 1 }], { frame: 12, opacity: 0.25 });
         expect(points).toHaveLength(2);
-        expect(removeKeyframeAt(points, 0)).toEqual([{ frame: 12, opacity: 0.25 }]);
+        const remaining = removeKeyframeAt(points, 0);
+        expect(remaining).toHaveLength(1);
+        expect(remaining[0]).toMatchObject({ frame: 12, opacity: 0.25 });
     });
 
     it('interpolates and holds at the ends', () => {
