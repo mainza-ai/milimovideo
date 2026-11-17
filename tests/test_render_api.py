@@ -46,6 +46,7 @@ def test_render_api_matches_computed_timeline(app_client, project):
     generated = Path(config.PROJECTS_DIR) / pid / "generated"
     _make_clip(generated / "red.mp4", "red")
     _make_clip(generated / "blue.mp4", "blue")
+    _make_clip(generated / "green.mp4", "green")
     _make_audio(generated / "music.m4a")
 
     shots = []
@@ -75,6 +76,28 @@ def test_render_api_matches_computed_timeline(app_client, project):
                 if name == "red" else []
             ),
         })
+    shots.append({
+        "id": "overlay",
+        "prompt": "green overlay",
+        "negative_prompt": "",
+        "seed": 42,
+        "width": 320,
+        "height": 180,
+        "fps": 25,
+        "num_frames": 25,
+        "cfg_scale": 1.0,
+        "enhance_prompt": False,
+        "upscale": False,
+        "pipeline_override": "auto",
+        "track_index": 1,
+        "start_frame": 25,
+        "trim_in": 0,
+        "trim_out": 0,
+        "timeline": [],
+        "video_url": f"/projects/{pid}/generated/green.mp4",
+        "status": "completed",
+        "keyframes": [{"frame": 0, "opacity": 0.0}, {"frame": 24, "opacity": 1.0}],
+    })
     shots.append({
         "id": "music",
         "prompt": "music",

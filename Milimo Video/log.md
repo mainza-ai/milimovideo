@@ -373,3 +373,13 @@ Moved viewport culling into a pure `cullCards` helper and covered it with a
 500-card test (a small slice mounts at detail zoom, all stay when far out,
 overscan keeps edge cards). This replaces the inline predicate; behavior is
 unchanged. Verified: 41 pytest, 23 vitest, tsc clean, eslint 0 errors, build.
+
+## [2026-11-16] ci | Playwright smoke
+
+Added Playwright with a headless Chromium smoke test that stubs the API and
+walks the real `/studio` shell: story spine, board Area control, master
+references, Review frame-comment surface, and Setup memory/model panels. Wired
+`npm run test:e2e`, excluded `e2e/` from Vitest, ignored Playwright artifacts,
+and added the browser-install + e2e steps to CI. Also extended the real render
+test with a V2 overlay carrying opacity keyframes. Verified locally: 1
+Playwright pass, 41 pytest, 23 vitest, tsc clean, build.

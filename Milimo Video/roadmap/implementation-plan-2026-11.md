@@ -51,7 +51,7 @@ single-engineer guidance.
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, setup check |
 | P3 OOM retry | **Not started** | P3-03 deferred |
 | P4 UX trust | **Partial** (P4-01,02,03,05,06) | take history/select, seed lock, save state/conflict, SSE reconnect |
-| P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health; no Playwright) | 21 backend tests, 4 frontend tests, lint 0 errors, build passes |
+| P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health + Playwright shell smoke) | 41 backend tests, 23 frontend tests, 1 Playwright smoke, lint 0 errors, build passes |
 | Front-end F0/F1 | **Started** (shell, tokens, editor store, board canvas, list/script, timeline shell, lazy `/studio`) | `StudioApp.test` mounts the shell; tsc/lint/build pass |
 | Front-end F2–F5 | **Deferred** per plan risk note | one engineer, backend gates first |
 
@@ -248,7 +248,7 @@ recoverable queue with no zombie `processing`/`pending`.
 |---|---|---|---|
 | P5-01 | `pytest` suite: schemas, save/load round-trip, render graph, queue, cancellation, security limits | >80% on changed modules; no network/GPU required for unit tests | L |
 | P5-02 | `vitest` store tests: ordering, conditioning, split, push, undo | Contract tests catch snake/camel regressions | M |
-| P5-03 | Playwright smoke: create project → add clips → save/reload → export → verify duration | Runs headless with stub backend | M |
+| P5-03 | Playwright smoke: create project → add clips → save/reload → export → verify duration | Shell/board/review/setup smoke runs headless with a stubbed API; full create→export flow still pending | M |
 | P5-04 | CI: ruff + pytest + tsc + eslint (fix the 117 problems or baseline them explicitly) + vitest | PR cannot merge red | M |
 | P5-05 | Pre-commit hooks: ruff format/check, tsc, no large files | Local parity with CI | S |
 | P5-06 | Structured logs with job/request IDs; `/health` includes device, model slots, queue depth, disk | One curl explains a stuck studio | S |
