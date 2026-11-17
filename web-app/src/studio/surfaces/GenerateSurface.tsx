@@ -558,9 +558,9 @@ export function GenerateSurface() {
 
             {lensOpen && (
                 <PipelineLens
-                    projectId={project.id}
                     shot={shot}
                     elements={elements}
+                    updateShot={updateShot}
                     onClose={() => setLensOpen(false)}
                 />
             )}

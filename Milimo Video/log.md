@@ -849,3 +849,10 @@ Verified: 61 pytest (backend unchanged), 44 vitest, 10 Playwright.
 
 Shorts can export the selected candidate at 9:16, 1:1, and 4:5 in one action, each
 as a true crop reframe. Verified: 44 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] lens | editable pipeline app mode
+
+Pipeline lens is no longer read-only: prompt, negative, frames, seed, resolution,
+model, enhance, and upscale are editable, validation and estimate update from the
+draft, and Apply writes the recipe back to the shot through the undoable document
+store. Recipe JSON export/download remains. Verified: 44 vitest, tsc clean.
