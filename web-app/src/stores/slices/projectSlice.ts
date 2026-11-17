@@ -133,6 +133,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     script_content: sc.scriptContent
                 })),
                 script_content: project.scriptContent,
+                captions_burn: project.captionsBurn ?? true,
                 captions: (project.captions || []).map(cue => ({
                     id: cue.id,
                     start_frame: cue.startFrame,
@@ -288,6 +289,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     matchedElements: s.matched_elements ? (typeof s.matched_elements === 'string' ? JSON.parse(s.matched_elements) : s.matched_elements) : undefined,
                 })),
                 scriptContent: data.script_content, // Load persisted script
+                captionsBurn: data.captions_burn ?? true,
                 captions: (data.captions || []).map((cue: any) => ({
                     id: cue.id || uuidv4(),
                     startFrame: cue.start_frame ?? 0,

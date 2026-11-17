@@ -507,3 +507,11 @@ Per-clip fade-in/out (seconds) persist and reach the audio filtergraph as
 `afade`; the render honors track solo (soloing one track mutes the rest) and the
 timeline labels expose M/S toggles. Added filtergraph tests for fades and solo.
 Verified: 46 pytest, 29 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f2 | caption import and burn toggle
+
+Added SRT/WebVTT parsing into sanitized frame cues, a timeline Import action, and
+a project-level `captions_burn` flag (persisted, default true). Deliver exposes a
+Burn captions toggle; the render skips ASS generation when it is off. Parser
+tests cover SRT, VTT, HTML tags, and invalid input. Verified: 47 pytest,
+32 vitest, tsc clean, eslint 0 errors.

@@ -205,6 +205,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         shots=[_shot_dict(s) for s in shots],
         scenes=scenes_data,
         captions=_parse_json_field(project.captions, []),
+        captions_burn=bool(project.captions_burn),
         script_content=project.script_content,
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
@@ -278,6 +279,7 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     db_project.fps = state.fps
     db_project.seed = state.seed
     db_project.captions = json.dumps(_sanitize_captions(state.captions))
+    db_project.captions_burn = bool(state.captions_burn)
     db_project.script_content = state.script_content
     
     db_project.updated_at = datetime.utcnow()
@@ -733,6 +735,8 @@ async def _render_background(
 
             stored_project = session.get(Project, project_id)
             captions = _parse_json_field(stored_project.captions, []) if stored_project else []
+            if stored_project is not None and not stored_project.captions_burn:
+                captions = []
             captions_path = write_ass_file(captions, width, height, fps)
             if captions_path:
                 await emit_progress(4, f"Burning in {len(captions)} caption cue(s)...")

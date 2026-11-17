@@ -135,6 +135,7 @@ export interface Project {
     scriptContent?: string;
     revision?: number;
     captions?: CaptionCue[];
+    captionsBurn?: boolean;
 }
 
 export interface ProjectSlice {

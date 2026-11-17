@@ -196,9 +196,12 @@ def test_captions_roundtrip_sorted_and_sanitized(app_client, project):
             {"id": "early", "start_frame": 0, "end_frame": 25, "text": " earlier "},
             {"id": "blank", "start_frame": 10, "end_frame": 20, "text": "   "},
         ],
+        "captions_burn": False,
     }
     assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
-    captions = app_client.get(f"/projects/{pid}").json()["captions"]
+    loaded = app_client.get(f"/projects/{pid}").json()
+    captions = loaded["captions"]
+    assert loaded["captions_burn"] is False
     assert [cue["id"] for cue in captions] == ["early", "late"]
     assert captions[0]["text"] == "earlier"
 

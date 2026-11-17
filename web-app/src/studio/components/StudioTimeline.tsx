@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-    Captions, Music, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal, UnfoldHorizontal,
+    Captions, Music, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal,
+    UnfoldHorizontal, Upload,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, type CaptionCue, type Shot } from '../../stores/timelineStore';
@@ -8,7 +9,8 @@ import { computeTimelineLayout, type TimelineClip } from '../../utils/timelineUt
 import { useStudioEditor } from '../state/editorStore';
 import { formatDuration } from '../data/useStudioData';
 import { bladeSourceFrame, rollCut, slipShot, trimShot } from '../timeline/ops';
-import { removeCue, upsertCue } from '../captions/cues';
+import { removeCue, sanitizeCues, upsertCue } from '../captions/cues';
+import { parseCaptions } from '../captions/parse';
 import { Waveform } from './Waveform';
 import { getAssetUrl } from '../../config';
 import { useStudioAssets } from '../data/useStudioData';
@@ -66,6 +68,7 @@ export function StudioTimeline() {
     const [preview, setPreview] = useState<Preview | null>(null);
     const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
     const [audioPickerOpen, setAudioPickerOpen] = useState(false);
+    const captionFileRef = useRef<HTMLInputElement>(null);
     const { assets } = useStudioAssets();
     const audioAssets = useMemo(() => assets.filter((asset) => asset.type === 'audio'), [assets]);
     const gesture = useRef<Gesture | null>(null);
@@ -335,6 +338,39 @@ export function StudioTimeline() {
                 <button type="button" className="st-button" data-size="sm" onClick={addCue} title="Add a caption cue at the playhead">
                     <Captions size={12} /> Caption
                 </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    onClick={() => captionFileRef.current?.click()}
+                    title="Import SRT or VTT captions"
+                >
+                    <Upload size={12} /> Import
+                </button>
+                <input
+                    ref={captionFileRef}
+                    type="file"
+                    accept=".srt,.vtt,text/vtt,application/x-subrip"
+                    style={{ display: 'none' }}
+                    aria-label="Import caption file"
+                    onChange={async (event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = '';
+                        if (!file) return;
+                        try {
+                            const parsed = parseCaptions(await file.text(), fps);
+                            if (parsed.length === 0) {
+                                addToast('No cues found in that file', 'info');
+                                return;
+                            }
+                            changeCaptions(sanitizeCues([...captions, ...parsed]));
+                            addToast(`Imported ${parsed.length} caption cues`, 'success');
+                        } catch {
+                            addToast('Could not read that caption file', 'error');
+                        }
+                    }}
+                />
                 <button
                     type="button"
                     className="st-button"

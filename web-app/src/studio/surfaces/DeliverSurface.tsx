@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Download, Film, Loader2, Send } from 'lucide-react';
+import { useTimelineStore } from '../../stores/timelineStore';
 import { useStudioCreateRender, useStudioProject, useStudioRenders } from '../data/useStudioData';
 import { getAssetUrl } from '../../config';
 
@@ -16,6 +17,7 @@ export function DeliverSurface() {
     const project = useStudioProject();
     const { renders, refresh } = useStudioRenders(project.id);
     const createRender = useStudioCreateRender(project.id);
+    const setProject = useTimelineStore((state) => state.setProject);
     const [preset, setPreset] = useState<typeof PRESETS[number]['id']>('project');
     const [busy, setBusy] = useState(false);
 
@@ -50,6 +52,14 @@ export function DeliverSurface() {
                     <span className="st-status-pill" title="Caption cues are burned in by the render">
                         {project.captions?.length || 0} caption cues
                     </span>
+                    <label className="st-status-pill" style={{ cursor: 'pointer' }}>
+                        <input
+                            type="checkbox"
+                            checked={project.captionsBurn ?? true}
+                            onChange={(event) => setProject({ ...project, captionsBurn: event.target.checked })}
+                        />
+                        Burn captions
+                    </label>
                     <button type="button" className="st-button" data-variant="primary" disabled={busy} onClick={() => void start()}>
                         {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                         {busy ? 'Queueing…' : 'Create export'}

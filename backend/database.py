@@ -30,6 +30,7 @@ class Project(SQLModel, table=True):
     board_revision: int = Field(default=0)
     view_state: Optional[str] = None
     captions: Optional[str] = None  # JSON list of {id,start_frame,end_frame,text}
+    captions_burn: bool = True
 
     shots: List["Shot"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     scenes: List["Scene"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
@@ -217,6 +218,7 @@ def _add_missing_columns() -> None:
             "board_revision": "INTEGER NOT NULL DEFAULT 0",
             "view_state": "TEXT",
             "captions": "TEXT",
+            "captions_burn": "BOOLEAN NOT NULL DEFAULT 1",
         },
         "shot": {
             "sequence_index": "INTEGER",
