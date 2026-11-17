@@ -4,9 +4,10 @@ import asyncio
 import os
 import re
 import shutil
+import subprocess
 import uuid
 import config
-from file_utils import get_base_dir
+from file_utils import get_base_dir, resolve_path
 from sqlmodel import Session
 from database import get_session
 import logging
@@ -15,6 +16,45 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["assets"])
+
+
+def _thumbnail_target(project_id: Optional[str], filename: str) -> tuple[str, str]:
+    """Return (filesystem path, web URL) for an uploaded video poster."""
+    stem = Path(filename).stem
+    thumb_name = f"{stem}_thumb.jpg"
+    if project_id:
+        folder = os.path.join(config.PROJECTS_DIR, project_id, "thumbnails")
+        url = f"/projects/{project_id}/thumbnails/{thumb_name}"
+    else:
+        folder = os.path.join(UPLOAD_DIR, "thumbnails")
+        url = f"/uploads/thumbnails/{thumb_name}"
+    return os.path.join(folder, thumb_name), url
+
+
+def _make_video_thumbnail(video_path: str, thumb_path: str) -> bool:
+    os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
+    for offset in ("0.5", "0"):
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-ss", offset, "-i", video_path,
+                    "-frames:v", "1", "-vf", "scale='min(640,iw)':-2",
+                    "-q:v", "4", thumb_path,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
+                return True
+        except (subprocess.CalledProcessError, OSError):
+            continue
+    try:
+        if os.path.exists(thumb_path):
+            os.remove(thumb_path)
+    except OSError:
+        pass
+    return False
 
 # Global upload dir (legacy)
 UPLOAD_DIR = os.path.join(get_base_dir(), "uploads")
@@ -114,6 +154,12 @@ def upload_file(
         else "text" if extension in text_extensions
         else "video"
     )
+    thumbnail_url = None
+    if asset_type == "video":
+        thumb_path, thumb_url = _thumbnail_target(project_id, filename)
+        if _make_video_thumbnail(file_path, thumb_path):
+            thumbnail_url = thumb_url
+
     new_asset = Asset(
         id=uuid.uuid4().hex,
         project_id=project_id,
@@ -121,6 +167,7 @@ def upload_file(
         url=access_url,
         path=file_path,
         filename=filename,
+        thumbnail_url=thumbnail_url,
         created_at=datetime.now(timezone.utc),
         meta_json=None,
     )
@@ -132,6 +179,7 @@ def upload_file(
         "asset_id": new_asset.id,
         "type": new_asset.type,
         "filename": new_asset.filename,
+        "thumbnail": new_asset.thumbnail_url,
         "size_bytes": written,
     }
 
@@ -218,13 +266,22 @@ async def list_uploads(session: Session = Depends(get_session)):
         if a.url in seen_urls:
             continue
         seen_urls.add(a.url)
+        thumb = a.thumbnail_url
+        source_path = a.path if a.path and os.path.exists(a.path) else resolve_path(a.url)
+        if a.type == "video" and not thumb and source_path and os.path.exists(source_path):
+            thumb_path, thumb_url = _thumbnail_target(a.project_id, a.filename)
+            if await asyncio.to_thread(_make_video_thumbnail, source_path, thumb_path):
+                a.thumbnail_url = thumb_url
+                session.add(a)
+                session.commit()
+                thumb = thumb_url
         files.append({
             "id": a.id,
             "url": a.url,
             "path": a.path,
             "type": a.type,
             "filename": a.filename,
-            "thumbnail": None,
+            "thumbnail": thumb,
             "created_at": a.created_at.timestamp()
         })
         

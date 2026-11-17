@@ -125,9 +125,10 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 - Pydantic boundaries: typed `ProjectState`, `ShotState`, `SceneState`,
   `TimelineItem`, `RenderSettings`, `BoardLayoutPayload`, review/share/plan/depth
   payloads.
-- Alembic baseline (`0001_baseline`) plus `0002_render_settings` and
-  `0003_seed_lock`, with startup upgrade; legacy DBs are repaired and stamped. Do
-  not add schema columns without a migration and migration test.
+- Alembic baseline (`0001_baseline`) plus `0002_render_settings`,
+  `0003_seed_lock`, and `0004_asset_thumbnail`, with startup upgrade; legacy DBs
+  are repaired and stamped. Do not add schema columns without a migration and
+  migration test.
 - Generated OpenAPI client types: `npm run gen:api`; CI checks drift.
 - Durable GPU queue: `QueuedJob` ledger + one global semaphore + one OOM retry
   + pause/resume dispatch.
@@ -164,7 +165,8 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
   caption toggle/preview, persisted encoding controls, render history/cancel.
 - Media viewer: one global image/video/audio/text preview used by Library, Story,
   Generate, Edit, Inspector, and Review; legacy localhost URLs are rewritten to
-  the current API origin with bearer-token support.
+  the current API origin with bearer-token support. Video uploads get real poster
+  frames and cards play muted on hover.
 - Shorts: transcript/SRT/VTT candidates, scores, editable in/out range,
   9:16/1:1/4:5 export, direct export from uploaded sources, cancel.
 - Setup: device/slots/queue/disk, queue pause/resume, pipeline readiness,
@@ -181,7 +183,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 83 backend tests, 56 Vitest tests, and 16 Playwright tests, plus
+baseline is 84 backend tests, 56 Vitest tests, and 17 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -249,7 +251,7 @@ npm run lint
 npm test                                       # 56 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 16 Playwright tests
+npm run test:e2e                               # 17 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```

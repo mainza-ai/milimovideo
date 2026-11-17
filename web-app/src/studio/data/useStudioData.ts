@@ -103,6 +103,7 @@ export interface StudioAsset {
     url: string;
     filename: string;
     type: string;
+    thumbnail?: string | null;
     created_at: number;
 }
 
@@ -150,6 +151,7 @@ export interface StudioRender {
     status: string;
     progress: number;
     output_path: string | null;
+    thumbnail_path?: string | null;
     error_message: string | null;
     created_at: string;
 }

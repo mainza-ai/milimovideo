@@ -418,6 +418,8 @@ def test_render_api_matches_computed_timeline(app_client, project):
     assert status.status_code == 200, status.text
     body = status.json()
     assert body["status"] == "completed", body
+    assert body["thumbnail_url"].endswith(f"{render_id}_thumb.jpg")
+    assert (generated.parent / "thumbnails" / f"{render_id}_thumb.jpg").exists()
 
     output = generated / f"{render_id}.mp4"
     assert output.exists()

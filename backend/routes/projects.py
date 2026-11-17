@@ -1079,6 +1079,26 @@ async def _render_background(
             if returncode != 0:
                 raise RuntimeError(f"FFmpeg render failed: {stderr[-4000:]}")
 
+            # Poster frame for Deliver/Shorts render history.
+            thumb_dir = os.path.join(config.PROJECTS_DIR, project_id, "thumbnails")
+            thumb_path = os.path.join(thumb_dir, f"{render_id}_thumb.jpg")
+            try:
+                os.makedirs(thumb_dir, exist_ok=True)
+                await asyncio.to_thread(
+                    subprocess.run,
+                    [
+                        "ffmpeg", "-y", "-ss", f"{max(0.1, range_start / max(1, fps)):.3f}",
+                        "-i", output_path, "-frames:v", "1", "-vf", "scale='min(640,iw)':-2",
+                        "-q:v", "4", thumb_path,
+                    ],
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                job.thumbnail_path = f"/projects/{project_id}/thumbnails/{render_id}_thumb.jpg"
+            except Exception as thumb_error:
+                logger.warning("Could not create render thumbnail: %s", thumb_error)
+
             await emit_progress(100, "Render complete!", status="completed")
             logger.info(f"Render completed: {output_path}")
 

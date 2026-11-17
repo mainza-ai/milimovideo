@@ -6,6 +6,7 @@ import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
+import { MediaThumb } from '../components/MediaThumb';
 import {
     useAssetUrl,
     useStudioReview,
@@ -404,9 +405,11 @@ export function ReviewSurface() {
                                     }}
                                 >
                                     <div className="st-take-media">
-                                        {take.thumbnail_url || take.url
-                                            ? <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
-                                            : <div className="st-stage-empty"><Play size={12} /></div>}
+                                        <MediaThumb
+                                            src={take.url}
+                                            poster={take.thumbnail_url}
+                                            alt={take.job_id}
+                                        />
                                     </div>
                                     <div className="st-take-body">
                                         <strong style={{ color: 'var(--st-text)' }}>{take.selected ? 'Selected' : 'Take'} · {take.model || take.type}</strong>

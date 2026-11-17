@@ -38,7 +38,7 @@ models introduced between revisions.
 | `scene` | project_id FK, index, name, script_content | N→1 project; 1→N shots |
 | `shot` | project_id, scene_id, index, sequence_index, track_index (0=V1, 1=V2, 2=A1), start_frame, trim_in/out, prompt/negative/action/dialogue/character, seed + seed_locked, width/height/num_frames/fps, cfg_scale, enhance_prompt, upscale, pipeline_override, auto_continue, status, timeline (JSON), keyframes (JSON), blocking (JSON), matched_elements (JSON), selected_take_id, favorite_take_id, audio_gain/muted/fade_in/fade_out, speed, video_url, thumbnail_url, last_job_id | N→1 project/scene; 1→N jobs |
 | `element` | project_id, name, trigger_word (`@Hero`), type (character\|location\|object\|style), description, image_path | N→1 project; trigger words feed IP-Adapter |
-| `asset` | project_id (nullable), type, path, url, filename, width/height, duration, meta_json | N→1 project |
+| `asset` | project_id (nullable), type, path, url, filename, thumbnail_url, width/height, duration, meta_json | N→1 project |
 | `queuedjob` | id, job_id, kind (video\|image\|inpaint\|element\|ai_parse\|depth), params_json, status (queued\|running\|completed\|failed), attempts, resume_policy, timestamps, error_message | scheduler ledger; one row per dispatch |
 | `job` | project_id, shot_id, type, status (pending\|processing\|completed\|failed\|cancelled), progress, output_path, thumbnail_path, error_message, prompt, params_json, enhanced_prompt, status_message, actual_frames, request_id, resume_policy | user-facing job state |
 | `sharelink` | token, project_id, created_at, revoked | capability links for review |
@@ -65,6 +65,7 @@ contracts cover health/plans/review/share.
 | `0001_baseline` | Full schema at Alembic adoption; legacy DBs repaired and stamped |
 | `0002_render_settings` | `render_crf`, `render_speed`, `render_audio_bitrate`, `render_audio_normalize` |
 | `0003_seed_lock` | `shot.seed_locked` |
+| `0004_asset_thumbnail` | `asset.thumbnail_url` for uploaded-video posters |
 
 **On-disk storage** (under `backend/`): `projects/{id}/generated/`,
 `projects/{id}/thumbnails/`, `projects/{id}/assets/{general,references,elements}/`,

@@ -128,6 +128,7 @@ class Asset(SQLModel, table=True):
     path: str
     url: str
     filename: str
+    thumbnail_url: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     # Metadata
     width: Optional[int] = None
@@ -247,6 +248,9 @@ def _add_missing_columns() -> None:
             "audio_fade_in": "FLOAT NOT NULL DEFAULT 0",
             "audio_fade_out": "FLOAT NOT NULL DEFAULT 0",
             "seed_locked": "BOOLEAN NOT NULL DEFAULT 1",
+        },
+        "asset": {
+            "thumbnail_url": "TEXT",
         },
         "job": {
             "resume_policy": "TEXT NOT NULL DEFAULT 'fail'",

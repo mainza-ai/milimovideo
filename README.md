@@ -54,6 +54,7 @@ a backend supervisor.
 - Library covers uploads, master references, takes, and ranked local search.
 - Any image, video, audio, or caption file opens in a global preview with native
   playback, full-size image display, download, and text/caption rendering.
+- Video cards use generated poster frames and play a muted preview on hover.
 - Deliver writes the computed cut with V1/V2 compositing, embedded audio + A1 mix,
   trims, speed, fades, keyframes, captions, render range, and persisted encoding
   settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
@@ -118,8 +119,9 @@ a backend supervisor.
 - Eleven routers and 113 routes: projects, jobs, assets, storyboard, elements,
   shots, models, planner, review, share, depth.
 - Pydantic write boundaries, generated OpenAPI TypeScript, and zod contract checks.
-- Alembic baseline `0001_baseline` plus `0002_render_settings` and
-  `0003_seed_lock`; legacy DBs are repaired and stamped at head.
+- Alembic baseline `0001_baseline` plus `0002_render_settings`,
+  `0003_seed_lock`, and `0004_asset_thumbnail`; legacy DBs are repaired and
+  stamped at head.
 - `QueuedJob` ledger, one global GPU semaphore, one OOM retry, startup recovery,
   idempotent shot jobs, pause/resume dispatch, queue position/estimate.
 - `X-Request-ID`, timing logs, `/health`, `/metrics/jobs`, and an error-budget UI.
@@ -258,10 +260,10 @@ npm run lint
 npm test                                          # 56 tests
 npm run build
 npm run check:bundle                              # JS budget
-npm run test:e2e                                  # 16 Playwright tests
+npm run test:e2e                                  # 17 Playwright tests
 ```
 
-The last verified run was 83 backend tests, 56 Vitest tests, and 16 Playwright
+The last verified run was 84 backend tests, 56 Vitest tests, and 17 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 responsive layout/overflow, perf, and visual checks.
 

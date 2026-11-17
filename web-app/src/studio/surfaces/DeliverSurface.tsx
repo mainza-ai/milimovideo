@@ -5,6 +5,8 @@ import {
     useStudioCancelJob, useStudioCreateRender, useStudioProject, useStudioRenders,
 } from '../data/useStudioData';
 import { getAssetUrl } from '../../config';
+import { useMediaPreview } from '../state/mediaPreviewStore';
+import { MediaThumb } from '../components/MediaThumb';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 const PRESETS = [
@@ -21,6 +23,7 @@ export function DeliverSurface() {
     const { renders, refresh } = useStudioRenders(project.id);
     const createRender = useStudioCreateRender(project.id);
     const cancelJob = useStudioCancelJob();
+    const openMediaPreview = useMediaPreview((state) => state.open);
     const setProject = useStudioDocumentStore((state) => state.setProject);
     const saveProject = useStudioDocumentStore((state) => state.saveProject);
     const [preset, setPreset] = useState<typeof PRESETS[number]['id']>(
@@ -276,11 +279,31 @@ export function DeliverSurface() {
                 ) : (
                     <table className="st-table">
                         <thead>
-                            <tr><th>Render</th><th>Status</th><th>Progress</th><th>Created</th><th>Output</th><th>Actions</th></tr>
+                            <tr><th>Preview</th><th>Render</th><th>Status</th><th>Progress</th><th>Created</th><th>Output</th><th>Actions</th></tr>
                         </thead>
                         <tbody>
                             {renders.map((render) => (
                                 <tr key={render.id}>
+                                    <td>
+                                        <button
+                                            type="button"
+                                            className="st-media-open st-render-thumb"
+                                            disabled={!render.output_path}
+                                            aria-label={`Preview render ${render.id}`}
+                                            onClick={() => render.output_path && openMediaPreview({
+                                                url: getAssetUrl(render.output_path) || render.output_path,
+                                                title: render.id,
+                                                subtitle: `${render.status} · ${render.progress}%`,
+                                                kind: 'video',
+                                            })}
+                                        >
+                                            <MediaThumb
+                                                src={render.output_path}
+                                                poster={render.thumbnail_path}
+                                                alt={`Render ${render.id}`}
+                                            />
+                                        </button>
+                                    </td>
                                     <td className="st-mono">{render.id}</td>
                                     <td>{render.status}</td>
                                     <td>{render.progress}%</td>

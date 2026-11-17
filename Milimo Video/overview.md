@@ -69,7 +69,7 @@ The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
 - review/share/agent, library/deliver, shorts/lenses, Tauri shell, queue pause,
   seed lock, encoding controls, integrity scan/repair, and native open/save.
 
-Verification: **83 backend tests, 56 Vitest tests, 16 Playwright tests**, clean
+Verification: **84 backend tests, 56 Vitest tests, 17 Playwright tests**, clean
 ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
 failures.
 

@@ -1129,3 +1129,12 @@ localhost media URLs to route through the current API origin with tokens, classi
 caption/text uploads correctly, and disabled pointer events on hidden card actions.
 Added `media-preview.spec.ts` and caption-type coverage. Verified: 83 pytest, 56
 Vitest, 16 Playwright, axe/tsc/ESLint/build/bundle clean.
+
+## [2026-11-17] fix | video posters and hover playback
+
+Added real poster frames for uploaded videos (`Asset.thumbnail_url`, Alembic
+`0004_asset_thumbnail`), backfilled legacy video posters through `/uploads`, and
+generated render posters. Added `MediaThumb` with poster-first cards, muted looping
+hover playback, play badges, and fallback behavior, used across Library, Story,
+Generate, Inspector, Review, Deliver, and Shorts. Verified: 84 pytest, 56 Vitest,
+17 Playwright, axe/tsc/ESLint/build/bundle clean.

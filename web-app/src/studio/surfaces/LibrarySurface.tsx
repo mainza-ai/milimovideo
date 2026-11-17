@@ -6,6 +6,7 @@ import {
 import { rankSearch, type SearchRecord } from '../search/localSearch';
 import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
+import { MediaThumb } from '../components/MediaThumb';
 import { useStudioDocumentStore, type Shot } from '../state/documentStore';
 import type { StudioAsset, StudioElement, StudioProjectTake } from '../data/useStudioData';
 
@@ -246,10 +247,12 @@ export function LibrarySurface() {
                                         kind: assetKind(asset),
                                     })}
                                 >
-                                    {assetKind(asset) === 'video' ? (
-                                        <video src={getAssetUrl(asset.url)} muted playsInline preload="metadata" />
-                                    ) : assetKind(asset) === 'image' ? (
-                                        <img src={getAssetUrl(asset.url)} alt="" loading="lazy" />
+                                    {assetKind(asset) === 'video' || assetKind(asset) === 'image' ? (
+                                        <MediaThumb
+                                            src={asset.url}
+                                            poster={asset.thumbnail}
+                                            alt={asset.filename}
+                                        />
                                     ) : assetKind(asset) === 'audio' ? (
                                         <div className="st-stage-empty"><Video size={14} /><span>audio</span></div>
                                     ) : (
@@ -357,11 +360,11 @@ export function LibrarySurface() {
                                             subtitle: `${take.model || take.type} · seed ${take.seed ?? '—'}`,
                                         })}
                                     >
-                                        {take.thumbnail_url || take.url ? (
-                                            <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
-                                        ) : (
-                                            <div className="st-stage-empty"><Film size={14} /></div>
-                                        )}
+                                        <MediaThumb
+                                            src={take.url}
+                                            poster={take.thumbnail_url}
+                                            alt={take.shot_label || take.job_id}
+                                        />
                                     </button>
                                     <div className="st-take-body">
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>

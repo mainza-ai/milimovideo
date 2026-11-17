@@ -1,6 +1,7 @@
-import { Clapperboard, Copy, Eye, GripVertical, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { Clapperboard, Copy, Eye, GripVertical, Loader2, Sparkles } from 'lucide-react';
 import type { Shot } from '../state/documentStore';
-import { useAssetUrl } from '../data/useStudioData';
+import { MediaThumb } from './MediaThumb';
 import type { BoardPosition } from '../state/editorStore';
 
 interface Props {
@@ -24,10 +25,7 @@ export function ShotCard({
     shot, index, position, selected, pinned, linkSource, onSelect, onDragStart, onResize,
     onGenerate, onEdit, onPreview, onDuplicate, onContextMenu,
 }: Props) {
-    const videoUrl = useAssetUrl(shot.videoUrl);
-    const thumbnailUrl = useAssetUrl(shot.thumbnailUrl);
-    const media = videoUrl || thumbnailUrl;
-    const isImage = !!media?.match(/\.(jpg|jpeg|png|webp)$/i);
+    const [hovered, setHovered] = useState(false);
 
     return (
         <div
@@ -43,6 +41,8 @@ export function ShotCard({
             }}
             onPointerDown={(event) => onDragStart(event, shot.id)}
             onContextMenu={(event) => onContextMenu(event, shot.id)}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
         >
             <button
                 type="button"
@@ -56,14 +56,12 @@ export function ShotCard({
                 className="st-shot-card-media"
                 style={{ height: Math.max(70, Math.min(200, position.height * 0.52)) }}
             >
-                {media ? (
-                    isImage ? <img src={media} alt="" loading="lazy" /> : <video src={media} muted playsInline preload="metadata" />
-                ) : (
-                    <div className="st-media-fallback">
-                        <ImageIcon size={22} />
-                        <span style={{ marginLeft: 6 }}>No preview</span>
-                    </div>
-                )}
+                <MediaThumb
+                    src={shot.videoUrl}
+                    poster={shot.thumbnailUrl}
+                    alt={shot.action || shot.prompt || 'Shot media'}
+                    hovered={hovered}
+                />
                 <span className="st-shot-card-badge">{shot.shotType || `S${index + 1}`}</span>
                 <span className="st-shot-card-status" data-status={shot.status || 'pending'}>
                     {shot.isGenerating ? <Loader2 size={9} className="animate-spin" /> : (shot.status || 'pending')}

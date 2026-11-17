@@ -8,6 +8,7 @@ import { getAssetUrl } from '../../config';
 import { MotionPanel } from './MotionPanel';
 import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
+import { MediaThumb } from './MediaThumb';
 import {
     useStudioCancel,
     useStudioElements,
@@ -307,11 +308,11 @@ export function Inspector() {
                                                     subtitle: `${take.model || take.type} · seed ${take.seed ?? '—'}`,
                                                 })}
                                             >
-                                                {take.thumbnail_url || take.url ? (
-                                                    <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
-                                                ) : (
-                                                    <div className="st-stage-empty"><RotateCcw size={14} /></div>
-                                                )}
+                                                <MediaThumb
+                                                    src={take.url}
+                                                    poster={take.thumbnail_url}
+                                                    alt={take.job_id}
+                                                />
                                             </button>
                                             <div className="st-take-body">
                                                 <div className="st-mono" style={{ color: 'var(--st-secondary)' }}>{take.job_id.slice(0, 10)}</div>

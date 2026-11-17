@@ -324,7 +324,7 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 
 ## 9. Library and search
 
-- **Assets** — upload directly with **Upload media**; images, video, audio, and caption files are supported. Click any media card to open the global preview (video/audio controls, image full size, caption/text view, download).
+- **Assets** — upload directly with **Upload media**; images, video, audio, and caption files are supported. Click any media card to open the global preview (video/audio controls, image full size, caption/text view, download). Video posters are generated on upload and the muted video plays while hovering.
 - **Master references** — Characters, Locations, Objects, and Styles with trigger
   words. Click a reference image to preview it. **New reference** creates one with a name, type, trigger word, image, and
   description; **Edit** updates it and **Delete** removes it. Trigger words are

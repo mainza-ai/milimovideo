@@ -21,6 +21,7 @@ import type { StudioElement } from '../data/useStudioData';
 import { PipelineLens } from '../components/PipelineLens';
 import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
+import { MediaThumb } from '../components/MediaThumb';
 
 export function GenerateSurface() {
     const project = useStudioDocumentStore((state) => state.project);
@@ -361,11 +362,11 @@ export function GenerateSurface() {
                                     subtitle: `${take.model || take.type} · seed ${take.seed ?? '—'}`,
                                 })}
                             >
-                                {take.thumbnail_url || take.url ? (
-                                    <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
-                                ) : (
-                                    <div className="st-stage-empty"><Film size={16} /></div>
-                                )}
+                                <MediaThumb
+                                    src={take.url}
+                                    poster={take.thumbnail_url}
+                                    alt={take.job_id}
+                                />
                             </button>
                             <div className="st-take-body">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>

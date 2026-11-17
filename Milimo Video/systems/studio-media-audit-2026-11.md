@@ -38,6 +38,10 @@ no full-size viewer.
    `.json`, `.txt`, and `.md` to `video`, so a caption file opened in a `<video>`.
 6. **Hidden card actions still received clicks.** The hover action row used
    `opacity: 0` without disabling pointer events.
+7. **Videos had no poster frames.** Uploaded videos had no `thumbnail_url`; even
+   generated videos exposed posters to the API but the Library rendered a passive
+   `<video>` instead of the poster.
+8. **No hover playback.** Cards showed a static frame or black media until opened.
 
 ## Fix
 
@@ -57,6 +61,11 @@ no full-size viewer.
 - Classified uploads as `image`, `video`, `audio`, `caption`, or `text`; the Library
   infers the kind from the filename as a fallback for old rows.
 - Disabled pointer events on hidden card action rows.
+- Added `Asset.thumbnail_url` (Alembic `0004_asset_thumbnail`) and generated real
+  poster frames on upload; `/uploads` backfills missing legacy video posters.
+- Added `MediaThumb`: poster-first thumbnails, muted looping hover playback, play
+  badge, and fallback to the video frame if a poster fails.
+- Renders now generate a poster too, shown in Deliver/Shorts history.
 
 ## Surface audit
 
@@ -73,6 +82,7 @@ no full-size viewer.
 | Edit | Stage only | **Preview** button + double-click stage |
 | Review | Video controls; image passive | Main image opens; take rows have Preview |
 | Shared review | Video controls | Full-frame media remains read-only |
+| Video cards | Black/passive video | Poster + muted hover playback |
 
 ## Verification
 
@@ -80,7 +90,7 @@ no full-size viewer.
   opened; video reported `readyState=4` and played.
 - E2E: `media-preview.spec.ts` uploads a real image, opens it from Library, verifies
   the dialog/image, and closes with Escape.
-- Final suite: **83 pytest, 56 Vitest, 16 Playwright**, axe green, tsc/ESLint clean,
+- Final suite: **84 pytest, 56 Vitest, 17 Playwright**, axe green, tsc/ESLint clean,
   build + bundle pass.
 
 ## Remaining polish
