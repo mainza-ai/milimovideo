@@ -400,7 +400,7 @@ Incident, measurements, gap register M-01…M-25, engine adapters, and gates:
 
 | Phase | Scope | Gate |
 |---|---|---|
-| **M0** | `MemoryBudget` (total/reserve/MPS ceiling/swap/pressure/in-process/external), model cost registry, job peak estimator, admission at every heavy entry, engine adapters (Ollama/oMLX/Strata), activation lease, encode off the loop, MPS cap, supervisor recovery | 121f/768×512/upscale is refused or downgraded with the 39.5 GB named; no heavy load bypasses the budget |
+| **M0** | `MemoryBudget` (total/reserve/MPS ceiling/swap/pressure/in-process/external), model cost registry, job peak estimator, admission at every heavy entry, engine adapters (Ollama/oMLX/Strata), activation lease, encode off the loop, MPS cap, supervisor/recovery reconciliation | 121f/768×512/upscale is refused or downgraded with the 39.5 GB named; no heavy load bypasses the budget |
 | **M1** | Residency manager with per-slot bytes/lease/TTL, pressure watcher, eviction order, manual unload-all, rollback on failed load, per-engine unload UI | Idle LTX/Flux/LLM evict; pressure evicts idle; active jobs never lose a model |
 | **M2** | Priority queue, model-aware batching, “waiting for memory” state, downgrade proposals, cancel in upscale/finalize | Mixed batches do not thrash; waits are explained |
 | **M3** | Setup memory panel, Generate preflight with peak/unload preview, per-job memory sampler, metrics, memory events | Peak and postmortem are visible; notifications cover waits/evictions |

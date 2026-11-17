@@ -51,6 +51,7 @@ observability.
 | Upscale phase A | 3 steps in **1:52** (~37 s/step) |
 | Upscale phase B | 3 steps in **0:53** |
 | OOM dialog | ~14:16, after the upscale phases, during finalize/encode |
+| Second pass | The log shows a second 40-step pass at faster step times after the first, consistent with the automatic OOM retry (75% resolution/frames) |
 | Backend after the incident | HTTP timed out; parent process 349 MB at 91% CPU; no model process alive; job stuck `processing` |
 | Foreign residency | **Strata 33 GB** (31 GB IOAccelerator), **oMLX 6.5 GB** (6.1 GB IOAccelerator); Ollama 0 |
 | Backend model memory before death | LTX ~76 GB budget (40 GB checkpoint + 23 GB Gemma + VAE/upscalers/workspace) |
@@ -58,6 +59,12 @@ observability.
 The sum at peak — 39.5 GB foreign + ~76 GB LTX + macOS/Docker/Safari — is above
 the 115.4 GB MPS ceiling. The machine did not fail to allocate one tensor; it ran
 out of *system* memory and swapped to death.
+
+**Recovery exercised while writing this audit:** the orphaned `QueuedJob` was
+marked failed manually (otherwise recovery would relaunch it, M-28), oMLX's 6.3 GB
+Llama was unloaded through `/v1/models/.../unload`, and the backend was restarted.
+`/health` returned OK with an empty slot list and queue, and the job was closed as
+`failed: Server restarted while the job was running`. Studio reconnected.
 
 ## Model inventory (measured on disk / documented runtime)
 
@@ -110,6 +117,7 @@ flowchart TD
 | **M-07** | **No MPS cap.** PyTorch may allocate until macOS thrashes. `torch.mps.set_per_process_memory_fraction` is available and unused. | API probe |
 | **M-08** | **Blocking finalize.** `encode_video` (and parts of save) run on the event loop; `/health` and SSE stop responding for minutes, which also hides progress. | HTTP timeouts during finalize |
 | **M-09** | **Crash leaves an orphan.** After the worker died, the reloader parent spun at 91% CPU with no model; the Job/QueuedJob stayed `processing/running`, and the studio stayed dead. | process/footprint probe; DB |
+| **M-26** | **The OOM retry is a memory amplifier.** On OOM the queue retries once at 75% resolution/frames, but keeps `upscale=true`, performs no new budget check, and emits only a `log` event. The retry re-runs the full pipeline (~10 more minutes) at a still-too-high peak and is invisible in the UI. | `job_utils._oom_retry_params`; second 40-step pass in the log |
 | **M-10** | **Upscale has no budget warning.** `upscale=true` is a 2× resolution phase; the UI shows a checkbox, not a cost. For 121 frames on this machine it is the difference between fitting and OOM. | Job params; shot/UI |
 
 ### P1 — incomplete residency model
@@ -136,6 +144,8 @@ flowchart TD
 | **M-23** | No engine-specific unload UX for oMLX (available), Strata (opaque), or LM Studio/vLLM (unknown). |
 | **M-24** | No "quiet mode" for background jobs (thumbnails, element visuals) that defers heavy work while the user is editing. |
 | **M-25** | No supervisor health check: a crashed worker is not restarted and the orphaned job is not failed until a restart. |
+| **M-27** | Generation logs are missing from `server.log` and the shell shows only uvicorn/tqdm output; there is no per-stage log or memory trace to postmortem a crash. |
+| **M-28** | **Recovery can re-run the OOM job.** `resume_queued_jobs` re-queues every `running` QueuedJob with fewer than two attempts, and `generate_video_task` only checks for `cancelled` — not the Job status. Restarting after a memory kill can immediately launch the same 121-frame job again. | `job_utils.resume_queued_jobs`; task start check |
 
 ## Engine residency adapters (what is actually available)
 
@@ -234,6 +244,9 @@ blocks eviction; `release` decrements; idle timers only fire at zero.
 | M0-07 | `torch.mps.set_per_process_memory_fraction` safety cap + swap guard | PyTorch fails before macOS thrashes |
 | M0-08 | Supervisor: no reload spinner; on worker death mark active jobs failed and restart | Crash leaves no orphan `processing` job |
 | M0-09 | Upscale warning/estimate; default off for long jobs under budget pressure | UI shows the cost before the job starts |
+| M0-10 | Budget-aware OOM retry: release external engines, re-estimate, reduce upscale, emit `job.retrying`; refuse if still too large | Retry cannot OOM twice; the retry is visible |
+| M0-11 | Per-stage job logging + memory sample in the job record | A crash has a readable postmortem |
+| M0-12 | Reconcile Job/QueuedJob on recovery; never re-run a failed/cancelled or memory-killed job without fresh admission | Restart cannot relaunch an OOM job |
 
 ### M1 — Residency and eviction (P0/P1, 2 days)
 
@@ -298,9 +311,10 @@ alternatives, SAM 3 lazy load, and a quality/memory/time comparison per model.
 
 ## Immediate mitigations (before the code lands)
 
-1. **Restart the backend.** It is currently wedged (HTTP timeouts, 91% CPU parent,
-   no model process); restarting marks the orphaned job failed via startup
-   recovery.
+1. **Restart the backend carefully.** It is wedged (HTTP timeouts, 91% CPU parent,
+   no model process). Before restarting, mark the orphaned `QueuedJob` failed:
+   startup recovery would otherwise re-queue the same 121-frame job and can OOM
+   again (M-28). The Job row is failed by startup cleanup.
 2. **Release Strata** (33 GB) unless in use, or quit the app for long video jobs.
 3. **Unload oMLX models** (6.3 GB) — `/v1/models/Llama-3.2-3B-Instruct-bf16/unload`
    works today; the panel does not call it yet.
