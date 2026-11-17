@@ -172,7 +172,7 @@ def test_shot_speed_roundtrip(app_client, project):
     payload = {
         "id": pid, "name": "Speed", "fps": 25, "seed": 42,
         "resolution_w": 768, "resolution_h": 512, "revision": 0,
-        "shots": [_shot("speed-shot", "fast", sequence_index=0, speed=2.0)],
+        "shots": [_shot("speed-persist-shot", "fast", sequence_index=0, speed=2.0)],
         "scenes": [],
     }
     assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200

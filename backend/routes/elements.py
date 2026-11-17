@@ -185,6 +185,7 @@ async def inpaint_image(job_id: str, req: InpaintRequest, background_tasks: Back
             job = Job(
                 id=job_id,
                 project_id=project_id,
+                shot_id=req.shot_id,
                 type="inpaint",
                 status="pending",
                 prompt=req.prompt,

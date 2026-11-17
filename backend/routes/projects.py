@@ -474,7 +474,7 @@ def list_project_takes(
         .where(Job.project_id == project_id)
         .where(Job.status == "completed")
         .where(Job.output_path.isnot(None))
-        .where(Job.type.in_(["shot_generation", "advanced", "video", "image", "chained"]))
+        .where(Job.type.in_(["shot_generation", "advanced", "video", "image", "chained", "inpaint"]))
         .order_by(Job.created_at.desc())
         .limit(max(1, min(1000, limit)))
     ).all()

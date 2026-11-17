@@ -69,7 +69,7 @@ def list_takes(shot_id: str, session: Session = Depends(get_session)):
         .where(Job.shot_id == shot_id)
         .where(Job.status == "completed")
         .where(Job.output_path.isnot(None))
-        .where(Job.type.in_(["shot_generation", "advanced", "video", "image"]))
+        .where(Job.type.in_(["shot_generation", "advanced", "video", "image", "inpaint"]))
         .order_by(Job.created_at.desc())
     ).all()
 

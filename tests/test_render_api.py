@@ -90,7 +90,7 @@ def test_render_speed_halves_the_cut(app_client, project):
     _make_clip(generated / "speed.mp4", "orange", seconds=2.0)
 
     shot = {
-        "id": "speed-shot",
+        "id": "speed-render-shot",
         "prompt": "speed",
         "negative_prompt": "",
         "seed": 42,

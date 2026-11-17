@@ -1253,6 +1253,20 @@
     font-weight: 700;
 }
 
+.st-inpaint-panel {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    z-index: 20;
+    width: min(320px, 42%);
+    padding: 12px;
+    border: 1px solid var(--st-border-strong);
+    border-radius: var(--st-radius);
+    background: var(--st-float);
+    box-shadow: var(--st-shadow);
+    color: var(--st-secondary);
+}
+
 .st-guide {
     position: absolute;
     inset: 0;

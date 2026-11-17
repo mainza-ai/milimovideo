@@ -559,3 +559,12 @@ live active jobs with cancel. Preview-first generates a still, polls the job, an
 attaches it as frame-0 conditioning before video spend. Takes can be favorited
 (`favorite_take_id`) and compare prefers the favorite. Verified: 51 pytest,
 32 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f3 | inpaint flow and batch matrix
+
+Edit surface captures the current video/image frame, uploads it locally, and runs
+the existing SAM-text + Flux inpaint endpoint as a shot-scoped job; the result is
+selected as a new immutable take. Generate gained a batch matrix with per-shot
+status/progress and generate/cancel actions. Inpaint jobs now carry `shot_id`
+and appear in both shot and project take history. Fixed a test id collision.
+Verified: 49 pytest, 32 vitest, tsc clean, build passes.

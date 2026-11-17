@@ -122,6 +122,7 @@ class InpaintRequest(BaseModel):
     points: Optional[str] = None  # For SAM point-based
     text_mask: Optional[str] = None  # For SAM text-based segmentation
     prompt: str
+    shot_id: Optional[str] = None
 
 class DetectRequest(BaseModel):
     image_path: str

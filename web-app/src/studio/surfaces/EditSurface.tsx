@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Columns2, Maximize, Pause, Play, SkipBack, SkipForward, SquareSplitHorizontal, Volume2 } from 'lucide-react';
+import {
+    Columns2, Loader2, Maximize, Pause, Play, SkipBack, SkipForward, SquareSplitHorizontal,
+    Volume2, Wand2, X,
+} from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
+import { apiUrl, getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 import { PlaybackEngine } from '../../components/Player/PlaybackEngine';
 import { StudioTimeline } from '../components/StudioTimeline';
@@ -20,6 +24,10 @@ export function EditSurface() {
     const [compareMode, setCompareMode] = useState<'off' | 'side' | 'wipe'>('off');
     const [wipe, setWipe] = useState(50);
     const [guides, setGuides] = useState({ grid: false, safe: false, thirds: false });
+    const [inpaintOpen, setInpaintOpen] = useState(false);
+    const [maskPrompt, setMaskPrompt] = useState('');
+    const [inpaintPrompt, setInpaintPrompt] = useState('');
+    const [inpaintStatus, setInpaintStatus] = useState<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(() => {
         const state = useTimelineStore.getState();
         return state.selectedShotId || null;
@@ -45,7 +53,7 @@ export function EditSurface() {
         : layout.find((clip) => clip.id === activeId) || null;
     const mediaUrl = useAssetUrl(active?.shot.videoUrl);
     const isImage = !!mediaUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
-    const { takes } = useStudioTakes(active?.shot.id);
+    const { takes, refresh: refreshTakes } = useStudioTakes(active?.shot.id);
     const compareTake = takes.find((take) => take.favorite && !take.selected && take.url)
         || takes.find((take) => !take.selected && take.url)
         || null;
@@ -95,6 +103,86 @@ export function EditSurface() {
         return unsubscribe;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [compareIsImage, compareUrl, fps, isImage, layout, mediaUrl, selectedShotId]);
+
+    const updateShot = useTimelineStore((state) => state.updateShot);
+
+    const submitInpaint = async () => {
+        if (!active || !maskPrompt.trim() || !inpaintPrompt.trim()) return;
+        setInpaintStatus('Capturing frame…');
+        try {
+            let blob: Blob | null = null;
+            const video = videoRef.current;
+            if (!isImage && video && video.videoWidth > 0) {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d')?.drawImage(video, 0, 0);
+                blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+            } else if (mediaUrl) {
+                blob = await fetch(mediaUrl).then((response) => response.blob());
+            }
+            if (!blob) throw new Error('Could not capture the current frame');
+
+            const form = new FormData();
+            form.append('file', blob, 'frame.jpg');
+            form.append('project_id', project.id);
+            form.append('type', 'reference');
+            const upload = await fetch(apiUrl('/upload'), { method: 'POST', body: form });
+            const uploaded = await upload.json().catch(() => ({}));
+            if (!upload.ok) throw new Error(uploaded.detail || 'Upload failed');
+
+            setInpaintStatus('Queued for inpainting…');
+            const jobId = `job_inpaint_${Date.now()}`;
+            const response = await fetch(apiUrl(`/edit/inpaint?job_id=${jobId}`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image_path: uploaded.url || uploaded.path,
+                    text_mask: maskPrompt.trim(),
+                    prompt: inpaintPrompt.trim(),
+                    shot_id: active.shot.id,
+                }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || data.status === 'error') {
+                throw new Error(data.detail || data.message || 'Inpaint failed to start');
+            }
+
+            for (let attempt = 0; attempt < 150; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                const status = await fetch(apiUrl(`/status/${jobId}`)).then((res) => res.json()).catch(() => ({}));
+                if (status.status === 'completed' && status.video_url) {
+                    const selection = await fetch(apiUrl(`/shots/${active.shot.id}/select-take`), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ job_id: jobId }),
+                    }).then((res) => res.json()).catch(() => ({}));
+                    updateShot(active.shot.id, {
+                        videoUrl: selection.url ? getAssetUrl(selection.url) : undefined,
+                        thumbnailUrl: selection.url ? getAssetUrl(selection.url) : undefined,
+                        lastJobId: jobId,
+                        selectedTakeId: jobId,
+                        status: 'completed',
+                    });
+                    await refreshTakes();
+                    setInpaintStatus('Applied as a new take');
+                    useTimelineStore.getState().addToast('Inpainted take applied', 'success');
+                    return;
+                }
+                if (status.status === 'failed' || status.status === 'cancelled') {
+                    throw new Error(status.error || 'Inpaint failed');
+                }
+                setInpaintStatus(status.status_message || `Inpainting · ${status.progress ?? 0}%`);
+            }
+            throw new Error('Inpaint timed out');
+        } catch (exc) {
+            setInpaintStatus(exc instanceof Error ? exc.message : 'Inpaint failed');
+            useTimelineStore.getState().addToast(
+                exc instanceof Error ? exc.message : 'Inpaint failed',
+                'error',
+            );
+        }
+    };
 
     return (
         <div className="st-edit">
@@ -169,6 +257,64 @@ export function EditSurface() {
                         ))}
                     </div>
                 </div>
+
+                {inpaintOpen && (
+                    <div className="st-inpaint-panel">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                            <Wand2 size={13} />
+                            <strong style={{ fontSize: 11 }}>Edit current frame</strong>
+                            <button
+                                type="button"
+                                className="st-icon-button"
+                                style={{ marginLeft: 'auto' }}
+                                aria-label="Close inpaint panel"
+                                onClick={() => setInpaintOpen(false)}
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
+                        <label className="st-label" htmlFor="inpaint-mask">What to replace (SAM text mask)</label>
+                        <input
+                            id="inpaint-mask"
+                            className="st-input"
+                            placeholder="e.g. the sky"
+                            value={maskPrompt}
+                            onChange={(event) => setMaskPrompt(event.target.value)}
+                        />
+                        <label className="st-label" htmlFor="inpaint-prompt" style={{ marginTop: 8 }}>New content</label>
+                        <textarea
+                            id="inpaint-prompt"
+                            className="st-textarea"
+                            style={{ minHeight: 56 }}
+                            placeholder="Describe the replacement"
+                            value={inpaintPrompt}
+                            onChange={(event) => setInpaintPrompt(event.target.value)}
+                        />
+                        <div className="st-button-row" style={{ marginTop: 8 }}>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                data-variant="primary"
+                                disabled={!maskPrompt.trim() || !inpaintPrompt.trim() || inpaintStatus?.startsWith('Capturing') || inpaintStatus?.startsWith('Queued') || inpaintStatus?.startsWith('Inpainting')}
+                                onClick={() => void submitInpaint()}
+                            >
+                                {inpaintStatus && !inpaintStatus.startsWith('Applied') && !inpaintStatus.startsWith('Could')
+                                    ? <Loader2 size={12} className="animate-spin" />
+                                    : <Wand2 size={12} />}
+                                Apply as new take
+                            </button>
+                        </div>
+                        {inpaintStatus && (
+                            <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 9, marginTop: 6 }}>
+                                {inpaintStatus}
+                            </div>
+                        )}
+                        <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                            Captures the frame at the playhead, uploads it locally, and runs the existing SAM+Flux inpaint job.
+                        </p>
+                    </div>
+                )}
             </div>
 
             <div className="st-transport">
@@ -212,6 +358,16 @@ export function EditSurface() {
                     onClick={() => setCompareMode(compareMode === 'wipe' ? 'off' : 'wipe')}
                 >
                     <SquareSplitHorizontal size={12} /> Wipe
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={inpaintOpen ? 'primary' : 'ghost'}
+                    onClick={() => setInpaintOpen(!inpaintOpen)}
+                    title="Inpaint the current frame as a new take"
+                >
+                    <Wand2 size={12} /> Edit frame
                 </button>
                 <span className="st-status-pill"><Volume2 size={11} /> embedded audio mixed</span>
                 <button type="button" className="st-icon-button" aria-label="Fullscreen (F2)">

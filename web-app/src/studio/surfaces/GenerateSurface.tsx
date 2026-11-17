@@ -343,6 +343,56 @@ export function GenerateSurface() {
                         <span className="st-chip">{shot.upscale ? 'upscale' : 'no upscale'}</span>
                     </div>
                 </div>
+
+                <details className="st-panel" style={{ marginTop: 14 }}>
+                    <summary className="st-panel-title" style={{ cursor: 'pointer', margin: 0 }}>
+                        Batch matrix · {videoShots.length} shots
+                    </summary>
+                    <table className="st-table" style={{ marginTop: 8 }}>
+                        <thead>
+                            <tr><th>#</th><th>Shot</th><th>Status</th><th>Progress</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody>
+                            {videoShots.map((item, index) => (
+                                <tr
+                                    key={item.id}
+                                    data-selected={item.id === shot.id}
+                                    onClick={() => useTimelineStore.getState().selectShot(item.id)}
+                                >
+                                    <td className="st-mono">{index + 1}</td>
+                                    <td>{item.action || item.prompt || 'Untitled'}</td>
+                                    <td>{item.status || 'pending'}</td>
+                                    <td className="st-mono">{item.progress != null ? `${item.progress}%` : '—'}</td>
+                                    <td onClick={(event) => event.stopPropagation()}>
+                                        <div className="st-button-row">
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                disabled={item.isGenerating}
+                                                onClick={() => void generate(item)}
+                                            >
+                                                {item.isGenerating ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                                                {item.isGenerating ? 'Running' : 'Generate'}
+                                            </button>
+                                            {item.isGenerating && (
+                                                <button
+                                                    type="button"
+                                                    className="st-button"
+                                                    data-size="sm"
+                                                    data-variant="danger"
+                                                    onClick={() => void cancel(item)}
+                                                >
+                                                    Cancel
+                                                </button>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </details>
             </section>
 
             <aside className="st-shot-params">
