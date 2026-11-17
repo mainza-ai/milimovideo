@@ -51,7 +51,9 @@ microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell
   AES-GCM credential sealing (`secretbox.py`). `backend/llm.py` is a compatibility
   facade. See [[llm-local-first-next-2026-11]].
 - **GPU scheduler** — `QueuedJob` ledger + one global semaphore + one OOM retry +
-  startup recovery + pause/resume + idempotent shot jobs.
+  startup recovery + pause/resume + idempotent shot jobs. Slots are being upgraded
+  to a measured memory budget with external-engine accounting, leases, TTL eviction,
+  and pressure response; see [[memory-management-audit-2026-11]].
 - **SAM 3 microservice (port 8001)** — health, mask prediction, detection, text
   segmentation, and video tracking sessions. Proxied through the backend.
 - **MemoryManager** — mutual exclusion between heavy model slots; see

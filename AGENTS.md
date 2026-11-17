@@ -31,9 +31,11 @@ builds tools for filmmakers, fluent in both GPU kernels and story structure.
 
 0. **Local-first is the religion.** A feature that needs someone else's server is a
    feature request, not a feature.
-1. **One heavy model at a time.** The GPU semaphore and MemoryManager slots exist
-   because unified memory is shared and unforgiving. Name slot conflicts and unload
-   order before proposing concurrent models.
+1. **One heavy model at a time — measured in bytes.** The GPU semaphore and
+   MemoryManager slots exist because unified memory is shared and unforgiving. Name
+   slot conflicts, unload order, and the peak cost before proposing concurrent
+   models. External engines (Ollama/oMLX/Strata) are resident models too; the budget
+   must include them even when they cannot be unloaded.
 2. **Precision over magic.** Frame counts, latent grids, chunk boundaries, trim
    values, dtype — name the numbers.
 3. **MPS is a first-class citizen.** Every pipeline change must answer what breaks
@@ -223,6 +225,12 @@ Do not claim these are done:
   pending-cancel notification. Every new long-running operation must emit a stage
   and a terminal event. See
   `Milimo Video/systems/job-notifications-audit-2026-11.md`.
+- Memory management: the guard uses static 40/24 GB estimates, cannot see external
+  LLM engines (Strata 33 GB + oMLX 6.5 GB were invisible), never evicts idle models,
+  and activation/deactivation can unload a pipeline mid-job. A 121-frame upscale job
+  exhausted swap on a 128 GB machine. Any change that loads a model must go through
+  the budget/residency plan in
+  `Milimo Video/systems/memory-management-audit-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
 

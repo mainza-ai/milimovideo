@@ -49,6 +49,10 @@ navigate, then drills into pages.
   LLM configuration audit **and implementation record**: Kubona reference patterns,
   the old Gemma/Ollama gaps, the shipped L0–L3 plane (persisted providers/roles,
   discovery, verify, sealed keys, air-gap, Studio panel), and the deferred L4 work.
+- [systems/memory-management-audit-2026-11](systems/memory-management-audit-2026-11.md) —
+  memory/OOM audit: the 128 GB incident, measured model and external-engine costs
+  (Strata 33 GB, oMLX 6.5 GB), static-estimate failure, gap register M-01…M-25,
+  engine adapters, budget/lease/eviction design, and phases M0–M5.
 - [systems/job-notifications-audit-2026-11](systems/job-notifications-audit-2026-11.md) —
   generation notification audit: the missing Studio toast layer and SSE consumer,
   live reproduction, gap register N-01…N-28, event catalog, and the N0–N5 plan.

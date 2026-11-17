@@ -1273,3 +1273,25 @@ accessibility, downloads/renders/parse/depth/inpaint), the proposed job event
 envelope and catalog, and phases N0–N5 with gates. Updated
 [[systems/sse-eventing]] to stop claiming Studio consumes events, the
 implementation plan status, AGENTS known gaps, and the index.
+
+## [2026-11-17] audit | memory management and model residency
+
+Investigated the macOS out-of-memory failure. On this 128 GB machine (115.4 GB MPS
+ceiling), Strata held **33 GB** and oMLX **6.5 GB** of model memory that Milimo
+could not see, while a 121-frame 768×512 40-step upscale job began at 13:59. The
+job denoised for 9:51, spent 1:52 + 0:53 in two 3-step upscale phases, then macOS
+raised "your system has run out of application memory" at ~14:16. Swap reached
+40–42 GB of 44 GB (92–96%). The worker died; the reloader parent was left spinning
+at 91% CPU with no model, HTTP stopped responding, and the Job/QueuedJob stayed
+`processing/running`.
+
+Filed [[systems/memory-management-audit-2026-11]] with measured footprints (LTX
+~76 GB, Flux ~36 GB, SAM 3, depth), the static 40/24 GB guard gap (real peaks
+2–3× higher), missing external-engine accounting, activation/deactivation bypassing
+the GPU lease, no idle TTL, no swap/pressure guard, no MPS cap, blocking encode, and
+crash recovery gaps. Proposed engine adapters (Ollama `/api/ps`, oMLX
+`/v1/models/status` + unload, Strata opaque), a byte budget with peak estimation and
+leases, admission/downgrade, model-aware batching, observability, and phases
+M0–M5. Updated [[concepts/memory-slots]], the implementation plan, architecture,
+AGENTS engineering law/known gaps, the LLM residency notes, the notification event
+catalog (`job.waiting`), and the index.

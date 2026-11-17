@@ -212,6 +212,7 @@ flowchart LR
 | Event | When | Required fields |
 |---|---|---|
 | `job.queued` | admission; also on position change | position, estimate, kind, project/shot |
+| `job.waiting` | blocked on memory or a priority queue | reason (`memory`/`queue`), position/estimate |
 | `job.started` | worker takes the semaphore | kind, project/shot |
 | `job.stage` | stage transition (load/enhance/condition/denoise/upscale/encode/save) | stage, progress floor |
 | `job.progress` | throttled numeric updates (≥1 s or ≥2%) | progress, step/total, eta |
@@ -264,6 +265,7 @@ the frozen editor keeps working.
 | N1-06 | Pending cancel: mark `QueuedJob` cancelled, set `completed_at`, broadcast `job.cancelled` | Queue no longer counts it; event arrives |
 | N1-07 | Startup recovery and OOM retry broadcast `job.retrying`/`job.failed`/`job.queued` | Recovery is visible |
 | N1-08 | Add `shot_id` to `/active_jobs` and queued rows | Studio can reconcile without guessing |
+| N1-09 | Emit `job.waiting` for memory/queue waits and `memory.*` events for evictions/unloads | Waits and evictions are visible and explained |
 
 ### N2 — A global notification surface (P1, 1–2 days)
 

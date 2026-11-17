@@ -58,6 +58,7 @@ single-engineer guidance.
 | Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview with start/end conditioning/batch/inpaint/favorites, queue position, pause/resume, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets, encoding controls, and in-flight render cancel) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; shorts/lens packaging remains scoped v1 |
 | Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native open/save/build + sidecar-binary resolution |
 | Front-end F6 | **Done — 2026-11-17** | responsive surface switcher, grouped toolbars, Inspector primary tabs + More, readable type/control sizes, card actions/bulk/context menu, command palette/shortcuts, density, responsive layout tests |
+| Memory & model residency | **Planned — P0** | audit in [[../systems/memory-management-audit-2026-11]]; static 40/24 GB estimates, no external-engine accounting (Strata 33 GB + oMLX 6.5 GB invisible), no idle eviction, activation bypasses the queue, and a 121-frame upscale job OOM-ed this machine |
 | Job notification plane | **Planned — P0** | audit + plan in [[../systems/job-notifications-audit-2026-11]]; Studio has no SSE consumer or toast layer, backend lacks queued/started/retry events, and the main Generate flow has no state reconciliation |
 | LLM configuration plane | **Done — L0–L3, 2026-11-17** | persisted `app_setting` document with revision CAS, six providers, six roles with fallback, discovery/verify/model catalog, sealed keys, air-gap + cloud opt-in, Studio AI & LLM panel, legacy popover compatibility; L4 governance deferred. See [[../systems/llm-settings-audit-2026-11]] |
 
@@ -391,6 +392,24 @@ Audit, reproduction evidence, gap register N-01…N-28, and the event catalog:
 **Immediate priority:** N0-01…N0-03 (toast layer, SSE bridge, Generate
 reconciliation), then N1-02/N1-04/N1-06 (queued/started/terminal and pending
 cancel). Do not add OS notifications before the in-app path is reliable.
+
+## Memory & Model Residency (Planned — P0)
+
+Incident, measurements, gap register M-01…M-25, engine adapters, and gates:
+[[../systems/memory-management-audit-2026-11]].
+
+| Phase | Scope | Gate |
+|---|---|---|
+| **M0** | `MemoryBudget` (total/reserve/MPS ceiling/swap/pressure/in-process/external), model cost registry, job peak estimator, admission at every heavy entry, engine adapters (Ollama/oMLX/Strata), activation lease, encode off the loop, MPS cap, supervisor recovery | 121f/768×512/upscale is refused or downgraded with the 39.5 GB named; no heavy load bypasses the budget |
+| **M1** | Residency manager with per-slot bytes/lease/TTL, pressure watcher, eviction order, manual unload-all, rollback on failed load, per-engine unload UI | Idle LTX/Flux/LLM evict; pressure evicts idle; active jobs never lose a model |
+| **M2** | Priority queue, model-aware batching, “waiting for memory” state, downgrade proposals, cancel in upscale/finalize | Mixed batches do not thrash; waits are explained |
+| **M3** | Setup memory panel, Generate preflight with peak/unload preview, per-job memory sampler, metrics, memory events | Peak and postmortem are visible; notifications cover waits/evictions |
+| **M4** | MPS allocation cap, tiled/chunked VAE, peak-aware clamps, cache flush verification | Peak stays under budget; no system-wide thrash |
+| **M5** | Quantized/MLX/smaller checkpoints, text-encoder alternatives, SAM/depth lazy load, quality/memory/time comparisons | Optional efficiency work |
+
+**Immediate priority:** M0-01…M0-05 (budget, costs, engine adapters, admission,
+activation lease), then M1-01…M1-03 (residency, TTL, pressure). Until then: unload
+Strata/oMLX before long video jobs, turn off upscale for 121 frames, and watch swap.
 
 ## Quality Gates
 

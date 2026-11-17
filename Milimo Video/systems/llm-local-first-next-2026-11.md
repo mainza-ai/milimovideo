@@ -15,6 +15,7 @@ related:
   - prompt-enhancement.md
   - architecture.md
   - data-models.md
+  - memory-management-audit-2026-11.md
   - ../concepts/memory-slots.md
   - ../roadmap/implementation-plan-2026-11.md
 ---
@@ -77,6 +78,24 @@ All three engines were running; a scratch backend seeded from discovery:
 | Memory slot and unload policy | `backend/memory_manager.py`, `runtime.release_local()` |
 | Generation integration | `tasks/video.py`, `tasks/chained.py`, `tasks/image.py`, `storyboard/manager.py` |
 | Studio UI | `web-app/src/studio/surfaces/LLMSettingsPanel.tsx` (+ legacy header popover) |
+
+### Engine residency
+
+Text models are resident models. The LLM plane currently:
+
+- **Ollama** — `GET /api/ps` reports loaded models and sizes; unload via
+  `POST /api/generate {keep_alive: 0}`.
+- **oMLX** — `GET /v1/models/status` reports `loaded`, `actual_size`, and
+  `current_model_memory`; unload via `POST /v1/models/{id}/unload`. Measured
+  **6.34 GB** for Llama-3.2-3B at audit time.
+- **Strata** — `GET /v1/models` lists the served model, but its control API at
+  `:47831/api/health` reported a stopped engine while the live engine on `:18500`
+  held **33 GB**. No unload path was found; treat it as externally managed.
+- **LM Studio / vLLM / llama.cpp** — no standard unload; process-level only.
+
+`runtime.release_local()` only unloads Ollama today. Until the memory audit's engine
+adapters land, a warm oMLX/Strata model is invisible to the budget and cannot be
+released by Milimo. See [[memory-management-audit-2026-11]].
 
 ### Still open
 
