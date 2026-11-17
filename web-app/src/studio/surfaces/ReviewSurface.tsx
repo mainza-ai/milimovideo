@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-    CheckCircle2, Check, MessageSquare, Play, Trash2, TriangleAlert, X,
+    CheckCircle2, Check, Film, MessageSquare, Play, Trash2, TriangleAlert, X,
 } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getAssetUrl } from '../../config';
@@ -38,6 +38,32 @@ export function ReviewSurface() {
     const approval = shot ? review.approvals.find((item) => item.shot_id === shot.id) : undefined;
     const comments = review.comments;
     const shotComments = shot ? comments.filter((item) => item.shot_id === shot.id) : [];
+    const activity = useMemo(() => {
+        const items = [
+            ...review.comments.map((item) => ({
+                id: `c-${item.id}`,
+                at: item.updated_at || item.created_at || '',
+                kind: 'comment' as const,
+                text: `${item.author} commented at f${item.frame}: ${item.body}`,
+            })),
+            ...review.approvals.map((item) => ({
+                id: `a-${item.id}`,
+                at: item.updated_at || item.created_at || '',
+                kind: 'approval' as const,
+                text: `${item.author} marked ${item.shot_id?.slice(0, 8) || 'shot'} ${item.status.replace('_', ' ')}`,
+            })),
+            ...takes.slice(0, 10).map((take) => ({
+                id: `t-${take.job_id}`,
+                at: take.created_at || '',
+                kind: 'take' as const,
+                text: `Take ${take.job_id.slice(0, 10)} generated (${take.model || take.type})`,
+            })),
+        ];
+        return items
+            .filter((item) => item.at)
+            .sort((a, b) => b.at.localeCompare(a.at))
+            .slice(0, 8);
+    }, [review.approvals, review.comments, takes]);
 
     const seekToFrame = (target: number, shotId?: string | null) => {
         if (shotId && shotId !== shot?.id) {
@@ -212,6 +238,21 @@ export function ReviewSurface() {
                         >
                             Inspector
                         </button>
+                    </div>
+
+                    <h3 className="st-panel-title" style={{ marginTop: 16 }}>Activity</h3>
+                    <div className="st-comment-list" style={{ marginBottom: 14 }}>
+                        {activity.length === 0 && (
+                            <div className="st-comment">No activity yet. Comments, decisions, and takes appear here.</div>
+                        )}
+                        {activity.map((item) => (
+                            <div className="st-comment" key={item.id} style={{ display: 'flex', gap: 6 }}>
+                                {item.kind === 'comment' ? <MessageSquare size={12} />
+                                    : item.kind === 'approval' ? <CheckCircle2 size={12} />
+                                        : <Film size={12} />}
+                                <span>{item.text}</span>
+                            </div>
+                        ))}
                     </div>
 
                     <h3 className="st-panel-title" style={{ marginTop: 16 }}>

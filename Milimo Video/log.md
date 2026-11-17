@@ -390,3 +390,10 @@ Updated the implementation-plan status table to match the landed studio work:
 F0/F1 mostly done, F2 mostly done (render-verified), F3/F4 partial, F5 still
 deferred, P4 evidence expanded. Remaining named gaps: activity feed, full CRUD
 Playwright flow, Alembic baseline, OpenAPI-generated types, P3 OOM retry.
+
+## [2026-11-16] review | merged activity feed
+
+Review now shows latest activity across comments, decisions, and generated takes
+with author/frame/model context, derived from the existing review and take
+contracts. This closes the named F4 activity-feed gap. Verified: 23 vitest,
+tsc clean, eslint 0 errors.
