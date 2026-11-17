@@ -764,3 +764,11 @@ Only 11 cards and 27 clips mount; headless (frame-limit disabled) measured
 subscriptions in TopBar/Inspector/CommandDock/StorySurface/StudioApp and removed
 board geometry/camera from localStorage persistence (the server board/view
 endpoints own those), eliminating redundant serialization during pans.
+
+## [2026-11-17] a11y | zero serious axe violations
+
+Raised muted/faint text contrast to pass WCAG AA, removed the nested interactive
+role from the card resize handle, and upgraded the axe gate to fail on serious as
+well as critical violations. Studio shell now reports zero violations under the
+WCAG A/AA rule set. Excluded Tauri build output from ESLint. Verified: 44 vitest,
+tsc clean, eslint 0 errors, axe 0 violations.

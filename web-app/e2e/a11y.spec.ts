@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
     await stubStudioApi(page);
 });
 
-test('studio shell has no critical accessibility violations', async ({ page }) => {
+test('studio shell has no serious or critical accessibility violations', async ({ page }) => {
     await page.goto('/studio');
     await expect(page.getByText('Story spine')).toBeVisible();
 
@@ -14,8 +14,10 @@ test('studio shell has no critical accessibility violations', async ({ page }) =
         .withTags(['wcag2a', 'wcag2aa'])
         .analyze();
 
-    const critical = results.violations.filter((violation) => violation.impact === 'critical');
-    expect(critical, JSON.stringify(critical, null, 2)).toEqual([]);
+    const blocking = results.violations.filter(
+        (violation) => violation.impact === 'critical' || violation.impact === 'serious',
+    );
+    expect(blocking, JSON.stringify(blocking, null, 2)).toEqual([]);
 });
 
 test('keyboard reaches the workspace and mode surfaces', async ({ page }) => {

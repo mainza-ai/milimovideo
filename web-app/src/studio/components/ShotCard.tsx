@@ -73,12 +73,7 @@ export function ShotCard({
             </div>
             <span
                 className="st-shot-card-resize"
-                role="slider"
-                tabIndex={-1}
-                aria-label={`Resize shot ${index + 1}`}
-                aria-valuenow={Math.round(position.width)}
-                aria-valuemin={200}
-                aria-valuemax={1200}
+                aria-hidden="true"
                 onPointerDown={(event) => onResize(event, shot.id)}
             />
         </button>
