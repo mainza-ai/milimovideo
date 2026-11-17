@@ -94,6 +94,7 @@ class Shot(SQLModel, table=True):
     audio_gain: float = 1.0
     audio_muted: bool = False
     keyframes: Optional[str] = None  # JSON [{frame, opacity}]
+    blocking: Optional[str] = None  # JSON top-down blocking nodes
     speed: float = 1.0  # playback rate; 2.0 halves the clip duration
     audio_fade_in: float = 0.0  # seconds
     audio_fade_out: float = 0.0  # seconds
@@ -232,6 +233,7 @@ def _add_missing_columns() -> None:
             "audio_gain": "FLOAT NOT NULL DEFAULT 1.0",
             "audio_muted": "BOOLEAN NOT NULL DEFAULT 0",
             "keyframes": "TEXT",
+            "blocking": "TEXT",
             "speed": "FLOAT NOT NULL DEFAULT 1.0",
             "audio_fade_in": "FLOAT NOT NULL DEFAULT 0",
             "audio_fade_out": "FLOAT NOT NULL DEFAULT 0",

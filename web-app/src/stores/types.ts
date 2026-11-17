@@ -51,6 +51,7 @@ export interface Shot {
     audioGain?: number;
     audioMuted?: boolean;
     keyframes?: OpacityKeyframe[];
+    blocking?: BlockingNode[];
     speed?: number;
     audioFadeIn?: number;
     audioFadeOut?: number;
@@ -110,6 +111,15 @@ export interface ParsedScene {
     name: string;
     content: string;
     shots: ParsedShot[];
+}
+
+export interface BlockingNode {
+    id: string;
+    type: 'camera' | 'character' | 'object';
+    label: string;
+    x: number;
+    y: number;
+    rotation?: number;
 }
 
 export interface OpacityKeyframe {

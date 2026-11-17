@@ -9,6 +9,7 @@ import { apiUrl, getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 import { PlaybackEngine } from '../../components/Player/PlaybackEngine';
 import { StudioTimeline } from '../components/StudioTimeline';
+import { BlockingLens } from '../components/BlockingLens';
 import { formatDuration, useAssetUrl, useStudioTakes } from '../data/useStudioData';
 
 export function EditSurface() {
@@ -25,6 +26,7 @@ export function EditSurface() {
     const [wipe, setWipe] = useState(50);
     const [guides, setGuides] = useState({ grid: false, safe: false, thirds: false });
     const [inpaintOpen, setInpaintOpen] = useState(false);
+    const [blockingOpen, setBlockingOpen] = useState(false);
     const [maskPrompt, setMaskPrompt] = useState('');
     const [inpaintPrompt, setInpaintPrompt] = useState('');
     const [inpaintStatus, setInpaintStatus] = useState<string | null>(null);
@@ -369,6 +371,16 @@ export function EditSurface() {
                 >
                     <Wand2 size={12} /> Edit frame
                 </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={blockingOpen ? 'primary' : 'ghost'}
+                    disabled={!active}
+                    onClick={() => setBlockingOpen(true)}
+                >
+                    Blocking
+                </button>
                 <span className="st-status-pill"><Volume2 size={11} /> embedded audio mixed</span>
                 <button type="button" className="st-icon-button" aria-label="Fullscreen (F2)">
                     <Maximize size={14} />
@@ -376,6 +388,15 @@ export function EditSurface() {
             </div>
 
             <StudioTimeline />
+
+            {blockingOpen && active && (
+                <BlockingLens
+                    shot={active.shot}
+                    project={project}
+                    updateShot={updateShot}
+                    onClose={() => setBlockingOpen(false)}
+                />
+            )}
         </div>
     );
 }

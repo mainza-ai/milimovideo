@@ -671,3 +671,10 @@ Generate gained a read-only pipeline lens: node summary (prompt, ingredients,
 model, frames, resolution, upscale, take), validation warnings including the
 LTX 8k+1 frame rule, a copyable reproducible recipe JSON, and a plan-API cost
 estimate. No cloud calls. Verified: 42 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f5 | blocking lens
+
+Edit gained a top-down blocking lens: draggable camera/character/object nodes,
+camera rotation, labels, add/remove/reset, and shot context. Positions persist
+on the shot as sanitized `blocking` JSON. Added backend round-trip/clamp tests.
+Verified: 58 pytest, 42 vitest, tsc clean, eslint 0 errors.

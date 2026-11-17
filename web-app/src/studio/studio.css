@@ -1840,6 +1840,30 @@
     font-weight: 600;
 }
 
+.st-blocking-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(240px, 1fr);
+    gap: 14px;
+    padding: 14px;
+}
+
+.st-blocking-stage {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border: 1px solid var(--st-border-strong);
+    border-radius: var(--st-radius);
+    background: #0a0b0c;
+    touch-action: none;
+}
+
+.st-blocking-body h4 {
+    margin: 0 0 6px;
+    color: var(--st-secondary);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
 .st-lens-body {
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);

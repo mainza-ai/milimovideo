@@ -61,6 +61,30 @@ def _sanitize_keyframes(keyframes) -> list:
     ]
 
 
+def _sanitize_blocking(nodes) -> list:
+    cleaned = []
+    for raw in list(nodes or [])[:100]:
+        data = raw.model_dump() if hasattr(raw, "model_dump") else dict(raw or {})
+        node_type = str(data.get("type") or "character")
+        if node_type not in {"camera", "character", "object"}:
+            node_type = "character"
+        try:
+            x = max(0.0, min(100.0, float(data.get("x", 50))))
+            y = max(0.0, min(100.0, float(data.get("y", 50))))
+            rotation = float(data.get("rotation", 0))
+        except (TypeError, ValueError):
+            continue
+        cleaned.append({
+            "id": str(data.get("id") or uuid.uuid4().hex)[:40],
+            "type": node_type,
+            "label": str(data.get("label") or node_type.title())[:80],
+            "x": x,
+            "y": y,
+            "rotation": max(-180.0, min(180.0, rotation)),
+        })
+    return cleaned
+
+
 def _sanitize_captions(captions) -> list:
     cleaned = []
     for cue in list(captions or [])[:500]:
@@ -112,6 +136,7 @@ def _shot_dict(shot: Shot) -> dict:
         "shot_type": shot.shot_type,
         "timeline": _parse_json_field(shot.timeline, []),
         "keyframes": _parse_json_field(shot.keyframes, []),
+        "blocking": _parse_json_field(shot.blocking, []),
         "matched_elements": _parse_json_field(shot.matched_elements, None),
         "enhanced_prompt_result": shot.enhanced_prompt_result,
         "last_job_id": shot.last_job_id,
@@ -372,6 +397,10 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
         if "keyframes" in clean_data:
             clean_data["keyframes"] = json.dumps(
                 _sanitize_keyframes(clean_data.get("keyframes"))
+            )
+        if "blocking" in clean_data:
+            clean_data["blocking"] = json.dumps(
+                _sanitize_blocking(clean_data.get("blocking"))
             )
 
         if shot_id and shot_id in existing_map:

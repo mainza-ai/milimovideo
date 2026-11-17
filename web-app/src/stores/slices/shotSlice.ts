@@ -153,6 +153,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 audioGain: s.audio_gain ?? 1,
                 audioMuted: s.audio_muted ?? false,
                 keyframes: Array.isArray(s.keyframes) ? s.keyframes : [],
+                blocking: Array.isArray(s.blocking) ? s.blocking : [],
                 speed: s.speed ?? 1,
                 audioFadeIn: s.audio_fade_in ?? 0,
                 audioFadeOut: s.audio_fade_out ?? 0,

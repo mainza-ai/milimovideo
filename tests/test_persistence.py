@@ -180,6 +180,24 @@ def test_shot_speed_roundtrip(app_client, project):
     assert loaded["shots"][0]["speed"] == 2.0
 
 
+def test_blocking_nodes_roundtrip_and_sanitize(app_client, project):
+    pid = project["id"]
+    payload = {
+        "id": pid, "name": "Blocking", "fps": 25, "seed": 42,
+        "resolution_w": 768, "resolution_h": 512, "revision": 0,
+        "shots": [_shot("blocking-shot", "block", sequence_index=0, blocking=[
+            {"id": "cam", "type": "camera", "label": "Cam A", "x": 50, "y": 120, "rotation": 400},
+            {"id": "talent", "type": "character", "label": "Sam", "x": -10, "y": 40},
+        ])],
+        "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    nodes = app_client.get(f"/projects/{pid}").json()["shots"][0]["blocking"]
+    assert nodes[0]["y"] == 100
+    assert nodes[0]["rotation"] == 180
+    assert nodes[1]["x"] == 0
+
+
 def test_project_script_content_roundtrip(app_client, project):
     pid = project["id"]
     payload = {
