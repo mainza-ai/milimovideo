@@ -210,12 +210,12 @@ export function BlockingLens({ shot, project, updateShot, onClose }: Props) {
                         )}
 
                         <h4 style={{ marginTop: 14 }}>Shot context</h4>
-                        <div className="st-meta-grid">
+                        <dl className="st-meta-grid">
                             <dt>Frames</dt><dd className="st-mono">{shot.numFrames}</dd>
                             <dt>Duration</dt><dd className="st-mono">{(shot.numFrames / fps).toFixed(2)}s</dd>
                             <dt>Type</dt><dd>{shot.shotType || 'medium'}</dd>
                             <dt>Talent</dt><dd>{shot.character || '—'}</dd>
-                        </div>
+                        </dl>
                     </aside>
                 </div>
             </div>

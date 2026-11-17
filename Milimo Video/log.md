@@ -893,3 +893,11 @@ the current directory/ancestors, or the app resource dir, then spawns it with lo
 written to `backend.desktop.log`. The studio's offline top-bar pill becomes a
 "Start backend" action on desktop. `cargo check` passes; bundled Python sidecar
 packaging remains open. Verified: 44 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] a11y | all surfaces audited
+
+Extended axe coverage across Generate, Edit, Review, Library, Deliver, Shorts, and
+Setup. Fixed semantic meta grids (`dl`), unlabeled prompt fields, icon-only
+timeline zoom buttons, and nested trim-handle interactivity. Every studio surface
+now has zero serious/critical WCAG A/AA violations. Verified: 44 vitest, tsc
+clean, 3 axe tests.

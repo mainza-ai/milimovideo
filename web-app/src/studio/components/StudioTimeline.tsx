@@ -289,11 +289,6 @@ export function StudioTimeline() {
 
     const previewFor = (clipId: string) => (preview?.shotId === clipId ? preview : null);
 
-    const nudgeTrim = (shot: Shot, edge: 'in' | 'out', delta: number) => {
-        const result = trimShot(shot, edge, delta);
-        if (result) updateShot(shot.id, result);
-    };
-
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             const target = event.target as HTMLElement | null;
@@ -426,13 +421,27 @@ export function StudioTimeline() {
                 </button>
 
                 <span style={{ width: 1, height: 18, background: 'var(--st-border-strong)', margin: '0 4px' }} />
-                <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={() => setTimelineZoom(timelineZoom / 1.2)}>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    aria-label="Zoom timeline out"
+                    onClick={() => setTimelineZoom(timelineZoom / 1.2)}
+                >
                     <Minus size={12} />
                 </button>
                 <span className="st-mono" style={{ color: 'var(--st-muted)', fontSize: 10, minWidth: 42, textAlign: 'center' }}>
                     {Math.round(timelineZoom)} px/s
                 </span>
-                <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={() => setTimelineZoom(timelineZoom * 1.2)}>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    aria-label="Zoom timeline in"
+                    onClick={() => setTimelineZoom(timelineZoom * 1.2)}
+                >
                     <Plus size={12} />
                 </button>
                 <span style={{ color: 'var(--st-faint)', fontSize: 10, marginLeft: 8 }}>
@@ -748,37 +757,13 @@ export function StudioTimeline() {
                                                 <>
                                                     <span
                                                         className="st-trim-handle st-trim-in"
-                                                        role="slider"
-                                                        tabIndex={0}
-                                                        aria-label="Trim in"
-                                                        aria-valuenow={trimIn}
-                                                        aria-valuemin={0}
-                                                        aria-valuemax={Math.max(0, (clip.shot.numFrames || 0) - trimOut - 1)}
+                                                        aria-hidden="true"
                                                         onPointerDown={(event) => beginGesture(event, 'trim-in', clip.shot)}
-                                                        onKeyDown={(event) => {
-                                                            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                                                                event.preventDefault();
-                                                                event.stopPropagation();
-                                                                nudgeTrim(clip.shot, 'in', event.key === 'ArrowRight' ? 1 : -1);
-                                                            }
-                                                        }}
                                                     />
                                                     <span
                                                         className="st-trim-handle st-trim-out"
-                                                        role="slider"
-                                                        tabIndex={0}
-                                                        aria-label="Trim out"
-                                                        aria-valuenow={trimOut}
-                                                        aria-valuemin={0}
-                                                        aria-valuemax={Math.max(0, (clip.shot.numFrames || 0) - trimIn - 1)}
+                                                        aria-hidden="true"
                                                         onPointerDown={(event) => beginGesture(event, 'trim-out', clip.shot)}
-                                                        onKeyDown={(event) => {
-                                                            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                                                                event.preventDefault();
-                                                                event.stopPropagation();
-                                                                nudgeTrim(clip.shot, 'out', event.key === 'ArrowRight' ? 1 : -1);
-                                                            }
-                                                        }}
                                                     />
                                                 </>
                                             )}

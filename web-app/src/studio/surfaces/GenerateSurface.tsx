@@ -332,6 +332,7 @@ export function GenerateSurface() {
                     <h3 className="st-panel-title">Prompt</h3>
                     <textarea
                         className="st-textarea"
+                        aria-label="Shot prompt"
                         value={promptDraft ?? shot.prompt}
                         onChange={(event) => setPromptDraft(event.target.value)}
                         onBlur={() => {
@@ -446,13 +447,13 @@ export function GenerateSurface() {
                 </div>
                 <div className="st-inspector-section">
                     <span className="st-label">Generation</span>
-                    <div className="st-meta-grid">
+                    <dl className="st-meta-grid">
                         <dt>Model</dt><dd>{shot.pipelineOverride || 'auto'}</dd>
                         <dt>Seed</dt><dd>{shot.seed}</dd>
                         <dt>Frames</dt><dd>{shot.numFrames}</dd>
                         <dt>Resolution</dt><dd>{shot.width}×{shot.height}</dd>
                         <dt>Status</dt><dd>{shot.status || 'pending'}</dd>
-                    </div>
+                    </dl>
                     <details className="st-advanced">
                         <summary>Advanced parameters</summary>
                         <div className="st-inspector-section" style={{ marginTop: 10, borderBottom: 0 }}>

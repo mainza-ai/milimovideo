@@ -85,13 +85,13 @@ export function SetupSurface() {
             <div className="st-grid" style={{ marginBottom: 14 }}>
                 <div className="st-panel">
                     <h3 className="st-panel-title">Memory slots</h3>
-                    <div className="st-meta-grid">
+                    <dl className="st-meta-grid">
                         <dt>Device</dt><dd>{health?.device || '—'}</dd>
                         <dt>Active</dt><dd>{health?.slots?.active_slots?.length ? health.slots.active_slots.join(', ') : 'none'}</dd>
                         <dt>GPU</dt><dd>{health?.gpu?.busy ? 'busy' : 'free'}</dd>
                         <dt>Queue</dt><dd>{health?.gpu?.queued ?? 0}</dd>
                         <dt>Auth</dt><dd>{health?.auth_required ? 'token required' : 'loopback only'}</dd>
-                    </div>
+                    </dl>
                     <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 10 }}>
                         Only one heavy model runs at a time; conflicting pipelines wait in the durable queue.
                     </p>

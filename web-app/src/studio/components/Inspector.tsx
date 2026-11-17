@@ -302,13 +302,13 @@ export function Inspector() {
                         {inspectorTab === 'effects' && (
                             <div className="st-inspector-section">
                                 <span className="st-label">Clip effects</span>
-                                <div className="st-meta-grid">
+                                <dl className="st-meta-grid">
                                     <dt>Speed</dt><dd>{shot.speed ?? 1}×</dd>
                                     <dt>Opacity keys</dt><dd>{shot.keyframes?.length ?? 0}</dd>
                                     <dt>Fade in/out</dt><dd>{(shot.audioFadeIn ?? 0).toFixed(1)}s / {(shot.audioFadeOut ?? 0).toFixed(1)}s</dd>
                                     <dt>Gain</dt><dd>{Math.round((shot.audioGain ?? 1) * 100)}%{shot.audioMuted ? ' · muted' : ''}</dd>
                                     <dt>Transition</dt><dd>{shot.keyframes?.some((key) => (key.scale ?? 1) !== 1) ? 'transform' : 'none'}</dd>
-                                </div>
+                                </dl>
                                 <div className="st-button-row" style={{ marginTop: 10 }}>
                                     <button type="button" className="st-button" data-size="sm" onClick={() => setInspectorTab('motion')}>
                                         Edit keyframes
@@ -345,10 +345,10 @@ export function Inspector() {
                                 <div className="st-value">
                                     Version stacks, frame comments, and approvals arrive in F4. The current shot is still the source of truth.
                                 </div>
-                                <div className="st-meta-grid" style={{ marginTop: 10 }}>
+                                <dl className="st-meta-grid" style={{ marginTop: 10 }}>
                                     <dt>Status</dt><dd>{shot.status || 'pending'}</dd>
                                     <dt>Last job</dt><dd className="st-mono">{shot.lastJobId || '—'}</dd>
-                                </div>
+                                </dl>
                             </div>
                         )}
 
@@ -425,11 +425,11 @@ export function Inspector() {
                                         />
                                     </label>
                                 </div>
-                                <div className="st-meta-grid" style={{ marginTop: 10 }}>
+                                <dl className="st-meta-grid" style={{ marginTop: 10 }}>
                                     <dt>Track</dt><dd>{shot.trackIndex === 2 ? 'A1' : shot.trackIndex === 1 ? 'V2' : 'V1'}</dd>
                                     <dt>Frames</dt><dd className="st-mono">{shot.numFrames}</dd>
                                     <dt>Trim</dt><dd className="st-mono">{shot.trimIn || 0} / {shot.trimOut || 0}</dd>
-                                </div>
+                                </dl>
                             </div>
                         )}
 
