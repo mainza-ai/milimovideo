@@ -1,5 +1,15 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Film, Image as ImageIcon, Library, RefreshCw, Video } from 'lucide-react';
+import { CheckCircle2, Film, Image as ImageIcon, Library, RefreshCw, Search, Video } from 'lucide-react';
+import { rankSearch, type SearchRecord } from '../search/localSearch';
+import { useStudioEditor } from '../state/editorStore';
+import { useTimelineStore, type Shot } from '../../stores/timelineStore';
+import type { StudioAsset, StudioElement, StudioProjectTake } from '../data/useStudioData';
+
+type SearchItem =
+    | { type: 'shot'; id: string; shot: Shot }
+    | { type: 'asset'; id: string; asset: StudioAsset }
+    | { type: 'reference'; id: string; element: StudioElement }
+    | { type: 'take'; id: string; take: StudioProjectTake };
 import { getAssetUrl } from '../../config';
 import {
     useStudioAssets,
@@ -15,7 +25,7 @@ export function LibrarySurface() {
     const { assets, loading, refresh } = useStudioAssets();
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioProjectTakes(project.id);
     const selectTake = useStudioSelectTake();
-    const [tab, setTab] = useState<'assets' | 'references' | 'takes'>('assets');
+    const [tab, setTab] = useState<'assets' | 'references' | 'takes' | 'search'>('assets');
     const [query, setQuery] = useState('');
 
     const filteredAssets = useMemo(() => {
@@ -36,6 +46,32 @@ export function LibrarySurface() {
             )
             : takes;
     }, [query, takes]);
+
+    const searchResults = useMemo(() => {
+        const records: Array<SearchRecord<SearchItem>> = [
+            ...project.shots.map((shot) => ({
+                kind: 'shot',
+                item: { type: 'shot' as const, id: shot.id, shot },
+                text: `${shot.action || ''} ${shot.prompt || ''} ${shot.character || ''} ${shot.dialogue || ''}`,
+            })),
+            ...assets.map((asset) => ({
+                kind: 'asset',
+                item: { type: 'asset' as const, id: asset.id, asset },
+                text: `${asset.filename} ${asset.type}`,
+            })),
+            ...elements.map((element) => ({
+                kind: 'reference',
+                item: { type: 'reference' as const, id: element.id, element },
+                text: `${element.name} ${element.trigger_word} ${element.description} ${element.type}`,
+            })),
+            ...takes.map((take) => ({
+                kind: 'take',
+                item: { type: 'take' as const, id: take.job_id, take },
+                text: `${take.shot_label || ''} ${take.prompt || ''} ${take.model || ''} ${take.job_id}`,
+            })),
+        ];
+        return rankSearch(query, records);
+    }, [assets, elements, project.shots, query, takes]);
 
     return (
         <div className="st-page">
@@ -65,6 +101,9 @@ export function LibrarySurface() {
                 </button>
                 <button type="button" className="st-button" data-size="sm" data-variant={tab === 'takes' ? 'primary' : 'ghost'} onClick={() => setTab('takes')}>
                     <Film size={12} /> Takes ({takes.length})
+                </button>
+                <button type="button" className="st-button" data-size="sm" data-variant={tab === 'search' ? 'primary' : 'ghost'} onClick={() => setTab('search')}>
+                    <Search size={12} /> Search ({searchResults.length})
                 </button>
                 <input
                     className="st-input"
@@ -99,6 +138,56 @@ export function LibrarySurface() {
                         ))}
                     </div>
                 )
+            ) : tab === 'search' ? (
+                <div className="st-panel">
+                    <h3 className="st-panel-title">Ranked local results · {searchResults.length}</h3>
+                    {!query.trim() && (
+                        <div className="st-value" style={{ color: 'var(--st-muted)' }}>
+                            Type a query to search shots, assets, master references, and takes. Everything runs locally.
+                        </div>
+                    )}
+                    {query.trim() && searchResults.length === 0 && (
+                        <div className="st-empty" style={{ minHeight: 100 }}>
+                            <strong>No matches</strong>
+                            <span>Try a shorter or broader phrase.</span>
+                        </div>
+                    )}
+                    <div className="st-link-list">
+                        {searchResults.map((result) => {
+                            const item = result.item;
+                            const label = item.type === 'shot'
+                                ? item.shot.action || item.shot.prompt || 'Shot'
+                                : item.type === 'asset'
+                                    ? item.asset.filename
+                                    : item.type === 'reference'
+                                        ? item.element.name
+                                        : item.take.shot_label || item.take.job_id;
+                            return (
+                                <button
+                                    key={`${result.kind}-${result.item.id}`}
+                                    type="button"
+                                    className="st-link-row"
+                                    style={{ cursor: 'pointer', background: 'transparent', textAlign: 'left', width: '100%' }}
+                                    onClick={() => {
+                                        const shotId = item.type === 'shot'
+                                            ? item.shot.id
+                                            : item.type === 'take'
+                                                ? item.take.shot_id
+                                                : null;
+                                        if (shotId) {
+                                            useTimelineStore.getState().selectShot(shotId);
+                                            useStudioEditor.getState().setSurface('story');
+                                        }
+                                    }}
+                                >
+                                    <span className="st-chip">{result.kind}</span>
+                                    <span style={{ flex: 1 }}>{label}</span>
+                                    <span className="st-mono" style={{ color: 'var(--st-faint)' }}>score {result.score}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
             ) : tab === 'takes' ? (
                 filteredTakes.length === 0 ? (
                     <div className="st-empty">

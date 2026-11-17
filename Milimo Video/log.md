@@ -575,3 +575,10 @@ Command dock can save a plan as a named recipe with its mode and text, load it
 against the current selection (supporting a `{{selection}}` placeholder), and
 delete recipes. Recipes persist in the editor store. Added store tests. Verified:
 33 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f4 | ranked local search
+
+Library gained a Search tab that ranks shots, assets, master references, and
+takes with deterministic token/prefix scoring — no embedding service, no network.
+Results show score and jump to the shot where applicable. Added unit tests for
+ranking and prefix behavior. Verified: 36 vitest, tsc clean, eslint 0 errors.
