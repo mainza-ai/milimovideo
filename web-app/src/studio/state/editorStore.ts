@@ -75,6 +75,8 @@ interface EditorState {
     boardAreas: Record<string, BoardArea>;
     boardLinks: BoardLink[];
     boardNotes: BoardNote[];
+    referencePositions: Record<string, BoardPosition>;
+    showReferenceCards: boolean;
     boardQuery: string;
     collabEnabled: boolean;
     boardMode: BoardMode;
@@ -124,6 +126,8 @@ interface EditorState {
     addNote: (note: Omit<BoardNote, 'id'>) => string;
     updateNote: (noteId: string, patch: Partial<BoardNote>) => void;
     removeNote: (noteId: string) => void;
+    setReferencePosition: (elementId: string, position: Partial<BoardPosition>) => void;
+    setShowReferenceCards: (show: boolean) => void;
     setMinimapOpen: (open: boolean) => void;
     setFollowSelection: (follow: boolean) => void;
     setTimelineZoom: (zoom: number) => void;
@@ -175,6 +179,8 @@ export const useStudioEditor = create<EditorState>()(
             boardAreas: {},
             boardLinks: [],
             boardNotes: [],
+            referencePositions: {},
+            showReferenceCards: false,
             boardQuery: '',
             collabEnabled: false,
             boardMode: 'select',
@@ -313,6 +319,16 @@ export const useStudioEditor = create<EditorState>()(
             removeNote: (noteId) => set((state) => ({
                 boardNotes: state.boardNotes.filter((note) => note.id !== noteId),
             })),
+            setReferencePosition: (elementId, position) => set((state) => ({
+                referencePositions: {
+                    ...state.referencePositions,
+                    [elementId]: {
+                        ...(state.referencePositions[elementId] || { x: 0, y: 0, width: 220, height: 170 }),
+                        ...position,
+                    },
+                },
+            })),
+            setShowReferenceCards: (showReferenceCards) => set({ showReferenceCards }),
             setMinimapOpen: (boardMinimapOpen) => set({ boardMinimapOpen }),
             setFollowSelection: (boardFollowSelection) => set({ boardFollowSelection }),
             setTimelineZoom: (timelineZoom) => set({ timelineZoom: Math.max(8, Math.min(240, timelineZoom)) }),
@@ -338,6 +354,7 @@ export const useStudioEditor = create<EditorState>()(
                 boardAreas: {},
                 boardLinks: [],
                 boardNotes: [],
+                referencePositions: {},
                 boardCamera: DEFAULT_CAMERA,
                 selectedAreaId: null,
             }),
@@ -364,6 +381,8 @@ export const useStudioEditor = create<EditorState>()(
                 // endpoints. Keeping them in localStorage too serialized 500
                 // cards on every pan frame.
                 boardNotes: state.boardNotes,
+                referencePositions: state.referencePositions,
+                showReferenceCards: state.showReferenceCards,
                 boardQuery: state.boardQuery,
                 collabEnabled: state.collabEnabled,
                 boardMode: state.boardMode,

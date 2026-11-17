@@ -865,6 +865,61 @@
 .st-board-link-blocking .st-board-link-node { stroke: var(--st-danger); }
 .st-board-link-reference .st-board-link-node { stroke: var(--st-v2); }
 
+.st-reference-card {
+    position: absolute;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgba(154, 123, 255, 0.42);
+    border-radius: var(--st-radius);
+    background: rgba(154, 123, 255, 0.08);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+    cursor: grab;
+    user-select: none;
+}
+
+.st-reference-media {
+    flex: 1;
+    min-height: 0;
+    background: #050607;
+}
+
+.st-reference-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.st-reference-media .st-media-fallback {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--st-faint);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.st-reference-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 8px;
+    border-top: 1px solid rgba(154, 123, 255, 0.2);
+}
+
+.st-reference-body strong {
+    color: var(--st-text);
+    font-size: 10px;
+}
+
+.st-reference-body span {
+    color: var(--st-muted);
+    font-size: 9px;
+}
+
 .st-board-note {
     position: absolute;
     z-index: 3;

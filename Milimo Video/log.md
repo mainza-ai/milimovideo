@@ -780,3 +780,10 @@ platform-neutral snapshot path and 20% pixel tolerance, plus deterministic
 minimap hiding and card-visible waits. Verified locally against the committed
 baseline. E2E count now includes shell, CRUD, export, reviewer-agent, axe,
 keyboard, perf board/timeline, and visual.
+
+## [2026-11-17] f1 | master-reference cards on the board
+
+Added an opt-in Refs layer that renders draggable element/reference cards with
+image, name, trigger, and type. Positions persist in the editor store; the layer
+resets with board layout. This extends the board beyond shot cards without
+changing sequence semantics. Verified: 44 vitest, tsc clean, eslint 0 errors.

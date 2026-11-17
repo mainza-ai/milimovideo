@@ -13,6 +13,7 @@ import {
 import { ShotCard } from './ShotCard';
 import { cullCards } from '../board/culling';
 import { startBoardCollab, type BoardCollab } from '../collab/boardSync';
+import { useStudioElements } from '../data/useStudioData';
 
 const CARD_W = 300;
 const CARD_H = 238;
@@ -103,7 +104,9 @@ export function BoardCanvas() {
         boardPast, boardFuture, pushBoardHistory, undoBoard, redoBoard, togglePin,
         collabEnabled, setCollabEnabled, hydrateBoard,
         boardNotes, addNote, updateNote, removeNote,
+        referencePositions, showReferenceCards, setReferencePosition, setShowReferenceCards,
     } = useStudioEditor();
+    const elements = useStudioElements(project.id);
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
     const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
@@ -132,6 +135,7 @@ export function BoardCanvas() {
     const [linkSource, setLinkSource] = useState<string | null>(null);
     const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
     const noteDrag = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
+    const referenceDrag = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
     const [scriptDraft, setScriptDraft] = useState(project.scriptContent || '');
     const [scriptBusy, setScriptBusy] = useState(false);
     const collabRef = useRef<BoardCollab | null>(null);
@@ -364,6 +368,7 @@ export function BoardCanvas() {
         const target = event.target as HTMLElement;
         if (target.closest('.st-shot-card') || target.closest('button')) return;
         if (target.closest('.st-board-note')) return;
+        if (target.closest('.st-reference-card')) return;
         if (target.closest('.st-board-area')) {
             selectArea(null);
             return;
@@ -479,6 +484,14 @@ export function BoardCanvas() {
                 });
             }
         }
+        if (referenceDrag.current) {
+            const dx = (event.clientX - referenceDrag.current.startX) / boardCamera.zoom;
+            const dy = (event.clientY - referenceDrag.current.startY) / boardCamera.zoom;
+            setReferencePosition(referenceDrag.current.id, {
+                x: Math.round((referenceDrag.current.origX + dx) / 8) * 8,
+                y: Math.round((referenceDrag.current.origY + dy) / 8) * 8,
+            });
+        }
         if (noteDrag.current) {
             const dx = (event.clientX - noteDrag.current.startX) / boardCamera.zoom;
             const dy = (event.clientY - noteDrag.current.startY) / boardCamera.zoom;
@@ -552,6 +565,7 @@ export function BoardCanvas() {
         }
         cardResize.current = null;
         noteDrag.current = null;
+        referenceDrag.current = null;
         if (areaDrag.current?.mode === 'create' && areaDraft) {
             if (areaDraft.width > 40 && areaDraft.height > 40) {
                 pushBoardHistory();
@@ -592,6 +606,23 @@ export function BoardCanvas() {
             ));
         });
     }, [boardAreas, boardCamera, boardPositions, shots, size]);
+
+    const referenceCards = useMemo(() => {
+        if (!showReferenceCards) return [];
+        const positions = Object.values(boardPositions);
+        const baseY = positions.length
+            ? Math.max(...positions.map((position) => position.y + position.height)) + 90
+            : 0;
+        return elements.map((element, index) => ({
+            element,
+            position: referencePositions[element.id] || {
+                x: (index % 4) * 270,
+                y: baseY + Math.floor(index / 4) * 210,
+                width: 240,
+                height: 180,
+            },
+        }));
+    }, [boardPositions, elements, referencePositions, showReferenceCards]);
 
     const hiddenShotIds = useMemo(() => {
         const collapsed = Object.values(boardAreas).filter((area) => area.collapsed);
@@ -743,6 +774,16 @@ export function BoardCanvas() {
                     title="Add a board note"
                 >
                     <StickyNote size={13} /> Note
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={showReferenceCards ? 'primary' : 'ghost'}
+                    onClick={() => setShowReferenceCards(!showReferenceCards)}
+                    title="Show master-reference cards on the board"
+                >
+                    Refs
                 </button>
                 <button type="button" className="st-button" data-size="sm" onClick={arrange} title="Arrange cards">
                     <Grid3X3 size={13} /> Arrange
@@ -1043,6 +1084,42 @@ export function BoardCanvas() {
                                         aria-label="Board note"
                                         onChange={(event) => updateNote(note.id, { text: event.target.value })}
                                     />
+                                </div>
+                            ))}
+
+                            {referenceCards.map(({ element, position }) => (
+                                <div
+                                    key={`ref-${element.id}`}
+                                    className="st-reference-card"
+                                    style={{
+                                        left: position.x,
+                                        top: position.y,
+                                        width: position.width,
+                                        height: position.height,
+                                    }}
+                                    onPointerDown={(event) => {
+                                        event.stopPropagation();
+                                        referenceDrag.current = {
+                                            id: element.id,
+                                            startX: event.clientX,
+                                            startY: event.clientY,
+                                            origX: position.x,
+                                            origY: position.y,
+                                        };
+                                        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+                                    }}
+                                >
+                                    <div className="st-reference-media">
+                                        {element.image_path ? (
+                                            <img src={getAssetUrl(element.image_path)} alt="" loading="lazy" />
+                                        ) : (
+                                            <div className="st-media-fallback">{element.type}</div>
+                                        )}
+                                    </div>
+                                    <div className="st-reference-body">
+                                        <strong>{element.name}</strong>
+                                        <span>@{element.trigger_word.replace(/^@/, '')} · {element.type}</span>
+                                    </div>
                                 </div>
                             ))}
 
