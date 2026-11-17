@@ -539,7 +539,15 @@ export function useStudioCancel() {
 export function useStudioCreateRender(projectId: string) {
     const { addToast } = useStudioSelection();
     const trackStates = useTimelineStore((state) => state.trackStates);
-    return useCallback(async (settings: { width: number; height: number; fps: number; crf?: number; preset?: string }) => {
+    return useCallback(async (settings: {
+        width: number;
+        height: number;
+        fps: number;
+        start_frame?: number;
+        end_frame?: number;
+        crf?: number;
+        preset?: string;
+    }) => {
         const response = await fetch(apiUrl(`/projects/${projectId}/render`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

@@ -179,10 +179,12 @@ def test_project_script_content_roundtrip(app_client, project):
         "resolution_w": 768, "resolution_h": 512, "revision": 0,
         "shots": [], "scenes": [],
         "script_content": "INT. STUDIO - NIGHT\n\nA filmmaker edits the cut.",
+        "render_preset": "vertical",
     }
     assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
     loaded = app_client.get(f"/projects/{pid}").json()
     assert loaded["script_content"].startswith("INT. STUDIO")
+    assert loaded["render_preset"] == "vertical"
 
 
 def test_captions_roundtrip_sorted_and_sanitized(app_client, project):

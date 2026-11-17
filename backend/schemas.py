@@ -77,6 +77,7 @@ class ProjectState(BaseModel):
     scenes: List[dict] = []
     captions: List[CaptionCue] = []
     captions_burn: bool = True
+    render_preset: Optional[str] = None
     script_content: Optional[str] = None
     resolution_w: int = 768
     resolution_h: int = 512
@@ -254,6 +255,8 @@ class RenderSettings(BaseModel):
     width: Optional[int] = None
     height: Optional[int] = None
     fps: Optional[int] = None
+    start_frame: Optional[int] = None
+    end_frame: Optional[int] = None
     crf: int = 18
     preset: str = "fast"
     audio_bitrate: str = "192k"

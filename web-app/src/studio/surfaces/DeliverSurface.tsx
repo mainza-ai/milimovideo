@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Film, Loader2, Send } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useStudioCreateRender, useStudioProject, useStudioRenders } from '../data/useStudioData';
 import { getAssetUrl } from '../../config';
+import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 const PRESETS = [
     { id: 'project', label: 'Project', width: null, height: null },
@@ -18,8 +19,19 @@ export function DeliverSurface() {
     const { renders, refresh } = useStudioRenders(project.id);
     const createRender = useStudioCreateRender(project.id);
     const setProject = useTimelineStore((state) => state.setProject);
-    const [preset, setPreset] = useState<typeof PRESETS[number]['id']>('project');
+    const saveProject = useTimelineStore((state) => state.saveProject);
+    const [preset, setPreset] = useState<typeof PRESETS[number]['id']>(
+        (PRESETS.find((item) => item.id === project.renderPreset)?.id || 'project'),
+    );
     const [busy, setBusy] = useState(false);
+    const layout = useMemo(() => computeTimelineLayout(project), [project]);
+    const totalDuration = Math.max(0.1, ...layout.map((clip) => clip.end));
+    const [rangeStart, setRangeStart] = useState(0);
+    const [rangeEnd, setRangeEnd] = useState(totalDuration);
+
+    useEffect(() => {
+        setRangeEnd((current) => (current > totalDuration ? totalDuration : current || totalDuration));
+    }, [totalDuration]);
 
     const start = async () => {
         const selected = PRESETS.find((item) => item.id === preset) || PRESETS[0];
@@ -29,6 +41,8 @@ export function DeliverSurface() {
                 width: selected.width || project.resolutionW,
                 height: selected.height || project.resolutionH,
                 fps: project.fps,
+                start_frame: Math.round(Math.min(rangeStart, rangeEnd) * project.fps),
+                end_frame: Math.round(Math.max(rangeStart, rangeEnd) * project.fps),
                 crf: 18,
                 preset: 'fast',
             });
@@ -77,12 +91,58 @@ export function DeliverSurface() {
                             className="st-button"
                             data-size="sm"
                             data-variant={preset === item.id ? 'primary' : 'ghost'}
-                            onClick={() => setPreset(item.id)}
+                            onClick={() => {
+                                setPreset(item.id);
+                                setProject({ ...project, renderPreset: item.id });
+                                void saveProject();
+                            }}
                         >
                             {item.label}
                             {item.width ? ` · ${item.width}×${item.height}` : ` · ${project.resolutionW}×${project.resolutionH}`}
                         </button>
                     ))}
+                </div>
+            </div>
+
+            <div className="st-panel" style={{ marginBottom: 14 }}>
+                <h3 className="st-panel-title">Render range · cut is {totalDuration.toFixed(2)}s</h3>
+                <div className="st-row">
+                    <label>
+                        <span className="st-label">In (seconds)</span>
+                        <input
+                            className="st-input"
+                            type="number"
+                            min={0}
+                            max={totalDuration}
+                            step={0.1}
+                            value={rangeStart}
+                            onChange={(event) => setRangeStart(Math.max(0, Math.min(totalDuration, Number(event.target.value))))}
+                        />
+                    </label>
+                    <label>
+                        <span className="st-label">Out (seconds)</span>
+                        <input
+                            className="st-input"
+                            type="number"
+                            min={0}
+                            max={totalDuration}
+                            step={0.1}
+                            value={rangeEnd}
+                            onChange={(event) => setRangeEnd(Math.max(0, Math.min(totalDuration, Number(event.target.value))))}
+                        />
+                    </label>
+                </div>
+                <div className="st-button-row" style={{ marginTop: 8 }}>
+                    <span className="st-chip">duration {Math.max(0, rangeEnd - rangeStart).toFixed(2)}s</span>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant="ghost"
+                        onClick={() => { setRangeStart(0); setRangeEnd(totalDuration); }}
+                    >
+                        Full cut
+                    </button>
                 </div>
             </div>
 

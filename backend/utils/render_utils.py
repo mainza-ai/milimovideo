@@ -105,6 +105,8 @@ def build_complex_filtergraph(
     preset: str = "fast",
     audio_bitrate: str = "192k",
     captions_path: Optional[str] = None,
+    start_seconds: float = 0.0,
+    duration_seconds: Optional[float] = None,
 ) -> List[str]:
     """Build an FFmpeg filtergraph that matches the NLE timeline.
 
@@ -317,6 +319,9 @@ def build_complex_filtergraph(
     if final_audio_label:
         cmd.extend(["-map", final_audio_label])
 
+    output_duration = duration_seconds if duration_seconds is not None else duration_sec
+    if start_seconds > 0:
+        cmd.extend(["-ss", f"{max(0.0, start_seconds):.3f}"])
     cmd.extend([
         "-c:v", "libx264",
         "-preset", str(preset),
@@ -324,7 +329,7 @@ def build_complex_filtergraph(
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", str(audio_bitrate),
-        "-t", f"{duration_sec:.3f}",
+        "-t", f"{max(0.05, output_duration):.3f}",
         "-movflags", "+faststart",
         output_path,
     ])

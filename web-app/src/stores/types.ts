@@ -140,6 +140,7 @@ export interface Project {
     revision?: number;
     captions?: CaptionCue[];
     captionsBurn?: boolean;
+    renderPreset?: string;
 }
 
 export interface ProjectSlice {

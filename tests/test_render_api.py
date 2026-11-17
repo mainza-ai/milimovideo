@@ -41,6 +41,49 @@ def _make_clip(path: Path, color: str, seconds: float = 1.0):
     )
 
 
+def test_render_range_exports_a_subsection(app_client, project):
+    pid = project["id"]
+    generated = Path(config.PROJECTS_DIR) / pid / "generated"
+    _make_clip(generated / "range.mp4", "purple", seconds=2.0)
+
+    shot = {
+        "id": "range-shot", "prompt": "range", "negative_prompt": "", "seed": 42,
+        "width": 320, "height": 180, "fps": 25, "num_frames": 50,
+        "cfg_scale": 1.0, "enhance_prompt": False, "upscale": False,
+        "pipeline_override": "auto", "track_index": 0, "start_frame": 0,
+        "trim_in": 0, "trim_out": 0, "timeline": [],
+        "video_url": f"/projects/{pid}/generated/range.mp4", "status": "completed",
+    }
+    payload = {
+        "id": pid, "name": "Range Render", "fps": 25, "seed": 42,
+        "resolution_w": 320, "resolution_h": 180, "revision": 0,
+        "shots": [shot], "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+
+    response = app_client.post(
+        f"/projects/{pid}/render",
+        json={
+            "settings": {
+                "width": 320, "height": 180, "fps": 25,
+                "start_frame": 25, "end_frame": 50,
+            },
+            "track_states": {},
+        },
+    )
+    assert response.status_code == 200, response.text
+    render_id = response.json()["job_id"]
+    status = app_client.get(f"/status/{render_id}").json()
+    assert status["status"] == "completed", status
+
+    output = generated / f"{render_id}.mp4"
+    probe = json.loads(subprocess.check_output([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "json", str(output),
+    ]))
+    assert float(probe["format"]["duration"]) == pytest.approx(1.0, abs=0.15)
+
+
 def test_render_speed_halves_the_cut(app_client, project):
     pid = project["id"]
     generated = Path(config.PROJECTS_DIR) / pid / "generated"

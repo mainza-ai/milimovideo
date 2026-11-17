@@ -524,3 +524,11 @@ scale/pan, `geq` for alpha when opacity varies, and `volume=eval=frame` for
 audio curves. Inspector rows expose each property at the playhead. Added
 filtergraph tests plus a real render exercising opacity+scale+pan. Verified:
 49 pytest, 32 vitest, tsc clean.
+
+## [2026-11-17] f2 | render range and preset persistence
+
+RenderSettings accepts start/end frames; the render clamps the range, seeks the
+output with `-ss`, and reports progress against the range duration. Deliver has
+in/out seconds with a full-cut reset, and the selected preset persists on the
+project (`render_preset`). Added a real FFmpeg range test (2s clip, 1s export).
+Verified: 50+ pytest, 32 vitest, tsc clean.

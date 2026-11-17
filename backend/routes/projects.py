@@ -216,6 +216,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         scenes=scenes_data,
         captions=_parse_json_field(project.captions, []),
         captions_burn=bool(project.captions_burn),
+        render_preset=project.render_preset,
         script_content=project.script_content,
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
@@ -290,6 +291,7 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     db_project.seed = state.seed
     db_project.captions = json.dumps(_sanitize_captions(state.captions))
     db_project.captions_burn = bool(state.captions_burn)
+    db_project.render_preset = state.render_preset
     db_project.script_content = state.script_content
     
     db_project.updated_at = datetime.utcnow()
@@ -751,6 +753,14 @@ async def _render_background(
             if captions_path:
                 await emit_progress(4, f"Burning in {len(captions)} caption cue(s)...")
 
+            total_frames = max(
+                (clip["start_frame"] + clip["duration_frames"])
+                for clip in (v1_clips + v2_clips + a1_clips)
+            )
+            range_start = max(0, min(total_frames - 1, settings.start_frame or 0))
+            range_end = max(range_start + 1, min(total_frames, settings.end_frame or total_frames))
+            range_duration = (range_end - range_start) / max(1, fps)
+
             await emit_progress(5, "Compiling FFmpeg filtergraph...")
             cmd = build_complex_filtergraph(
                 project_fps=fps,
@@ -765,6 +775,8 @@ async def _render_background(
                 preset=settings.preset,
                 audio_bitrate=settings.audio_bitrate,
                 captions_path=captions_path,
+                start_seconds=range_start / max(1, fps),
+                duration_seconds=range_duration,
             )
 
             logger.info("Executing render FFmpeg: %s", " ".join(cmd))
@@ -775,10 +787,7 @@ async def _render_background(
             )
             stderr_task = asyncio.create_task(process.stderr.read())
 
-            duration_sec = max(1.0, (
-                max((c["start_frame"] + c["duration_frames"]) for c in (v1_clips + v2_clips + a1_clips))
-                / max(1, fps)
-            ))
+            duration_sec = max(0.05, range_duration)
 
             cancelled = False
             while True:

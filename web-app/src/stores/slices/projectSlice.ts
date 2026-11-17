@@ -134,6 +134,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 })),
                 script_content: project.scriptContent,
                 captions_burn: project.captionsBurn ?? true,
+                render_preset: project.renderPreset ?? null,
                 captions: (project.captions || []).map(cue => ({
                     id: cue.id,
                     start_frame: cue.startFrame,
@@ -290,6 +291,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 })),
                 scriptContent: data.script_content, // Load persisted script
                 captionsBurn: data.captions_burn ?? true,
+                renderPreset: data.render_preset || undefined,
                 captions: (data.captions || []).map((cue: any) => ({
                     id: cue.id || uuidv4(),
                     startFrame: cue.start_frame ?? 0,
