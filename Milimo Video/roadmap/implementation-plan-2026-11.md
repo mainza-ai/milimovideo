@@ -54,7 +54,7 @@ single-engineer guidance.
 | P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health + full Playwright flow) | 41 backend tests, 23 frontend tests, 3 Playwright tests (shell, CRUD, export), lint 0 errors, build passes |
 | Front-end F0/F1 | **Mostly done** (shell, tokens, editor store, board canvas + culling/areas/links, list/script, Setup, lazy `/studio`) | vitest + Playwright smoke; tsc/lint/build pass |
 | Front-end F2 | **Mostly done** (trim/slip/roll/blade/ripple, audio gain/mute + A1 placement, captions + ASS burn-in, opacity keyframes) | pure-op tests, filtergraph tests, real FFmpeg render with V1/V2/A1/captions/keyframes |
-| Front-end F3/F4 | **Partial** (takes, generate/cancel, plan approval, frame comments/approvals, share links, library takes, deliver presets) | backend contract tests + shell smoke; activity feed and full CRUD/export E2E open |
+| Front-end F3/F4 | **Partial** (takes, generate/cancel, plan approval, comments/approvals/activity, share links, library takes, deliver presets) | backend contract tests + Playwright CRUD/export; composer, batch, preview, recipes, semantic search open |
 | Front-end F5 | **Deferred** until F2/F4 gates | shorts/lenses/packaging |
 
 **Not adopted:** Alembic (P1-02) — a small idempotent schema repair/backfill runs
@@ -65,9 +65,10 @@ change. OpenAPI-generated TS types (P1-06) remain open. The durable GPU ledger
 **Verification commands**
 
 ```bash
-./milimov/bin/python -m pytest        # 21 passed
+./milimov/bin/python -m pytest        # 41 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
 cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # clean
+cd web-app && npm run test:e2e        # 3 Playwright tests
 curl http://127.0.0.1:8000/health     # device/queue/slots/disk
 ```
 
