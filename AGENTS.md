@@ -158,8 +158,8 @@ not just filtergraph strings.
   9:16/1:1/4:5 export, direct export from uploaded sources.
 - Setup: device/slots/queue/disk, pipeline readiness, base/LoRA activation,
   LoRA strength, model downloads, depth model, error budget.
-- Desktop: Tauri 2 shell with native save dialog and a backend supervisor that
-  locates/starts `run_backend.sh`; bundled Python sidecar remains a follow-up.
+- Desktop: Tauri 2 shell with native open/save dialogs and a backend supervisor
+  that locates/starts `run_backend.sh`; bundled Python sidecar remains a follow-up.
 - Collaboration: opt-in Yjs board sync spike over BroadcastChannel (same machine).
 
 ### Known gaps (do not claim these are done)

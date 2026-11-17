@@ -946,3 +946,10 @@ them with the project. The filtergraph applies single-pass loudnorm after the
 audio mix. Added Alembic revision 0002 (column-safe for fresh and legacy DBs),
 round-trip/clamp tests, filtergraph tests, and a real ffprobe assertion for a
 256k normalized export. Verified: 71 pytest, 50 vitest, tsc clean, build pass.
+
+## [2026-11-17] desktop | native open dialog
+
+Closed the missing native-open half of F5-05: Tauri now exposes `read_text_file`,
+and `openTextFile` uses the dialog plugin with a browser file-picker fallback.
+Pipeline lens recipe import uses the native picker on desktop. Added desktop
+tests. Verified: 52 vitest, tsc clean, eslint 0 errors, cargo check.

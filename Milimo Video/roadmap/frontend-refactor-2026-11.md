@@ -50,7 +50,7 @@ at `/`.
 | **F3 Generate** | **Done for scoped F3** | Workspace, composer/@mentions, advanced params, preview frame, batch queue+matrix, queue position/estimate/cancel, takes/favorites, inpaint-as-take |
 | **F4 Review** | **Done for scoped F4** | Plan cards/approval/undo, recipes, comments/approvals/activity, needs-you, share links, compare, ranked search, takes, deliver presets, LoRA activation/strength, reviewer→agent E2E |
 | **F4 Library/Deliver** | **Done for scoped F4** | Assets/references/takes/search tabs, master-reference CRUD with image/trigger, ranked local search, take lineage + select/favorite, presets, render history, caption burn toggle, CRF/encoder/audio/loudness controls |
-| **F5 Shorts/lenses** | **Done for scoped F5** | Shorts candidates/scores/editable range/source export; pipeline lens recipe import/export; blocking lens; lazy 3D previz; Yjs board spike; Tauri shell with native save, a built debug binary, and sidecar-binary resolution. A bundled Python runtime is not shipped |
+| **F5 Shorts/lenses** | **Done for scoped F5** | Shorts candidates/scores/editable range/source export; pipeline lens recipe import/export; blocking lens; lazy 3D previz; Yjs board spike; Tauri shell with native open/save, a built debug binary, and sidecar-binary resolution. A bundled Python runtime is not shipped |
 
 **Next:** keep `/` until the final cutover gates are green. A bundled Python
 sidecar binary remains the only F5 packaging gap; the supervisor resolves one

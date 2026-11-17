@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { CheckCircle2, Copy, Loader2, TriangleAlert, Upload, X } from 'lucide-react';
 import type { Shot } from '../state/documentStore';
-import { saveTextFile } from '../../desktop';
+import { openTextFile, saveTextFile } from '../../desktop';
 import type { StudioElement } from '../data/useStudioData';
 import { parsePipelineRecipe } from '../lens/recipe';
 
@@ -23,7 +23,6 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
     const [estimate, setEstimate] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
-    const importRef = useRef<HTMLInputElement>(null);
     const [draft, setDraft] = useState({
         prompt: shot.prompt || '',
         negative: shot.negativePrompt || '',
@@ -253,22 +252,16 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
                                 {loading ? <Loader2 size={11} className="animate-spin" /> : <CheckCircle2 size={11} />}
                                 Estimate
                             </button>
-                            <button type="button" className="st-button" data-size="sm" onClick={() => importRef.current?.click()}>
-                                <Upload size={11} /> Import JSON
-                            </button>
-                            <input
-                                ref={importRef}
-                                type="file"
-                                accept="application/json,.json"
-                                style={{ display: 'none' }}
-                                aria-label="Import pipeline recipe"
-                                onChange={async (event) => {
-                                    const file = event.target.files?.[0];
-                                    event.target.value = '';
-                                    if (!file) return;
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                onClick={async () => {
                                     setImportError(null);
                                     try {
-                                        const parsed = parsePipelineRecipe(await file.text());
+                                        const raw = await openTextFile();
+                                        if (raw === null) return;
+                                        const parsed = parsePipelineRecipe(raw);
                                         setDraft({
                                             prompt: parsed.prompt,
                                             negative: parsed.negativePrompt,
@@ -284,7 +277,9 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
                                         setImportError(error instanceof Error ? error.message : 'Could not read recipe');
                                     }
                                 }}
-                            />
+                            >
+                                <Upload size={11} /> Import JSON
+                            </button>
                         </div>
                         {importError && (
                             <div className="st-lens-warnings" role="alert">

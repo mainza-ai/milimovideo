@@ -4,6 +4,11 @@ fn save_text_file(path: String, contents: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn read_text_file(path: String) -> Result<String, String> {
+    std::fs::read_to_string(&path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn start_backend(app: tauri::AppHandle) -> Result<String, String> {
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
@@ -74,7 +79,7 @@ fn start_backend(app: tauri::AppHandle) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![save_text_file, start_backend])
+        .invoke_handler(tauri::generate_handler![save_text_file, read_text_file, start_backend])
         .run(tauri::generate_context!())
         .expect("error while running Milimo Video");
 }

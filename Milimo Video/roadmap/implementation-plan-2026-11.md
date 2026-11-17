@@ -51,11 +51,11 @@ single-engineer guidance.
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, setup check |
 | P3 OOM retry | **Done** | one retry at 75% resolution / 8k+1 frames, cache clear, shot params updated, unit tests |
 | P4 UX trust | **Done** (P4-01–P4-07) | takes/favorites, seed lock, save conflict, reconnect, review, plan approval, undo, zero serious/critical axe, 500-card/200-clip perf specs, tracking overlay |
-| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI) | 71 backend, 50 frontend, 12 Playwright (incl. axe/perf/visual/reference CRUD); new modules >80%; total 37%; lint 0 errors |
+| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI) | 71 backend, 52 frontend, 12 Playwright (incl. axe/perf/visual/reference CRUD); new modules >80%; total 37%; lint 0 errors |
 | Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent + separate document stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 12 Playwright incl. visual; store separation covered by E2E |
 | Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking + depth overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip ~275fps perf; depth uses optional Depth Anything V2 Small |
 | Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview/batch/inpaint/favorites, queue position, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets and encoding controls) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; deeper shorts polish open |
-| Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native save/build + sidecar-binary resolution |
+| Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native open/save/build + sidecar-binary resolution |
 
 **Still open:** a bundled Python sidecar binary is not shipped or built; the desktop
 supervisor prefers one if present and otherwise runs `run_backend.sh`.
