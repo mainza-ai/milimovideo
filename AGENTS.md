@@ -170,13 +170,16 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Desktop: Tauri 2 shell with native open/save dialogs and a backend supervisor
   that prefers a `milimo-backend` sidecar and otherwise starts `run_backend.sh`.
   Bundled Python/Torch runtime remains a follow-up.
+- Shell chrome: responsive surface switcher, grouped/overflowing toolbars, command
+  palette (`⌘K`), shortcut sheet (`?`), density preference, card quick actions,
+  context menus, and bulk selection actions.
 - Collaboration: opt-in Yjs board sync spike over BroadcastChannel (same machine).
 
 ### Plan status and known gaps
 
-Scoped P0–P5 / F0–F5 are complete. The current green baseline is 82 backend
-tests, 52 Vitest tests, and 12 Playwright tests, plus ruff/tsc/ESLint, Vite build,
-bundle budget, `cargo check`, and `verify_setup`.
+Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
+baseline is 82 backend tests, 53 Vitest tests, and 15 Playwright tests, plus
+ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
 
@@ -185,9 +188,6 @@ Do not claim these are done:
 - Legacy `/` cutover is gated on the documented two-clean-release window.
 - Scoped-v1 gaps: no transitions/LUT/titles/A2 track, lexical rather than
   embedding search, and no shorts/lens template packs.
-- F6 chrome stabilization: the Studio is too dense and breaks at ~1024px
-  (top-bar collision, board-toolbar overflow, clipped rail labels, hidden
-  Inspector tabs). See `Milimo Video/systems/studio-ux-audit-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
 
@@ -243,10 +243,10 @@ Run from the repo root unless noted:
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 52 Vitest tests
+npm test                                       # 53 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 12 Playwright tests
+npm run test:e2e                               # 15 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```

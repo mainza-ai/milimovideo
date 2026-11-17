@@ -349,7 +349,7 @@ export function ReviewSurface() {
                                     </span>
                                 </div>
                                 <p style={{ margin: '6px 0 0' }}>{comment.body}</p>
-                                <div style={{ marginTop: 4, color: 'var(--st-faint)', fontSize: 9 }}>
+                                <div style={{ marginTop: 4, color: 'var(--st-faint)', fontSize: 11 }}>
                                     {comment.author} · {comment.status}
                                     {comment.created_at ? ` · ${new Date(comment.created_at).toLocaleString()}` : ''}
                                 </div>

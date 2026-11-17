@@ -48,7 +48,6 @@ test('500-card board mounts only the viewport slice', async ({ page, request }) 
     await page.goto('/studio');
     await expect(page.getByLabel('Project name')).toHaveValue('Perf Board', { timeout: 30000 });
     await expect(page.getByText('Shot 1', { exact: true }).first()).toBeVisible({ timeout: 30000 });
-    await page.getByTitle('Minimap').click();
 
     const mounted = await page.locator('.st-shot-card').count();
     console.log(`500-card board mounted cards: ${mounted}`);

@@ -1100,3 +1100,21 @@ plan, and wiki index.
 
 Added the F6 chrome-stabilization finding to AGENTS.md's remaining/deferred list
 so agents do not treat the Studio layout as finished.
+
+## [2026-11-17] feat | F6 studio chrome stabilization
+
+Executed the F6 audit plan. Fixed the root cause first: the global `font: inherit`
+shorthand on all controls was overriding component font sizes (rail labels were
+rendering at 16px inside 40px buttons). Replaced it with `font-family: inherit`.
+
+Implemented: responsive top-bar surface switcher under 1200px; grouped/wrapping
+board and timeline toolbars with a More menu; 76px mode rail; Inspector primary
+tabs + More; 11px+ type floor; 32px minimum controls; collapsible story spine,
+Generate panes, Inspector, and command dock; command palette (`⌘K`), shortcut sheet
+(`?`), agent dock shortcut (`⌘J`), comfort/compact density, card quick actions,
+right-click shot menu, bulk selection bar, and auto-fit at narrow widths.
+
+Verification: 0 clipped rail labels, 0 toolbar overflow, 0 Inspector tab overflow,
+0 text nodes <10px, 0 buttons <28px at 2048/1440/1280/1024/900/768; 53 Vitest, 15
+Playwright (responsive layout spec included), axe green, tsc/ESLint clean, build +
+bundle budget pass. Visual baseline refreshed.

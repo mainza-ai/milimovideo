@@ -33,6 +33,28 @@ labels, 26px status pills, 27px buttons, and multiple horizontal scroll regions
 with no scroll affordance. This is a chrome/layout problem, not a missing-surface
 problem.
 
+## Resolution (2026-11-17)
+
+F6 is implemented. The original findings below remain as the audit trail.
+
+| Finding | Before | After |
+|---|---|---|
+| Rail labels | 53–85px labels in 40px buttons; every label clipped | 76px rail, 64px buttons, 10px labels; **0 clipped** |
+| Inspector tabs | 486px content in 319px with hidden scrollbar | Primary tabs + `More`; **256/256**, no overflow |
+| Board toolbar | 1167px content in 786/730px | Grouped toolbar wraps; **no child outside** at 1440/1024/900/768 |
+| Top-bar nav | Overlap at 1024; tabs hidden at ≤900 | Compact surface switcher at <1200; tabs never overlap |
+| Typography | 21–23 nodes <10px on Generate/Edit/Deliver/Setup | **0 text nodes <10px** on every surface |
+| Controls | 27 Edit / 22 Setup buttons under 28px | **0 buttons under 28px** |
+| Hidden horizontal scrolls | Inspector tabs, board toolbar | No non-scroll container overflow; timeline/transport wrap |
+
+Also added: command palette (`⌘K`), shortcut sheet (`?`), agent dock shortcut
+(`⌘J`), comfort/compact density, card quick actions, right-click shot menu, bulk
+selection bar, collapsible story spine/Generate panes, and a responsive layout
+Playwright spec across 2048/1440/1280/1024/900/768.
+
+Verification after the pass: **15 Playwright tests, 53 Vitest tests**, axe green,
+tsc/ESLint clean, bundle budget pass, and no body overflow at any supported width.
+
 ## Method
 
 - Reviewed the provided 2048×1285 Studio screenshot.

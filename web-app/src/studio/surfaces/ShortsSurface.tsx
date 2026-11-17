@@ -261,7 +261,7 @@ export function ShortsSurface() {
                                 })}
                             />
                         </label>
-                        <span className="st-value" style={{ color: rangeValid ? 'var(--st-muted)' : 'var(--st-danger)', fontSize: 10 }}>
+                        <span className="st-value" style={{ color: rangeValid ? 'var(--st-muted)' : 'var(--st-danger)', fontSize: 11 }}>
                             {(activeRange.end - activeRange.start).toFixed(1)}s {rangeValid ? '' : '· out must be after in'}
                         </span>
                         <button
@@ -281,7 +281,7 @@ export function ShortsSurface() {
                     </div>
                 )}
                 {!fromTranscript && (
-                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 6 }}>
                         No transcript: candidates are built from shot text and timing. Import an SRT/VTT for real caption-aware scoring.
                     </p>
                 )}
@@ -308,10 +308,10 @@ export function ShortsSurface() {
                                 {candidate.score}
                             </span>
                         </div>
-                        <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10, marginTop: 6 }}>
+                        <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11, marginTop: 6 }}>
                             {candidate.duration.toFixed(1)}s · {candidate.text.split(/\s+/).length} words
                         </div>
-                        <p className="st-value" style={{ fontSize: 10, marginTop: 6, color: 'var(--st-secondary)' }}>
+                        <p className="st-value" style={{ fontSize: 11, marginTop: 6, color: 'var(--st-secondary)' }}>
                             {candidate.text.slice(0, 220)}{candidate.text.length > 220 ? '…' : ''}
                         </p>
                         {candidate.id === selected?.id && (

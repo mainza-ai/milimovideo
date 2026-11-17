@@ -223,7 +223,9 @@ free disk.
 |---|---|
 | `1`–`8` | Story, Generate, Edit, Review, Library, Deliver, Shorts, Setup |
 | `Space` | Play/pause (opens Edit when needed) |
-| `⌘K` / `Ctrl+K` | Command dock |
+| `⌘K` / `Ctrl+K` | Command palette |
+| `⌘J` / `Ctrl+J` | Agent command dock |
+| `?` | Keyboard shortcuts |
 | `⌘Z` / `Ctrl+Z` | Undo |
 | `⇧⌘Z` / `Ctrl+Shift+Z` | Redo |
 | `B` | Blade at the playhead |
@@ -251,15 +253,15 @@ masking/tracking toggles. New work belongs in Studio.
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                          # 52 tests
+npm test                                          # 53 tests
 npm run build
 npm run check:bundle                              # JS budget
-npm run test:e2e                                  # 12 Playwright tests
+npm run test:e2e                                  # 15 Playwright tests
 ```
 
-The last verified run was 82 backend tests, 52 Vitest tests, and 12 Playwright
-tests, including all-surface axe, CRUD, export, reference CRUD, review-agent, perf,
-and visual checks.
+The last verified run was 82 backend tests, 53 Vitest tests, and 15 Playwright
+tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
+responsive layout/overflow, perf, and visual checks.
 
 ## 🧭 Project layout
 

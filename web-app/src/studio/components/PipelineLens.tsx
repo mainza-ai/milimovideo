@@ -92,7 +92,7 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
                 <div className="st-lens-head">
                     <div>
                         <strong>Pipeline lens · {shot.id.slice(0, 10)}</strong>
-                        <div style={{ color: 'var(--st-faint)', fontSize: 9 }}>
+                        <div style={{ color: 'var(--st-faint)', fontSize: 11 }}>
                             Recipe graph and validation for this shot. No cloud calls.
                         </div>
                     </div>
@@ -293,7 +293,7 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
                     <div>
                         <h4>Ingredients</h4>
                         {matched.length === 0 ? (
-                            <div style={{ color: 'var(--st-muted)', fontSize: 10 }}>No references attached.</div>
+                            <div style={{ color: 'var(--st-muted)', fontSize: 11 }}>No references attached.</div>
                         ) : (
                             <div className="st-chip-row">
                                 {matched.map((element) => (
@@ -304,7 +304,7 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
                             </div>
                         )}
                         <h4 style={{ marginTop: 12 }}>Notes</h4>
-                        <p style={{ color: 'var(--st-muted)', fontSize: 10, lineHeight: 1.55 }}>
+                        <p style={{ color: 'var(--st-muted)', fontSize: 11, lineHeight: 1.55 }}>
                             Apply writes the recipe back to the shot through the undoable document store.
                             Reproducing it needs the same model, seed, frames, resolution, and ingredients.
                         </p>

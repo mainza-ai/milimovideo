@@ -51,13 +51,13 @@ single-engineer guidance.
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, queued/cancellable downloads, setup check |
 | P3 OOM retry | **Done** | one retry at 75% resolution / 8k+1 frames, cache clear, shot params updated, unit tests |
 | P4 UX trust | **Done** (P4-01–P4-07) | takes/favorites, persistent seed lock, save conflict, reconnect, review, plan approval, undo, zero serious/critical axe, 500-card/200-clip perf specs, tracking overlay |
-| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 82 backend, 52 frontend, 12 Playwright (incl. axe/perf/visual/reference CRUD); new modules >80%; total 37%; lint 0 errors |
+| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 82 backend, 53 frontend, 15 Playwright (incl. axe/perf/visual/reference CRUD); new modules >80%; total 37%; lint 0 errors |
 | Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent + separate document stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 12 Playwright incl. visual; store separation covered by E2E |
 | Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking + depth overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip ~275fps perf; depth uses optional Depth Anything V2 Small |
 | Front-end F4 integrity | **Done** | scan + repair for missing media, orphan scene/board references, sequence order, and caption ranges |
 | Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview with start/end conditioning/batch/inpaint/favorites, queue position, pause/resume, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets, encoding controls, and in-flight render cancel) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; shorts/lens packaging remains scoped v1 |
 | Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native open/save/build + sidecar-binary resolution |
-| Front-end F6 | **Planned — P0** | chrome stabilization: top-bar collision, board-toolbar overflow, clipped rail labels, hidden inspector tabs, type/control density |
+| Front-end F6 | **Done — 2026-11-17** | responsive surface switcher, grouped toolbars, Inspector primary tabs + More, readable type/control sizes, card actions/bulk/context menu, command palette/shortcuts, density, responsive layout tests |
 
 **Still open / deferred:**
 
@@ -68,10 +68,8 @@ single-engineer guidance.
   crew remain a separate model-artifact program.
 - **Scoped-v1 gaps** — no transitions/LUT/titles/A2 track, lexical rather than
   embedding search, and no shorts/lens template packs.
-- **F6 chrome stabilization** — the Studio works but is too dense and breaks at
-  ~1024px. The audit and prioritized F6 tasks live in
-  [[frontend-refactor-2026-11]] and
-  [[../systems/studio-ux-audit-2026-11]].
+- **F6 chrome stabilization** — completed 2026-11-17. The audit and resolution
+  evidence live in [[../systems/studio-ux-audit-2026-11]].
 - **Visual baselines** — platform-tolerant and locally generated.
 
 Depth uses an optional local Depth Anything V2 Small model downloaded in Setup.
@@ -86,7 +84,7 @@ regression, and the durable ledger are adopted.
 ./milimov/bin/python -m pytest        # 82 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
 cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # clean
-cd web-app && npm run test:e2e        # 12 Playwright tests
+cd web-app && npm run test:e2e        # 15 Playwright tests
 curl http://127.0.0.1:8000/health     # device/queue/slots/disk
 ```
 

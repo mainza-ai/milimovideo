@@ -91,6 +91,10 @@ interface EditorState {
     commandOpen: boolean;
     commandMode: 'ask' | 'direct' | 'generate' | 'find';
     commandDraft: string;
+    spineCollapsed: boolean;
+    generateRailCollapsed: boolean;
+    generateParamsCollapsed: boolean;
+    density: 'comfortable' | 'compact';
     recipes: PlanRecipe[];
     focusMode: 'none' | 'canvas' | 'stage';
     setSurface: (surface: StudioSurface) => void;
@@ -137,6 +141,10 @@ interface EditorState {
     setCommandOpen: (open: boolean) => void;
     setCommandMode: (mode: EditorState['commandMode']) => void;
     setCommandDraft: (draft: string) => void;
+    setSpineCollapsed: (collapsed: boolean) => void;
+    setGenerateRailCollapsed: (collapsed: boolean) => void;
+    setGenerateParamsCollapsed: (collapsed: boolean) => void;
+    setDensity: (density: 'comfortable' | 'compact') => void;
     saveRecipe: (recipe: Omit<PlanRecipe, 'id' | 'created'>) => void;
     deleteRecipe: (recipeId: string) => void;
     setFocusMode: (mode: EditorState['focusMode']) => void;
@@ -192,9 +200,13 @@ export const useStudioEditor = create<EditorState>()(
             timelineHeight: 330,
             inspectorOpen: true,
             inspectorWidth: 360,
-            commandOpen: true,
+            commandOpen: false,
             commandMode: 'direct',
             commandDraft: '',
+            spineCollapsed: false,
+            generateRailCollapsed: false,
+            generateParamsCollapsed: false,
+            density: 'comfortable',
             recipes: [],
             focusMode: 'none',
             setSurface: (activeSurface) => set({ activeSurface }),
@@ -338,6 +350,10 @@ export const useStudioEditor = create<EditorState>()(
             setCommandOpen: (commandOpen) => set({ commandOpen }),
             setCommandMode: (commandMode) => set({ commandMode }),
             setCommandDraft: (commandDraft) => set({ commandDraft }),
+            setSpineCollapsed: (spineCollapsed) => set({ spineCollapsed }),
+            setGenerateRailCollapsed: (generateRailCollapsed) => set({ generateRailCollapsed }),
+            setGenerateParamsCollapsed: (generateParamsCollapsed) => set({ generateParamsCollapsed }),
+            setDensity: (density) => set({ density }),
             saveRecipe: (recipe) => set((state) => ({
                 recipes: [
                     ...state.recipes.filter((item) => item.name !== recipe.name),
@@ -361,14 +377,15 @@ export const useStudioEditor = create<EditorState>()(
         }),
         {
             name: 'milimo-studio-editor',
-            version: 2,
-            migrate: (persisted: unknown) => {
+            version: 3,
+            migrate: (persisted: unknown, version: number) => {
                 const next = { ...(persisted as Record<string, unknown>) };
                 delete next.boardPositions;
                 delete next.boardPinned;
                 delete next.boardAreas;
                 delete next.boardLinks;
                 delete next.boardCamera;
+                if (version < 3) next.commandOpen = false;
                 return next;
             },
             partialize: (state) => ({
@@ -395,6 +412,10 @@ export const useStudioEditor = create<EditorState>()(
                 inspectorWidth: state.inspectorWidth,
                 commandOpen: state.commandOpen,
                 commandMode: state.commandMode,
+                spineCollapsed: state.spineCollapsed,
+                generateRailCollapsed: state.generateRailCollapsed,
+                generateParamsCollapsed: state.generateParamsCollapsed,
+                density: state.density,
                 recipes: state.recipes,
             }),
         },

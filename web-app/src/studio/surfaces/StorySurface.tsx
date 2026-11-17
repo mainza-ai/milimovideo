@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight, Search, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, Sparkles } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { useStudioEditor } from '../state/editorStore';
@@ -13,9 +13,13 @@ export function StorySurface() {
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,
     })));
-    const { selectedSceneId, selectScene } = useStudioEditor(useShallow((state) => ({
+    const {
+        selectedSceneId, selectScene, spineCollapsed, setSpineCollapsed,
+    } = useStudioEditor(useShallow((state) => ({
         selectedSceneId: state.selectedSceneId,
         selectScene: state.selectScene,
+        spineCollapsed: state.spineCollapsed,
+        setSpineCollapsed: state.setSpineCollapsed,
     })));
     const { elements } = useStudioElements(project.id);
     const [query, setQuery] = useState('');
@@ -46,10 +50,34 @@ export function StorySurface() {
 
     return (
         <div className="st-story">
+            {spineCollapsed ? (
+                <aside className="st-spine st-spine-collapsed" aria-label="Story spine collapsed">
+                    <button
+                        type="button"
+                        className="st-icon-button"
+                        aria-label="Show story spine"
+                        title="Show story spine"
+                        onClick={() => setSpineCollapsed(false)}
+                    >
+                        <ChevronRight size={15} />
+                    </button>
+                </aside>
+            ) : (
             <aside className="st-spine" aria-label="Story spine">
                 <div className="st-spine-head">
-                    <div className="st-spine-title">Story spine</div>
-                    <label style={{ position: 'relative', display: 'block' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <div className="st-spine-title" style={{ marginBottom: 0 }}>Story spine</div>
+                        <button
+                            type="button"
+                            className="st-icon-button"
+                            aria-label="Hide story spine"
+                            title="Hide story spine"
+                            onClick={() => setSpineCollapsed(true)}
+                        >
+                            <ChevronLeft size={15} />
+                        </button>
+                    </div>
+                    <label style={{ position: 'relative', display: 'block', marginTop: 8 }}>
                         <Search size={12} style={{ position: 'absolute', left: 8, top: 9, color: 'var(--st-faint)' }} />
                         <input
                             className="st-input"
@@ -104,7 +132,7 @@ export function StorySurface() {
                             Master references · {elements.length}
                         </div>
                         {elements.length === 0 ? (
-                            <div style={{ color: 'var(--st-faint)', fontSize: 9, lineHeight: 1.5 }}>
+                            <div style={{ color: 'var(--st-faint)', fontSize: 11, lineHeight: 1.5 }}>
                                 Characters, locations, and objects appear here once created.
                             </div>
                         ) : (
@@ -139,6 +167,7 @@ export function StorySurface() {
                     </div>
                 </div>
             </aside>
+            )}
             <BoardCanvas />
         </div>
     );

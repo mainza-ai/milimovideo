@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-    Film, Image as ImageIcon, ListChecks, Loader2, Play, RotateCcw, Sparkles, Square, Star, X,
+    Film, Image as ImageIcon, ListChecks, Loader2, PanelLeft, PanelRight, Play, RotateCcw,
+    Sparkles, Square, Star, X,
 } from 'lucide-react';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { apiUrl, getAssetUrl } from '../../config';
@@ -18,6 +19,7 @@ import {
 } from '../data/useStudioData';
 import type { StudioElement } from '../data/useStudioData';
 import { PipelineLens } from '../components/PipelineLens';
+import { useStudioEditor } from '../state/editorStore';
 
 export function GenerateSurface() {
     const project = useStudioDocumentStore((state) => state.project);
@@ -25,6 +27,10 @@ export function GenerateSurface() {
     const { elements } = useStudioElements(project.id);
     const generate = useStudioGenerate();
     const cancel = useStudioCancel();
+    const generateRailCollapsed = useStudioEditor((state) => state.generateRailCollapsed);
+    const setGenerateRailCollapsed = useStudioEditor((state) => state.setGenerateRailCollapsed);
+    const generateParamsCollapsed = useStudioEditor((state) => state.generateParamsCollapsed);
+    const setGenerateParamsCollapsed = useStudioEditor((state) => state.setGenerateParamsCollapsed);
     const [promptDraft, setPromptDraft] = useState<string | null>(null);
     const [batchBusy, setBatchBusy] = useState(false);
     const [preview, setPreview] = useState<{ url: string | null; status: string; path?: string } | null>(null);
@@ -213,11 +219,15 @@ export function GenerateSurface() {
     };
 
     return (
-        <div className="st-shot-workspace">
+        <div
+            className="st-shot-workspace"
+            data-rail={generateRailCollapsed ? 'collapsed' : 'open'}
+            data-params={generateParamsCollapsed ? 'collapsed' : 'open'}
+        >
             <aside className="st-shot-rail">
                 <div className="st-spine-head">
                     <div className="st-spine-title">Shot queue</div>
-                    <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                    <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11 }}>
                         {videoShots.filter((item) => item.status === 'completed').length}/{videoShots.length} with takes
                     </div>
                 </div>
@@ -249,6 +259,24 @@ export function GenerateSurface() {
                         </p>
                     </div>
                     <div className="st-button-row">
+                        <button
+                            type="button"
+                            className="st-icon-button"
+                            aria-label={generateRailCollapsed ? 'Show shot queue' : 'Hide shot queue'}
+                            title={generateRailCollapsed ? 'Show shot queue' : 'Hide shot queue'}
+                            onClick={() => setGenerateRailCollapsed(!generateRailCollapsed)}
+                        >
+                            <PanelLeft size={15} />
+                        </button>
+                        <button
+                            type="button"
+                            className="st-icon-button"
+                            aria-label={generateParamsCollapsed ? 'Show ingredients and params' : 'Hide ingredients and params'}
+                            title={generateParamsCollapsed ? 'Show ingredients and params' : 'Hide ingredients and params'}
+                            onClick={() => setGenerateParamsCollapsed(!generateParamsCollapsed)}
+                        >
+                            <PanelRight size={15} />
+                        </button>
                         <button type="button" className="st-button" data-variant="primary" disabled={shot.isGenerating} onClick={() => void generate(shot)}>
                             {shot.isGenerating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                             {shot.isGenerating ? 'Generating…' : 'Generate'}
@@ -396,7 +424,7 @@ export function GenerateSurface() {
                             </button>
                         </div>
                     )}
-                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 6 }}>
                         New previews attach at frame 0. End-frame conditioning uses frame {Math.max(0, shot.numFrames - 1)}.
                     </p>
                     {shot.timeline.length > 0 && (
@@ -630,7 +658,7 @@ export function GenerateSurface() {
                         </button>
                     </div>
                     {activeJobs.length === 0 ? (
-                        <span className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>No active jobs.</span>
+                        <span className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11 }}>No active jobs.</span>
                     ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                             {activeJobs.map((job) => (
@@ -665,7 +693,7 @@ export function GenerateSurface() {
                             <Play size={12} /> Legacy edit tools
                         </button>
                     </div>
-                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 6 }}>
                         Preview-first generates a still you can inspect before video. Batch queue uses the durable GPU queue.
                     </p>
                 </div>

@@ -154,7 +154,7 @@ export function SetupSurface() {
                             {health?.queue_paused ? 'Resume queue' : 'Pause queue'}
                         </button>
                     </div>
-                    <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 10 }}>
+                    <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 11 }}>
                         Only one heavy model runs at a time; conflicting pipelines wait in the durable queue.
                         Pausing stops new dispatch after the current job finishes.
                     </p>
@@ -165,7 +165,7 @@ export function SetupSurface() {
                         <HardDrive size={16} style={{ verticalAlign: -2, marginRight: 6 }} />
                         {formatBytes(health?.disk_free_bytes)} free
                     </div>
-                    <p className="st-value" style={{ marginTop: 6, color: 'var(--st-muted)', fontSize: 10 }}>
+                    <p className="st-value" style={{ marginTop: 6, color: 'var(--st-muted)', fontSize: 11 }}>
                         Checkpoints are large. Rescan before downloading; the library lists real downloaded state.
                     </p>
                 </div>
@@ -185,7 +185,7 @@ export function SetupSurface() {
                         ))}
                         {Object.keys(pipelines).length === 0 && <span className="st-value">No readiness data.</span>}
                     </div>
-                    <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 10 }}>
+                    <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 11 }}>
                         {activeCount} base/LoRA active. Activate a downloaded base below.
                     </p>
                 </div>
@@ -329,7 +329,7 @@ export function SetupSurface() {
                             <tr key={model.id}>
                                 <td>
                                     <strong>{model.name}</strong>
-                                    <div style={{ color: 'var(--st-faint)', fontSize: 9 }}>{model.id}{model.required ? ' · required' : ''}</div>
+                                    <div style={{ color: 'var(--st-faint)', fontSize: 11 }}>{model.id}{model.required ? ' · required' : ''}</div>
                                 </td>
                                 <td>{model.pipeline} · {model.family}</td>
                                 <td>
@@ -344,7 +344,7 @@ export function SetupSurface() {
                                 <td className="st-mono">{model.vram_estimate_gb ? `${model.vram_estimate_gb} GB` : '—'}</td>
                                 <td>
                                     {model.status === 'downloaded' && model.family === 'depth' && (
-                                        <span style={{ color: 'var(--st-success)', fontSize: 9 }}>ready · loads on demand</span>
+                                        <span style={{ color: 'var(--st-success)', fontSize: 11 }}>ready · loads on demand</span>
                                     )}
                                     {model.status === 'downloaded' && model.family !== 'depth' && (
                                         <button
@@ -378,7 +378,7 @@ export function SetupSurface() {
                                                 Unload
                                             </button>
                                             {kind === 'lora' && loras.find((lora) => lora.model_id === model.id) && (
-                                                <label style={{ display: 'block', marginTop: 5, color: 'var(--st-muted)', fontSize: 9 }}>
+                                                <label style={{ display: 'block', marginTop: 5, color: 'var(--st-muted)', fontSize: 11 }}>
                                                     Strength · {Math.round((loras.find((lora) => lora.model_id === model.id)?.strength ?? 1) * 100)}%
                                                     <input
                                                         type="range"
@@ -398,7 +398,7 @@ export function SetupSurface() {
                                     )}
                                     {model.status !== 'downloaded' && model.status !== 'active' && model.status !== 'downloading' && (
                                         model.status === 'incompatible' ? (
-                                            <span style={{ color: 'var(--st-faint)', fontSize: 9 }}>not for this device</span>
+                                            <span style={{ color: 'var(--st-faint)', fontSize: 11 }}>not for this device</span>
                                         ) : (
                                             <button
                                                 type="button"

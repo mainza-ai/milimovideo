@@ -98,7 +98,7 @@ export function CommandDock() {
                     <button type="button" className="st-button" data-variant="primary" onClick={() => setCommandOpen(true)}>
                         <Sparkles size={13} /> Open command dock
                     </button>
-                    <span className="st-command-hint">⌘K</span>
+                    <span className="st-command-hint">⌘J</span>
                 </div>
             </div>
         );

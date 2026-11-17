@@ -431,7 +431,7 @@ export function StudioTimeline() {
                 >
                     <Minus size={12} />
                 </button>
-                <span className="st-mono" style={{ color: 'var(--st-muted)', fontSize: 10, minWidth: 42, textAlign: 'center' }}>
+                <span className="st-mono" style={{ color: 'var(--st-muted)', fontSize: 11, minWidth: 42, textAlign: 'center' }}>
                     {Math.round(timelineZoom)} px/s
                 </span>
                 <button
@@ -444,12 +444,12 @@ export function StudioTimeline() {
                 >
                     <Plus size={12} />
                 </button>
-                <span style={{ color: 'var(--st-faint)', fontSize: 10, marginLeft: 8 }}>
+                <span style={{ color: 'var(--st-faint)', fontSize: 11, marginLeft: 8 }}>
                     {layout.length} clips · {formatDuration(duration * fps, fps)}
                     {preview ? ` · ${preview.trimIn}–${(preview.trimIn || 0) + preview.trimOut} preview` : ''}
                 </span>
                 <span style={{ flex: 1 }} />
-                <span style={{ color: 'var(--st-faint)', fontSize: 9 }}>
+                <span style={{ color: 'var(--st-faint)', fontSize: 11 }}>
                     B blade · R ripple · [ ] slide
                 </span>
                 <button
@@ -467,7 +467,7 @@ export function StudioTimeline() {
                 <div className="st-audio-picker">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                         <Music size={12} />
-                        <strong style={{ fontSize: 10 }}>Place audio on A1</strong>
+                        <strong style={{ fontSize: 11 }}>Place audio on A1</strong>
                         <button
                             type="button"
                             className="st-icon-button"
@@ -479,7 +479,7 @@ export function StudioTimeline() {
                         </button>
                     </div>
                     {audioAssets.length === 0 ? (
-                        <div style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                        <div style={{ color: 'var(--st-muted)', fontSize: 11 }}>
                             No audio uploads yet. Upload music or voice in Library.
                         </div>
                     ) : (
@@ -676,7 +676,7 @@ export function StudioTimeline() {
                                         className="st-button"
                                         data-size="sm"
                                         data-variant={trackStates[track.id]?.muted ? 'danger' : 'ghost'}
-                                        style={{ padding: '1px 5px', fontSize: 8 }}
+                                        style={{ padding: '1px 5px', fontSize: 11 }}
                                         onClick={() => toggleTrackMute(track.id)}
                                         aria-pressed={!!trackStates[track.id]?.muted}
                                     >
@@ -687,7 +687,7 @@ export function StudioTimeline() {
                                         className="st-button"
                                         data-size="sm"
                                         data-variant={trackStates[track.id]?.solo ? 'primary' : 'ghost'}
-                                        style={{ padding: '1px 5px', fontSize: 8 }}
+                                        style={{ padding: '1px 5px', fontSize: 11 }}
                                         onClick={() => toggleTrackSolo(track.id)}
                                         aria-pressed={!!trackStates[track.id]?.solo}
                                     >

@@ -1,4 +1,4 @@
-import { GripVertical, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Clapperboard, Copy, GripVertical, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
 import type { Shot } from '../state/documentStore';
 import { useAssetUrl } from '../data/useStudioData';
 import type { BoardPosition } from '../state/editorStore';
@@ -13,10 +13,15 @@ interface Props {
     onSelect: (event: React.MouseEvent) => void;
     onDragStart: (event: React.PointerEvent, shotId: string) => void;
     onResize: (event: React.PointerEvent, shotId: string) => void;
+    onGenerate: (shotId: string) => void;
+    onEdit: (shotId: string) => void;
+    onDuplicate: (shotId: string) => void;
+    onContextMenu: (event: React.MouseEvent, shotId: string) => void;
 }
 
 export function ShotCard({
     shot, index, position, selected, pinned, linkSource, onSelect, onDragStart, onResize,
+    onGenerate, onEdit, onDuplicate, onContextMenu,
 }: Props) {
     const videoUrl = useAssetUrl(shot.videoUrl);
     const thumbnailUrl = useAssetUrl(shot.thumbnailUrl);
@@ -24,8 +29,7 @@ export function ShotCard({
     const isImage = !!media?.match(/\.(jpg|jpeg|png|webp)$/i);
 
     return (
-        <button
-            type="button"
+        <div
             className="st-shot-card"
             data-selected={selected}
             data-pinned={pinned}
@@ -37,9 +41,14 @@ export function ShotCard({
                 height: position.height,
             }}
             onPointerDown={(event) => onDragStart(event, shot.id)}
-            onClick={(event) => onSelect(event)}
-            aria-label={`Shot ${index + 1}: ${shot.action || shot.prompt || 'Untitled'}`}
+            onContextMenu={(event) => onContextMenu(event, shot.id)}
         >
+            <button
+                type="button"
+                className="st-shot-card-select"
+                onClick={(event) => onSelect(event)}
+                aria-label={`Shot ${index + 1}: ${shot.action || shot.prompt || 'Untitled'}`}
+            />
             <div
                 className="st-shot-card-media"
                 style={{ height: Math.max(70, Math.min(200, position.height * 0.52)) }}
@@ -56,6 +65,21 @@ export function ShotCard({
                 <span className="st-shot-card-status" data-status={shot.status || 'pending'}>
                     {shot.isGenerating ? <Loader2 size={9} className="animate-spin" /> : (shot.status || 'pending')}
                 </span>
+                <div
+                    className="st-shot-card-actions"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                >
+                    <button type="button" aria-label={`Generate ${shot.action || shot.prompt || 'shot'}`} title="Generate" onClick={() => onGenerate(shot.id)}>
+                        <Sparkles size={12} />
+                    </button>
+                    <button type="button" aria-label={`Open ${shot.action || shot.prompt || 'shot'} in Edit`} title="Open in Edit" onClick={() => onEdit(shot.id)}>
+                        <Clapperboard size={12} />
+                    </button>
+                    <button type="button" aria-label={`Duplicate ${shot.action || shot.prompt || 'shot'}`} title="Duplicate" onClick={() => onDuplicate(shot.id)}>
+                        <Copy size={12} />
+                    </button>
+                </div>
             </div>
             <div className="st-shot-card-body">
                 <div className="st-shot-card-title">{shot.action || shot.prompt || 'Untitled shot'}</div>
@@ -76,6 +100,6 @@ export function ShotCard({
                 aria-hidden="true"
                 onPointerDown={(event) => onResize(event, shot.id)}
             />
-        </button>
+        </div>
     );
 }

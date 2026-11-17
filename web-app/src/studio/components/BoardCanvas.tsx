@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ChevronDown, ChevronRight, Grid3X3, Link2, List, Maximize2, Map, Minus, MousePointer2,
-    Plus, Redo2, RotateCcw, Search, SquareDashed, StickyNote, Trash2, Pin, Undo2, X,
+    ChevronDown, ChevronRight, Clapperboard, Copy, Grid3X3, Link2, List, Maximize2, Map,
+    Minus, MoreHorizontal, MousePointer2, Plus, Redo2, RotateCcw, Search, Sparkles,
+    SquareDashed, StickyNote, Trash2, Pin, Undo2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStudioDocumentStore } from '../state/documentStore';
@@ -13,7 +14,7 @@ import {
 import { ShotCard } from './ShotCard';
 import { cullCards } from '../board/culling';
 import { startBoardCollab, type BoardCollab } from '../collab/boardSync';
-import { useStudioElements, useStudioReview } from '../data/useStudioData';
+import { useStudioElements, useStudioGenerate, useStudioReview } from '../data/useStudioData';
 
 const CARD_W = 300;
 const CARD_H = 238;
@@ -105,10 +106,11 @@ export function BoardCanvas() {
         collabEnabled, setCollabEnabled, hydrateBoard,
         boardNotes, addNote, updateNote, removeNote,
         referencePositions, showReferenceCards, setReferencePosition, setShowReferenceCards,
-        setInspectorTab, setSurface,
+        setInspectorTab, setSurface, spineCollapsed, setSpineCollapsed,
     } = useStudioEditor();
     const { elements } = useStudioElements(project.id);
     const { review } = useStudioReview(project.id);
+    const generate = useStudioGenerate();
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
     const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
@@ -140,7 +142,44 @@ export function BoardCanvas() {
     const referenceDrag = useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
     const [scriptDraft, setScriptDraft] = useState(project.scriptContent || '');
     const [scriptBusy, setScriptBusy] = useState(false);
+    const [toolbarMenuOpen, setToolbarMenuOpen] = useState(false);
+    const [contextMenu, setContextMenu] = useState<{ shotId: string; x: number; y: number } | null>(null);
     const collabRef = useRef<BoardCollab | null>(null);
+
+    useEffect(() => {
+        const closeMenus = () => {
+            setToolbarMenuOpen(false);
+            setContextMenu(null);
+        };
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeMenus();
+        };
+        window.addEventListener('pointerdown', closeMenus);
+        window.addEventListener('keydown', onKeyDown);
+        return () => {
+            window.removeEventListener('pointerdown', closeMenus);
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, []);
+
+    const duplicateShot = (shotId: string) => {
+        const shot = project.shots.find((item) => item.id === shotId);
+        if (!shot) return;
+        const { id: _id, ...copy } = shot;
+        addShot(copy);
+        addToast('Shot duplicated', 'success');
+    };
+
+    const openShotInEdit = (shotId: string) => {
+        selectShot(shotId);
+        setCurrentTime(0);
+        setSurface('edit');
+    };
+
+    const generateShot = (shotId: string) => {
+        const shot = project.shots.find((item) => item.id === shotId);
+        if (shot) void generate(shot);
+    };
 
     useEffect(() => {
         if (!collabEnabled || typeof BroadcastChannel === 'undefined') return;
@@ -415,6 +454,7 @@ export function BoardCanvas() {
 
     const startCardDrag = (event: React.PointerEvent, shotId: string) => {
         event.stopPropagation();
+        if (event.button !== 0) return;
         if (boardMode === 'link') {
             selectShot(shotId);
             if (!linkSource) {
@@ -704,68 +744,72 @@ export function BoardCanvas() {
     return (
         <div className="st-board-wrap">
             <div className="st-board-toolbar">
-                <button type="button" className="st-button" data-size="sm" data-variant={storyView === 'board' ? 'primary' : 'ghost'} onClick={() => setStoryView('board')}>
-                    <Grid3X3 size={13} /> Board
-                </button>
-                <button type="button" className="st-button" data-size="sm" data-variant={storyView === 'list' ? 'primary' : 'ghost'} onClick={() => setStoryView('list')}>
-                    <List size={13} /> Shot list
-                </button>
-                <button type="button" className="st-button" data-size="sm" data-variant={storyView === 'script' ? 'primary' : 'ghost'} onClick={() => setStoryView('script')}>
-                    <Search size={13} /> Script
-                </button>
-                <span style={{ width: 1, height: 18, background: 'var(--st-border-strong)', margin: '0 2px' }} />
-                <button
-                    type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant={boardMode === 'select' ? 'primary' : 'ghost'}
-                    onClick={() => { setBoardMode('select'); setLinkSource(null); }}
-                    title="Select and pan"
-                >
-                    <MousePointer2 size={13} /> Select
-                </button>
-                <button
-                    type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant={boardMode === 'area' ? 'primary' : 'ghost'}
-                    onClick={() => { setBoardMode('area'); setLinkSource(null); }}
-                    title="Drag to create an area"
-                >
-                    <SquareDashed size={13} /> Area
-                </button>
-                <button
-                    type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant={boardMode === 'link' ? 'primary' : 'ghost'}
-                    onClick={() => { setBoardMode('link'); setLinkSource(null); }}
-                    title="Click two cards to link them"
-                >
-                    <Link2 size={13} /> Link
-                </button>
-                {boardMode === 'link' && (
-                    <select
-                        className="st-select"
-                        style={{ width: 116, height: 27, padding: '2px 6px' }}
-                        value={linkKind}
-                        onChange={(event) => setLinkKind(event.target.value as LinkKind)}
-                        aria-label="Link kind"
+                <div className="st-toolbar-group">
+                    <button type="button" className="st-button" data-size="sm" data-variant={storyView === 'board' ? 'primary' : 'ghost'} onClick={() => setStoryView('board')}>
+                        <Grid3X3 size={13} /> Board
+                    </button>
+                    <button type="button" className="st-button" data-size="sm" data-variant={storyView === 'list' ? 'primary' : 'ghost'} onClick={() => setStoryView('list')}>
+                        <List size={13} /> Shot list
+                    </button>
+                    <button type="button" className="st-button" data-size="sm" data-variant={storyView === 'script' ? 'primary' : 'ghost'} onClick={() => setStoryView('script')}>
+                        <Search size={13} /> Script
+                    </button>
+                </div>
+
+                <div className="st-toolbar-group">
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant={boardMode === 'select' ? 'primary' : 'ghost'}
+                        onClick={() => { setBoardMode('select'); setLinkSource(null); }}
+                        title="Select and pan"
                     >
-                        <option value="thread">Thread</option>
-                        <option value="blocking">Blocking</option>
-                        <option value="reference">Reference</option>
-                    </select>
-                )}
-                <span className="st-spacer" />
+                        <MousePointer2 size={13} /> Select
+                    </button>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant={boardMode === 'area' ? 'primary' : 'ghost'}
+                        onClick={() => { setBoardMode('area'); setLinkSource(null); }}
+                        title="Drag to create an area"
+                    >
+                        <SquareDashed size={13} /> Area
+                    </button>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant={boardMode === 'link' ? 'primary' : 'ghost'}
+                        onClick={() => { setBoardMode('link'); setLinkSource(null); }}
+                        title="Click two cards to link them"
+                    >
+                        <Link2 size={13} /> Link
+                    </button>
+                    {boardMode === 'link' && (
+                        <select
+                            className="st-select"
+                            style={{ width: 112, minHeight: 32, padding: '2px 8px' }}
+                            value={linkKind}
+                            onChange={(event) => setLinkKind(event.target.value as LinkKind)}
+                            aria-label="Link kind"
+                        >
+                            <option value="thread">Thread</option>
+                            <option value="blocking">Blocking</option>
+                            <option value="reference">Reference</option>
+                        </select>
+                    )}
+                </div>
+
                 <input
-                    className="st-input"
-                    style={{ width: 180, height: 27, padding: '3px 8px' }}
+                    className="st-input st-toolbar-search"
                     placeholder="Filter shots…"
                     value={boardQuery}
                     onChange={(event) => setBoardQuery(event.target.value)}
                     aria-label="Filter shots"
                 />
+
                 <button
                     type="button"
                     className="st-button"
@@ -776,150 +820,196 @@ export function BoardCanvas() {
                 >
                     <Plus size={13} /> Add shot
                 </button>
-                <button
-                    type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant="ghost"
-                    onClick={() => {
-                        const rect = hostRef.current?.getBoundingClientRect();
-                        const world = rect
-                            ? toWorld(rect.left + rect.width / 2, rect.top + rect.height / 2)
-                            : { x: 0, y: 0 };
-                        pushBoardHistory();
-                        addNote({
-                            text: 'New note',
-                            x: Math.round(world.x - 120),
-                            y: Math.round(world.y - 60),
-                            width: 240,
-                            height: 130,
-                        });
-                    }}
-                    title="Add a board note"
-                >
-                    <StickyNote size={13} /> Note
-                </button>
-                <button
-                    type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant={showReferenceCards ? 'primary' : 'ghost'}
-                    onClick={() => setShowReferenceCards(!showReferenceCards)}
-                    title="Show master-reference cards on the board"
-                >
-                    Refs
-                </button>
-                <button type="button" className="st-button" data-size="sm" onClick={arrange} title="Arrange cards">
-                    <Grid3X3 size={13} /> Arrange
-                </button>
-                {selectedShotIds.length >= 2 && (
-                    <>
-                        <select
-                            className="st-select"
-                            style={{ width: 104, height: 27, padding: '2px 6px' }}
-                            value=""
-                            aria-label="Align selected cards"
-                            onChange={(event) => {
-                                if (event.target.value) alignSelected(event.target.value as Parameters<typeof alignSelected>[0]);
-                            }}
-                        >
-                            <option value="">Align…</option>
-                            <option value="left">Left</option>
-                            <option value="center-h">Center H</option>
-                            <option value="right">Right</option>
-                            <option value="top">Top</option>
-                            <option value="center-v">Center V</option>
-                            <option value="bottom">Bottom</option>
-                        </select>
-                        <button
-                            type="button"
-                            className="st-button"
-                            data-size="sm"
-                            data-variant="ghost"
-                            disabled={selectedShotIds.length < 3}
-                            onClick={() => distributeSelected('h')}
-                            title="Distribute horizontally"
-                        >
-                            Dist H
-                        </button>
-                        <button
-                            type="button"
-                            className="st-button"
-                            data-size="sm"
-                            data-variant="ghost"
-                            disabled={selectedShotIds.length < 3}
-                            onClick={() => distributeSelected('v')}
-                            title="Distribute vertically"
-                        >
-                            Dist V
-                        </button>
-                    </>
-                )}
-                <button type="button" className="st-button" data-size="sm" onClick={fit} title="Fit board">
-                    <Maximize2 size={13} /> Fit
-                </button>
-                <button type="button" className="st-button" data-size="sm" data-variant={boardMinimapOpen ? 'primary' : 'ghost'} onClick={() => setMinimapOpen(!boardMinimapOpen)} title="Minimap">
-                    <Map size={13} />
-                </button>
-                <button type="button" className="st-button" data-size="sm" data-variant={boardFollowSelection ? 'primary' : 'ghost'} onClick={() => setFollowSelection(!boardFollowSelection)} title="Follow selection">
-                    <Pin size={13} />
-                </button>
-                {selectedShotIds.length === 1 && (
+
+                <div className="st-menu-wrap">
                     <button
                         type="button"
                         className="st-button"
                         data-size="sm"
-                        data-variant={boardPinned[selectedShotIds[0]] ? 'primary' : 'ghost'}
-                        title="Pin selected card"
-                        onClick={() => {
-                            pushBoardHistory();
-                            togglePin(selectedShotIds[0]);
-                        }}
+                        aria-haspopup="menu"
+                        aria-expanded={toolbarMenuOpen}
+                        onClick={() => setToolbarMenuOpen(!toolbarMenuOpen)}
                     >
-                        <Pin size={13} /> {boardPinned[selectedShotIds[0]] ? 'Unpin' : 'Pin'}
+                        <MoreHorizontal size={14} /> More
                     </button>
-                )}
+                    {toolbarMenuOpen && (
+                        <div className="st-menu" role="menu" onPointerDown={(event) => event.stopPropagation()}>
+                            <div className="st-menu-section">Board</div>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                onClick={() => {
+                                    const rect = hostRef.current?.getBoundingClientRect();
+                                    const world = rect
+                                        ? toWorld(rect.left + rect.width / 2, rect.top + rect.height / 2)
+                                        : { x: 0, y: 0 };
+                                    pushBoardHistory();
+                                    addNote({
+                                        text: 'New note',
+                                        x: Math.round(world.x - 120),
+                                        y: Math.round(world.y - 60),
+                                        width: 240,
+                                        height: 130,
+                                    });
+                                    setToolbarMenuOpen(false);
+                                }}
+                            >
+                                <StickyNote size={13} /> Add note
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                data-active={showReferenceCards}
+                                onClick={() => { setShowReferenceCards(!showReferenceCards); setToolbarMenuOpen(false); }}
+                            >
+                                <Grid3X3 size={13} /> {showReferenceCards ? 'Hide reference cards' : 'Show reference cards'}
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                onClick={() => { arrange(); setToolbarMenuOpen(false); }}
+                            >
+                                <Grid3X3 size={13} /> Arrange cards
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                onClick={() => { fit(); setToolbarMenuOpen(false); }}
+                            >
+                                <Maximize2 size={13} /> Fit board
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                data-active={boardMinimapOpen}
+                                onClick={() => { setMinimapOpen(!boardMinimapOpen); setToolbarMenuOpen(false); }}
+                            >
+                                <Map size={13} /> {boardMinimapOpen ? 'Hide minimap' : 'Show minimap'}
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                data-active={boardFollowSelection}
+                                onClick={() => { setFollowSelection(!boardFollowSelection); setToolbarMenuOpen(false); }}
+                            >
+                                <Pin size={13} /> {boardFollowSelection ? 'Stop following selection' : 'Follow selection'}
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                onClick={() => {
+                                    pushBoardHistory();
+                                    for (const id of selectedShotIds) togglePin(id);
+                                    setToolbarMenuOpen(false);
+                                }}
+                            >
+                                <Pin size={13} /> Pin selected
+                            </button>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                onClick={() => { setSpineCollapsed(!spineCollapsed); setToolbarMenuOpen(false); }}
+                            >
+                                {spineCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                                {spineCollapsed ? 'Show story spine' : 'Hide story spine'}
+                            </button>
+                            <div className="st-menu-section">Selection</div>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                disabled={selectedShotIds.length === 0}
+                                onClick={() => {
+                                    if (!window.confirm(`Delete ${selectedShotIds.length} shot(s)?`)) return;
+                                    for (const id of selectedShotIds) deleteShot(id);
+                                    selectShots([]);
+                                    setToolbarMenuOpen(false);
+                                }}
+                            >
+                                <Trash2 size={13} /> Delete selected
+                            </button>
+                            {selectedShotIds.length >= 2 && (
+                                <>
+                                    <select
+                                        className="st-select"
+                                        style={{ width: '100%', margin: '4px 0', minHeight: 32 }}
+                                        value=""
+                                        aria-label="Align selected cards"
+                                        onChange={(event) => {
+                                            if (event.target.value) {
+                                                alignSelected(event.target.value as Parameters<typeof alignSelected>[0]);
+                                                setToolbarMenuOpen(false);
+                                            }
+                                        }}
+                                    >
+                                        <option value="">Align selected…</option>
+                                        <option value="left">Left</option>
+                                        <option value="center-h">Center H</option>
+                                        <option value="right">Right</option>
+                                        <option value="top">Top</option>
+                                        <option value="center-v">Center V</option>
+                                        <option value="bottom">Bottom</option>
+                                    </select>
+                                    <div className="st-button-row">
+                                        <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={() => { distributeSelected('h'); setToolbarMenuOpen(false); }}>
+                                            Distribute H
+                                        </button>
+                                        <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={() => { distributeSelected('v'); setToolbarMenuOpen(false); }}>
+                                            Distribute V
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                            <div className="st-menu-section">Collaboration</div>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                data-active={collabEnabled}
+                                onClick={() => { setCollabEnabled(!collabEnabled); setToolbarMenuOpen(false); }}
+                            >
+                                <Link2 size={13} /> {collabEnabled ? 'Stop live board sync' : 'Live-sync board with a tab'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+
                 <button
                     type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant={collabEnabled ? 'primary' : 'ghost'}
-                    onClick={() => setCollabEnabled(!collabEnabled)}
-                    title="Live-sync the board with another tab on this machine (Yjs spike)"
-                >
-                    Collab
-                </button>
-                <button
-                    type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant="ghost"
+                    className="st-icon-button"
                     disabled={boardPast.length === 0}
                     onClick={undoBoard}
                     title="Undo board change"
+                    aria-label="Undo board change"
                 >
-                    <Undo2 size={13} />
+                    <Undo2 size={14} />
                 </button>
                 <button
                     type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant="ghost"
+                    className="st-icon-button"
                     disabled={boardFuture.length === 0}
                     onClick={redoBoard}
                     title="Redo board change"
+                    aria-label="Redo board change"
                 >
-                    <Redo2 size={13} />
+                    <Redo2 size={14} />
                 </button>
                 <button
                     type="button"
-                    className="st-button"
-                    data-size="sm"
-                    data-variant="ghost"
+                    className="st-icon-button"
                     onClick={() => { pushBoardHistory(); resetBoard(); }}
                     title="Reset board layout"
+                    aria-label="Reset board layout"
                 >
-                    <RotateCcw size={13} />
+                    <RotateCcw size={14} />
                 </button>
             </div>
 
@@ -1198,6 +1288,18 @@ export function BoardCanvas() {
                                         }}
                                         onDragStart={startCardDrag}
                                         onResize={startCardResize}
+                                        onGenerate={generateShot}
+                                        onEdit={openShotInEdit}
+                                        onDuplicate={duplicateShot}
+                                        onContextMenu={(event, shotId) => {
+                                            event.preventDefault();
+                                            event.stopPropagation();
+                                            setContextMenu({
+                                                shotId,
+                                                x: Math.min(event.clientX, window.innerWidth - 240),
+                                                y: Math.min(event.clientY, window.innerHeight - 260),
+                                            });
+                                        }}
                                     />
                                 );
                             })}
@@ -1218,6 +1320,9 @@ export function BoardCanvas() {
                     )}
 
                     <div className="st-board-zoom">
+                        <button type="button" className="st-icon-button" onClick={fit} aria-label="Fit board" title="Fit board">
+                            <Maximize2 size={12} />
+                        </button>
                         <button type="button" className="st-icon-button" onClick={() => setCamera({ ...boardCamera, zoom: Math.max(0.25, boardCamera.zoom / 1.15) })} aria-label="Zoom out">
                             <Minus size={12} />
                         </button>
@@ -1231,6 +1336,39 @@ export function BoardCanvas() {
                             <Plus size={12} />
                         </button>
                     </div>
+
+                    {selectedShotIds.length >= 2 && (
+                        <div className="st-board-bulk" role="group" aria-label="Selected cards">
+                            <span className="st-value">{selectedShotIds.length} selected</span>
+                            <button type="button" className="st-button" data-size="sm" onClick={() => {
+                                for (const id of selectedShotIds) generateShot(id);
+                            }}>
+                                <Sparkles size={12} /> Generate
+                            </button>
+                            <button type="button" className="st-button" data-size="sm" onClick={() => {
+                                for (const id of selectedShotIds) duplicateShot(id);
+                                selectShots([]);
+                            }}>
+                                <Copy size={12} /> Duplicate
+                            </button>
+                            <button type="button" className="st-button" data-size="sm" onClick={() => {
+                                pushBoardHistory();
+                                for (const id of selectedShotIds) togglePin(id);
+                            }}>
+                                <Pin size={12} /> Pin
+                            </button>
+                            <button type="button" className="st-button" data-size="sm" data-variant="danger" onClick={() => {
+                                if (!window.confirm(`Delete ${selectedShotIds.length} shot(s)?`)) return;
+                                for (const id of selectedShotIds) deleteShot(id);
+                                selectShots([]);
+                            }}>
+                                <Trash2 size={12} /> Delete
+                            </button>
+                            <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={() => selectShots([])}>
+                                <X size={12} /> Clear
+                            </button>
+                        </div>
+                    )}
 
                     {boardMinimapOpen && minimapBase && minimapView && (
                         <div className="st-board-minimap" role="img" aria-label="Board minimap">
@@ -1252,7 +1390,7 @@ export function BoardCanvas() {
             ) : storyView === 'list' ? (
                 <div className="st-list-wrap">
                     <div className="st-button-row" style={{ marginBottom: 8 }}>
-                        <span className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                        <span className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11 }}>
                             {selectedShotIds.length} selected
                         </span>
                         <button
@@ -1490,7 +1628,7 @@ export function BoardCanvas() {
                             >
                                 Download backup
                             </button>
-                            <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9 }}>
+                            <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11 }}>
                                 Parsing archives the current storyboard before replacing shots.
                             </span>
                         </div>
@@ -1507,7 +1645,7 @@ export function BoardCanvas() {
                                 }
                             }}
                         />
-                        <div className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                        <div className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 6 }}>
                             {scriptDraft.trim()
                                 ? `${scriptDraft.trim().split(/\s+/).length} words · ${project.shots.length} shots in the cut`
                                 : `No script text yet. Current cut has ${project.shots.length} shots.`}
@@ -1515,6 +1653,41 @@ export function BoardCanvas() {
                     </div>
                 </div>
             )}
+
+            {contextMenu && (() => {
+                const shot = project.shots.find((item) => item.id === contextMenu.shotId);
+                if (!shot) return null;
+                return (
+                    <div
+                        className="st-context-menu"
+                        style={{ left: contextMenu.x, top: contextMenu.y }}
+                        role="menu"
+                        aria-label="Shot actions"
+                        onPointerDown={(event) => event.stopPropagation()}
+                    >
+                        <div className="st-context-menu-title">{shot.action || shot.prompt || 'Untitled shot'}</div>
+                        <button type="button" role="menuitem" className="st-project-menu-item" onClick={() => { generateShot(shot.id); setContextMenu(null); }}>
+                            <Sparkles size={13} /> Generate
+                        </button>
+                        <button type="button" role="menuitem" className="st-project-menu-item" onClick={() => { openShotInEdit(shot.id); setContextMenu(null); }}>
+                            <Clapperboard size={13} /> Open in Edit
+                        </button>
+                        <button type="button" role="menuitem" className="st-project-menu-item" onClick={() => { duplicateShot(shot.id); setContextMenu(null); }}>
+                            <Copy size={13} /> Duplicate
+                        </button>
+                        <button type="button" role="menuitem" className="st-project-menu-item" onClick={() => { pushBoardHistory(); togglePin(shot.id); setContextMenu(null); }}>
+                            <Pin size={13} /> {boardPinned[shot.id] ? 'Unpin' : 'Pin'}
+                        </button>
+                        <button type="button" role="menuitem" className="st-project-menu-item" onClick={() => {
+                            if (!window.confirm('Delete this shot?')) return;
+                            deleteShot(shot.id);
+                            setContextMenu(null);
+                        }}>
+                            <Trash2 size={13} /> Delete
+                        </button>
+                    </div>
+                );
+            })()}
         </div>
     );
 }

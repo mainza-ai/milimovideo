@@ -51,15 +51,12 @@ at `/`.
 | **F4 Review** | **Done for scoped F4** | Plan cards/approval/undo, recipes, comments/approvals/activity, needs-you, share links, compare, ranked search, takes, deliver presets, LoRA activation/strength, reviewer→agent E2E |
 | **F4 Library/Deliver** | **Done for scoped F4** | Assets/references/takes/search tabs, master-reference CRUD with image/trigger, ranked local search, take lineage + select/favorite, presets, render history, caption burn toggle, CRF/encoder/audio/loudness controls, integrity scan/repair |
 | **F5 Shorts/lenses** | **Done for scoped F5** | Shorts candidates/scores/editable range/source export; pipeline lens recipe import/export; blocking lens; lazy 3D previz; Yjs board spike; Tauri shell with native open/save, a built debug binary, and sidecar-binary resolution. A bundled Python runtime is not shipped |
-| **F6 Chrome stabilization** | **Planned — P0** | See [[../systems/studio-ux-audit-2026-11.md]]: top-bar collision at ~1024, board toolbar overflow, clipped mode rail labels, hidden inspector tabs, 7–10px type, sub-28px controls |
+| **F6 Chrome stabilization** | **Done — 2026-11-17** | Responsive surface switcher, grouped/wrapping toolbars, primary Inspector tabs + More, 76px rail, 11px+ type, 32px controls, card actions/context menu/bulk bar, command palette/shortcuts, density, responsive layout tests. See [[../systems/studio-ux-audit-2026-11]]. |
 
-**Next:** F6 chrome stabilization from
-[[../systems/studio-ux-audit-2026-11.md]]. The shell is functionally complete but
-breaks at 1024px: nav overlaps, the board toolbar overflows, the mode rail clips
-labels, and the Inspector hides tabs in a scrollbar-less scroller. Keep `/` until
-the final cutover gates are green. A bundled Python sidecar binary remains the only
-F5 packaging gap; the supervisor resolves one when it exists and otherwise falls
-back to `run_backend.sh`.
+**Next:** keep `/` until the final cutover gates are green. A bundled Python
+sidecar binary remains the only F5 packaging gap; the supervisor resolves one when
+it exists and otherwise falls back to `run_backend.sh`. F6 chrome stabilization is
+complete; see [[../systems/studio-ux-audit-2026-11]].
 
 ## Why This Refactor
 
@@ -281,8 +278,9 @@ differentiators, not v1 requirements.
 
 ### F6 — Chrome, Density, and Responsive Stabilization (P0–P3)
 
-Driven by [[../systems/studio-ux-audit-2026-11.md]]. This is a chrome/layout pass,
-not a board/timeline engine rewrite.
+**Status: Done 2026-11-17.** Driven by
+[[../systems/studio-ux-audit-2026-11.md]]. This was a chrome/layout pass, not a
+board/timeline engine rewrite.
 
 | Task | Priority | Change | Acceptance | Effort |
 |---|---|---|---|---|

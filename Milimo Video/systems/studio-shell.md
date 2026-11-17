@@ -48,6 +48,10 @@ Deliver, Shorts, and Setup; board and timeline as peers; immutable takes; agent
 plan/approval/undo; review/share; queue pause/resume; seed lock; encoding controls;
 integrity scan/repair; Tauri native open/save.
 
+F6 chrome stabilization is also complete: responsive surface switcher, grouped
+toolbars, Inspector primary tabs + More, readable type/control sizes, card actions,
+context menus, bulk selection, command palette, shortcut sheet, and density modes.
+
 Known scoped gaps: no transitions/LUT/titles/A2, lexical rather than embedding
 search, no shorts/lens template packs, and no bundled Python sidecar runtime. Legacy
 `/` remains until the two-clean-release cutover.

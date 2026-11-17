@@ -440,11 +440,11 @@ export function EditSurface() {
                             </button>
                         </div>
                         {inpaintStatus && (
-                            <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 9, marginTop: 6 }}>
+                            <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11, marginTop: 6 }}>
                                 {inpaintStatus}
                             </div>
                         )}
-                        <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                        <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 6 }}>
                             Captures the frame at the playhead, uploads it locally, and runs the existing SAM+Flux inpaint job.
                         </p>
                     </div>
@@ -545,7 +545,7 @@ export function EditSurface() {
                 >
                     {depthBusy ? 'Depth…' : 'Depth'}
                 </button>
-                <span className="st-status-pill"><Volume2 size={11} /> embedded audio mixed</span>
+                <span className="st-status-pill st-transport-audio"><Volume2 size={11} /> embedded audio mixed</span>
                 <button type="button" className="st-icon-button" aria-label="Fullscreen (F2)">
                     <Maximize size={14} />
                 </button>

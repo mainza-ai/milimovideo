@@ -62,7 +62,7 @@ export function BlockingLens({ shot, project, updateShot, onClose }: Props) {
                 <div className="st-lens-head">
                     <div>
                         <strong>Blocking lens · {shot.action || shot.prompt || shot.id.slice(0, 10)}</strong>
-                        <div style={{ color: 'var(--st-faint)', fontSize: 9 }}>
+                        <div style={{ color: 'var(--st-faint)', fontSize: 11 }}>
                             Top-down camera and talent diagram for this shot. Positions persist with the shot.
                         </div>
                     </div>
@@ -206,7 +206,7 @@ export function BlockingLens({ shot, project, updateShot, onClose }: Props) {
                                 </button>
                             </>
                         ) : (
-                            <p style={{ color: 'var(--st-muted)', fontSize: 10 }}>Select a node to edit it.</p>
+                            <p style={{ color: 'var(--st-muted)', fontSize: 11 }}>Select a node to edit it.</p>
                         )}
 
                         <h4 style={{ marginTop: 14 }}>Shot context</h4>

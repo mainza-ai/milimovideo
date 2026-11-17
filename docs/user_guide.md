@@ -97,7 +97,11 @@ Useful shortcuts:
 
 - `1`–`8` switch surfaces.
 - `Space` play/pause (opens Edit when needed).
-- `⌘K` / `Ctrl+K` toggles the command dock.
+- `⌘K` / `Ctrl+K` opens the command palette.
+- `⌘J` / `Ctrl+J` toggles the agent command dock.
+- `?` opens the keyboard shortcut sheet.
+- The palette can switch density (comfortable/compact), toggle panes, and reach
+  every surface.
 - `⌘Z` / `Ctrl+Z` undo; `⇧⌘Z` / `Ctrl+Shift+Z` redo.
 - `B` blade at the playhead, `R` ripple-delete, `[` / `]` slide the selected V1 clip.
 - `Escape` exits focus mode.

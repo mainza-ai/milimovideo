@@ -41,7 +41,7 @@ navigate, then drills into pages.
 - [systems/studio-ux-audit-2026-11](systems/studio-ux-audit-2026-11.md) — 2026-11
   chrome/density audit: measured 1024px nav collision, board-toolbar overflow,
   clipped rail labels, hidden Inspector tabs, typography/control-size evidence,
-  missing UX functionality, and the F6 stabilization plan.
+  missing UX functionality, and the completed F6 stabilization pass.
 
 ## Models
 - [models/ltx-2](models/ltx-2.md) — LTX-2 19B dual-stream transformer: the three
@@ -118,7 +118,7 @@ navigate, then drills into pages.
   phased plan (Phase 0 verify → Phase 1 models → Phase 2 architecture → Phase 3
   UX), risks, and open questions for Mainza. Phase 1+ now gated by the 2026-11 audit.
 - [roadmap/implementation-plan-2026-11](roadmap/implementation-plan-2026-11.md) —
-  the sequenced fix-and-ship plan. Scoped P0–P5 and F0–F5 are complete; the page
+  the sequenced fix-and-ship plan. Scoped P0–P5, F0–F5, and F6 are complete; the page
   lists remaining/deferred work (bundled sidecar, legacy cutover, Phase 6 v2 lane,
   scoped v1 gaps) and the verification matrix.
 - [roadmap/frontend-refactor-2026-11](roadmap/frontend-refactor-2026-11.md) — the

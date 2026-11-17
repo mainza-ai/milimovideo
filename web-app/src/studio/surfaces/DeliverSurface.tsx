@@ -197,7 +197,7 @@ export function DeliverSurface() {
                         </label>
                     </div>
                 </div>
-                <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 8 }}>
+                <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 8 }}>
                     Values persist with the project. Normalization applies a single-pass loudnorm at -16 LUFS.
                 </p>
             </div>

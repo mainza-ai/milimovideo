@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import './studio.css';
 import { ModeRail } from './components/ModeRail';
 import { TopBar } from './components/TopBar';
@@ -20,6 +20,7 @@ import { SharedReviewPage } from './SharedReviewPage';
 import { studioQueryClient } from './state/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
+import { CommandPalette, ShortcutSheet } from './components/CommandPalette';
 import { enabledStudioSurfaces, isStudioSurfaceEnabled } from './features';
 
 const SURFACES: StudioSurface[] = enabledStudioSurfaces();
@@ -40,16 +41,29 @@ export function StudioApp() {
 
 function StudioShell() {
     const {
-        activeSurface, setSurface, inspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode,
+        activeSurface, setSurface, inspectorOpen, setInspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode, density,
     } = useStudioEditor(useShallow((state) => ({
         activeSurface: state.activeSurface,
         setSurface: state.setSurface,
         inspectorOpen: state.inspectorOpen,
+        setInspectorOpen: state.setInspectorOpen,
         focusMode: state.focusMode,
         commandOpen: state.commandOpen,
         setCommandOpen: state.setCommandOpen,
         setFocusMode: state.setFocusMode,
+        density: state.density,
     })));
+
+    useEffect(() => {
+        const closeNarrowInspector = () => {
+            if (window.innerWidth < 1180) setInspectorOpen(false);
+        };
+        closeNarrowInspector();
+        window.addEventListener('resize', closeNarrowInspector);
+        return () => window.removeEventListener('resize', closeNarrowInspector);
+    }, [setInspectorOpen]);
+    const [paletteOpen, setPaletteOpen] = useState(false);
+    const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const project = useStudioProject();
     useStudioProjectBootstrap();
     useStudioBoardSync(project.id);
@@ -70,10 +84,27 @@ function StudioShell() {
             const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || '') || target?.isContentEditable;
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
                 event.preventDefault();
+                setPaletteOpen((open) => !open);
+                setShortcutsOpen(false);
+                return;
+            }
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') {
+                event.preventDefault();
                 setCommandOpen(!commandOpen);
                 return;
             }
+            if (event.key === 'Escape' && (paletteOpen || shortcutsOpen)) {
+                event.preventDefault();
+                setPaletteOpen(false);
+                setShortcutsOpen(false);
+                return;
+            }
             if (typing) return;
+            if (event.key === '?') {
+                event.preventDefault();
+                setShortcutsOpen(true);
+                return;
+            }
             if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {
                 event.preventDefault();
                 if (event.shiftKey) temporalStore.getState().redo();
@@ -97,7 +128,10 @@ function StudioShell() {
         };
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [activeSurface, commandOpen, isPlaying, setCommandOpen, setFocusMode, setIsPlaying, setSurface, temporalStore]);
+    }, [
+        activeSurface, commandOpen, isPlaying, paletteOpen, shortcutsOpen,
+        setCommandOpen, setFocusMode, setIsPlaying, setSurface, temporalStore,
+    ]);
 
     if (SURFACES.length === 0) {
         return (
@@ -127,7 +161,7 @@ function StudioShell() {
     })();
 
     return (
-        <div className="studio-root">
+        <div className="studio-root" data-density={density}>
             <a className="st-skip-link" href="#studio-main">Skip to workspace</a>
             <TopBar />
             <div className="st-body">
@@ -141,6 +175,15 @@ function StudioShell() {
                 {inspectorOpen && <Inspector />}
             </div>
             <StatusStrip />
+            <CommandPalette
+                open={paletteOpen}
+                onClose={() => setPaletteOpen(false)}
+                onOpenShortcuts={() => {
+                    setPaletteOpen(false);
+                    setShortcutsOpen(true);
+                }}
+            />
+            <ShortcutSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
         </div>
     );
 }

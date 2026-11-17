@@ -25,7 +25,7 @@ export function MotionPanel({ shot, project, updateShot }: Props) {
     return (
         <div className="st-inspector-section">
             <span className="st-label">Motion keyframes · frame {localFrame}</span>
-            <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+            <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11 }}>
                 Piecewise-linear opacity, scale, pan (x/y), and volume. Opacity/transform are burned into video; volume drives audio.
             </div>
             <div className="st-button-row" style={{ marginTop: 8 }}>
@@ -56,7 +56,7 @@ export function MotionPanel({ shot, project, updateShot }: Props) {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
                 {keyframes.length === 0 && (
-                    <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 10 }}>
+                    <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11 }}>
                         No keyframes. The clip stays fully opaque.
                     </span>
                 )}
@@ -67,10 +67,10 @@ export function MotionPanel({ shot, project, updateShot }: Props) {
                     return (
                         <div key={keyframe.frame} className="st-keyframe">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <span className="st-mono" style={{ width: 44, fontSize: 10 }}>
+                                <span className="st-mono" style={{ width: 44, fontSize: 11 }}>
                                     f{keyframe.frame}
                                 </span>
-                                <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, flex: 1 }}>
+                                <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, flex: 1 }}>
                                     opacity {Math.round((keyframe.opacity ?? 1) * 100)}% · scale {Math.round((keyframe.scale ?? 1) * 100)}%
                                 </span>
                                 <button

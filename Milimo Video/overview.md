@@ -61,7 +61,7 @@ a backend supervisor.
 
 ## Current State (2026-11-17)
 
-The scoped P0–P5 and F0–F5 implementation plan is complete:
+The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
 
 - security, canonical timeline/persistence, render fidelity, scheduler, model truth,
   UX trust, tests/CI;
@@ -69,7 +69,7 @@ The scoped P0–P5 and F0–F5 implementation plan is complete:
 - review/share/agent, library/deliver, shorts/lenses, Tauri shell, queue pause,
   seed lock, encoding controls, integrity scan/repair, and native open/save.
 
-Verification: **82 backend tests, 52 Vitest tests, 12 Playwright tests**, clean
+Verification: **82 backend tests, 53 Vitest tests, 15 Playwright tests**, clean
 ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
 failures.
 

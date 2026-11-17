@@ -286,10 +286,10 @@ export function SharedReviewPage({ token }: { token: string }) {
                                         >
                                             <span className="st-mono">f{comment.frame}</span>
                                         </button>
-                                        <span style={{ color: 'var(--st-faint)', fontSize: 9 }}>{comment.status}</span>
+                                        <span style={{ color: 'var(--st-faint)', fontSize: 11 }}>{comment.status}</span>
                                     </div>
                                     <p style={{ margin: '6px 0 0' }}>{comment.body}</p>
-                                    <div style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 4 }}>
+                                    <div style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 4 }}>
                                         {comment.author}
                                     </div>
                                 </div>

@@ -1,6 +1,8 @@
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Loader2, Play, RotateCcw, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
+import {
+    ChevronDown, Loader2, Play, RotateCcw, Sparkles, Star, Volume2, VolumeX, X,
+} from 'lucide-react';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { MotionPanel } from './MotionPanel';
@@ -15,7 +17,8 @@ import {
     useStudioTakes,
 } from '../data/useStudioData';
 
-const TABS = ['shot', 'prompt', 'motion', 'takes', 'audio', 'effects', 'review', 'history'] as const;
+const PRIMARY_TABS = ['shot', 'prompt', 'takes', 'audio'] as const;
+const MORE_TABS = ['motion', 'effects', 'review', 'history'] as const;
 
 export function Inspector() {
     const { selectedShotId, updateShot, addToast } = useStudioSelection();
@@ -40,6 +43,25 @@ export function Inspector() {
         setSurface: state.setSurface,
     })));
     const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
+    const [moreOpen, setMoreOpen] = useState(false);
+
+    useEffect(() => {
+        if (!MORE_TABS.includes(inspectorTab as typeof MORE_TABS[number])) setMoreOpen(false);
+    }, [inspectorTab]);
+
+    useEffect(() => {
+        if (!moreOpen) return;
+        const close = () => setMoreOpen(false);
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') close();
+        };
+        window.addEventListener('pointerdown', close);
+        window.addEventListener('keydown', onKeyDown);
+        return () => {
+            window.removeEventListener('pointerdown', close);
+            window.removeEventListener('keydown', onKeyDown);
+        };
+    }, [moreOpen]);
 
     const matchedElements = !shot?.matchedElements?.length
         ? []
@@ -79,7 +101,7 @@ export function Inspector() {
             />
             <div className="st-inspector-head">
                 <div className="st-inspector-tabs" role="tablist" aria-label="Inspector sections">
-                    {TABS.map((tab) => (
+                    {PRIMARY_TABS.map((tab) => (
                         <button
                             key={tab}
                             type="button"
@@ -92,6 +114,38 @@ export function Inspector() {
                             {tab}
                         </button>
                     ))}
+                </div>
+                <div className="st-inspector-more-wrap" onPointerDown={(event) => event.stopPropagation()}>
+                    <button
+                        type="button"
+                        className="st-inspector-tab st-inspector-more"
+                        data-active={MORE_TABS.includes(inspectorTab as typeof MORE_TABS[number])}
+                        aria-haspopup="menu"
+                        aria-expanded={moreOpen}
+                        onClick={() => setMoreOpen(!moreOpen)}
+                    >
+                        {MORE_TABS.includes(inspectorTab as typeof MORE_TABS[number]) ? inspectorTab : 'More'}
+                        <ChevronDown size={12} />
+                    </button>
+                    {moreOpen && (
+                        <div className="st-inspector-more-menu" role="menu" aria-label="More inspector sections">
+                            {MORE_TABS.map((tab) => (
+                                <button
+                                    key={tab}
+                                    type="button"
+                                    role="menuitem"
+                                    className="st-project-menu-item"
+                                    data-active={inspectorTab === tab}
+                                    onClick={() => {
+                                        setInspectorTab(tab);
+                                        setMoreOpen(false);
+                                    }}
+                                >
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 <button type="button" className="st-icon-button" onClick={() => setInspectorOpen(false)} aria-label="Close inspector">
                     <X size={14} />
@@ -302,7 +356,7 @@ export function Inspector() {
                                         </button>
                                     )}
                                 </div>
-                                <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 10 }}>
+                                <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 11 }}>
                                     Takes are completed jobs; selecting one repoints the shot without deleting the others.
                                 </p>
                             </div>
@@ -342,7 +396,7 @@ export function Inspector() {
                                         Reset effects
                                     </button>
                                 </div>
-                                <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 8 }}>
+                                <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 8 }}>
                                     Effects are baked by the render: speed, fades, gain, and keyframe alpha/transform. No external effect service.
                                 </p>
                             </div>
@@ -364,7 +418,7 @@ export function Inspector() {
                         {inspectorTab === 'audio' && (
                             <div className="st-inspector-section">
                                 <span className="st-label">Embedded audio</span>
-                                <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                                <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11 }}>
                                     Gain and mute are written into the computed cut and applied by FFmpeg.
                                 </div>
                                 <label style={{ display: 'block', marginTop: 10 }}>

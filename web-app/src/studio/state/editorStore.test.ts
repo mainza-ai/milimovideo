@@ -107,3 +107,21 @@ describe('studio editor board semantics', () => {
         expect(useStudioEditor.getState().boardLinks).toHaveLength(1);
     });
 });
+
+describe('studio chrome preferences', () => {
+    it('stores density and pane collapse choices', () => {
+        const state = useStudioEditor.getState();
+        state.setDensity('compact');
+        state.setSpineCollapsed(true);
+        state.setGenerateRailCollapsed(true);
+        state.setGenerateParamsCollapsed(true);
+        expect(useStudioEditor.getState().density).toBe('compact');
+        expect(useStudioEditor.getState().spineCollapsed).toBe(true);
+        expect(useStudioEditor.getState().generateRailCollapsed).toBe(true);
+        expect(useStudioEditor.getState().generateParamsCollapsed).toBe(true);
+        state.setDensity('comfortable');
+        state.setSpineCollapsed(false);
+        state.setGenerateRailCollapsed(false);
+        state.setGenerateParamsCollapsed(false);
+    });
+});

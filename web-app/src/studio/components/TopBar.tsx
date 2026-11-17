@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-    CheckCircle2, ChevronDown, CloudOff, FolderOpen, HardDrive, MessageSquare, MonitorPlay,
+    CheckCircle2, ChevronDown, FolderOpen, MessageSquare, MonitorPlay,
     Plus, Redo2, Save, Share2, TriangleAlert, Undo2,
 } from 'lucide-react';
 import { useStore } from 'zustand';
@@ -39,6 +39,7 @@ export function TopBar() {
     const createNewProject = useStudioDocumentStore((state) => state.createNewProject);
     const deleteProject = useStudioDocumentStore((state) => state.deleteProject);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [surfaceMenuOpen, setSurfaceMenuOpen] = useState(false);
     const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
     // zundo's temporal store is attached to the document store.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,10 +98,6 @@ export function TopBar() {
             <div className="st-brand">
                 <img src="/logo.png" alt="" />
                 <span className="st-brand-name">Milimo</span>
-                <span className="st-status-pill" data-tone={health ? 'good' : 'warn'}>
-                    {health ? <MonitorPlay size={11} /> : <CloudOff size={11} />}
-                    {health ? health.device.toUpperCase() : 'OFFLINE'}
-                </span>
                 <div className="st-project-switcher">
                     <input
                         className="st-project-name"
@@ -168,6 +165,39 @@ export function TopBar() {
                 </div>
             </div>
 
+            <div className="st-surface-compact">
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    aria-label="Switch studio surface"
+                    aria-expanded={surfaceMenuOpen}
+                    onClick={() => setSurfaceMenuOpen(!surfaceMenuOpen)}
+                >
+                    {SURFACES.find((surface) => surface.id === activeSurface)?.label || 'Story'}
+                    <ChevronDown size={13} />
+                </button>
+                {surfaceMenuOpen && (
+                    <div className="st-surface-compact-menu" role="menu">
+                        {SURFACES.map((surface) => (
+                            <button
+                                key={surface.id}
+                                type="button"
+                                role="menuitem"
+                                className="st-project-menu-item"
+                                data-active={activeSurface === surface.id}
+                                onClick={() => {
+                                    setSurface(surface.id);
+                                    setSurfaceMenuOpen(false);
+                                }}
+                            >
+                                {surface.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             <nav className="st-surface-tabs" aria-label="Studio surfaces">
                 {SURFACES.map((surface) => (
                     <button
@@ -224,13 +254,6 @@ export function TopBar() {
                     {saveStatus === 'saved' ? <CheckCircle2 size={11} /> : saveStatus === 'error' || saveStatus === 'conflict' ? <TriangleAlert size={11} /> : <Save size={11} />}
                     {saveLabel}
                 </button>
-                {health && (
-                    <span className="st-status-pill" data-tone={health.gpu.busy ? 'warn' : 'good'} title="GPU slot / queue">
-                        <HardDrive size={11} />
-                        {health.gpu.busy ? 'GPU busy' : 'GPU free'}
-                        {health.gpu.queued > 0 ? ` · ${health.gpu.queued} queued` : ''}
-                    </span>
-                )}
                 {error && (
                     <button
                         type="button"
@@ -253,13 +276,20 @@ export function TopBar() {
                         {isDesktop() ? 'Start backend' : 'Backend offline'}
                     </button>
                 )}
-                <button type="button" className="st-icon-button" title="Toggle inspector" onClick={() => setInspectorOpen(!inspectorOpen)}>
+                <button
+                    type="button"
+                    className="st-icon-button"
+                    title="Toggle inspector"
+                    aria-label="Toggle inspector"
+                    onClick={() => setInspectorOpen(!inspectorOpen)}
+                >
                     <MonitorPlay size={15} />
                 </button>
                 <button
                     type="button"
                     className="st-icon-button"
                     title={health?.auth_required ? 'Share links need local no-token mode' : 'Copy review link'}
+                    aria-label="Copy review link"
                     disabled={health?.auth_required}
                     onClick={() => void createShareLink()}
                 >

@@ -216,7 +216,7 @@ export default function Previz3D({ shot, project, onClose }: Props) {
                 <div className="st-lens-head">
                     <div>
                         <strong>3D previz · {shot.action || shot.prompt || shot.id.slice(0, 10)}</strong>
-                        <div style={{ color: 'var(--st-faint)', fontSize: 9 }}>
+                        <div style={{ color: 'var(--st-faint)', fontSize: 11 }}>
                             Lazy-loaded three.js stage from the blocking lens. Camera path follows shot order.
                         </div>
                     </div>
@@ -256,7 +256,7 @@ export default function Previz3D({ shot, project, onClose }: Props) {
                     />
                 )}
                 <div className="st-lens-body" style={{ paddingTop: 0 }}>
-                    <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                    <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11 }}>
                         <Camera size={12} /> Drag to orbit · scroll to zoom · right-drag to pan. Nodes come from the blocking lens.
                     </div>
                 </div>
