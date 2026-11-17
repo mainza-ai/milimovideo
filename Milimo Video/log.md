@@ -635,3 +635,9 @@ shows the 7-day job error budget (status counts + recent failures) from
 project and exposes a download endpoint; the Script surface can download the
 backup. AI script parsing now runs off the event loop via `asyncio.to_thread`.
 Verified: 56 pytest, 36 vitest, tsc clean.
+
+## [2026-11-17] perf | timeline viewport culling
+
+Timeline clips outside the horizontal viewport (plus overscan) are no longer
+mounted. Added a pure culling helper with a 200-clip unit test; the table view
+still lists every clip. Verified: 38 vitest, tsc clean, eslint 0 errors.

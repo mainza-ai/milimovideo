@@ -11,6 +11,7 @@ import { formatDuration } from '../data/useStudioData';
 import { bladeSourceFrame, rollCut, slipShot, trimShot } from '../timeline/ops';
 import { removeCue, sanitizeCues, upsertCue } from '../captions/cues';
 import { parseCaptions } from '../captions/parse';
+import { cullTimelineClips } from '../timeline/culling';
 import { Waveform } from './Waveform';
 import { getAssetUrl } from '../../config';
 import { useStudioAssets } from '../data/useStudioData';
@@ -68,6 +69,9 @@ export function StudioTimeline() {
     const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
     const [audioPickerOpen, setAudioPickerOpen] = useState(false);
     const [tableView, setTableView] = useState(false);
+    const [scrollLeft, setScrollLeft] = useState(0);
+    const [viewportWidth, setViewportWidth] = useState(900);
+    const scrollRef = useRef<HTMLDivElement>(null);
     const captionFileRef = useRef<HTMLInputElement>(null);
     const { assets } = useStudioAssets();
     const audioAssets = useMemo(() => assets.filter((asset) => asset.type === 'audio'), [assets]);
@@ -75,6 +79,15 @@ export function StudioTimeline() {
     const fps = project.fps || 25;
     const captions = project.captions || [];
     const selectedCue = captions.find((cue) => cue.id === selectedCueId) || null;
+
+    useEffect(() => {
+        const host = scrollRef.current;
+        if (!host) return;
+        const observer = new ResizeObserver(() => setViewportWidth(host.clientWidth));
+        observer.observe(host);
+        setViewportWidth(host.clientWidth);
+        return () => observer.disconnect();
+    }, [tableView]);
 
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
     const duration = Math.max(10, ...layout.map((clip) => clip.end)) + 2;
@@ -95,6 +108,10 @@ export function StudioTimeline() {
     const v1Clips = useMemo(
         () => layout.filter((clip) => clip.track === 0).sort((a, b) => a.start - b.start),
         [layout],
+    );
+    const visibleLayout = useMemo(
+        () => cullTimelineClips(layout, scrollLeft, viewportWidth, timelineZoom),
+        [layout, scrollLeft, timelineZoom, viewportWidth],
     );
 
     const findClip = (shotId: string): TimelineClip | undefined =>
@@ -615,7 +632,11 @@ export function StudioTimeline() {
                     </table>
                 </div>
             ) : (
-            <div className="st-timeline-scroll">
+            <div
+                className="st-timeline-scroll"
+                ref={scrollRef}
+                onScroll={(event) => setScrollLeft(event.currentTarget.scrollLeft)}
+            >
                 <div
                     className="st-timeline-inner"
                     style={{ width: width + 110 }}
@@ -671,7 +692,7 @@ export function StudioTimeline() {
                                 onClick={seek}
                                 role="presentation"
                             >
-                                {layout.filter((clip) => clip.track === track.id).map((clip) => {
+                                {visibleLayout.filter((clip) => clip.track === track.id).map((clip) => {
                                     const activePreview = previewFor(clip.id);
                                     const neighborPreview = preview?.neighborId === clip.id ? preview : null;
                                     const trimIn = neighborPreview?.neighborTrimIn ?? activePreview?.trimIn ?? clip.shot.trimIn ?? 0;
