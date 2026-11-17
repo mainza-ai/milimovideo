@@ -1,10 +1,12 @@
-"""Typed LLM settings, providers, and film-production roles."""
+"""Typed LLM settings, providers, capabilities, and film-production roles."""
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
+
+SCHEMA_VERSION = 2
 
 PROVIDER_TYPES = {
     "gemma", "ollama", "lmstudio", "openai_compatible", "openai", "anthropic",
@@ -19,6 +21,8 @@ ROLE_IDS = {
 
 
 class LLMProviderConfig(BaseModel):
+    # `id` mirrors the providers-dict key; it is the stable instance identity.
+    id: str = ""
     type: str
     name: str
     base_url: str = ""
@@ -48,8 +52,9 @@ class LLMModelTarget(BaseModel):
 
 class LLMRoleAssignment(BaseModel):
     role: str
-    provider: str
-    model: str
+    # Empty provider means the role is explicitly unassigned.
+    provider: str = ""
+    model: str = ""
     fallback: List[LLMModelTarget] = Field(default_factory=list)
     temperature: Optional[float] = None
     top_p: Optional[float] = None
@@ -57,9 +62,29 @@ class LLMRoleAssignment(BaseModel):
     max_tokens: Optional[int] = None
     reasoning_effort: Optional[str] = None
 
+    @property
+    def assigned(self) -> bool:
+        return bool(self.provider and self.model)
+
+
+class LLMBudgetConfig(BaseModel):
+    # 0 disables cloud spend entirely; local calls are never budgeted.
+    daily_usd: float = 0.0
+    # When true, enabling or assigning a cloud model requires a passing eval.
+    eval_gate: bool = False
+
+
+class LLMEvalSummary(BaseModel):
+    completed_at: str
+    revision: int
+    pass_rate: float
+    p50_ms: int
+    cases: int = 0
+    roles: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+
 
 class LLMSettings(BaseModel):
-    schema_version: int = 1
+    schema_version: int = SCHEMA_VERSION
     revision: int = 0
     active_provider: str = "gemma"
     active_model: str = "ltx-gemma3"
@@ -68,6 +93,8 @@ class LLMSettings(BaseModel):
     max_tokens: int = 400
     providers: Dict[str, LLMProviderConfig] = Field(default_factory=dict)
     roles: Dict[str, LLMRoleAssignment] = Field(default_factory=dict)
+    budget: LLMBudgetConfig = Field(default_factory=LLMBudgetConfig)
+    last_eval: Optional[LLMEvalSummary] = None
 
 
 class LLMTestRequest(BaseModel):
@@ -85,3 +112,17 @@ class LLMVerifyResult(BaseModel):
     models: List[str] = Field(default_factory=list)
     error: Optional[str] = None
     fault: Optional[str] = None
+    needs_key: bool = False
+
+
+class LLMDiscoverAttach(BaseModel):
+    provider: str
+    base_url: str
+    name: str = ""
+    wire: str = "openai_chat"
+    models: List[str] = Field(default_factory=list)
+
+
+class LLMEvalRequest(BaseModel):
+    roles: List[str] = Field(default_factory=list)
+    limit: int = 2

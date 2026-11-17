@@ -70,13 +70,22 @@ async def generate_image_task(job_id: str, params: dict):
                         "prompt_image to a local HTTP provider in Studio Setup."
                     )
                 else:
-                    enhanced, _ = llm_enhance(prompt=prompt, is_video=False, seed=seed)
+                    enhanced, _ = llm_enhance(
+                        prompt=prompt, is_video=False, seed=seed,
+                        cancel_check=lambda: active_jobs.get(job_id, {}).get("cancelled", False),
+                    )
                     if enhanced and enhanced != prompt:
                         logger.info(f"Enhanced image prompt: {enhanced[:100]}...")
                         update_job_db(job_id, "processing", enhanced_prompt=enhanced)
                         prompt = enhanced
             except Exception as e:
                 logger.warning(f"Image prompt enhancement failed: {e}")
+            finally:
+                try:
+                    from llm import release_local_models
+                    release_local_models()
+                except Exception:
+                    pass
         
         # Flux 2 Logic
         from models.flux_wrapper import flux_inpainter

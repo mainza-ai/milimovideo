@@ -118,6 +118,11 @@ class StoryboardManager:
                 if enhanced and enhanced != continuation_input:
                     chunk_config["prompt"] = enhanced
                     logger.info(f"Chunk {chunk_idx} enhanced prompt: {enhanced[:80]}...")
+                try:
+                    from llm import release_local_models
+                    release_local_models()
+                except Exception:
+                    pass
             except Exception as e:
                 logger.warning(f"Chunk {chunk_idx} narrative enhancement failed: {e}")
                 

@@ -8,7 +8,9 @@ heavy GPU models.
 Slot system:
   - "video"  → LTX-2 pipeline (model_engine.ModelManager)
   - "image"  → Flux 2 pipeline (flux_wrapper.FluxInpainter)
-  - "llm"    → Ollama (managed via keep_alive, not loaded in this process)
+  - "llm_http" → a local HTTP LLM engine (Ollama/oMLX/Strata/LM Studio).
+                Residency is owned by that engine; this manager drops it before
+                a heavy model loads and records it while a call is in flight.
 
 Usage:
     from memory_manager import memory_manager
@@ -29,8 +31,8 @@ class MemoryManager:
     # ── Slot Conflict Rules ──────────────────────────────────────
     # These slots cannot coexist in memory simultaneously.
     CONFLICTS = {
-        "video": {"image"},   # LTX and Flux are mutually exclusive
-        "image": {"video"},   # Flux and LTX are mutually exclusive
+        "video": {"image", "llm_http"},   # LTX cannot share memory with Flux or a warm LLM
+        "image": {"video", "llm_http"},   # Flux cannot share memory with LTX or a warm LLM
     }
     
     def prepare_for(self, slot: str) -> None:
@@ -48,6 +50,14 @@ class MemoryManager:
         
         self._active_slots.add(slot)
     
+    def mark_active(self, slot: str) -> None:
+        """Record a slot as resident without unloading anything.
+
+        Used for engines whose lifecycle we do not own (a warm HTTP LLM). A
+        later `prepare_for("video"/"image")` will drop it.
+        """
+        self._active_slots.add(slot)
+
     def release(self, slot: str) -> None:
         """Mark a slot as no longer active (model has been unloaded)."""
         self._active_slots.discard(slot)
@@ -59,7 +69,9 @@ class MemoryManager:
             self._unload_ltx()
         elif slot == "image":
             self._unload_flux()
-        
+        elif slot == "llm_http":
+            self._unload_http_llm()
+
         self._active_slots.discard(slot)
         self._flush_memory()
     
@@ -87,6 +99,16 @@ class MemoryManager:
         except Exception as e:
             logger.warning(f"MemoryManager: Failed to unload Flux: {e}")
     
+    def _unload_http_llm(self) -> None:
+        """Release local HTTP LLM models (Ollama supports explicit unload)."""
+        try:
+            from services.llm.runtime import unload_local_models
+
+            unload_local_models()
+            logger.info("MemoryManager: Released local HTTP LLM models")
+        except Exception as e:
+            logger.warning(f"MemoryManager: Failed to release HTTP LLM models: {e}")
+
     def _flush_memory(self) -> None:
         """Force garbage collection and clear GPU caches."""
         gc.collect()

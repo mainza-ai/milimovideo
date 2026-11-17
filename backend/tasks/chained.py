@@ -202,6 +202,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                         text_encoder=text_encoder,
                         image_path=chunk_images[0][0] if chunk_images else None,
                         seed=seed,
+                        cancel_check=lambda: active_jobs.get(job_id, {}).get("cancelled", False),
                     )
                     if enhanced:
                         chunk_prompt = enhanced
@@ -218,6 +219,11 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     if text_encoder is not None:
                         del text_encoder
                         cleanup_memory()
+                    try:
+                        from llm import release_local_models
+                        release_local_models()
+                    except Exception:
+                        pass
                 
             
             # Expose current prompt to UI

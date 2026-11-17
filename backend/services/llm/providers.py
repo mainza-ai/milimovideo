@@ -1,21 +1,24 @@
 """Wire adapters for the configured LLM providers.
 
-The runtime never talks to a provider directly; every request goes through one
-of these adapters so endpoint validation, credential placement, timeout, and
-error taxonomy stay in one place. Both a sync (`httpx.Client`) and an async
-(`httpx.AsyncClient`) path exist: GPU tasks run in worker threads, while the
-script-parse route must not block the event loop.
+Every request goes through one of these adapters so endpoint validation,
+credential placement, timeout, capability parsing, and the error taxonomy stay
+in one place. Sync (`httpx.Client`) serves GPU worker threads; async
+(`httpx.AsyncClient`) serves request handlers and streaming.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import mimetypes
 import time
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any, AsyncIterator, Sequence
 
 import httpx
+
+from .capabilities import classify_model, extract_context
 
 logger = logging.getLogger("llm.providers")
 
@@ -45,6 +48,24 @@ class Completion:
     usage: dict[str, int] = field(default_factory=dict)
 
 
+# ── images ──────────────────────────────────────────────────────────
+
+
+def encode_image(path: str) -> tuple[str, str]:
+    """Return (mime, base64) for a local image. Raises ProviderError on failure."""
+    try:
+        with open(path, "rb") as handle:
+            raw = handle.read()
+    except OSError as exc:
+        raise ProviderError("image", "input", f"cannot read {path}: {exc}") from exc
+    mime = mimetypes.guess_type(path)[0] or "image/png"
+    return mime, base64.b64encode(raw).decode("ascii")
+
+
+def _image_data_url(mime: str, b64: str) -> str:
+    return f"data:{mime};base64,{b64}"
+
+
 # ── payload builders ────────────────────────────────────────────────
 
 
@@ -54,49 +75,98 @@ def _ollama_payload(
     options: dict,
     keep_alive: str | None,
     json_mode: bool = False,
+    image: tuple[str, str] | None = None,
+    stream: bool = False,
 ) -> dict:
     system = "\n".join(m.content for m in messages if m.role == "system").strip()
     prompt = "\n".join(m.content for m in messages if m.role != "system").strip()
     payload: dict[str, Any] = {
         "model": model,
         "prompt": prompt,
-        "stream": False,
+        "stream": stream,
         "options": options,
     }
     if system:
         payload["system"] = system
     if keep_alive is not None:
         payload["keep_alive"] = keep_alive
+    if image is not None:
+        payload["images"] = [image[1]]
     if json_mode:
         # Ollama's native grammar constraint; other wires rely on the prompt.
         payload["format"] = "json"
     return payload
 
 
-def _openai_payload(model: str, messages: Sequence[ChatMessage], options: dict) -> dict:
+def _openai_messages(messages: Sequence[ChatMessage], image: tuple[str, str] | None) -> list[dict]:
+    rows: list[dict] = []
+    for index, message in enumerate(messages):
+        is_last_user = message.role != "system" and image is not None and index == len(messages) - 1
+        if is_last_user:
+            rows.append({
+                "role": message.role,
+                "content": [
+                    {"type": "text", "text": message.content},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": _image_data_url(image[0], image[1])},
+                    },
+                ],
+            })
+        else:
+            rows.append({"role": message.role, "content": message.content})
+    return rows
+
+
+def _openai_payload(
+    model: str,
+    messages: Sequence[ChatMessage],
+    options: dict,
+    image: tuple[str, str] | None = None,
+    stream: bool = False,
+) -> dict:
     payload: dict[str, Any] = {
         "model": model,
-        "messages": [{"role": m.role, "content": m.content} for m in messages],
-        "stream": False,
+        "messages": _openai_messages(messages, image),
+        "stream": stream,
     }
     payload.update(options)
     return payload
 
 
-def _anthropic_payload(model: str, messages: Sequence[ChatMessage], options: dict) -> dict:
+def _anthropic_payload(
+    model: str,
+    messages: Sequence[ChatMessage],
+    options: dict,
+    image: tuple[str, str] | None = None,
+    stream: bool = False,
+) -> dict:
     system = "\n".join(m.content for m in messages if m.role == "system").strip()
+    rows: list[dict] = []
+    chat = [m for m in messages if m.role != "system"]
+    for index, message in enumerate(chat):
+        is_last = image is not None and index == len(chat) - 1
+        if is_last:
+            content: Any = [
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": image[0], "data": image[1]},
+                },
+                {"type": "text", "text": message.content},
+            ]
+        else:
+            content = message.content
+        rows.append({"role": message.role if message.role in {"user", "assistant"} else "user", "content": content})
     payload: dict[str, Any] = {
         "model": model,
         "max_tokens": options.pop("max_tokens", 1024),
-        "messages": [
-            {"role": m.role if m.role in {"user", "assistant"} else "user", "content": m.content}
-            for m in messages
-            if m.role != "system"
-        ],
+        "messages": rows,
     }
     if system:
         payload["system"] = system
     payload.update(options)
+    if stream:
+        payload["stream"] = True
     return payload
 
 
@@ -115,6 +185,10 @@ def _anthropic_headers(api_key: str | None) -> dict[str, str]:
     if api_key:
         headers["x-api-key"] = api_key
     return headers
+
+
+def _ollama_headers() -> dict[str, str]:
+    return {"Content-Type": "application/json"}
 
 
 def _fault_for_status(status: int) -> str:
@@ -193,21 +267,29 @@ def _request_spec(
     options,
     keep_alive,
     json_mode: bool = False,
+    image: tuple[str, str] | None = None,
+    stream: bool = False,
 ):
     if wire == "ollama_native":
         return (
             "POST",
             "/api/generate",
             _ollama_headers(),
-            _ollama_payload(model, messages, options, keep_alive, json_mode),
+            _ollama_payload(model, messages, options, keep_alive, json_mode, image, stream),
         )
     if wire == "anthropic_messages":
-        return "POST", "/v1/messages", _anthropic_headers(api_key), _anthropic_payload(model, messages, options)
-    return "POST", "/chat/completions", _openai_headers(api_key), _openai_payload(model, messages, options)
-
-
-def _ollama_headers() -> dict[str, str]:
-    return {"Content-Type": "application/json"}
+        return (
+            "POST",
+            "/v1/messages",
+            _anthropic_headers(api_key),
+            _anthropic_payload(model, messages, dict(options), image, stream),
+        )
+    return (
+        "POST",
+        "/chat/completions",
+        _openai_headers(api_key),
+        _openai_payload(model, messages, dict(options), image, stream),
+    )
 
 
 def complete(
@@ -222,12 +304,14 @@ def complete(
     timeout_sec: int,
     keep_alive: str | None = None,
     json_mode: bool = False,
+    image_path: str | None = None,
 ) -> Completion:
     """Synchronous completion for worker threads."""
     if wire == "gemma_native":
         raise ProviderError(provider, "in_process", "Gemma requires the loaded LTX text encoder")
+    image = encode_image(image_path) if image_path else None
     method, path, headers, payload = _request_spec(
-        wire, provider, api_key, model, messages, dict(options), keep_alive, json_mode
+        wire, provider, api_key, model, messages, dict(options), keep_alive, json_mode, image
     )
     started = time.monotonic()
     try:
@@ -263,12 +347,14 @@ async def acomplete(
     timeout_sec: int,
     keep_alive: str | None = None,
     json_mode: bool = False,
+    image_path: str | None = None,
 ) -> Completion:
     """Async completion for request handlers."""
     if wire == "gemma_native":
         raise ProviderError(provider, "in_process", "Gemma requires the loaded LTX text encoder")
+    image = encode_image(image_path) if image_path else None
     method, path, headers, payload = _request_spec(
-        wire, provider, api_key, model, messages, dict(options), keep_alive, json_mode
+        wire, provider, api_key, model, messages, dict(options), keep_alive, json_mode, image
     )
     started = time.monotonic()
     try:
@@ -292,10 +378,185 @@ async def acomplete(
     )
 
 
+# ── streaming ───────────────────────────────────────────────────────
+
+
+def _sse_delta(wire: str, payload: str) -> str | None:
+    """Extract content deltas; reasoning deltas are ignored on purpose."""
+    try:
+        data = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    if wire == "ollama_native":
+        return str(data.get("response") or "") or None
+    if wire == "anthropic_messages":
+        if data.get("type") == "content_block_delta":
+            return str((data.get("delta") or {}).get("text") or "") or None
+        return None
+    choices = data.get("choices") or []
+    if not choices:
+        return None
+    delta = choices[0].get("delta") or {}
+    content = delta.get("content")
+    if isinstance(content, str):
+        return content or None
+    if isinstance(content, list):
+        text = "".join(str(part.get("text", "")) for part in content if isinstance(part, dict))
+        return text or None
+    return None
+
+
+async def astream(
+    *,
+    provider: str,
+    wire: str,
+    base_url: str,
+    api_key: str | None,
+    model: str,
+    messages: Sequence[ChatMessage],
+    options: dict,
+    timeout_sec: int,
+    keep_alive: str | None = None,
+    json_mode: bool = False,
+    image_path: str | None = None,
+) -> AsyncIterator[str]:
+    """Yield text deltas. Callers enforce a first-byte timeout and fall back."""
+    if wire == "gemma_native":
+        raise ProviderError(provider, "in_process", "Gemma cannot stream")
+    image = encode_image(image_path) if image_path else None
+    method, path, headers, payload = _request_spec(
+        wire, provider, api_key, model, messages, dict(options), keep_alive, json_mode, image, stream=True
+    )
+    try:
+        async with httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout_sec) as client:
+            async with client.stream(method, path, headers=headers, json=payload) as response:
+                if response.status_code >= 400:
+                    await response.aread()
+                    raise _error_from_response(provider, response)
+                async for line in response.aiter_lines():
+                    if not line or line.startswith(":"):
+                        continue
+                    if wire == "ollama_native":
+                        if line.startswith("data:"):
+                            line = line[5:].strip()
+                        delta = _sse_delta(wire, line)
+                        if delta:
+                            yield delta
+                        try:
+                            if json.loads(line).get("done"):
+                                return
+                        except Exception:
+                            pass
+                        continue
+                    if line.startswith("event:"):
+                        continue
+                    if line.startswith("data:"):
+                        line = line[5:].strip()
+                    if line == "[DONE]":
+                        return
+                    delta = _sse_delta(wire, line)
+                    if delta:
+                        yield delta
+    except ProviderError:
+        raise
+    except Exception as exc:
+        raise _wrap_httpx(provider, exc) from exc
+
+
+# ── warm / unload ───────────────────────────────────────────────────
+
+
+def warm(
+    *,
+    provider: str,
+    wire: str,
+    base_url: str,
+    api_key: str | None,
+    model: str,
+    timeout_sec: int,
+    keep_alive: str | None = None,
+) -> dict[str, Any]:
+    """Load the model into memory and return the measured load time."""
+    if wire == "gemma_native":
+        return {"ok": True, "load_ms": 0, "in_process": True}
+    started = time.monotonic()
+    try:
+        with httpx.Client(base_url=base_url.rstrip("/"), timeout=max(timeout_sec, 1)) as client:
+            if wire == "ollama_native":
+                response = client.post("/api/generate", json={
+                    "model": model,
+                    "prompt": "",
+                    "stream": False,
+                    "keep_alive": keep_alive or "5m",
+                })
+            else:
+                path = "/v1/messages" if wire == "anthropic_messages" else "/chat/completions"
+                headers = _anthropic_headers(api_key) if wire == "anthropic_messages" else _openai_headers(api_key)
+                body: dict[str, Any] = {
+                    "model": model,
+                    "messages": [{"role": "user", "content": "ping"}],
+                    "stream": False,
+                }
+                if wire == "anthropic_messages":
+                    headers = {**headers, "Content-Type": "application/json"}
+                    body["max_tokens"] = 8
+                else:
+                    body["max_tokens"] = 8
+                response = client.post(path, headers=headers, json=body)
+    except Exception as exc:
+        raise _wrap_httpx(provider, exc) from exc
+    if response.status_code >= 400:
+        raise _error_from_response(provider, response)
+    return {"ok": True, "load_ms": int((time.monotonic() - started) * 1000)}
+
+
+def unload(*, provider: str, wire: str, base_url: str, model: str, timeout_sec: int = 5) -> bool:
+    """Release a model where the wire supports it (Ollama does)."""
+    if wire != "ollama_native" or not model:
+        return False
+    try:
+        with httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout_sec) as client:
+            # Omitting `prompt` is the documented unload form; an empty prompt
+            # still runs a generation on some Ollama versions.
+            response = client.post("/api/generate", json={
+                "model": model, "stream": False, "keep_alive": 0,
+            })
+        return response.status_code < 400
+    except Exception:
+        return False
+
+
 # ── model catalogs ──────────────────────────────────────────────────
 
 
-def _ollama_models(base_url: str, timeout_sec: int) -> list[dict]:
+def _ollama_show(base_url: str, model: str) -> dict[str, Any]:
+    try:
+        with httpx.Client(base_url=base_url.rstrip("/"), timeout=2.0) as client:
+            response = client.post("/api/show", json={"model": model})
+        if response.status_code >= 400:
+            return {}
+        return response.json()
+    except Exception:
+        return {}
+
+
+def _ollama_context(show: dict[str, Any]) -> tuple[int | None, bool]:
+    info = show.get("model_info") or {}
+    context = None
+    for key, value in info.items():
+        if key.endswith(".context_length") and isinstance(value, int) and value > 0:
+            context = value
+            break
+    capabilities = [str(item).lower() for item in (show.get("capabilities") or [])]
+    vision = "vision" in capabilities or any(
+        "vision" in str(key).lower() and bool(value) for key, value in info.items()
+    )
+    return context, vision
+
+
+def _ollama_models(base_url: str, timeout_sec: int, deep: bool = False) -> list[dict]:
     with httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout_sec) as client:
         response = client.get("/api/tags")
     if response.status_code >= 400:
@@ -306,65 +567,92 @@ def _ollama_models(base_url: str, timeout_sec: int) -> list[dict]:
         details = row.get("details") or {}
         families = details.get("families") or []
         family = str(details.get("family") or "")
-        blob = f"{row.get('name', '')} {family} {' '.join(families)}".lower()
+        name = str(row.get("name") or row.get("model") or "")
+        flags = classify_model(name, family=family, families=families)
         models.append({
-            "id": row.get("name") or row.get("model"),
-            "name": row.get("name") or row.get("model"),
+            "id": name,
+            "name": name,
             "size": row.get("size"),
             "modified_at": row.get("modified_at"),
             "parameter_size": details.get("parameter_size"),
             "quantization": details.get("quantization_level"),
             "family": family or None,
-            "vision": any(token in blob for token in ("vision", "llava", "mllama", "clip", "qwen2.5-vl", "gemma3")),
             "context_length": None,
+            **flags,
+            "source": "ollama",
         })
+    if deep:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def enrich(model: dict) -> None:
+            show = _ollama_show(base_url, model["id"])
+            context, vision = _ollama_context(show)
+            if context:
+                model["context_length"] = context
+            if vision:
+                model["vision"] = True
+
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            list(pool.map(enrich, models[:32]))
     return models
 
 
-def _openai_models(base_url: str, api_key: str | None, timeout_sec: int) -> list[dict]:
+def _openai_models(base_url: str, api_key: str | None, timeout_sec: int, deep: bool = False) -> list[dict]:
     with httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout_sec) as client:
         response = client.get("/models", headers=_openai_headers(api_key))
     if response.status_code >= 400:
         raise _error_from_response("openai_compatible", response)
     rows = response.json().get("data") or []
-    return [
-        {
-            "id": row.get("id"),
-            "name": row.get("id"),
-            "size": None,
-            "modified_at": None,
-            "parameter_size": None,
-            "quantization": None,
-            "family": None,
-            "vision": any(token in str(row.get("id", "")).lower() for token in ("vl", "vision")),
-            "context_length": row.get("context_length"),
-        }
-        for row in rows
-        if row.get("id")
-    ]
+    results: list[dict] = []
+    for row in rows:
+        model_id = row.get("id")
+        if not model_id:
+            continue
+        meta = row.get("meta") or {}
+        extra = [str(meta.get("label") or ""), *[str(a) for a in (meta.get("aliases") or [])]]
+        declared = bool(row.get("vision")) or "vision" in [str(c).lower() for c in (row.get("capabilities") or [])]
+        flags = classify_model(str(model_id), extra=extra, declared_vision=declared)
+        results.append({
+            "id": model_id,
+            "name": str(meta.get("label") or model_id),
+            "size": row.get("size"),
+            "modified_at": row.get("created") or row.get("created_at"),
+            "parameter_size": meta.get("parameter_size") or row.get("parameter_size"),
+            "quantization": meta.get("quantization") or row.get("quantization"),
+            "family": row.get("owned_by") or meta.get("family") or None,
+            "context_length": extract_context(row, meta),
+            **flags,
+            "source": "openai_compatible",
+        })
+    return results
 
 
-def _anthropic_models(base_url: str, api_key: str | None, timeout_sec: int) -> list[dict]:
+def _anthropic_models(base_url: str, api_key: str | None, timeout_sec: int, deep: bool = False) -> list[dict]:
     with httpx.Client(base_url=base_url.rstrip("/"), timeout=timeout_sec) as client:
         response = client.get("/v1/models", headers=_anthropic_headers(api_key))
     if response.status_code >= 400:
         raise _error_from_response("anthropic", response)
     rows = response.json().get("data") or []
-    return [
-        {
-            "id": row.get("id"),
-            "name": row.get("display_name") or row.get("id"),
+    results = []
+    for row in rows:
+        model_id = row.get("id")
+        if not model_id:
+            continue
+        results.append({
+            "id": model_id,
+            "name": row.get("display_name") or model_id,
             "size": None,
             "modified_at": row.get("created_at"),
             "parameter_size": None,
             "quantization": None,
-            "family": None,
+            "family": "anthropic",
+            "context_length": extract_context(row, row.get("meta") or {}),
+            "chat": True,
             "vision": True,
-            "context_length": None,
-        }
-        for row in rows
-        if row.get("id")
-    ]
+            "embedding_only": False,
+            "source": "anthropic",
+        })
+    return results
 
 
 def list_models(
@@ -374,6 +662,7 @@ def list_models(
     base_url: str,
     api_key: str | None,
     timeout_sec: int,
+    deep: bool = False,
 ) -> list[dict]:
     if wire == "gemma_native":
         return [{
@@ -384,15 +673,18 @@ def list_models(
             "parameter_size": None,
             "quantization": None,
             "family": "gemma",
-            "vision": True,
             "context_length": None,
+            "chat": True,
+            "vision": True,
+            "embedding_only": False,
+            "source": "gemma",
         }]
     try:
         if wire == "ollama_native":
-            return _ollama_models(base_url, timeout_sec)
+            return _ollama_models(base_url, timeout_sec, deep)
         if wire == "anthropic_messages":
-            return _anthropic_models(base_url, api_key, timeout_sec)
-        return _openai_models(base_url, api_key, timeout_sec)
+            return _anthropic_models(base_url, api_key, timeout_sec, deep)
+        return _openai_models(base_url, api_key, timeout_sec, deep)
     except ProviderError:
         raise
     except Exception as exc:

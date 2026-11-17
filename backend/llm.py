@@ -12,6 +12,7 @@ Usage:
 
 import logging
 import threading
+from typing import Callable
 
 from services.llm import runtime
 from services.llm.prompts import IMAGE_SYSTEM_PROMPT, get_video_system_prompt
@@ -21,11 +22,13 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "IMAGE_SYSTEM_PROMPT",
+    "describe_route",
     "enhance_prompt",
     "get_video_system_prompt",
     "last_enhancement",
     "module_role",
     "prepare_text_encoder",
+    "release_local_models",
     "role_uses_gemma",
 ]
 
@@ -50,11 +53,7 @@ def role_uses_gemma(role: str) -> bool:
 
 
 def prepare_text_encoder(pipeline, is_video: bool = True):
-    """Return the LTX text encoder only when the resolved role needs Gemma.
-
-    This keeps Ollama-only setups from loading the 19B video pipeline just to
-    rewrite a prompt.
-    """
+    """Return the LTX text encoder only when the resolved role needs Gemma."""
     if not role_uses_gemma(role_for(is_video)):
         return None
     ledger = getattr(pipeline, "stage_1_model_ledger", None)
@@ -65,6 +64,10 @@ def prepare_text_encoder(pipeline, is_video: bool = True):
     except Exception as exc:
         logger.warning("Could not retrieve the LTX text encoder: %s", exc)
         return None
+
+
+def describe_route(role: str) -> dict | None:
+    return runtime.describe_route(role)
 
 
 def describe_runtime() -> dict:
@@ -84,6 +87,15 @@ def last_enhancement() -> dict | None:
     return getattr(_local, "provenance", None)
 
 
+def release_local_models() -> list[str]:
+    """Unload local HTTP LLMs after enhancement, before denoising."""
+    try:
+        return runtime.release_local()
+    except Exception as exc:
+        logger.warning("Could not release local LLM models: %s", exc)
+        return []
+
+
 def enhance_prompt(
     prompt: str,
     system_prompt: str | None = None,
@@ -93,6 +105,7 @@ def enhance_prompt(
     seed: int = 42,
     duration_seconds: float = 4.8,
     has_input_image: bool = False,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> tuple[str, bool]:
     """Enhance a generation prompt through the resolved role plan.
 
@@ -100,9 +113,6 @@ def enhance_prompt(
     the original prompt is returned unchanged so generation still proceeds.
     """
     role = role_for(is_video)
-    # Default prompts ask for the structured JSON contract; a caller-supplied
-    # prompt (Director continuation, storyboard prose) is free-form, so native
-    # JSON mode is only requested for the default contract.
     json_mode = system_prompt is None
 
     if not system_prompt:
@@ -122,6 +132,7 @@ def enhance_prompt(
         seed=seed,
         max_tokens=400 if is_video else 300,
         json_mode=json_mode,
+        cancel_check=cancel_check,
     )
 
     if result is None:

@@ -940,6 +940,116 @@
         "title": "InpaintRequest",
         "type": "object"
       },
+      "LLMBudgetConfig": {
+        "properties": {
+          "daily_usd": {
+            "default": 0.0,
+            "title": "Daily Usd",
+            "type": "number"
+          },
+          "eval_gate": {
+            "default": false,
+            "title": "Eval Gate",
+            "type": "boolean"
+          }
+        },
+        "title": "LLMBudgetConfig",
+        "type": "object"
+      },
+      "LLMDiscoverAttach": {
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "wire": {
+            "default": "openai_chat",
+            "title": "Wire",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "base_url"
+        ],
+        "title": "LLMDiscoverAttach",
+        "type": "object"
+      },
+      "LLMEvalRequest": {
+        "properties": {
+          "limit": {
+            "default": 2,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          }
+        },
+        "title": "LLMEvalRequest",
+        "type": "object"
+      },
+      "LLMEvalSummary": {
+        "properties": {
+          "cases": {
+            "default": 0,
+            "title": "Cases",
+            "type": "integer"
+          },
+          "completed_at": {
+            "title": "Completed At",
+            "type": "string"
+          },
+          "p50_ms": {
+            "title": "P50 Ms",
+            "type": "integer"
+          },
+          "pass_rate": {
+            "title": "Pass Rate",
+            "type": "number"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "roles": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Roles",
+            "type": "object"
+          }
+        },
+        "required": [
+          "completed_at",
+          "revision",
+          "pass_rate",
+          "p50_ms"
+        ],
+        "title": "LLMEvalSummary",
+        "type": "object"
+      },
       "LLMModelTarget": {
         "properties": {
           "model": {
@@ -995,6 +1105,11 @@
             "default": false,
             "title": "Has Key",
             "type": "boolean"
+          },
+          "id": {
+            "default": "",
+            "title": "Id",
+            "type": "string"
           },
           "is_local": {
             "default": true,
@@ -1085,10 +1200,12 @@
             "title": "Max Tokens"
           },
           "model": {
+            "default": "",
             "title": "Model",
             "type": "string"
           },
           "provider": {
+            "default": "",
             "title": "Provider",
             "type": "string"
           },
@@ -1142,9 +1259,7 @@
           }
         },
         "required": [
-          "role",
-          "provider",
-          "model"
+          "role"
         ],
         "title": "LLMRoleAssignment",
         "type": "object"
@@ -1165,6 +1280,19 @@
             "default": true,
             "title": "Air Gapped",
             "type": "boolean"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/LLMBudgetConfig"
+          },
+          "last_eval": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LLMEvalSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "max_tokens": {
             "default": 400,
@@ -1191,7 +1319,7 @@
             "type": "object"
           },
           "schema_version": {
-            "default": 1,
+            "default": 2,
             "title": "Schema Version",
             "type": "integer"
           },
@@ -1277,6 +1405,11 @@
             },
             "title": "Models",
             "type": "array"
+          },
+          "needs_key": {
+            "default": false,
+            "title": "Needs Key",
+            "type": "boolean"
           },
           "ok": {
             "title": "Ok",
@@ -7002,9 +7135,89 @@
         ]
       }
     },
+    "/settings/llm/attach": {
+      "post": {
+        "operationId": "attach_llm_server_settings_llm_attach_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LLMDiscoverAttach"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Attach Llm Server",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/budget": {
+      "post": {
+        "operationId": "set_llm_budget_settings_llm_budget_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Body",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Llm Budget",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/settings/llm/discover": {
       "post": {
-        "description": "Scan loopback ports for running local inference servers.",
+        "description": "Scan loopback ports and identify real inference engines by response shape.",
         "operationId": "discover_llm_servers_settings_llm_discover_post",
         "responses": {
           "200": {
@@ -7022,10 +7235,20 @@
         ]
       }
     },
-    "/settings/llm/health": {
-      "get": {
-        "description": "Resolution status for every role plus per-provider last success/fault.",
-        "operationId": "llm_health_settings_llm_health_get",
+    "/settings/llm/eval": {
+      "post": {
+        "description": "Run local role fixtures. This calls the saved plan and can take minutes.",
+        "operationId": "run_llm_eval_settings_llm_eval_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LLMEvalRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -7034,6 +7257,105 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Llm Eval",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/eval/apply": {
+      "post": {
+        "operationId": "apply_llm_recommendation_settings_llm_eval_apply_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Llm Recommendation",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/health": {
+      "get": {
+        "description": "Resolution status for every role plus provider health and budget.\n\n`check=true` also reads local catalogs so missing role models are reported;\nit is explicit because it makes one request per local engine.",
+        "operationId": "llm_health_settings_llm_health_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "check",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Check",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Llm Health",
@@ -7044,7 +7366,7 @@
     },
     "/settings/llm/models": {
       "get": {
-        "description": "Model catalog for one provider (defaults to the active role's provider).",
+        "description": "Model catalog with context, vision, and chat flags.",
         "operationId": "list_llm_models_settings_llm_models_get",
         "parameters": [
           {
@@ -7061,6 +7383,16 @@
                 }
               ],
               "title": "Provider"
+            }
+          },
+          {
+            "in": "query",
+            "name": "deep",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Deep",
+              "type": "boolean"
             }
           }
         ],
@@ -7085,6 +7417,102 @@
           }
         },
         "summary": "List Llm Models",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/profiles/{profile}": {
+      "post": {
+        "operationId": "apply_llm_profile_settings_llm_profiles__profile__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile",
+            "required": true,
+            "schema": {
+              "title": "Profile",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Llm Profile",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/providers/{provider_id}": {
+      "delete": {
+        "operationId": "remove_llm_provider_settings_llm_providers__provider_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Llm Provider",
         "tags": [
           "settings"
         ]
@@ -7172,6 +7600,65 @@
         ]
       }
     },
+    "/settings/llm/providers/{provider_id}/warm": {
+      "post": {
+        "operationId": "warm_llm_provider_settings_llm_providers__provider_id__warm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Warm Llm Provider",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/spend": {
+      "get": {
+        "operationId": "llm_spend_settings_llm_spend_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Llm Spend",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/settings/llm/test": {
       "post": {
         "description": "Send a test prompt through the role plan or an explicit provider/model.",
@@ -7207,6 +7694,46 @@
           }
         },
         "summary": "Test Llm",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/test/stream": {
+      "post": {
+        "description": "Stream a test prompt as SSE, with a non-stream fallback inside the runtime.",
+        "operationId": "test_llm_stream_settings_llm_test_stream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LLMTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Llm Stream",
         "tags": [
           "settings"
         ]

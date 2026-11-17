@@ -9,12 +9,29 @@ from services.llm.defaults import default_settings
 from services.llm.store import llm_settings
 
 
-@pytest.fixture()
-def fresh_settings(app_client):
-    """Reset the singleton so each test loads from the test database."""
+@pytest.fixture(autouse=True)
+def fresh_settings(app_client, monkeypatch):
+    """Reset the singleton and seed a deterministic local document.
+
+    Discovery is stubbed so tests never depend on which engines happen to be
+    running on the developer's machine.
+    """
+    from sqlmodel import Session
+
+    from database import AppSetting, engine
+    from services.llm import discovery as discovery_module
+
+    monkeypatch.setattr(discovery_module, "discover_local_servers", lambda **kwargs: [])
+    with Session(engine) as session:
+        row = session.get(AppSetting, "llm")
+        if row:
+            session.delete(row)
+            session.commit()
     llm_settings._settings = None
+    runtime.clear_catalog()
     yield
     llm_settings._settings = None
+    runtime.clear_catalog()
 
 
 def _snapshot(client):
@@ -31,6 +48,7 @@ def _put(client, body, expected_revision=None):
 def test_settings_are_persisted_across_reload(app_client, fresh_settings):
     body = _snapshot(app_client)
     body["providers"]["ollama"]["default_model"] = "qwen3:8b"
+    body["roles"]["script_parse"]["provider"] = "ollama"
     body["roles"]["script_parse"]["model"] = "qwen3:8b"
     body["active_model"] = "qwen3:8b"
     saved = _put(app_client, body)
@@ -81,7 +99,7 @@ def test_unknown_provider_role_and_model_are_rejected(app_client, fresh_settings
 
 def test_remote_plaintext_http_is_refused(app_client, fresh_settings):
     body = _snapshot(app_client)
-    body["providers"]["openai_compatible"]["base_url"] = "http://example.com/v1"
+    body["providers"]["ollama"]["base_url"] = "http://example.com/v1"
     response = _put(app_client, body)
     assert response.status_code == 400
     assert "plaintext" in response.json()["detail"]
@@ -165,7 +183,7 @@ def test_discovery_returns_live_servers(app_client, monkeypatch):
     monkeypatch.setattr(
         discovery,
         "discover_local_servers",
-        lambda: [{
+        lambda **kwargs: [{
             "provider": "ollama",
             "name": "Ollama",
             "wire": "ollama_native",
@@ -173,6 +191,8 @@ def test_discovery_returns_live_servers(app_client, monkeypatch):
             "port": 11434,
             "models": ["qwen3:8b"],
             "source": "loopback",
+            "instance_id": "ollama",
+            "attached": False,
         }],
     )
     response = app_client.post("/settings/llm/discover")
@@ -202,9 +222,23 @@ def test_role_fallback_uses_the_next_hop(app_client, fresh_settings, monkeypatch
     body = _snapshot(app_client)
     body["roles"]["script_parse"]["provider"] = "ollama"
     body["roles"]["script_parse"]["model"] = "primary"
-    body["roles"]["script_parse"]["fallback"] = [{"provider": "lmstudio", "model": "backup"}]
-    body["providers"]["lmstudio"]["default_model"] = "backup"
-    body["providers"]["lmstudio"]["enabled"] = True
+    body["roles"]["script_parse"]["fallback"] = [
+        {"provider": "openai_compatible@127.0.0.1:8787", "model": "backup"}
+    ]
+    attached = app_client.post("/settings/llm/attach", json={
+        "provider": "openai_compatible",
+        "base_url": "http://127.0.0.1:8787/v1",
+        "name": "oMLX",
+        "wire": "openai_chat",
+        "models": ["backup"],
+    })
+    assert attached.status_code == 200, attached.text
+    body = _snapshot(app_client)
+    body["roles"]["script_parse"]["provider"] = "ollama"
+    body["roles"]["script_parse"]["model"] = "primary"
+    body["roles"]["script_parse"]["fallback"] = [
+        {"provider": "openai_compatible@127.0.0.1:8787", "model": "backup"}
+    ]
     assert _put(app_client, body).status_code == 200
 
     def fake_complete(**kwargs):
@@ -216,7 +250,7 @@ def test_role_fallback_uses_the_next_hop(app_client, fresh_settings, monkeypatch
 
     monkeypatch.setattr(providers, "complete", fake_complete)
     result = runtime.complete("script_parse", "hello")
-    assert result.provider == "lmstudio"
+    assert result.provider == "openai_compatible@127.0.0.1:8787"
     assert result.model == "backup"
     assert result.text == "fallback reply"
 

@@ -93,6 +93,7 @@ def list_takes(shot_id: str, session: Session = Depends(get_session)):
             "seed": params.get("seed"),
             "model": params.get("pipeline_override") or params.get("pipeline_type"),
             "num_frames": params.get("num_frames"),
+            "llm": params.get("llm"),
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "selected": job.id == selected_id,
             "favorite": job.id == shot.favorite_take_id,

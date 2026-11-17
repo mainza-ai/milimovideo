@@ -49,6 +49,79 @@ def clamp_resolution_for_device(width: int, height: int) -> tuple[int, int]:
     
     return width, height
 
+
+def _resolve_llm_image(params: dict) -> str | None:
+    """First visual reference available for VLM prompt enhancement."""
+    for raw in params.get("inspiration_images") or []:
+        if isinstance(raw, str):
+            return resolve_path(raw) or raw
+    images = params.get("images") or []
+    if images:
+        item = images[0]
+        path = item[0] if isinstance(item, (list, tuple)) and item else (
+            item.get("path") if isinstance(item, dict) else item
+        )
+        if isinstance(path, str):
+            return resolve_path(path) or path
+    for item in params.get("timeline") or []:
+        if isinstance(item, dict) and item.get("type") == "image" and item.get("path"):
+            return resolve_path(item["path"]) or item["path"]
+    return None
+
+
+def _preenhance_http(job_id: str, params: dict, is_cancelled) -> bool:
+    """Run HTTP-provider enhancement before the pipeline loads.
+
+    Gemma is in-process and needs the loaded LTX text encoder, so it stays on
+    the old path. A local HTTP model (Ollama/oMLX/Strata) can rewrite the
+    prompt before LTX/Flux occupy memory, then be released before denoising.
+    """
+    if not params.get("enhance_prompt", True) or params.get("_llm_preenhanced"):
+        return bool(params.get("_llm_preenhanced"))
+    prompt = params.get("prompt") or ""
+    if not prompt.strip():
+        return False
+
+    from llm import describe_route, enhance_prompt, release_local_models, role_uses_gemma
+
+    num_frames = params.get("num_frames", 121)
+    is_video = num_frames != 1
+    role = "prompt_video" if is_video else "prompt_image"
+    if role_uses_gemma(role):
+        return False
+
+    image_path = _resolve_llm_image(params)
+    route = describe_route(role)
+    label = f"{route['provider']}/{route['model']}" if route else "local LLM"
+    update_job_progress(job_id, 3, f"Enhancing prompt via {label}…")
+    try:
+        enhanced, is_ref = enhance_prompt(
+            prompt,
+            is_video=is_video,
+            seed=params.get("seed", 42),
+            image_path=image_path,
+            has_input_image=bool(image_path),
+            duration_seconds=num_frames / float(params.get("fps", 25.0)),
+            cancel_check=is_cancelled,
+        )
+    finally:
+        release_local_models()
+
+    params["_llm_preenhanced"] = True
+    if enhanced and enhanced != prompt:
+        params["prompt"] = enhanced
+    if is_ref:
+        params["images"] = []
+        params["inspiration_images"] = []
+        params["timeline"] = [
+            item for item in (params.get("timeline") or [])
+            if not (isinstance(item, dict) and item.get("type") == "image")
+        ]
+        update_job_progress(job_id, 4, "Reference sheet detected. Using it for prompt enhancement only.")
+    update_job_db(job_id, "processing", enhanced_prompt=params.get("prompt"))
+    return True
+
+
 async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         prompt = params.get("prompt", "")
         negative_prompt = params.get("negative_prompt", "")
@@ -199,7 +272,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             # Prompt Enhancement for single-frame (image) mode.
             # Flux has no LTX text encoder, so the `prompt_image` role must
             # resolve to an HTTP provider (Ollama/LM Studio/compatible).
-            if enhance_prompt:
+            if enhance_prompt and not params.get("_llm_preenhanced"):
                 try:
                     from llm import enhance_prompt as llm_enhance, role_uses_gemma
                     if role_uses_gemma("prompt_image"):
@@ -209,7 +282,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             "provider in Studio Setup."
                         )
                     else:
-                        enhanced, _ = llm_enhance(prompt=prompt, is_video=False, seed=seed)
+                        enhanced, _ = llm_enhance(
+                            prompt=prompt, is_video=False, seed=seed,
+                            cancel_check=lambda: active_jobs.get(job_id, {}).get("cancelled", False),
+                        )
                         if enhanced and enhanced != prompt:
                             prompt = enhanced
                             update_job_db(job_id, "processing", enhanced_prompt=prompt)
@@ -217,6 +293,9 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             logger.info(f"Enhanced single-frame prompt: {prompt[:100]}...")
                 except Exception as e:
                     logger.warning(f"Single-frame prompt enhancement failed: {e}")
+                finally:
+                    from llm import release_local_models
+                    release_local_models()
             
             def _run_flux():
                  def flux_callback(step, total):
@@ -356,7 +435,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             result = None
             if pipeline_type == "ti2vid":
                 run_prompt = prompt
-                if enhance_prompt:
+                if enhance_prompt and not params.get("_llm_preenhanced"):
                     update_job_progress(job_id, 5, "Enhancing Prompt...")
                     logger.info("Enhancing prompt with the resolved LLM role plan...")
                     try:
@@ -385,6 +464,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             seed=seed,
                             duration_seconds=(num_frames / float(params.get("fps", 25.0))),
                             has_input_image=bool(image_for_llm),
+                            cancel_check=lambda: active_jobs.get(job_id, {}).get("cancelled", False),
                         )
                         logger.info(f"DEBUG: Prompt AFTER VLM Enhancement: {run_prompt}")
                         if is_ref:
@@ -400,6 +480,9 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             cleanup_memory()
                     except Exception as e:
                         logger.warning(f"Prompt enhancement failed: {e}")
+                    finally:
+                        from llm import release_local_models
+                        release_local_models()
 
                 if input_images:
                     valid_inputs = []
@@ -447,7 +530,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             elif pipeline_type == "ic_lora":
                 # Manual enhancement for ic_lora (same as ti2vid)
                 ic_prompt = prompt
-                if enhance_prompt:
+                if enhance_prompt and not params.get("_llm_preenhanced"):
                     try:
                         from llm import enhance_prompt as llm_enhance, prepare_text_encoder
                         text_encoder = prepare_text_encoder(pipeline, is_video=True)
@@ -458,6 +541,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             seed=seed,
                             duration_seconds=(num_frames / float(params.get("fps", 25.0))),
                             has_input_image=bool(input_images),
+                            cancel_check=lambda: active_jobs.get(job_id, {}).get("cancelled", False),
                         )
                         if is_ref:
                             logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V (ic_lora).")
@@ -471,6 +555,9 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     except Exception as e:
                         logger.warning(f"ic_lora prompt enhancement failed: {e}")
                         ic_prompt = prompt
+                    finally:
+                        from llm import release_local_models
+                        release_local_models()
 
                 result = pipeline(
                     prompt=ic_prompt,
@@ -488,7 +575,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             elif pipeline_type == "keyframe":
                 # Manual enhancement for keyframe (same as ti2vid)
                 kf_prompt = prompt
-                if enhance_prompt:
+                if enhance_prompt and not params.get("_llm_preenhanced"):
                     try:
                         from llm import enhance_prompt as llm_enhance, prepare_text_encoder
                         text_encoder = prepare_text_encoder(pipeline, is_video=True)
@@ -499,6 +586,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                             seed=seed,
                             duration_seconds=(num_frames / float(params.get("fps", 25.0))),
                             has_input_image=bool(input_images),
+                            cancel_check=lambda: active_jobs.get(job_id, {}).get("cancelled", False),
                         )
                         if is_ref:
                             logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V (keyframe).")
@@ -512,6 +600,9 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     except Exception as e:
                         logger.warning(f"keyframe prompt enhancement failed: {e}")
                         kf_prompt = prompt
+                    finally:
+                        from llm import release_local_models
+                        release_local_models()
 
                 result = pipeline(
                     prompt=kf_prompt,
@@ -766,6 +857,17 @@ async def generate_video_task(job_id: str, params: dict):
         if pipeline_type == "auto":
             pipeline_type = "ti2vid"
         
+        # Rewrite the prompt on a local HTTP model before LTX/Flux load. Gemma
+        # needs the loaded text encoder and stays on the in-pipeline path.
+        try:
+            _preenhance_http(
+                job_id,
+                params,
+                lambda: active_jobs.get(job_id, {}).get("cancelled", False),
+            )
+        except Exception as exc:
+            logger.warning(f"Pre-pipeline prompt enhancement failed: {exc}")
+
         # Load Pipeline
         pipeline = await manager.load_pipeline(pipeline_type)
         

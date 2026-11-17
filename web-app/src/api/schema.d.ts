@@ -1640,6 +1640,40 @@ export interface paths {
         patch: operations["patch_llm_settings_settings_llm_patch"];
         trace?: never;
     };
+    "/settings/llm/attach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Attach Llm Server */
+        post: operations["attach_llm_server_settings_llm_attach_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set Llm Budget */
+        post: operations["set_llm_budget_settings_llm_budget_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/llm/discover": {
         parameters: {
             query?: never;
@@ -1651,9 +1685,46 @@ export interface paths {
         put?: never;
         /**
          * Discover Llm Servers
-         * @description Scan loopback ports for running local inference servers.
+         * @description Scan loopback ports and identify real inference engines by response shape.
          */
         post: operations["discover_llm_servers_settings_llm_discover_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/eval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Llm Eval
+         * @description Run local role fixtures. This calls the saved plan and can take minutes.
+         */
+        post: operations["run_llm_eval_settings_llm_eval_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/eval/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Llm Recommendation */
+        post: operations["apply_llm_recommendation_settings_llm_eval_apply_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1669,7 +1740,10 @@ export interface paths {
         };
         /**
          * Llm Health
-         * @description Resolution status for every role plus per-provider last success/fault.
+         * @description Resolution status for every role plus provider health and budget.
+         *
+         *     `check=true` also reads local catalogs so missing role models are reported;
+         *     it is explicit because it makes one request per local engine.
          */
         get: operations["llm_health_settings_llm_health_get"];
         put?: never;
@@ -1689,12 +1763,46 @@ export interface paths {
         };
         /**
          * List Llm Models
-         * @description Model catalog for one provider (defaults to the active role's provider).
+         * @description Model catalog with context, vision, and chat flags.
          */
         get: operations["list_llm_models_settings_llm_models_get"];
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/profiles/{profile}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Llm Profile */
+        post: operations["apply_llm_profile_settings_llm_profiles__profile__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/providers/{provider_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Llm Provider */
+        delete: operations["remove_llm_provider_settings_llm_providers__provider_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1734,6 +1842,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/llm/providers/{provider_id}/warm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Warm Llm Provider */
+        post: operations["warm_llm_provider_settings_llm_providers__provider_id__warm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/spend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Llm Spend */
+        get: operations["llm_spend_settings_llm_spend_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/llm/test": {
         parameters: {
             query?: never;
@@ -1748,6 +1890,26 @@ export interface paths {
          * @description Send a test prompt through the role plan or an explicit provider/model.
          */
         post: operations["test_llm_settings_llm_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/test/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Llm Stream
+         * @description Stream a test prompt as SSE, with a non-stream fallback inside the runtime.
+         */
+        post: operations["test_llm_stream_settings_llm_test_stream_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2565,6 +2727,70 @@ export interface components {
             /** Text Mask */
             text_mask?: string | null;
         };
+        /** LLMBudgetConfig */
+        LLMBudgetConfig: {
+            /**
+             * Daily Usd
+             * @default 0
+             */
+            daily_usd: number;
+            /**
+             * Eval Gate
+             * @default false
+             */
+            eval_gate: boolean;
+        };
+        /** LLMDiscoverAttach */
+        LLMDiscoverAttach: {
+            /** Base Url */
+            base_url: string;
+            /** Models */
+            models?: string[];
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Provider */
+            provider: string;
+            /**
+             * Wire
+             * @default openai_chat
+             */
+            wire: string;
+        };
+        /** LLMEvalRequest */
+        LLMEvalRequest: {
+            /**
+             * Limit
+             * @default 2
+             */
+            limit: number;
+            /** Roles */
+            roles?: string[];
+        };
+        /** LLMEvalSummary */
+        LLMEvalSummary: {
+            /**
+             * Cases
+             * @default 0
+             */
+            cases: number;
+            /** Completed At */
+            completed_at: string;
+            /** P50 Ms */
+            p50_ms: number;
+            /** Pass Rate */
+            pass_rate: number;
+            /** Revision */
+            revision: number;
+            /** Roles */
+            roles?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+        };
         /** LLMModelTarget */
         LLMModelTarget: {
             /** Model */
@@ -2601,6 +2827,11 @@ export interface components {
              * @default false
              */
             has_key: boolean;
+            /**
+             * Id
+             * @default
+             */
+            id: string;
             /**
              * Is Local
              * @default true
@@ -2646,9 +2877,15 @@ export interface components {
             fallback?: components["schemas"]["LLMModelTarget"][];
             /** Max Tokens */
             max_tokens?: number | null;
-            /** Model */
+            /**
+             * Model
+             * @default
+             */
             model: string;
-            /** Provider */
+            /**
+             * Provider
+             * @default
+             */
             provider: string;
             /** Reasoning Effort */
             reasoning_effort?: string | null;
@@ -2678,6 +2915,8 @@ export interface components {
              * @default true
              */
             air_gapped: boolean;
+            budget?: components["schemas"]["LLMBudgetConfig"];
+            last_eval?: components["schemas"]["LLMEvalSummary"] | null;
             /**
              * Max Tokens
              * @default 400
@@ -2698,7 +2937,7 @@ export interface components {
             };
             /**
              * Schema Version
-             * @default 1
+             * @default 2
              */
             schema_version: number;
             /**
@@ -2737,6 +2976,11 @@ export interface components {
             latency_ms: number;
             /** Models */
             models?: string[];
+            /**
+             * Needs Key
+             * @default false
+             */
+            needs_key: boolean;
             /** Ok */
             ok: boolean;
             /** Provider */
@@ -6492,6 +6736,74 @@ export interface operations {
             };
         };
     };
+    attach_llm_server_settings_llm_attach_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LLMDiscoverAttach"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_llm_budget_settings_llm_budget_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     discover_llm_servers_settings_llm_discover_post: {
         parameters: {
             query?: never;
@@ -6512,9 +6824,44 @@ export interface operations {
             };
         };
     };
-    llm_health_settings_llm_health_get: {
+    run_llm_eval_settings_llm_eval_post: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LLMEvalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_llm_recommendation_settings_llm_eval_apply_post: {
+        parameters: {
+            query?: {
+                expected_revision?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6530,15 +6877,120 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    llm_health_settings_llm_health_get: {
+        parameters: {
+            query?: {
+                check?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     list_llm_models_settings_llm_models_get: {
         parameters: {
             query?: {
                 provider?: string | null;
+                deep?: boolean;
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_llm_profile_settings_llm_profiles__profile__post: {
+        parameters: {
+            query?: {
+                expected_revision?: number | null;
+            };
+            header?: never;
+            path: {
+                profile: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_llm_provider_settings_llm_providers__provider_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -6625,7 +7077,91 @@ export interface operations {
             };
         };
     };
+    warm_llm_provider_settings_llm_providers__provider_id__warm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    llm_spend_settings_llm_spend_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     test_llm_settings_llm_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LLMTestRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_llm_stream_settings_llm_test_stream_post: {
         parameters: {
             query?: never;
             header?: never;
