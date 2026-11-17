@@ -327,3 +327,10 @@ per-pipeline readiness with missing counts, and a base-model table showing real
 status, size, and VRAM estimate. Activation/unload call the real endpoints and
 are explicit, single-slot operations. Added a mount test that reaches Setup.
 Verified: 36 pytest, 16 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] review | needs-you tray
+
+The review hook now refreshes every 15s, and the top bar shows a "needs you"
+pill (open comments + change requests) that jumps to Review. This is the
+editor-side half of F4-06; the reviewer share link remains open.
+Verified: 36 pytest, 16 vitest, tsc clean, eslint 0 errors, vite build.

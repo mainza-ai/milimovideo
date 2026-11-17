@@ -1,8 +1,8 @@
 import {
-    CheckCircle2, CloudOff, HardDrive, MonitorPlay, Redo2, Save, Share2, TriangleAlert, Undo2,
+    CheckCircle2, CloudOff, HardDrive, MessageSquare, MonitorPlay, Redo2, Save, Share2, TriangleAlert, Undo2,
 } from 'lucide-react';
 import { useStore } from 'zustand';
-import { useStudioData } from '../data/useStudioData';
+import { useStudioData, useStudioReview } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
 import { useTimelineStore } from '../../stores/timelineStore';
 
@@ -17,6 +17,8 @@ const SURFACES: Array<{ id: StudioSurface; label: string }> = [
 
 export function TopBar() {
     const { project, health, error } = useStudioData();
+    const { review } = useStudioReview(project.id);
+    const needsYou = review.summary.open + review.summary.changes_requested;
     const { activeSurface, setSurface, inspectorOpen, setInspectorOpen } = useStudioEditor();
     const { saveStatus, saveError, saveProject } = useTimelineStore();
     // zundo's temporal store is attached to the document store.
@@ -66,6 +68,17 @@ export function TopBar() {
             </nav>
 
             <div className="st-topbar-right">
+                {needsYou > 0 && (
+                    <button
+                        type="button"
+                        className="st-status-pill"
+                        data-tone="warn"
+                        onClick={() => setSurface('review')}
+                        title="Open comments and change requests"
+                    >
+                        <MessageSquare size={11} /> {needsYou} needs you
+                    </button>
+                )}
                 <button
                     type="button"
                     className="st-icon-button"

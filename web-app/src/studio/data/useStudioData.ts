@@ -318,7 +318,11 @@ export function useStudioReview(projectId: string) {
         }
     }, [projectId]);
 
-    useEffect(() => { void refresh(); }, [refresh]);
+    useEffect(() => {
+        void refresh();
+        const interval = window.setInterval(refresh, 15000);
+        return () => window.clearInterval(interval);
+    }, [refresh]);
 
     const addComment = useCallback(async (shotId: string | null, frame: number, body: string) => {
         const response = await fetch(apiUrl(`/projects/${projectId}/review/comments`), {
