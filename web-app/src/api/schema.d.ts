@@ -1048,6 +1048,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/repair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Repair Project
+         * @description Repair safe, reversible inconsistencies without deleting files.
+         *
+         *     Clears missing media references, orphan scene/board references, normalizes
+         *     sequence order, and sanitizes caption ranges. Missing files stay on disk for
+         *     a manual relink; only the broken pointer is removed.
+         */
+        post: operations["repair_project_projects__project_id__repair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/review": {
         parameters: {
             query?: never;
@@ -5046,6 +5070,37 @@ export interface operations {
         };
     };
     get_project_renders_projects__project_id__renders_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_project_projects__project_id__repair_post: {
         parameters: {
             query?: never;
             header?: never;

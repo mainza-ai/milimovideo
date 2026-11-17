@@ -5112,6 +5112,47 @@
         ]
       }
     },
+    "/projects/{project_id}/repair": {
+      "post": {
+        "description": "Repair safe, reversible inconsistencies without deleting files.\n\nClears missing media references, orphan scene/board references, normalizes\nsequence order, and sanitizes caption ranges. Missing files stay on disk for\na manual relink; only the broken pointer is removed.",
+        "operationId": "repair_project_projects__project_id__repair_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Repair Project",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/projects/{project_id}/review": {
       "get": {
         "operationId": "list_review_projects__project_id__review_get",

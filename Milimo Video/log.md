@@ -1035,3 +1035,11 @@ leaves queued jobs untouched, lets the current job finish, and resumes within
 250ms. Health reports `queue_paused`; Setup exposes Pause/Resume. Added endpoint,
 health-contract, and dispatch-gate tests. Verified: 78 pytest, 52 vitest, ruff
 clean, tsc clean, build + bundle check pass.
+
+## [2026-11-17] repair | project integrity repair
+
+Added `POST /projects/{id}/repair`: clears missing media pointers, orphan scene
+references, orphan board nodes/links, normalizes sequence order, and sanitizes
+caption ranges without deleting files. Setup exposes Repair safe issues after a
+scan. Added a round-trip repair test. Verified: 79 pytest, 52 vitest, ruff clean,
+tsc clean, build + bundle check pass.

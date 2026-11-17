@@ -11,6 +11,7 @@ import {
     useStudioElements,
     useStudioFavoriteTake,
     useStudioGenerate,
+    useStudioHealth,
     useStudioSelectTake,
     useStudioSelection,
     useStudioTakes,
@@ -29,6 +30,8 @@ export function GenerateSurface() {
     const [preview, setPreview] = useState<{ url: string | null; status: string; path?: string } | null>(null);
     const [lensOpen, setLensOpen] = useState(false);
     const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(project.id);
+    const { health } = useStudioHealth();
+    const [queueBusy, setQueueBusy] = useState(false);
 
     const videoShots = project.shots.filter((item) => item.trackIndex !== 2);
     const selectedVideoShot = videoShots.find((item) => item.id === selectedShotId);
@@ -155,6 +158,27 @@ export function GenerateSurface() {
                 exc instanceof Error ? exc.message : 'Preview failed',
                 'error',
             );
+        }
+    };
+
+    const toggleQueue = async (paused: boolean) => {
+        setQueueBusy(true);
+        try {
+            const response = await fetch(apiUrl(`/jobs/queue/${paused ? 'pause' : 'resume'}`), { method: 'POST' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Queue update failed');
+            useStudioDocumentStore.getState().addToast(
+                paused ? 'Queue paused after the current job' : 'Queue resumed',
+                'info',
+            );
+            await refreshJobs();
+        } catch (error) {
+            useStudioDocumentStore.getState().addToast(
+                error instanceof Error ? error.message : 'Queue update failed',
+                'error',
+            );
+        } finally {
+            setQueueBusy(false);
         }
     };
 
@@ -592,7 +616,19 @@ export function GenerateSurface() {
                     </details>
                 </div>
                 <div className="st-inspector-section">
-                    <span className="st-label">Active queue · {activeJobs.length}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                        <span className="st-label">Active queue · {activeJobs.length}</span>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="ghost"
+                            disabled={queueBusy}
+                            onClick={() => void toggleQueue(!(health?.queue_paused ?? false))}
+                        >
+                            {health?.queue_paused ? 'Resume' : 'Pause'}
+                        </button>
+                    </div>
                     {activeJobs.length === 0 ? (
                         <span className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>No active jobs.</span>
                     ) : (

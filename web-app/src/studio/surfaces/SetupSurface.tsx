@@ -41,6 +41,25 @@ export function SetupSurface() {
             setDownloading(null);
         }
     };
+    const repairProject = async () => {
+        setRepairing(true);
+        try {
+            const response = await fetch(apiUrl(`/projects/${project.id}/repair`), { method: 'POST' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Repair failed');
+            const total = Object.values(data.counts || {}).reduce(
+                (sum: number, value) => sum + Number(value || 0),
+                0,
+            );
+            addToast(`Repaired ${total} issue(s)`, 'success');
+            await scanIntegrity();
+        } catch (exc) {
+            addToast(exc instanceof Error ? exc.message : 'Repair failed', 'error');
+        } finally {
+            setRepairing(false);
+        }
+    };
+
     const toggleQueue = async (paused: boolean) => {
         setQueueBusy(true);
         try {
@@ -60,6 +79,7 @@ export function SetupSurface() {
     const [busy, setBusy] = useState<string | null>(null);
     const [downloading, setDownloading] = useState<string | null>(null);
     const [queueBusy, setQueueBusy] = useState(false);
+    const [repairing, setRepairing] = useState(false);
 
     const visible = useMemo(() => {
         const matching = models.filter((model) => (
@@ -159,10 +179,25 @@ export function SetupSurface() {
             <div className="st-panel" style={{ marginBottom: 14 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                     <h3 className="st-panel-title" style={{ margin: 0 }}>Project integrity</h3>
-                    <button type="button" className="st-button" data-size="sm" disabled={integrityLoading} onClick={() => void scanIntegrity()}>
-                        {integrityLoading ? <Loader2 size={12} className="animate-spin" /> : null}
-                        {integrityLoading ? 'Scanning…' : 'Scan project'}
-                    </button>
+                    <div className="st-button-row">
+                        <button type="button" className="st-button" data-size="sm" disabled={integrityLoading} onClick={() => void scanIntegrity()}>
+                            {integrityLoading ? <Loader2 size={12} className="animate-spin" /> : null}
+                            {integrityLoading ? 'Scanning…' : 'Scan project'}
+                        </button>
+                        {integrity && integrity.issues.length > 0 && (
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                data-variant="primary"
+                                disabled={repairing}
+                                onClick={() => void repairProject()}
+                            >
+                                {repairing ? <Loader2 size={12} className="animate-spin" /> : null}
+                                {repairing ? 'Repairing…' : 'Repair safe issues'}
+                            </button>
+                        )}
+                    </div>
                 </div>
                 {!integrity ? (
                     <p className="st-value" style={{ color: 'var(--st-muted)', marginTop: 8 }}>

@@ -159,7 +159,8 @@ not just filtergraph strings.
 - Shorts: transcript/SRT/VTT candidates, scores, editable in/out range,
   9:16/1:1/4:5 export, direct export from uploaded sources.
 - Setup: device/slots/queue/disk, queue pause/resume, pipeline readiness,
-  base/LoRA activation, LoRA strength, model downloads, depth model, error budget.
+  base/LoRA activation, LoRA strength, model downloads, depth model, integrity
+  scan/repair, error budget.
 - Desktop: Tauri 2 shell with native open/save dialogs and a backend supervisor
   that locates/starts `run_backend.sh`; bundled Python sidecar remains a follow-up.
 - Collaboration: opt-in Yjs board sync spike over BroadcastChannel (same machine).

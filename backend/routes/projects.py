@@ -588,6 +588,95 @@ def project_integrity(project_id: str, session: Session = Depends(get_session)):
     }
 
 
+@router.post("/projects/{project_id}/repair")
+def repair_project(project_id: str, session: Session = Depends(get_session)):
+    """Repair safe, reversible inconsistencies without deleting files.
+
+    Clears missing media references, orphan scene/board references, normalizes
+    sequence order, and sanitizes caption ranges. Missing files stay on disk for
+    a manual relink; only the broken pointer is removed.
+    """
+    from file_utils import resolve_path
+
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    shots = session.exec(select(Shot).where(Shot.project_id == project_id)).all()
+    scenes = session.exec(select(Scene).where(Scene.project_id == project_id)).all()
+    scene_ids = {scene.id for scene in scenes}
+    shot_ids = {shot.id for shot in shots}
+    counts = {
+        "missing_video": 0,
+        "missing_thumbnail": 0,
+        "orphan_scene": 0,
+        "sequence_reindexed": 0,
+        "orphan_board_nodes": 0,
+        "orphan_board_links": 0,
+        "captions_sanitized": 0,
+    }
+
+    ordered = sorted(
+        shots,
+        key=lambda shot: (
+            shot.sequence_index is None,
+            shot.sequence_index or 0,
+            shot.created_at,
+            shot.id,
+        ),
+    )
+    for index, shot in enumerate(ordered):
+        if shot.sequence_index != index:
+            shot.sequence_index = index
+            counts["sequence_reindexed"] += 1
+        if shot.scene_id and shot.scene_id not in scene_ids:
+            shot.scene_id = None
+            counts["orphan_scene"] += 1
+        for field, key in (("video_url", "missing_video"), ("thumbnail_url", "missing_thumbnail")):
+            value = getattr(shot, field)
+            if not value:
+                continue
+            resolved = resolve_path(value)
+            if not resolved or not os.path.exists(resolved):
+                setattr(shot, field, None)
+                counts[key] += 1
+        session.add(shot)
+
+    layout = _parse_json_field(project.board_layout, None)
+    if isinstance(layout, dict):
+        nodes = layout.get("nodes", [])
+        links = layout.get("links", [])
+        kept_nodes = [node for node in nodes if node.get("id") in shot_ids]
+        kept_links = [
+            link for link in links
+            if link.get("source") in shot_ids and link.get("target") in shot_ids
+        ]
+        counts["orphan_board_nodes"] = len(nodes) - len(kept_nodes)
+        counts["orphan_board_links"] = len(links) - len(kept_links)
+        if counts["orphan_board_nodes"] or counts["orphan_board_links"]:
+            layout["nodes"] = kept_nodes
+            layout["links"] = kept_links
+            project.board_layout = json.dumps(layout)
+            project.board_revision = (project.board_revision or 0) + 1
+
+    original_captions = _parse_json_field(project.captions, [])
+    sanitized = _sanitize_captions(original_captions)
+    if sanitized != original_captions:
+        counts["captions_sanitized"] = max(1, len(original_captions) - len(sanitized))
+        project.captions = json.dumps(sanitized)
+
+    project.updated_at = datetime.utcnow()
+    project.revision = (project.revision or 0) + 1
+    session.add(project)
+    session.commit()
+
+    return {
+        "project_id": project_id,
+        "revision": project.revision,
+        "counts": counts,
+    }
+
+
 @router.get("/projects/{project_id}/takes")
 def list_project_takes(
     project_id: str,

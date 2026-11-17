@@ -369,6 +369,10 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 - Base model table: real status, size, VRAM estimate, Activate/Unload or Download.
 - LoRA table: real downloaded/active state, activation, and strength.
 - Depth Anything V2 Small is optional; download it here before using the Depth overlay.
+- Project integrity: **Scan project** reports missing media, orphan shots/scenes,
+  orphan board nodes/links, and invalid caption ranges. **Repair safe issues**
+  clears broken pointers, normalizes sequence order, and sanitizes captions
+  without deleting files.
 - Error budget: 7-day job counts by status and recent failures.
 
 Activation loads the real model through the loader and respects the one-slot rule.
