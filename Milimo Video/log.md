@@ -473,3 +473,12 @@ arrange, pin toggles, and reset push one snapshot per gesture/action. Added the
 missing pin/unpin control for a single selection. Board undo restores positions,
 pins, areas, and links without touching document edits. Verified: 29 vitest,
 tsc clean, eslint 0 errors.
+
+## [2026-11-17] f1 | persisted, editable script view
+
+Project-level script text now round-trips through ProjectState (`script_content`)
+and the save payload. The studio Script view is an editable monospace editor with
+word/shot counts, save-on-blur + explicit save, and a confirmed
+parse-and-replace action that uses the existing local parser and storyboard
+commit. Parsing warns that unmatched shots are removed. Verified: 42 pytest,
+29 vitest, tsc clean, eslint 0 errors.

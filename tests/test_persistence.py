@@ -159,6 +159,19 @@ def test_project_takes_lists_completed_outputs(app_client, project):
     assert body["takes"][0]["shot_label"] == "take library"
 
 
+def test_project_script_content_roundtrip(app_client, project):
+    pid = project["id"]
+    payload = {
+        "id": pid, "name": "Script", "fps": 25, "seed": 42,
+        "resolution_w": 768, "resolution_h": 512, "revision": 0,
+        "shots": [], "scenes": [],
+        "script_content": "INT. STUDIO - NIGHT\n\nA filmmaker edits the cut.",
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    loaded = app_client.get(f"/projects/{pid}").json()
+    assert loaded["script_content"].startswith("INT. STUDIO")
+
+
 def test_captions_roundtrip_sorted_and_sanitized(app_client, project):
     pid = project["id"]
     payload = {

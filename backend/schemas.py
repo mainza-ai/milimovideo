@@ -76,6 +76,7 @@ class ProjectState(BaseModel):
     shots: List[dict]
     scenes: List[dict] = []
     captions: List[CaptionCue] = []
+    script_content: Optional[str] = None
     resolution_w: int = 768
     resolution_h: int = 512
     fps: int = 25

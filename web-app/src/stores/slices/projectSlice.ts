@@ -129,6 +129,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     name: sc.name,
                     script_content: sc.scriptContent
                 })),
+                script_content: project.scriptContent,
                 captions: (project.captions || []).map(cue => ({
                     id: cue.id,
                     start_frame: cue.startFrame,

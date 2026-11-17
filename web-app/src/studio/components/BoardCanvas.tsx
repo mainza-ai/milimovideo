@@ -55,6 +55,7 @@ export function BoardCanvas() {
     const project = useTimelineStore((state) => state.project);
     const {
         selectedShotId, selectShot, setCurrentTime, addShot, updateShot, deleteShot,
+        setProject, saveProject, parseScript, commitStoryboard, addToast,
     } = useTimelineStore(useShallow((state) => ({
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
@@ -62,6 +63,11 @@ export function BoardCanvas() {
         addShot: state.addShot,
         updateShot: state.updateShot,
         deleteShot: state.deleteShot,
+        setProject: state.setProject,
+        saveProject: state.saveProject,
+        parseScript: state.parseScript,
+        commitStoryboard: state.commitStoryboard,
+        addToast: state.addToast,
     })));
     const {
         storyView, setStoryView, boardCamera, setCamera, boardPositions,
@@ -98,6 +104,12 @@ export function BoardCanvas() {
     } | null>(null);
     const [areaDraft, setAreaDraft] = useState<BoardArea | null>(null);
     const [linkSource, setLinkSource] = useState<string | null>(null);
+    const [scriptDraft, setScriptDraft] = useState(project.scriptContent || '');
+    const [scriptBusy, setScriptBusy] = useState(false);
+
+    useEffect(() => {
+        setScriptDraft(project.scriptContent || '');
+    }, [project.id, project.scriptContent]);
 
     const shots = useMemo(() => {
         const q = boardQuery.trim().toLowerCase();
@@ -1092,12 +1104,68 @@ export function BoardCanvas() {
                 </div>
             ) : (
                 <div className="st-script-wrap">
-                    <div className="st-script">
-                        {project.scriptContent?.trim()
-                            ? project.scriptContent
-                            : project.shots
-                                .map((shot, index) => `${index + 1}. ${shot.action || shot.prompt || ''}${shot.dialogue ? `\n   ${shot.character || 'CHARACTER'}: ${shot.dialogue}` : ''}`)
-                                .join('\n\n') || 'No script text yet. Paste a script in the legacy editor or import it in F1.'}
+                    <div style={{ maxWidth: 860, margin: '0 auto' }}>
+                        <div className="st-button-row" style={{ marginBottom: 8 }}>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                data-variant="primary"
+                                disabled={scriptBusy}
+                                onClick={async () => {
+                                    setProject({ ...project, scriptContent: scriptDraft });
+                                    await saveProject();
+                                    addToast('Script saved', 'success');
+                                }}
+                            >
+                                Save script
+                            </button>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                disabled={scriptBusy || !scriptDraft.trim()}
+                                onClick={async () => {
+                                    if (!window.confirm(
+                                        'Replace the storyboard with parsed scenes? Existing shots keep their IDs where indexes match; other shots are removed.',
+                                    )) return;
+                                    setScriptBusy(true);
+                                    try {
+                                        const scenes = await parseScript(scriptDraft);
+                                        if (scenes.length === 0) {
+                                            addToast('No scenes parsed from this script', 'info');
+                                            return;
+                                        }
+                                        await commitStoryboard(scenes, scriptDraft);
+                                    } finally {
+                                        setScriptBusy(false);
+                                    }
+                                }}
+                            >
+                                {scriptBusy ? 'Parsing…' : 'Parse & replace storyboard'}
+                            </button>
+                            <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9 }}>
+                                Parsing is destructive; confirm before it replaces shots.
+                            </span>
+                        </div>
+                        <textarea
+                            className="st-textarea st-script"
+                            style={{ minHeight: 'calc(100dvh - 240px)', width: '100%', maxWidth: 'none' }}
+                            value={scriptDraft}
+                            aria-label="Script"
+                            placeholder="Paste a screenplay or numbered shot list. Scenes and shots are parsed locally."
+                            onChange={(event) => setScriptDraft(event.target.value)}
+                            onBlur={() => {
+                                if (scriptDraft !== (project.scriptContent || '')) {
+                                    setProject({ ...project, scriptContent: scriptDraft });
+                                }
+                            }}
+                        />
+                        <div className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                            {scriptDraft.trim()
+                                ? `${scriptDraft.trim().split(/\s+/).length} words · ${project.shots.length} shots in the cut`
+                                : `No script text yet. Current cut has ${project.shots.length} shots.`}
+                        </div>
                     </div>
                 </div>
             )}

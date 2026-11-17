@@ -202,6 +202,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         shots=[_shot_dict(s) for s in shots],
         scenes=scenes_data,
         captions=_parse_json_field(project.captions, []),
+        script_content=project.script_content,
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
         fps=project.fps,
@@ -274,6 +275,7 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     db_project.fps = state.fps
     db_project.seed = state.seed
     db_project.captions = json.dumps(_sanitize_captions(state.captions))
+    db_project.script_content = state.script_content
     
     db_project.updated_at = datetime.utcnow()
     db_project.revision = (db_project.revision or 0) + 1
