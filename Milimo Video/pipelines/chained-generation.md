@@ -1,7 +1,7 @@
 ---
 type: pipelines
 created: 2026-10-09
-updated: 2026-10-09
+updated: 2026-11-17
 tags: chained-generation quantum-alignment ltx-2 long-video
 sources:
   - docs/03_ai_pipelines.md
@@ -32,20 +32,20 @@ in the docs is historical; the implemented path uses a 25-frame **pixel**
 2. For chunk 0: run the TI2Vid pipeline for 121 frames.
 3. For chunk N>0: async-extract the last 25 frames (ffmpeg subprocess, glob in
    `workspace/storyboard_artifacts/`), pass them as `media_sequence`, generate 121.
-4. Trim the first 25 frames from the decoded video in Python; trim audio by the
-   same count (currently trimmed at the **end** — see audit).
+4. Trim the first 25 frames from the decoded video in Python and trim audio from
+   the **start** by the same count, so audio stays aligned across chunks.
 5. Commit the chunk; repeat. Final stitch re-encodes with an ffmpeg `concat`
    filtergraph (`libx264`, CRF 18, AAC 192k), not `-c copy`.
-6. Cancellation is checked between chunks and in the step callback; the
-   pre-chunk `break` path can still stitch a partial film (see audit).
+6. Cancellation is checked between chunks and in the step callback; cancellation
+   raises, and the stitch path refuses a partial chunk list.
 
 ## Key Parameters
 
 | Parameter | Value |
 |---|---|
-| `chunk_size` | 505 frames (LTX-2 native limit) |
-| `overlap_frames` | 24 px requested overlap |
-| `effective_step` | 481 frames of new content per chunk |
+| `chunk_size` | 121 frames (LTX-2 native limit) |
+| `overlap_frames` | 25 frames |
+| `effective_step` | 96 frames of new content per chunk |
 
 **Quantum Alignment math** (latent grid = 8 px per latent):
 
@@ -69,17 +69,15 @@ in the docs is historical; the implemented path uses a 25-frame **pixel**
 
 - **Product name**: the chained path is Milimo's **"Smart Continue"** feature.
 - **Delegation precondition**: chained generation triggers only when
-  `pipeline_type == "ti2vid"` **and** `num_frames > 505` — the other pipelines
+  `pipeline_type == "ti2vid"` **and** `num_frames > 121` — the other pipelines
   don't chain.
-- **Latent handoff, precisely**: after each chunk's Stage 1 denoising, the full
-  latent tensor is captured (`last_chunk_latent`); the conditioning slice is
-  `last_chunk_latent[:, :, start_slice:, :, :]` — the *tail* of the previous
-  chunk's latent — injected as a conditioning input seeding the next chunk.
-- **Last-frame extraction**: `ffmpeg -sseof -0.1` grabs the final frame as frame-0
-  conditioning for chunk N+1.
-- **Trim template**: `ffmpeg -i chunk.mp4 -ss <trim_seconds> -c copy
-  trimmed_chunk.mp4` where `trim_seconds = frames_to_trim / fps` — no re-encode.
-  Stitching uses ffmpeg concat (file-list or filter method).
+- **Pixel conditioning handoff**: the implemented path extracts the previous
+  chunk's last 25 frames as a `media_sequence` and passes them into the next chunk;
+  it does not use the older captured latent-tail design.
+- **Last-frame extraction**: `ffmpeg -sseof -<seconds>` extracts the overlap frames
+  into the project workspace before the next chunk.
+- **Trim/stitch**: Python trims the overlap from decoded video/audio; the final
+  stitch re-encodes with an FFmpeg `concat` filter (libx264 + AAC), not `-c copy`.
 - **Progress**: SSE broadcasts per-chunk progress (`chunk i/N`); cancellation
   checks `active_jobs[job_id]["cancelled"]` between chunks.
 - **StoryboardManager dual modes**: Worker/Generation `(job_id, prompt, params,

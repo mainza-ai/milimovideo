@@ -1,12 +1,15 @@
 ---
 type: overview
 created: 2026-10-09
-updated: 2026-10-09
-tags: overview local-first nle open-source
+updated: 2026-11-17
+tags: overview local-first nle open-source studio
 sources:
   - README.md
+  - ../docs/user_guide.md
 related:
   - systems/architecture.md
+  - systems/studio-shell.md
+  - roadmap/implementation-plan-2026-11.md
   - workflows/getting-started.md
 ---
 
@@ -16,60 +19,70 @@ related:
 **non-linear editor (NLE)** for filmmakers, running entirely **local-first** on the
 filmmaker's own machine. Apache 2.0 licensed. Author: Mainza Kangombe.
 
-Unlike simple prompt-to-video interfaces, Milimo unifies best-in-class foundation
-models into one cohesive filmmaking workflow:
+It is one application with two front ends during the strangler cutover:
+
+- **Studio** at `/studio` — Story, Generate, Edit, Review, Library, Deliver, Shorts,
+  and Setup. This is the current shell.
+- **Legacy NLE** at `/` — frozen fallback for the two-clean-release window. It can
+  be forced back onto `/studio` with `VITE_STUDIO_ENABLED=false`.
+
+The Tauri desktop shell hosts the same Studio UI with native Open/Save dialogs and
+a backend supervisor.
+
+## Models
 
 | Model | Role |
 |---|---|
 | **LTX-2 19B** | Dual-stream transformer for cinematic video generation (text-to-video, image-to-video, keyframe interpolation) |
 | **Flux 2 Klein 9B** | High-fidelity image synthesis with IP-Adapter reference conditioning and RePaint inpainting |
 | **SAM 3** | Text-prompted segmentation, click-to-segment, and video object tracking (standalone microservice) |
-| **Gemma 3** | Intelligent prompt enhancement and narrative direction |
+| **Gemma 3** | Prompt enhancement and narrative direction |
+| **Depth Anything V2 Small** | Optional local monocular depth for the Edit overlay |
 
 ## What makes it a studio, not a demo
 
-- **Visual conditioning & character consistency** — Story Elements (Characters,
-  Locations, Objects) with trigger words (e.g. `@Hero`); the system auto-detects
-  triggers in prompts and injects IP-Adapter reference images, so identities persist
-  across shots.
-- **Storyboard engine** — paste screenplay text; Milimo parses it into scenes and
-  shots (regex `ScriptParser` or Gemma 3 AI parsing), matches `@Elements`, and can
-generate Flux 2 concept-art thumbnails as pre-viz.
-- **Chained generation (Quantum Alignment)** — shots past the 121-frame native
-  chunk generate autoregressively with a 25-frame overlap; the current code passes a
-  pixel `media_sequence` and trims the overlap, not the older latent-tail handoff
-  described in early docs.
-- **Professional NLE** — magnetic 3-track timeline (V1 magnetic, V2 overlay, A1
-audio), frame-accurate trimming, snap engine, undo/redo.
-- **In-painting & intelligent editing** — mask anything via click or natural language
-  (SAM 3), then add/remove elements with Flux 2 RePaint inpainting.
-- **Memory discipline** — the MemoryManager enforces one heavy GPU model at a time;
-  Ollama unloads immediately after prompt enhancement. Built MPS-first for Apple
-  Silicon, CUDA as primary target.
+- **One project graph, three lenses.** Story (script/board/shot list), Generate
+  (shot workspace/takes/ingredients), and Edit (stage/timeline) all read the same
+  `Shot` graph. Board position never defines sequence order.
+- **Immutable takes.** Every completed generation is a take with seed, model, and
+  lineage. Selecting a take repoints the shot; old takes remain comparable.
+- **Truthful render.** The export is the computed cut: magnetic V1 from
+  `sequence_index`, free V2/A1, alpha compositing, embedded audio + A1 mix, trims,
+  speed, fades, keyframes, captions, render range, and persisted encoding settings.
+- **A deterministic default.** Seed lock is on; the same prompt and parameters
+  reproduce the same take. Randomizing a new take is explicit.
+- **Plan before spend.** The command dock proposes a diff with model/time/VRAM
+  estimates; approval is required and applying a plan is one undo step.
+- **Durable local jobs.** A `QueuedJob` ledger, one global GPU semaphore, one OOM
+  retry, startup recovery, pause/resume dispatch, cancellation, and SSE progress.
+- **Local-first security.** Loopback default, CORS allowlist, optional bearer token,
+  sanitized uploads, safe media Range serving, and no cloud dependency in the hot
+  path.
 
-## Stack
+## Current State (2026-11-17)
 
-| Layer | Technology |
-|---|---|
-| Frontend | React 19.2, TypeScript, Vite, Zustand (7-slice store + persist + zundo) |
-| Backend | FastAPI (Python 3.10+), SQLModel/SQLAlchemy (SQLite), SSE via sse-starlette |
-| Video AI | LTX-2 19B — 3 pipelines + chained generation |
-| Image AI | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint |
-| Segmentation | SAM 3 microservice (port 8001) |
-| Processing | FFmpeg — thumbnails, frame extraction, overlap trimming, concat |
+The scoped P0–P5 and F0–F5 implementation plan is complete:
 
-## Current State (2026-11-16)
+- security, canonical timeline/persistence, render fidelity, scheduler, model truth,
+  UX trust, tests/CI;
+- Studio shell and all surfaces;
+- review/share/agent, library/deliver, shorts/lenses, Tauri shell, queue pause,
+  seed lock, encoding controls, integrity scan/repair, and native open/save.
 
-The Nov 2026 engineering audit found the studio layer is not yet trustworthy:
-timeline order and conditioning do not round-trip, export timing/compositing/audio
-are wrong, and the local API is open. The model layer and workflow concepts are
-strong. Read [[systems/engineering-audit-2026-11.md]] before trusting the NLE with a
-real project; the fix sequence is
-[[roadmap/implementation-plan-2026-11.md]].
+Verification: **82 backend tests, 52 Vitest tests, 12 Playwright tests**, clean
+ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
+failures.
+
+Remaining/deferred work is explicit in
+[[roadmap/implementation-plan-2026-11.md]]: bundled Python sidecar runtime, legacy
+cutover, Phase 6 v2 model/eval lane, and scoped-v1 gaps (transitions/LUT/titles/A2,
+embedding search, shorts/lens template packs). Visual baselines are local and
+platform-tolerant.
 
 ## Related
 
-- [[systems/engineering-audit-2026-11.md]] — current-state audit
-- [[roadmap/implementation-plan-2026-11.md]] — prioritized fix plan
 - [[systems/architecture.md]] — how the pieces fit together
+- [[systems/studio-shell.md]] — the implemented Studio shell
+- [[systems/data-models.md]] — persistence and migrations
+- [[roadmap/implementation-plan-2026-11.md]] — status and remaining work
 - [[workflows/getting-started.md]] — from zero to studio

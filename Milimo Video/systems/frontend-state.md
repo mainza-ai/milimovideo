@@ -1,13 +1,14 @@
 ---
 type: systems
 created: 2026-10-09
-updated: 2026-10-09
-tags: zustand frontend state-management react performance
+updated: 2026-11-17
+tags: zustand frontend state-management react performance studio
 sources:
-  - docs/04_frontend_state.md
-  - skills/skills/milimo-frontend-state-manager/SKILL.md
+  - ../web-app/src/studio/state/
+  - ../web-app/src/stores/
 related:
   - architecture.md
+  - studio-shell.md
   - nle-timeline.md
   - data-models.md
   - sse-eventing.md
@@ -17,94 +18,86 @@ related:
 
 ## Purpose
 
-One Zustand "God Store" (`useTimelineStore` in `stores/timelineStore.ts`) holds all
-global UI state. The standing rule from the project's skill: **no independent React
-Contexts for global state** — new state goes into one of the 7 slices, never a new
-context.
+There are two state systems during the strangler cutover. The **Studio** owns a
+document/editor/job/agent split and server state through TanStack Query. The
+**legacy editor** keeps the original 7-slice store. They share the backend project
+model but not in-memory documents.
 
-## Components
+## Studio stores
 
-| Slice | Owns |
+| Store | Owns |
 |---|---|
-| **ProjectSlice** | `project`, `assetRefreshVersion`; `setProject`, `saveProject()` (PUT upsert), `createNewProject`, `loadProject`, `deleteProject` |
-| **ShotSlice** | Shot CRUD + generation ops: `addShot`, `updateShot` (local), `patchShot` (persist), `splitShot`, `reorderShots`, `moveShotToValues`, conditioning items; `generateShot(shotId)` → generation endpoint, `inpaintShot(...)` → `/edit/inpaint` |
-| **PlaybackSlice** | `currentTime`, `isPlaying` (+ maximum duration cache) |
-| **UISlice** | `selectedShotId`, `toasts`, `transientDuration`, `viewMode` (timeline\|elements\|storyboard\|images), `isEditing` |
-| **TrackSlice** | `trackStates` (muted/locked/hidden per track); track map 0=V1 Main, 1=V2 Overlay, 2=A1 Audio |
-| **ElementSlice** | `elements`, `generatingElementIds`, `parsedScenes`; `fetchElements`, `createElement`, `generateVisual` → `/elements/{id}/visualize`, `parseScript` (regex) / `aiParseScript` (Gemma 3), `commitStoryboard`, `generateThumbnails`, `pushStoryboardToTimeline` |
-| **ServerSlice** | `handleServerEvent(type, data)` — routes SSE events into shot updates |
+| `state/documentStore.ts` (`milimo-studio-document`) | Project, shots, scenes, captions, save status/revision/conflict, document undo/redo, playback time/playing, track states, toasts |
+| `state/editorStore.ts` | Active surface, story view, selection, board camera/positions/areas/links/notes, pins, minimap, timeline zoom/height, inspector state, command dock, recipes, focus mode |
+| `state/jobStore.ts` | Active jobs and metrics; isolated from document/playback |
+| `state/agentStore.ts` | Plan history and pending agent proposals |
+| TanStack Query (`state/queryClient.ts`) | Health, models, pipelines, review/share, renders, assets, elements, metrics |
 
-**Persist** (`zustand/persist`, key `milimo-timeline-storage`): only `project` is
-persisted; on hydrate, transient state resets (toasts cleared, `isPlaying=false`,
-`isEditing=false`). `milimo_last_project_id` in localStorage drives last-project
-recovery.
+The document store is **separate** from the legacy `timelineStore`. Studio routes
+(`/studio`) use `useStudioDocumentStore`; legacy routes (`/`) use
+`useTimelineStore`. Switching routes does not carry unsaved edits.
 
-**Undo/redo** (`zundo` temporal): 20 steps, and only `project` is tracked — UI,
-playback, and server state are never undoable.
+**Persistence:** the editor store persists view/layout preferences (active surface,
+board camera/areas/links/notes, inspector/timeline sizes, recipes, flags). The
+document store persists the last project reference and rehydrates from the server;
+transient job/progress state is not persisted.
+
+**Undo:** document history covers user edits to the project document. Board
+move/resize/link/area/note history is a separate board stack. SSE/progress events do
+not enter undo.
+
+**Save discipline:** saves are serialized; the top bar shows
+Unsaved/Saving/Saved/Save failed/Conflict. A revision mismatch returns 409 and the
+UI requires a reload rather than silently overwriting. `documentStore` owns the
+CAS/conflict state for Studio.
+
+**Rollback flags:** `VITE_STUDIO_ENABLED=false` serves the legacy editor at
+`/studio`. `VITE_STUDIO_DISABLED_SURFACES=shorts,setup` hides individual surfaces;
+ModeRail, keyboard switching, and the active-surface guard honor it. The flag
+parser is unit-tested.
+
+## Legacy store
+
+`stores/timelineStore.ts` is the original 7-slice Zustand store:
+ProjectSlice, ShotSlice, PlaybackSlice, UISlice, TrackSlice, ElementSlice, and
+ServerSlice. It uses `milimo-timeline-storage`, persists the project, and tracks the
+whole project with zundo. The legacy UI remains at `/` and is frozen except for P0
+fixes.
+
+The legacy store still contains the older contract quirks documented in the audit
+(camelCase/snake_case mapping, broad project subscribers, and optimistic
+`patchShot`). Do not extend it; new work belongs in Studio stores.
 
 ## Key Interactions
 
-- Server → store flows through `ServerSlice.handleServerEvent`: `progress` updates
-  `progress`/`statusMessage`/`etaSeconds`/`enhancedPromptResult` (matched by
-  `lastJobId`); `complete` clears `isGenerating`, sets `videoUrl`/`thumbnailUrl`,
-  bumps `assetRefreshVersion` (MediaLibrary refreshes); `error` drops a toast;
-  `cancelled` resets to pending and clears the job lock. Thumbnail jobs match by
-  `shot_id` (not `lastJobId`) and touch only `thumbnailUrl`.
-- `patchShot` is **optimistic**: it updates the store first, then PATCHes. It does
-  not roll back on a non-2xx response, so a failed save looks successful until
-  reload. SSE remains the server → store path for job progress.
-- `SSEProvider` owns the single `EventSource`; on mount, `jobPoller` re-syncs any
-  shot still flagged `isGenerating` via `GET /status/{job_id}` (see
-  [[sse-eventing.md]]).
+- **Server reads** flow through TanStack Query or focused hooks; mutations call the
+  backend then refresh the affected query.
+- **SSE jobs** update the Studio job store and prompts job polling; document
+  completion updates `videoUrl`/`thumbnailUrl` for the selected take.
+- **Playback** is isolated in its own clock/store surface so 60fps time changes do
+  not reconcile the board or timeline tree.
+- **Selection** flows board → shot list → inspector → timeline through editor store
+  selection plus document store selected shot.
+- **Agent** plans are stored in the agent store; applying a plan goes through the
+  document store so it is one undo step.
 
 ## Gotchas
 
-- **Selector discipline is load-bearing.** Granular selectors
-  (`useTimelineStore(s => s.currentTime)`) plus `useShallow` for multi-field
-  selection; `PlaybackEngine` and `VideoSurface` use headless `.subscribe()` so
-  60fps updates never trigger React renders. Components subscribing to
-  frequent updates must not select broad objects or they create reconciliation loops.
-- During clip drags, `transientDuration` updates instead of mutating `project` —
-  otherwise the whole timeline tree re-renders per frame.
-- **Safari quirk:** `draggable` elements swallow CSS hover events in WebKit —
-  interactive buttons inside draggable cards (`ElementCard`, media assets) use
-  explicit React `isHovered` state, never CSS `:hover`.
-- Magnetic V1: track 0 ignores `startFrame`; layout appends each shot after the
-  previous one's duration, so dragging a V1 clip just reorders the array. V2/A1 use
-explicit `startFrame` free placement. All in `computeTimelineLayout()`.
-- `TrackingPanel` keeps its session state locally, not in the global store.
-
-## Target State (2026-11-16)
-
-This page documents the **current** 7-slice God store. The agreed replacement is
-[[studio-shell.md]]: four stores (document / editor / job / agent), TanStack Query
-for server state, Immer patches for undo, and one API client. The migration is
-[[../roadmap/frontend-refactor-2026-11.md]]. Do not extend the current store with
-new global state; put new work in the target shell.
-
-## Audit Notes (2026-11-16)
-
-See [[engineering-audit-2026-11.md]] for evidence:
-
-- **Contract loss:** save sends `frameIndex`, load reads `frame_index`; height,
-  per-shot fps, `shotType`, `index`, and `status` are omitted from `saveProject`.
-- **74 hardcoded `http://localhost:8000` URLs** across 20 files; `VITE_API_URL` is
-  only honored by `ModelSettings`. Remote/Tauri clients break.
-- **Autosave races:** a 2s debounced whole-project PUT has no revision or
-  serialization; overlapping saves can land out of order.
-- **Undo pollution:** zundo tracks the whole project incl. progress/status, so
-  server-driven events consume the 20-step history.
-- **Stale generation state:** `isGenerating` persists in localStorage; hydrate only
-  resets toasts/playback/editing, and `jobPoller` ignores 404.
-- **`pushStoryboardToTimeline` lives in `ShotSlice`**, not `ElementSlice`, and sets
-  `trimOut = numFrames` (zero-length clips).
-- **`patchShot` rollback missing**, as noted above.
-- **Drag preview reads undefined `clip.numFrames`/`clip.name`** in `TimelineClip`.
+- Do not select whole project objects in frequently updating components; select
+  narrow fields and use `useShallow` only for related fields.
+- The board camera and layout are semantic editor state; order is always
+  `sequence_index`, never canvas x/y.
+- The Studio and legacy stores can both be mounted in one browser tab during
+  navigation; do not assume a shared document.
+- The feature flags are build-time Vite env values; changing them requires a
+  dev-server restart/rebuild.
+- Zod contracts intentionally cover selected endpoints; generated OpenAPI types
+  cover the rest. CI checks generated drift.
 
 ## Related
 
-- [[engineering-audit-2026-11.md]] — frontend findings
-- [[architecture.md]] — the system around the store
-- [[nle-timeline.md]] — the timeline this state drives
-- [[data-models.md]] — the TypeScript types mirror
-- [[sse-eventing.md]] — how server events reach the store
+- [[architecture.md]] — the system around the stores
+- [[studio-shell.md]] — Studio surfaces and layout
+- [[nle-timeline.md]] — timeline and playback
+- [[data-models.md]] — the TypeScript/backend mirror
+- [[sse-eventing.md]] — server events and recovery

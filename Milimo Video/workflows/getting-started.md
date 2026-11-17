@@ -1,7 +1,7 @@
 ---
 type: workflows
 created: 2026-10-09
-updated: 2026-10-09
+updated: 2026-11-17
 tags: setup installation quickstart
 sources:
   - README.md
@@ -19,7 +19,7 @@ From a fresh clone to a running studio generating video, locally.
 
 ## Prerequisites
 
-- Python 3.10+, Node.js 18+, FFmpeg
+- Python 3.12 (repo venv `milimov`), Node.js 22+, FFmpeg/ffprobe
 - **NVIDIA**: 16GB+ VRAM (RTX 3090/4090 recommended)
 - **Apple Silicon**: 32GB+ unified memory (M2/M3/M4 Max/Ultra recommended)
 
@@ -37,22 +37,32 @@ From a fresh clone to a running studio generating video, locally.
 5. **SAM 3** (optional but recommended): `conda create -n sam3_env python=3.12`,
    `pip install -e sam3` + FastAPI/uvicorn deps; checkpoint `backend/models/sam3/sam3.pt`
    auto-downloads from HuggingFace on first start if missing.
-6. **Launch all three services**:
-   - `./run_backend.sh` → API on port 8000
-   - `./run_sam.sh` → SAM 3 on port 8001
+6. **Optional depth**: download Depth Anything V2 Small in Setup before using the
+   Edit depth overlay.
+7. **Launch the services**:
+   - `./run_backend.sh` → API on port 8000 (runs `verify_setup.py` first)
+   - `./run_sam.sh` → SAM 3 on port 8001 (optional)
    - `./run_frontend.sh` → UI on port 5173
-7. **Open** `http://localhost:5173` (Chrome or Safari). Paste a script into the
-   Storyboard view, generate thumbnails for pre-viz, then generate shots.
+8. **Open** `http://localhost:5173/studio` (Chrome or Safari). Paste a script in
+   Story → Script, board it, generate shots in Generate, then cut in Edit.
+   The legacy editor remains at `/` until cutover.
+9. **Verify the install**:
+   ```bash
+   ./milimov/bin/python -m pytest
+   ./milimov/bin/python backend/verify_setup.py
+   cd web-app && npx tsc -b && npm run lint && npm test && npm run build
+   ```
 
 ## Tips
 
 - Only one heavy model lives in memory at a time — switching from image work to
   video work visibly unloads/reloads models (see [[../concepts/memory-slots.md]]).
   Don't run two generations at once.
-- On Apple Silicon: if output frames come back black, check the MPS dtype guards
-  (VAE decode on CPU, float32 transformer).
+- On Apple Silicon: the VAE is cast to float32 and accelerator caches are cleared
+  between jobs. FP8 is CUDA-only.
 - Inpainting and tracking need the SAM 3 service running; generation alone doesn't.
-- Keyboard: `Space` play/pause, `Cmd+S` save, drag-and-drop imports media.
+- Keyboard: `1`–`8` switch Studio surfaces, `Space` play/pause, `⌘K` command
+  dock, `B` blade, `R` ripple delete.
 
 ## Related
 

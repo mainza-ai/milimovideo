@@ -1,13 +1,15 @@
 ---
 type: systems
 created: 2026-10-09
-updated: 2026-10-09
-tags: nle timeline zustand playback frontend
+updated: 2026-11-17
+tags: nle timeline studio playback render ffmpeg
 sources:
-  - docs/01_system_architecture.md
-  - docs/user_guide.md
+  - ../docs/user_guide.md
+  - ../web-app/src/studio/
+  - ../backend/utils/render_utils.py
 related:
   - architecture.md
+  - studio-shell.md
   - frontend-state.md
 ---
 
@@ -15,74 +17,101 @@ related:
 
 ## Purpose
 
-The professional editing surface: a magnetic multi-track timeline where AI-generated
-shots become an editable film. CSS-based (no canvas) with GPU-composited clip
-positioning for 60fps responsiveness.
+The editing surface where AI-generated shots become a film. The Studio timeline is
+a DOM-handle timeline with an isolated playback clock, a keyboard/table equivalent,
+and a render graph that matches the cut. The legacy editor keeps its original
+DOM timeline as the frozen fallback.
 
-## Components
+## Studio components
 
 | Component | Role |
 |---|---|
-| `timelineStore.ts` | Single Zustand store (7 slices) — the source of truth; persist + zundo undo/redo |
-| `VisualTimeline.tsx` | Renders tracks, clips, playhead; handles drag-and-drop |
-| `TimelineTrack.tsx` / `TimelineClip.tsx` | Track and clip rendering; clips use `translateX` for GPU compositing |
-| `PlaybackEngine.tsx` | Headless `requestAnimationFrame` loop driving `currentTime`; caches layout in a `useRef` to avoid per-frame GC |
-| `GlobalAudioManager.ts` | Web Audio API singleton (`AudioContext` + `AudioBufferSourceNode`); buffers decoded upfront; 0.3s drift tolerance |
-| `timelineUtils.ts` | `computeTimelineLayout()` — centralized layout with magnetic V1 logic |
-| `snapEngine.ts` | Snap-to-grid/clip/playhead during drags |
-| `CinematicPlayer.tsx` | "Program monitor": `VideoSurface`, `PlayerHUD`, `LoadingOverlay`, `ControlsBar` |
+| `studio/state/documentStore.ts` | Studio project document, save/revision, document undo |
+| `studio/components/StudioTimeline.tsx` | Tracks, clips, tools, trim gestures, audio picker, caption lane, table view |
+| `studio/components/PlaybackEngine.tsx` | Studio-owned `requestAnimationFrame` clock, separate from the legacy store |
+| `studio/components/Waveform.tsx` | Audio waveform rendering |
+| `studio/components/MotionPanel.tsx` | Keyframe editing for opacity/scale/pan/volume |
+| `studio/utils/timelineUtils.ts` / `timeline/ops.ts` | Shared computed layout and pure edit operations |
+| `backend/utils/render_utils.py` | FFmpeg filtergraph builder for the computed cut |
 
 ## Tracks
 
-- **V1 (magnetic)** — the main story track; clips snap together, no gaps.
-- **V2 (overlay)** — free placement; b-roll, inserts.
-- **A1 (audio)** — music and SFX, with waveform display (WaveSurfer; Safari gets the
-  `MediaElement` backend, others `WebAudio`).
+- **V1** — magnetic story track. Order is `sequence_index`; `start_frame` is ignored.
+- **V2** — free overlay track with alpha compositing.
+- **A1** — free audio/music track.
+- **C1** — caption lane backed by project caption cues.
 
-## Key Interactions
+A2 is **not implemented** in scoped v1. The render graph and UI stop at V1/V2/A1
+plus captions.
 
-- `CinematicPlayer` subscribes to the headless `PlaybackEngine` with throttled drift
-  correction (250ms, `fastSeek()` support); video starts muted for Safari autoplay
-  policy and un-mutes on first user gesture.
-- SSE `complete` events and `jobPoller` keep timeline state in sync with backend jobs.
-- Keyboard: `Space` play/pause, `Cmd+Z` / `Cmd+Shift+Z` undo/redo, `Cmd+S` save,
-  `Delete` removes selected shot, drag-and-drop imports media.
+## Tools and interactions
 
-## Gotchas
+- **Select/trim** — click clips; drag edge handles to trim. Handles support keyboard
+  nudging through the table path.
+- **Slip** — move the source window while keeping duration.
+- **Roll** — move a cut together with the next V1 clip.
+- **Blade** — split at the playhead (`B`).
+- **Ripple delete** — remove and reflow V1 (`R`).
+- **Slide** — move the selected V1 clip earlier/later (`[` / `]`).
+- **Rate** — 0.25–4×; duration changes and render applies `setpts`/`atempo`.
+- **Audio** — gain, mute, fade-in/out, per-clip solo/mute, A1 placement, waveform.
+- **Captions** — add at playhead, edit in/out/text, import SRT/VTT, optional burn-in.
+- **Motion** — opacity, scale, pan X/Y, and volume keyframes.
+- **Table** — editable rows for clips, trims, speed, mute, and delete; keyboard edit
+  path for accessibility.
+- **Range** — deliver in/out seconds; the render respects it.
 
-- Per-frame work must not recompute layout — the `useRef` cache on
-  `computeTimelineLayout` exists because recomputing every frame caused GC pressure.
-- Safari needs muted-start + `MediaElement` audio backend; Chrome is fine on WebAudio.
+## Render truth
 
-## Target State (2026-11-16)
+The export is computed from `sequence_index` and placement, not from canvas
+coordinates or stale `start_frame` values:
 
-The replacement timeline is specified in [[studio-shell.md]] and
-[[../roadmap/frontend-refactor-2026-11.md]]: V1 magnetic from `order_index`, free
-V2/A1/A2/captions, DOM handles + canvas media layer, embedded V1/V2 audio,
-keyframes, transitions, and a render graph that matches the cut. Stop adding
-features to the current DOM-only timeline except P0 fixes.
+- magnetic V1 timing across the project;
+- V2 alpha-correct overlay over V1;
+- embedded V1/V2 audio plus A1 (`amix duration=longest`);
+- per-clip gain/mute, fades, solo, and track mute/hidden state;
+- speed, trim, opacity/scale/pan/volume keyframes;
+- caption ASS burn-in;
+- render range and fit (`pad` or `crop`);
+- persisted project defaults for CRF, encoder speed, audio bitrate, and optional
+  single-pass `loudnorm` at −16 LUFS.
 
-## Audit Notes (2026-11-16)
+The render runs as an FFmpeg subprocess with parsed progress, cancellation, a
+single terminal event, and a `Job` row. Tests assert real output duration,
+dimensions, pixels, audio presence/bitrate, and filtergraph contents.
 
-The timeline *renders* correctly in the browser but does not yet *persist* or
-*export* correctly. See [[engineering-audit-2026-11.md]] for evidence:
+## Playback
 
-- V1 order is array order only; `PUT /projects/{id}` has no order field and `GET`
-  sorts by `created_at`, so reorder is lost on reload.
-- Export computes V1 starts from `start_frame`, not magnetic layout; every V1 shot
-  in the live DB has `start_frame=0`, so export overlays them all at `t=0`.
-- "Push to timeline" sets `trimOut = numFrames`, producing zero-length clips.
-- Split shot is broken (missing `datetime` import in the route; client maps a JSON
-  string as an array) and assigns the new shot the original index.
-- V2 export pads opaque black over V1 (no alpha compositing); V1/V2 embedded audio
-  is never mixed. Preview starts muted for Safari autoplay and has no per-clip
-  audio control.
-- `GlobalAudioManager` ignores `trimOut` when computing clip duration.
-- Per-frame `setCurrentTime` still notifies components that select `project`/
-  `shots`, so 60fps scrubbing reconciles large trees.
+- `PlaybackEngine` owns a studio clock; components subscribe narrowly so scrubbing
+  does not reconcile the whole project tree.
+- Play/pause is global (`Space` opens Edit when needed).
+- Video preview starts muted for Safari autoplay, then unmutes on the first gesture.
+- WaveSurfer supplies waveforms; Safari uses the `MediaElement` backend.
+
+## Performance
+
+- 500-card board pan measured ~58 fps headless.
+- 200-clip timeline scroll measured ~275–280 fps headless.
+- Board culling and timeline culling are committed in Playwright perf specs.
+- Avoid per-frame project subscriptions; use narrow selectors and the isolated
+  playback clock.
+
+## Legacy timeline
+
+The legacy `/` timeline remains a 3-track DOM editor with its own store and export
+modal. It is frozen except for P0 fixes. Do not add new features to it; Studio is the
+current shell.
+
+## Known scoped gaps
+
+- No transitions, LUTs, or title clips.
+- No A2 track.
+- No canvas media layer; clips are DOM elements with culling.
+- Proxies and media relink are not implemented.
 
 ## Related
 
-- [[engineering-audit-2026-11.md]] — timeline/export findings
 - [[architecture.md]] — the full system picture
-- [[frontend-state.md]] — the store driving the timeline
+- [[studio-shell.md]] — Studio surface architecture
+- [[frontend-state.md]] — stores and playback isolation
+- [[../roadmap/implementation-plan-2026-11.md]] — render/scheduler status

@@ -7,7 +7,7 @@
 **The AI-Native Cinematic Studio**
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Frontend](https://img.shields.io/badge/Frontend-React_18_Vite-61DAFB.svg)](web-app/)
+[![Frontend](https://img.shields.io/badge/Frontend-React_19_+_Vite-61DAFB.svg)](web-app/)
 [![Backend](https://img.shields.io/badge/Backend-FastAPI_Python-009688.svg)](backend/)
 [![Models](https://img.shields.io/badge/Models-LTX--2_|_Flux.2_|_SAM_3-purple.svg)](https://github.com/Lightricks/LTX-2)
 
@@ -15,219 +15,291 @@
 
 ---
 
-**Milimo Video** is a state-of-the-art, open-source AI video production studio designed for filmmakers. It unifies the world's best foundation models into a cohesive, professional workflow — running entirely **local-first** on your own machine.
+**Milimo Video** is an open-source, local-first AI film studio: a storyboard, a
+shot-generation workspace, a non-linear editor, a review room, and a delivery desk
+in one application. It runs on your machine. No cloud account is required for the
+project, the cut, the models, or the render.
 
-Unlike simple "prompt-to-video" interfaces, Milimo is a full **Non-Linear Editor (NLE)** that combines:
-*   **LTX-2 19B** — Dual-stream transformer for cinematic video generation (text-to-video, image-to-video, keyframe interpolation).
-*   **Flux 2 Klein 9B** — High-fidelity image synthesis with IP-Adapter reference conditioning and RePaint inpainting.
-*   **SAM 3** — Text-prompted segmentation, click-to-segment, and video object tracking via standalone microservice.
-*   **Gemma 3** — Intelligent prompt enhancement and narrative direction.
+There are two interfaces during the strangler cutover:
 
-## ✨ Key Features
+- **Studio** — `http://localhost:5173/studio`. The current shell: Story, Generate,
+  Edit, Review, Library, Deliver, Shorts, and Setup.
+- **Legacy editor** — `http://localhost:5173/`. Frozen fallback for the cutover
+  window. Set `VITE_STUDIO_ENABLED=false` to serve it at `/studio` as a rollback.
 
-### 🎬 Visual Conditioning & Character Consistency
-Achieve what standard models can't: persistent identities across shots.
-- **IP-Adapter Integration**: Flux 2's IP-Adapter (CLIP ViT-L → 4-token projection) injects visual style and character identity directly into the generation latent space.
-- **Reference Conditioning**: Native AE encodes reference images with temporal offsets, concatenating them to the denoising input for style-faithful generation.
-- **Story Elements**: Define reusable **Characters, Locations, and Objects** with trigger words (e.g., `@Hero`). The system auto-detects triggers in prompts and injects the correct IP-Adapter images and enriched text.
-- **Projected Latents**: Support for projecting reference images into LTX-2's latent space for seamless Image-to-Video transitions.
+The Tauri desktop shell hosts the same Studio UI with native Open/Save dialogs and
+a backend supervisor.
+
+## ✨ What makes it a studio
+
+### One project, three lenses
+
+- **Story** — script parsing, story spine, infinite board, shot list, typed links,
+  notes, master-reference cards, review task cards, and board undo.
+- **Generate** — ingredients and `@trigger` mentions, advanced parameters, a
+  persistent seed lock, start/end-frame conditioning, preview stills, batch queue
+  and matrix, immutable takes, favorites, inpaint, and a pipeline lens whose
+  reproducible recipe can be exported and imported as JSON.
+- **Edit** — program monitor, compare/wipe, guides, magnetic V1 plus free V2/A1,
+  trim/slip/roll/blade/ripple/rate/slide, audio gain/mute/fades/solo, waveform,
+  captions with SRT/VTT import and burn-in, motion keyframes, render range, a
+  timeline table/keyboard path, object tracking, local depth overlay, blocking
+  lens, and lazy 3D previz.
+
+### Takes, review, and delivery
+
+- Every completed generation is an immutable take with seed, model, and lineage.
+- Review supports frame comments, approvals, activity, compare, a needs-you tray,
+  and capability share links.
+- Library covers uploads, master references, takes, and ranked local search.
+- Deliver writes the computed cut with V1/V2 compositing, embedded audio + A1 mix,
+  trims, speed, fades, keyframes, captions, render range, and persisted encoding
+  settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
+- Shorts builds scored candidate windows from a transcript or shot text, supports
+  editable in/out ranges, and exports 9:16, 1:1, and 4:5 crops from the cut or an
+  uploaded source.
+- Setup exposes real device/slot/queue/disk state, queued and cancellable model
+  downloads, LoRA activation and strength, an optional local Depth Anything V2
+  model, queue pause/resume, integrity scan/repair, and a job error budget.
+
+### Visual conditioning & character consistency
+
+- **Story Elements / Master References** — reusable Characters, Locations, Objects,
+  and Styles with `@trigger` words. Trigger detection injects reference images and
+  enriched prompt context.
+- **IP-Adapter** — Flux 2 reference conditioning for identity and style.
+- **Reference conditioning** — native AE reference encoding for generation.
+- **Projected latents** — reference images can be projected into LTX-2 latent space.
+
+### Storyboard engine and chained generation
+
+- Paste screenplay text; the local parser produces scenes and shots. AI parsing is
+  queued through the GPU ledger rather than blocking the request.
+- Character/Location/Object matching uses `ElementMatcher` with provenance.
+- Shots over the native 121-frame chunk generate autoregressively with a 25-frame
+  overlap, pixel `media_sequence` handoff, and start-trimmed audio alignment.
+
+### Inpainting, segmentation, tracking, depth
+
+- **Flux 2 RePaint** inpainting from a text mask, SAM points, or an uploaded mask.
+- **SAM 3** text/box/click segmentation and bidirectional video object tracking via
+  a separate microservice on port 8001.
+- **Depth Anything V2 Small** (optional, downloaded in Setup) produces a local
+  monocular depth map for the Edit stage.
+- Jobs run through the durable GPU ledger with one OOM retry and a single heavy
+  model slot.
 
 ![Milimo Elements](assets/milimo_video_elements.png)
 
-### 📝 Storyboard Engine
-Transform screenplays into video productions instantly.
-- **Script-to-Video**: Paste standard screenplay text — Milimo parses it into Scenes and Shots via regex-based `ScriptParser`.
-- **Auto-Injection**: `ElementManager` scans for `@Element` references and injects visual/textual conditioning + narrative context (action, dialogue, character).
-- **Chained Generation**: Shots exceeding 121 frames auto-trigger **Quantum Alignment** — autoregressive chunk-by-chunk generation with latent handoffs aligned to the 8-pixel VAE grid, ensuring seamless visual continuity.
-
-### 🎞️ Professional Non-Linear Editor (NLE)
-A fully functional timeline built for the AI workflow.
-- **Multi-Track Editing**: 3 tracks — V1 (magnetic main), V2 (overlay, free placement), A1 (audio).
-- **Smart Continue**: Autoregressive video chaining via `StoryboardManager` with last-frame extraction and overlap trimming.
-- **Precision Control**: Frame-accurate seeking, scrubbing, trimming (`trimIn`/`trimOut`), and `snapEngine` snapping.
-- **CSS-Based Timeline**: GPU-accelerated clip positioning (`translateX`), granular Zustand selectors, and `useShallow` for 60fps UI responsiveness.
-
 ![Milimo Timeline](assets/milimo_video_timeline.png)
 
-### ✂️ In-Painting & Intelligent Editing
-Professional-grade retouching powered by the SAM 3 → Flux 2 pipeline.
-- **Flux RePaint Inpainting**: Select any frame, mask an area, and use natural language to add or remove elements. Uses iterative mask-blended denoising with real-time SSE progress. Inpaint jobs are persisted to the database for reliable status polling via `/status/{job_id}`.
-- **SAM 3 Text-Prompted Segmentation**: Describe what to segment ("a person", "the sky") — SAM 3 finds all matching objects with bounding boxes and confidence scores.
-- **Click-to-Segment**: Click on objects in the video frame for instant SAM 3-powered mask generation. No manual roto-scoping.
-- **Video Object Tracking**: Select an object on one frame → SAM 3 tracks it across every frame of the video, bidirectionally. Full UI via `TrackingPanel` with session lifecycle management (start → prompt → propagate → navigate results).
-- **AE Hot-Swap**: Toggle between native AutoEncoder (supports reference conditioning) and diffusers AE fallback via the `enable_ae` flag.
-- **True CFG Mode**: Optional double-pass negative prompting for Flux 2 (2× inference time, disabled by default).
-
 ![Milimo Image Generation](assets/milimo_video_image_generation.png)
-
-### 🧠 Advanced Generation
-- **Dual-Stage Pipeline**: LTX-2 generates at half-res, then spatially upsamples 2× with distilled LoRA-384.
-- **3 Pipeline Modes**: `ti2vid` (text/image-to-video), `ic_lora` (IC-LoRA conditioning), `keyframe` (keyframe interpolation).
-- **Single-Frame Shortcut**: When `num_frames==1`, video gen silently delegates to Flux 2 for instant image generation.
-- **Real-Time Progress**: SSE (Server-Sent Events) stream denoising step progress, ETA, and enhanced prompts to the UI in real-time.
-
----
 
 ## 🛠️ Architecture
 
 ![Milimo Architecture](assets/Milimo_Video_Studio_Architecture_infograph.png)
 
-
-Milimo Video is built on a modern, robust stack:
-
 | Layer | Technology |
 |---|---|
-| **Frontend** | React 18, TypeScript, Vite, Zustand (7-slice store + persist + zundo undo/redo) |
-| **Backend** | FastAPI (Python 3.10+), SQLModel/SQLAlchemy (SQLite), SSE via `sse-starlette` |
-| **Video AI** | LTX-2 19B Dual-Stream Transformer — 3 pipelines + chained generation |
-| **Image AI** | Flux 2 Klein 9B (`FluxInpainter`) — IP-Adapter, True CFG, RePaint inpainting |
-| **Segmentation** | SAM 3 Microservice (port 8001) — `Sam3Processor` (text/box), `inst_interactive_predictor` (click), `Sam3VideoPredictor` (tracking, MPS/CUDA/CPU) |
-| **Prompt AI** | Gemma 3 (via LTX-2 text encoder) — cinematic prompt enhancement |
-| **Processing** | FFmpeg — thumbnails, frame extraction, overlap trimming, concat |
+| **Studio frontend** | React 19.2, TypeScript, Vite, Zustand document/editor/job/agent stores, TanStack Query, zod contracts |
+| **Legacy frontend** | React + Vite NLE at `/`, separate timeline store, frozen fallback |
+| **Backend** | FastAPI (Python 3.12 in the checked-in venv), SQLModel/SQLAlchemy + SQLite, Alembic, SSE via `sse-starlette` |
+| **Video AI** | LTX-2 19B — `ti2vid`, `ic_lora`, `keyframe`, chained generation |
+| **Image AI** | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint inpainting |
+| **Segmentation** | SAM 3 microservice (port 8001) — text/box/click masks and video tracking |
+| **Prompt AI** | Gemma 3 via the LTX text encoder; optional Ollama path |
+| **Processing** | FFmpeg/ffprobe — render, probes, thumbnails, frame extraction, stitching |
+| **Desktop** | Tauri 2 — native Open/Save dialogs, backend supervisor, sidecar-binary lookup |
 
-### MPS-First Optimization
-Designed for Apple Silicon with CUDA as primary target:
-- FP8 on CUDA, float32 fallback on MPS
-- VAE decode CPU-offloaded on MPS (prevents black output)
-- Transformer forced to float32 dtype on MPS
-- Memory managed via `gc.collect()` + `torch.mps.empty_cache()`
-- SAM 3 Video Predictor: device auto-detection (CUDA → MPS → CPU), guarded `torch.cuda.*` calls
-- `PYTORCH_ENABLE_MPS_FALLBACK=1` for SAM 3 ops not yet on MPS
+### Backend surface
 
-### Documentation
-See the [`docs/`](docs/) directory for comprehensive technical documentation:
-- [System Architecture](docs/01_system_architecture.md) — Component diagrams and subsystem interactions
-- [Data Models](docs/02_data_models.md) — ER diagrams, Pydantic schemas, TypeScript types
-- [AI Pipelines](docs/03_ai_pipelines.md) — LTX-2, Flux 2, SAM 3 pipeline analysis with flow diagrams
-- [Frontend State](docs/04_frontend_state.md) — Zustand store architecture and optimization strategies
-- [Execution Flow](docs/05_execution_flow.md) — Sequence diagrams for all generation workflows
-- [File Dependencies](docs/06_file_dependency.md) — Import graphs and module analysis
-- [Flux 2 Bible](docs/flux2-bible.md) — Deep-dive into Flux 2 integration
-- [LTX-2 Bible](docs/ltx2-bible.md) — Deep-dive into LTX-2 integration
-- [SAM 3 Bible](docs/sam3-bible.md) — Deep-dive into SAM 3 microservice
+- Eleven routers and 113 routes: projects, jobs, assets, storyboard, elements,
+  shots, models, planner, review, share, depth.
+- Pydantic write boundaries, generated OpenAPI TypeScript, and zod contract checks.
+- Alembic baseline `0001_baseline` plus `0002_render_settings` and
+  `0003_seed_lock`; legacy DBs are repaired and stamped at head.
+- `QueuedJob` ledger, one global GPU semaphore, one OOM retry, startup recovery,
+  idempotent shot jobs, pause/resume dispatch, queue position/estimate.
+- `X-Request-ID`, timing logs, `/health`, `/metrics/jobs`, and an error-budget UI.
+- Loopback by default, CORS allowlist, optional bearer token, safe Range media
+  serving, upload allowlist/size cap.
 
----
+### MPS-first notes
+
+- FP8 is CUDA-only; Apple Silicon uses the regular MPS path.
+- The VAE is cast to float32 on MPS to prevent black output; accelerator caches are
+  cleared between jobs.
+- Long video jobs are chunked; the GPU semaphore prevents two heavy models loading
+  at once.
+- SAM 3 auto-selects CUDA → MPS → CPU and guards CUDA-only calls.
+- `PYTORCH_ENABLE_MPS_FALLBACK=1` is used for unsupported SAM 3 ops.
+
+## 📚 Documentation
+
+- [User Guide](docs/user_guide.md) — the definitive Studio-first manual.
+- [Wiki index](Milimo%20Video/index.md) — interlinked systems, models, pipelines,
+  workflows, decisions, and roadmap.
+- [System Architecture](docs/01_system_architecture.md)
+- [Data Models](docs/02_data_models.md)
+- [AI Pipelines](docs/03_ai_pipelines.md)
+- [Frontend State](docs/04_frontend_state.md)
+- [Execution Flow](docs/05_execution_flow.md)
+- [File Dependencies](docs/06_file_dependency.md)
+- [Flux 2 Bible](docs/flux2-bible.md), [LTX-2 Bible](docs/ltx2-bible.md),
+  [SAM 3 Bible](docs/sam3-bible.md)
+- [Implementation plan](Milimo%20Video/roadmap/implementation-plan-2026-11.md) —
+  scoped v1 status, remaining/deferred items, verification matrix.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- **Python 3.10+**
-- **Node.js 18+**
-- **FFmpeg**
-- **High-End GPU**:
-  - **NVIDIA**: 16GB+ VRAM recommended.
-  - **Apple Silicon**: M1/M2/M3/M4 Max or Ultra recommended (32GB+ RAM).
+- **Python 3.12** (the repo venv is `milimov/`)
+- **Node.js 22+**
+- **FFmpeg and ffprobe** on `PATH`
+- **Apple Silicon:** 32 GB unified memory or more recommended for LTX-2 19B.
+- **NVIDIA:** 16 GB+ VRAM recommended.
+- **Disk:** model checkpoints are large; Setup reports free space before download.
 
-### 1. Installation
+### 1. Install
 
-Clone the repository:
 ```bash
 git clone https://github.com/mainza-ai/milimovideo.git
 cd milimovideo
+python3 -m venv milimov
+./milimov/bin/pip install -e ./LTX-2/packages/ltx-core \
+  -e ./LTX-2/packages/ltx-pipelines -e ./flux2 \
+  -r backend/requirements.txt
+cd web-app && npm install && cd ..
 ```
 
-### 2. Backend Setup
+### 2. Models
 
-Milimo uses a specialized environment for LTX-2 and Flux.
+Download LTX-2, Flux 2, and SAM 3 checkpoints as described in the
+[User Guide](docs/user_guide.md), or use Setup's model table to inspect/download
+supported entries. Depth Anything V2 Small is optional and only needed for the
+Edit depth overlay.
 
-1.  **Create Environment**:
-    ```bash
-    python3 -m venv milimov
-    ./milimov/bin/pip install -e ./LTX-2/packages/ltx-core
-    ./milimov/bin/pip install -e ./LTX-2/packages/ltx-pipelines
-    ./milimov/bin/pip install -e ./flux2
-    ./milimov/bin/pip install -r backend/requirements.txt
-    ```
+SAM 3 is optional for segmentation/tracking; without it the rest of the studio
+still runs.
 
-2.  **Download LTX-2 Models**:
-    Place the following into `LTX-2/models/checkpoints/`:
-    - [LTX-2 19B Distilled](https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled.safetensors)
-    - [LTX-2 Distilled LoRA-384](https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-19b-distilled-lora-384.safetensors) → `checkpoints/`
-    - [LTX-2 Spatial Upscaler](https://huggingface.co/Lightricks/LTX-2/resolve/main/ltx-2-spatial-upscaler-x2-1.0.safetensors) → `upscalers/`
-    - [Gemma 3 Text Encoder](https://huggingface.co/google/gemma-3-12b-it-qat-q4_0-unquantized/tree/main) → `text_encoders/gemma3/`
+### 3. Launch
 
-3.  **Download Flux 2 Models**:
-    Place files in `backend/models/flux2/`:
-
-    ```text
-    backend/models/flux2/
-    ├── flux-2-klein-9b.safetensors    # Flow model (9B params)
-    ├── ae.safetensors                 # Native AutoEncoder (preferred)
-    ├── vae/                           # Diffusers AE fallback (config.json + diffusion_pytorch_model.safetensors)
-    ├── text_encoder/                  # Qwen 3 (8B) text encoder
-    ├── tokenizer/                     # Qwen tokenizer files
-    └── ip-adapter.safetensors         # IP-Adapter weights (CLIP ViT-L projection)
-    ```
-
-4.  **SAM 3 Setup (Segmentation & Tracking)**:
-    The SAM 3 service runs in a separate environment (`sam3_env`).
-    1.  Create environment:
-        ```bash
-        conda create -n sam3_env python=3.12
-        conda activate sam3_env
-        pip install -e sam3
-        pip install fastapi uvicorn python-multipart psutil pycocotools huggingface_hub
-        ```
-    2.  **Download Model**:
-        Download the SAM 3 checkpoint from [HuggingFace](https://huggingface.co/facebook/sam3) (auto-downloads on first start if missing).
-    3.  Place it in: `backend/models/sam3/sam3.pt`
-
-### 3. Running the Studio
-
-**1. Start the Backend API** (port 8000):
 ```bash
-./run_backend.sh
+./run_backend.sh     # verifies the environment, then serves http://127.0.0.1:8000
+./run_sam.sh         # optional SAM 3 on port 8001
+./run_frontend.sh    # Vite on http://127.0.0.1:5173
 ```
 
-**2. Start the SAM 3 Service** (port 8001, optional — for segmentation, masking & tracking):
+Open **`http://localhost:5173/studio`** for the Studio shell. The legacy editor is
+at `/`.
+
+Desktop:
+
 ```bash
-./run_sam.sh
+cd web-app
+npm run tauri dev
+npm run tauri build
 ```
 
-**3. Start the Web Interface** (port 5173):
+If the backend is offline, the top-bar status offers **Start backend**, which runs
+`run_backend.sh` from the checkout. No Python/Torch runtime is bundled yet; the
+supervisor will launch a `milimo-backend` sidecar binary if one is shipped.
+
+### Health
+
 ```bash
-./run_frontend.sh
+curl http://127.0.0.1:8000/health
 ```
 
-Visit **`http://localhost:5173`** to enter the studio.
-
----
+Reports device, GPU busy/queued, memory slots, queue pause state, auth mode, and
+free disk.
 
 ## 🎮 Controls
 
+### Studio
+
 | Key | Action |
 |---|---|
-| **Space** | Play / Pause |
-| **Cmd + Z** | Undo |
-| **Cmd + Shift + Z** | Redo |
-| **S / Cmd + S** | Save Project |
-| **Delete / Backspace** | Remove selected shot |
-| **Drag & Drop** | Import images/videos onto timeline |
-| **✏️ Edit icon** | Toggle masking/inpainting mode |
-| **⌖ Crosshair icon** | Toggle video object tracking mode |
+| `1`–`8` | Story, Generate, Edit, Review, Library, Deliver, Shorts, Setup |
+| `Space` | Play/pause (opens Edit when needed) |
+| `⌘K` / `Ctrl+K` | Command dock |
+| `⌘Z` / `Ctrl+Z` | Undo |
+| `⇧⌘Z` / `Ctrl+Shift+Z` | Redo |
+| `B` | Blade at the playhead |
+| `R` | Ripple delete |
+| `[` / `]` | Slide selected V1 clip |
+| `Escape` | Exit focus mode |
 
----
+Board: drag empty canvas to pan, `⌘`/`Ctrl`+wheel to zoom, `Shift`-click to
+multi-select, `Shift`-drag to marquee. Timeline: drag clip edges to trim; the table
+view exposes keyboard editing.
 
----
+### Legacy
 
-## 🤝 Community & Collaboration
+The legacy editor keeps its original shortcuts, including `S`/`⌘S` save and the
+masking/tracking toggles. New work belongs in Studio.
 
-Milimo Video is an open-source project, and we welcome contributions! Whether you're a developer, filmmaker, or AI enthusiast, there are many ways to get involved:
+## ✅ Verification
 
-*   **Code**: Submit Pull Requests for new features, bug fixes, or performance improvements.
-*   **Models**: Share custom LoRAs or fine-tunes that work well with the LTX-2/Flux pipeline.
-*   **Feedback**: Open Issues for bugs or feature requests on our [GitHub repository](https://github.com/mainza-ai/milimovideo).
+```bash
+./milimov/bin/python -m compileall -q backend
+./milimov/bin/python -m pytest                    # 82 tests
+./milimov/bin/python -m ruff check backend        # correctness rules
+./milimov/bin/python backend/verify_setup.py      # 0 failures expected
 
-Let's build the future of AI cinema together.
+cd web-app
+npx tsc -b --pretty false
+npm run lint
+npm test                                          # 52 tests
+npm run build
+npm run check:bundle                              # JS budget
+npm run test:e2e                                  # 12 Playwright tests
+```
+
+The last verified run was 82 backend tests, 52 Vitest tests, and 12 Playwright
+tests, including all-surface axe, CRUD, export, reference CRUD, review-agent, perf,
+and visual checks.
+
+## 🧭 Project layout
+
+```
+backend/           FastAPI, tasks, routes, models, Alembic, tests
+web-app/           React/Vite Studio + legacy editor + Tauri shell
+  src/studio/      Studio shell, stores, surfaces, lenses, shorts, collab
+  src-tauri/      Native shell and backend supervisor
+sam3/              Optional SAM 3 microservice
+tests/             Backend pytest suite
+docs/              Immutable technical sources and user guide
+Milimo Video/      LLM-owned wiki (systems, models, pipelines, roadmap)
+dev_diary/         Build log and social notes
+```
+
+## ⚠️ Known limitations
+
+- **No bundled Python runtime.** The desktop shell can start a sidecar binary if
+  present, but packaging Python/Torch is not built.
+- **Legacy `/` remains** until the documented two-clean-release cutover window.
+- **Scoped v1 cut:** no transitions, LUTs, titles, or A2 track; search is ranked
+  lexical matching, not embeddings; Shorts/lenses have no template packs.
+- **Depth model** is downloaded separately and is not shipped in the repo.
+- **Visual baselines** are platform-tolerant and locally generated.
+- **Phase 6 v2 work** (eval harness, model swaps, MLX/FP8 lanes, agent crew) is a
+  separate program, not part of scoped v1.
+
+## 🤝 Community
+
+Milimo Video is open source. Contributions are welcome:
+
+- **Code** — pull requests for features, fixes, and performance.
+- **Models** — share LoRAs or fine-tunes that work with LTX-2/Flux.
+- **Feedback** — open issues on the [GitHub repository](https://github.com/mainza-ai/milimovideo).
 
 ## ✍️ Author
 
 **Mainza Kangombe**  
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-blue.svg)](https://www.linkedin.com/in/mainza-kangombe-6214295)
 
----
-
 ## 📜 License
 
-This project is licensed under the Apache 2.0 License.
+Apache 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

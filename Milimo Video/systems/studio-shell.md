@@ -1,7 +1,7 @@
 ---
 type: systems
 created: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 tags: frontend architecture canvas timeline studio shell ux
 sources:
   - wiki/research/frontend-video-platforms-2026.md
@@ -16,20 +16,21 @@ related:
   - ../roadmap/implementation-plan-2026-11.md
 ---
 
-# Studio Shell — Target Front-End Architecture
+# Studio Shell — Implemented Front-End Architecture
 
 ## Purpose
 
-Define the front end Milimo Video should become: a local-first film studio where
-**the board, the shot, and the cut are the same project**. This replaces the
-current tab-switched, God-store, hardcoded-localhost UI with a shell built around
-one canonical project graph and three synchronized lenses:
+Define the Studio shell: a local-first film studio where **the board, the shot, and
+the cut are the same project**. It replaces the legacy tab-switched, God-store UI
+with one canonical project graph and synchronized lenses:
 
 - **Story** — script, board, shot list.
 - **Generate** — shot workspace, ingredients, takes.
 - **Edit** — stage, timeline, inspector.
 - **Review** — versions, compare, comments, approvals.
-- **Library / Deliver** — assets, master references, models, exports, shorts.
+- **Library / Deliver** — assets, master references, takes, exports.
+- **Shorts** — transcript candidates, reframe, variants.
+- **Setup** — device, queue, models, integrity, error budget.
 
 The reference implementation for the canvas interaction vocabulary is
 [Kubona](https://github.com/mainza-ai/kubona) (Apache 2.0, inspected at
@@ -39,6 +40,17 @@ The reference implementation for the canvas interaction vocabulary is
 `CopilotDrawer.tsx`, and `CommandPalette.tsx`. Borrow the interaction patterns and
 small utilities with attribution; do **not** import the quantum domain, cards, or
 product language.
+
+## Implementation Status (2026-11-17)
+
+The scoped F0–F5 shell is implemented: Story, Generate, Edit, Review, Library,
+Deliver, Shorts, and Setup; board and timeline as peers; immutable takes; agent
+plan/approval/undo; review/share; queue pause/resume; seed lock; encoding controls;
+integrity scan/repair; Tauri native open/save.
+
+Known scoped gaps: no transitions/LUT/titles/A2, lexical rather than embedding
+search, no shorts/lens template packs, and no bundled Python sidecar runtime. Legacy
+`/` remains until the two-clean-release cutover.
 
 ## Design Stance
 
@@ -69,7 +81,8 @@ product language.
 | **Review** | Is this the right take? | Versions + Compare + Comments |
 | **Library** | What do I own? | Assets / Elements / Takes / Models |
 | **Deliver** | How does it go out? | Presets + Variants + Render queue |
-| **Settings** | How is the studio configured? | Project / Device / Models / Shortcuts |
+| **Shorts** | How do I repurpose the cut? | Transcript + candidates + reframe |
+| **Setup** | How is the studio configured? | Device / Models / Queue / Integrity |
 
 The mode rail is intentionally small (six icons + settings). Every surface is
 reachable from the command palette and from contextual links (“Open in Edit”,
@@ -128,7 +141,7 @@ the shot list is the accessible/bulk-edit view.
 │                                                      │ Take      │
 ├──────────────────────────────────────────────────────┤ Audio     │
 │ Timeline (45–60% height)                             │ Effects   │
-│ ruler · V2 · V1 · A1 · A2 · captions · markers       │ History   │
+│ ruler · V2 · V1 · A1 · captions · markers             │ History   │
 └──────────────────────────────────────────────────────┴───────────┘
 ```
 
@@ -230,15 +243,15 @@ shapes).
 
 ### Board lenses (progressive)
 
-1. **Story Board** (v1) — cards, areas, links, master references, takes, notes.
-2. **Pipeline** (later) — node graph for a shot's generation recipe; every step
-   visible, reusable, cost-estimated. Build on `@xyflow/react` or a custom graph;
-   do not make it the default surface.
-3. **Blocking** (later) — top-down camera/character diagram with auto camera
-   reposition, animated blocking, shot list sync (Shot Designer pattern).
-4. **Previz 3D** (later) — three.js stage with camera path, depth, props/sets,
-   snapshot to image/video conditioning (Kubona 3D pattern). Lazy-load; fail
-   closed when WebGL is unavailable.
+1. **Story Board** (implemented) — cards, areas, links, master references, takes,
+   notes.
+2. **Pipeline lens** (implemented v1) — validation graph for a shot recipe, with
+   model/time/VRAM estimate, apply-to-shot, and JSON recipe import/export. It is a
+   lens, not the default surface.
+3. **Blocking lens** (implemented v1) — top-down camera/character/object diagram
+   persisted per shot; reset and rotation controls.
+4. **Previz 3D** (implemented v1) — lazy three.js stage with camera path, orbit/zoom/
+   pan, and PNG snapshot. WebGL failure is caught; the editor continues.
 
 ### Board node morphologies
 

@@ -1064,3 +1064,15 @@ Replaced the stale "deeper shorts polish open" note and expanded "Still open"
 into explicit remaining/deferred items: bundled Python sidecar, legacy cutover,
 the Phase 6 v2 lane, scoped-v1 gaps (transitions/LUT/titles/A2, embedding search,
 template packs), and local visual baselines. No code changed.
+
+## [2026-11-17] ingest | docs, README, and wiki refresh
+
+Updated the public README, `docs/user_guide.md`, and the LLM wiki to the current
+Studio + legacy architecture. The README now reflects React 19.2, the Studio
+surfaces, the eleven-router/113-route backend, Alembic 0001–0003, durable queue,
+render encoding, seed lock, desktop open/save, verification commands, and scoped
+limitations. Wiki updates: overview, index, architecture, data-models, nle-timeline,
+frontend-state, sse-eventing, studio-shell, engineering-audit remediation/product
+gaps, getting-started, script-to-video, masking-tracking, and chained-generation.
+Corrected stale claims about React 18, seven routers, 505-frame chaining, the
+save endpoint, and a float32 transformer. No product code changed.

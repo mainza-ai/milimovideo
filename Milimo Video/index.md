@@ -3,7 +3,7 @@
 Catalog of every wiki page. Updated on every change. The LLM reads this first to
 navigate, then drills into pages.
 
-- Last updated: 2026-11-16
+- Last updated: 2026-11-17
 
 ## Overview
 - [overview](overview.md) — what Milimo Video is: the AI-native cinematic studio,
@@ -31,11 +31,13 @@ navigate, then drills into pages.
   dispatcher: Gemma built-in vs Ollama, keep_alive unload discipline,
   vision-model badges, VLM structured extraction.
 - [systems/engineering-audit-2026-11](systems/engineering-audit-2026-11.md) —
-  code-level audit: P0 security/data/render blockers, evidence with file:line,
-  what already works, missing functionality, and the resolved doc contradictions.
-- [systems/studio-shell](systems/studio-shell.md) — target front-end
-  architecture: Story/Generate/Edit/Review surfaces, board + timeline as peers,
-  canonical shot graph, four stores, canvas/timeline engines, performance budgets.
+  code-level audit and remediation ledger: original P0 security/data/render
+  blockers, evidence with file:line, what works, remaining product gaps, and the
+  resolved doc contradictions.
+- [systems/studio-shell](systems/studio-shell.md) — the implemented Studio shell:
+  Story/Generate/Edit/Review/Library/Deliver/Shorts/Setup surfaces, board + timeline
+  as peers, canonical shot graph, separate stores, canvas/timeline engines,
+  performance budgets, and the remaining scoped gaps.
 
 ## Models
 - [models/ltx-2](models/ltx-2.md) — LTX-2 19B dual-stream transformer: the three
@@ -112,9 +114,9 @@ navigate, then drills into pages.
   phased plan (Phase 0 verify → Phase 1 models → Phase 2 architecture → Phase 3
   UX), risks, and open questions for Mainza. Phase 1+ now gated by the 2026-11 audit.
 - [roadmap/implementation-plan-2026-11](roadmap/implementation-plan-2026-11.md) —
-  the sequenced fix-and-ship plan: security hotfixes, canonical timeline, render
-  fidelity, unified GPU queue, model-management truth, frontend contracts, CI gates,
-  then the gated v2 model lane.
+  the sequenced fix-and-ship plan. Scoped P0–P5 and F0–F5 are complete; the page
+  lists remaining/deferred work (bundled sidecar, legacy cutover, Phase 6 v2 lane,
+  scoped v1 gaps) and the verification matrix.
 - [roadmap/frontend-refactor-2026-11](roadmap/frontend-refactor-2026-11.md) — the
   strangler rebuild of the studio: F0 shell/tokens/contracts → F1 story/board →
   F2 edit/timeline → F3 generate/takes → F4 agent/review/library/deliver → F5
@@ -131,7 +133,7 @@ navigate, then drills into pages.
 - `docs/ltx2-bible.md` — deep-dive into LTX-2 integration
 - `docs/sam3-bible.md` — deep-dive into the SAM 3 microservice
 - `docs/CODEBASE_ANALYSIS.md` — codebase analysis
-- `docs/user_guide.md` — the definitive user guide
+- `docs/user_guide.md` — the definitive Studio-first user guide
 - `skills/skills/milimo-frontend-state-manager/SKILL.md` — frontend state conventions
 - `dev_diary/` — build log: social updates, blog posts, explainer notes
 - `mv_plan/google_cloud_integration.md` — cloud-engines proposal (plan, not implemented)

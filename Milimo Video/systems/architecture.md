@@ -1,18 +1,20 @@
 ---
 type: systems
 created: 2026-10-09
-updated: 2026-10-09
-tags: architecture frontend backend microservice sse
+updated: 2026-11-17
+tags: architecture frontend backend microservice sse alembic studio
 sources:
-  - docs/01_system_architecture.md
-  - docs/06_file_dependency.md
-  - docs/CODEBASE_ANALYSIS.md
+  - ../docs/01_system_architecture.md
+  - ../docs/06_file_dependency.md
+  - ../web-app/src/
+  - ../backend/
 related:
   - ../overview.md
   - ../models/sam-3.md
   - ../concepts/memory-slots.md
   - ../decisions/sam3-microservice.md
   - data-models.md
+  - studio-shell.md
   - frontend-state.md
   - sse-eventing.md
 ---
@@ -21,97 +23,120 @@ related:
 
 ## Purpose
 
-The split architecture that keeps UI responsive while GPU-heavy inference runs
-locally: a React frontend, a FastAPI backend on port 8000, and SAM 3 isolated as its
-own microservice on port 8001.
+The split architecture that keeps the UI responsive while GPU-heavy inference runs
+locally: a React Studio shell, a FastAPI backend on port 8000, an optional SAM 3
+microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell.
 
 ## Components
 
-- **Frontend (React 18 / Vite / TypeScript, port 5173)** — UI, timeline state,
-  multi-track NLE, preview player. Key pieces: `CinematicPlayer`, `VisualTimeline`,
-  `InspectorPanel`, `MediaLibrary`, `ElementsView`, `StoryboardView`, `SSEProvider`.
-- **Backend (Python / FastAPI, port 8000)** — model inference, asset management, job
-  queue, SQLite via SQLModel. **Seven routers / 93 routes** (verified 2026-11-16):
-  projects, jobs, assets, elements, storyboard, shots, models.
-- **Task engine** — `tasks/video.py`, `tasks/chained.py`, `tasks/image.py`;
-  `ModelManager` singleton loads LTX-2 pipelines; `FluxInpainter` singleton wraps
-  Flux 2; `StoryboardManager` coordinates chunks; `ElementManager`/`ElementMatcher`/
-  `InpaintingManager` handle elements and masks.
-- **SAM 3 microservice (port 8001)** — own FastAPI server; endpoints for health,
-  mask prediction, detection, text segmentation, and video tracking sessions.
-- **MemoryManager** — central mutual-exclusion between GPU models (see
-  [[../concepts/memory-slots.md]]).
+- **Studio frontend (React 19.2 / Vite / TypeScript, port 5173)** — the current
+  shell at `/studio`: Story, Generate, Edit, Review, Library, Deliver, Shorts,
+  Setup. It owns a studio document store, editor store, job store, and agent store,
+  with TanStack Query for server reads and zod contracts for selected endpoints.
+- **Legacy frontend** — the original NLE at `/`, using `timelineStore` and 7 slices.
+  Frozen except for P0 fixes. `VITE_STUDIO_ENABLED=false` serves it at `/studio`.
+- **Backend (Python / FastAPI, port 8000)** — inference dispatch, project/assets,
+  durable GPU queue, SQLite via SQLModel, Alembic migrations, SSE. **Eleven routers
+  / 113 routes** (verified 2026-11-17): projects, jobs, assets, storyboard, elements,
+  shots, models, planner, review, share, depth.
+- **Task engine** — `tasks/video.py`, `tasks/chained.py`, `tasks/image.py`,
+  `tasks/depth.py`, `tasks/ai_parse.py`; `ModelManager` loads LTX-2; `FluxInpainter`
+  wraps Flux 2; `StoryboardManager` coordinates chunks; managers handle elements,
+  masks, and SAM tracking.
+- **GPU scheduler** — `QueuedJob` ledger + one global semaphore + one OOM retry +
+  startup recovery + pause/resume + idempotent shot jobs.
+- **SAM 3 microservice (port 8001)** — health, mask prediction, detection, text
+  segmentation, and video tracking sessions. Proxied through the backend.
+- **MemoryManager** — mutual exclusion between heavy model slots; see
+  [[../concepts/memory-slots.md]].
+- **Desktop (Tauri 2)** — native Open/Save, dialog plugin, backend supervisor,
+  sidecar-binary lookup. Bundled Python runtime is not shipped.
 
 ## Key Interactions
 
 | Interaction | Protocol | Notes |
 |---|---|---|
-| UI → Backend | HTTP REST | CRUD for projects/shots/elements/assets; job dispatch |
-| Backend → UI | SSE | Real-time progress, completion, errors; auto-reconnect with backoff |
-| UI refresh sync | `GET /status/{job_id}` | One-shot job recovery on page load via `jobPoller` |
-| Backend → SAM 3 | HTTP REST (port 8001) | Segmentation and tracking calls |
-| Worker → LTX-2 / Flux 2 | Direct Python import | One pipeline cached at a time; MemoryManager gates swaps |
-| Prompt enhancement | `llm.py` dispatcher | Gemma built-in or Ollama HTTP API (`keep_alive: 0` unloads after use) |
+| Studio → Backend | HTTP REST | Projects/shots/elements/assets/review/share/render/model routes; one `apiUrl` resolver |
+| Backend → Studio | SSE | `progress`, `complete`, `error`, `cancelled`, render and model events |
+| Studio read sync | TanStack Query + local hooks | Health, models, review, renders, assets, elements, jobs |
+| Studio job recovery | `GET /status/{job_id}` | Polls in-flight jobs on reconnect/mount; 404 means not running |
+| Backend → SAM 3 | HTTP REST (port 8001) | Segmentation and tracking calls, off the event loop |
+| Worker → LTX-2 / Flux 2 | Direct Python import | One heavy model at a time; MemoryManager gates swaps |
+| Prompt enhancement | `llm.py` dispatcher | Gemma built-in or Ollama with `keep_alive: 0` |
+| Render | FFmpeg subprocess | Storyboard renders from computed layout; progress parsed from FFmpeg |
 | Media serving | HTTP Range requests | `206 Partial Content` for Safari-compatible mp4/mp3 |
+| DB schema | Alembic | Baseline + render settings + seed lock; legacy DBs repaired/stamped |
+
+## Current Studio vs Legacy
+
+| Concern | Studio `/studio` | Legacy `/` |
+|---|---|---|
+| Store | `milimo-studio-document` + editor/job/agent stores | `milimo-timeline-storage` + 7-slice store |
+| Surfaces | Story/Generate/Edit/Review/Library/Deliver/Shorts/Setup | tabbed editor, storyboard, elements, images, models |
+| Board | Infinite canvas with areas/links/notes/reference/task cards | none |
+| Timeline | DOM handles + isolated playback, table/keyboard path | DOM timeline |
+| Render controls | Range, fit, CRF, encoder speed, audio bitrate, loudnorm, cancel | export modal |
+| Review | frame comments, approvals, activity, share links | none |
+| Agent | plan/approval/undo, recipes, `@Agent` | none |
+| Desktop | same shell in Tauri | browser |
+
+Both interfaces share the backend project model but have separate in-memory
+documents. Switching routes does not share unsaved edits.
+
+## Module Map (current)
+
+**Backend** (`backend/`): `server.py` (FastAPI entry, media Range, `/events`,
+`/health`), `config.py`, `database.py` (SQLModel + Alembic init), `events.py`
+(SSE), `job_utils.py` (queue ledger, semaphore, retry, pause, cancellation),
+`schemas.py` (Pydantic boundaries), `model_engine.py` / `memory_manager.py`,
+`llm.py`, `models/flux_wrapper.py`, `managers/` (element/inpainting/tracking),
+`services/` (script/ai storyboard, matcher, model registry/downloader), `tasks/`
+(video, chained, image, depth, ai_parse), `routes/` (11 routers), `alembic/`
+(baseline, render settings, seed lock), `utils/` (render filtergraph, captions,
+paths).
+
+**Frontend** (`web-app/src/`): `main.tsx` → `App.tsx` (Studio lazy route + legacy),
+`src/studio/StudioApp.tsx`, `state/documentStore.ts` (studio document + undo),
+`state/editorStore.ts`, `state/jobStore.ts`, `state/agentStore.ts`,
+`data/useStudioData.ts` (hooks/contracts), `surfaces/`, `components/` (board,
+timeline, inspector, command dock, lenses), `src/config.ts` (API/asset resolver),
+`src/api/` (generated schema + zod contracts), `src/stores/` (legacy store/slices),
+`src-tauri/` (desktop shell).
+
+**Import edges:** `tasks/video.py` is the generation funnel; `tasks/image.py` →
+`flux_wrapper.py` → `memory_manager.py`; `routes/storyboard.py` →
+`ai_storyboard.py` → model engine; `routes/elements.py` → inpainting/tracking
+managers → SAM 3; `storyboard/manager.py` → `element_manager.py` → Flux IP-Adapter.
+Studio components read the document store and Query hooks; no component talks to
+SQLite or the model layer directly.
+
+## Deployment & Process Topology
+
+- `./run_backend.sh` verifies environment via `backend/verify_setup.py` before
+  starting Uvicorn.
+- `./run_frontend.sh` starts Vite; `npm run tauri dev` hosts Studio in Tauri.
+- `./run_sam.sh` starts the optional SAM 3 service.
+- One GPU job at a time; queue pause stops new dispatch after the current job.
+- Frontend production build is served by the backend or Tauri; API base defaults to
+  the current origin outside Vite dev.
 
 ## Gotchas
 
-- Only one LTX-2 pipeline is cached at a time; switching types triggers unload →
-  `gc.collect()` → cache flush → reload.
-- `num_frames == 1` silently delegates video generation to Flux 2 image generation.
-- Ollama sends `keep_alive: 0` so the LLM unloads immediately after prompt
-enhancement — otherwise a 27B model can sit on ~49GB VRAM.
-- Static media must be served with range requests or Safari playback breaks.
-
-## Module Map (from the dependency analysis)
-
-**Backend** (`backend/`): `server.py` (FastAPI entry; owns `GET /events` SSE
-directly), `config.py` (pure config, zero deps), `database.py` (ORM + sessions),
-`events.py` (SSE broadcast), `job_utils.py` (job lifecycle: database + events +
-file_utils), `schemas.py` (all Pydantic), `model_engine.py` (ModelManager),
-`memory_manager.py`, `llm.py`, `models/flux_wrapper.py`, `managers/`
-(element/inpainting/tracking), `services/` (script_parser, ai_storyboard,
-element_matcher), `storyboard/manager.py`, `tasks/` (video, chained, image),
-`routes/` — **7 routers**: projects, jobs, assets, elements, storyboard, shots,
-models (the generate/edit routes live under jobs/elements/models). `routes/shots.py`
-currently registers a duplicate `PATCH /shots/{shot_id}` that is shadowed by
-`routes/projects.py`; see the audit.
-
-**Frontend** (`web-app/src/`): `main.tsx` → `App.tsx` → Layout, CinematicPlayer,
-SSEProvider. `stores/timelineStore.ts` (God Store, 20+ importers) composes 7 slices
-in `stores/slices/`; `stores/types.ts` mirrors the backend models. Key utils:
-`timelineUtils.ts` (magnetic layout), `snapEngine.ts`, `jobPoller.ts`,
-`GlobalAudioManager.ts`, `config.ts` (API_BASE_URL).
-
-**Key import edges**: `tasks/video.py` is the generation funnel (max fan-out: 8
-imports); `tasks/image.py` → `flux_wrapper.py` → `memory_manager.py` (slot
-discipline); `routes/storyboard.py` → `ai_storyboard.py` → `model_engine.py`
-(Gemma via LTX encoder); `routes/elements.py` → inpainting/tracking managers →
-SAM 3 over HTTP; `storyboard/manager.py` → `element_manager.py` →
-`flux_wrapper.py` (trigger injection → IP-Adapter).
-
-**Notes**: DB file is `backend/milimovideo.db`; the dependency doc counts 24 backend
-files while the codebase analysis counts 28 — at least one doc predates the other
-(`llm.py`/`memory_manager.py` era). The dependency graph also claims "no circular
-dependencies" while showing `model_engine ⇄ memory_manager` edges — the slot
-handshake is genuinely bidirectional by design.
-
-## Audit Notes (2026-11-16)
-
-The code-level audit found the architecture's main risk is not the model layer but
-the studio contract: V1 order and conditioning do not round-trip, export timing is
-derived from `start_frame` (all zero in the live DB), and image/inpaint jobs bypass
-the GPU semaphore. Security is also open (CORS `*`, no auth, `eval` in inpaint).
-See [[engineering-audit-2026-11.md]] for evidence and
-[[../roadmap/implementation-plan-2026-11.md]] for the fix sequence.
+- Only one LTX-2 pipeline is cached at a time; switching types unloads, clears
+  caches, then reloads.
+- `num_frames == 1` delegates video generation to Flux 2 image generation.
+- Ollama uses `keep_alive: 0`; a 27B model otherwise sits on VRAM.
+- MPS casts the VAE to float32 to prevent black output; FP8 is CUDA-only.
+- Safari needs Range serving and muted-start playback.
+- Do not add schema columns without an Alembic revision.
+- The studio and legacy editors have separate document stores; test the route you
+  changed.
 
 ## Related
 
-- [[engineering-audit-2026-11.md]] — current-state findings
-- [[../overview.md]]
-- [[../models/sam-3.md]]
-- [[../concepts/memory-slots.md]]
-- [[../decisions/sam3-microservice.md]]
-- [[data-models.md]] — the persistence layer in detail
-- [[frontend-state.md]] — the store in detail
-- [[sse-eventing.md]] — the event system in detail
+- [[data-models.md]] — persistence and migrations
+- [[studio-shell.md]] — implemented Studio architecture
+- [[frontend-state.md]] — stores in detail
+- [[nle-timeline.md]] — timeline and render truth
+- [[sse-eventing.md]] — events and recovery
+- [[../roadmap/implementation-plan-2026-11.md]] — status and remaining work

@@ -77,7 +77,7 @@ But the **studio layer around the engines is not yet trustworthy**:
 and the timeline/render truth work land. Model quality is not the current moat
 problem; correctness is.
 
-## Remediation Status — 2026-11-16
+## Remediation Status — 2026-11-17
 
 | Finding | Status | Change |
 |---|---|---|
@@ -126,11 +126,18 @@ problem; correctness is.
 | NLE-05 audio trimOut | **Fixed** | GlobalAudioManager duration honors trims |
 | NLE-07 render cancel | **Fixed** | active_jobs registration + terminate/kill |
 | NLE-08 progress | **Fixed** | `-progress pipe:1` parsing |
+| Render encoding | **Fixed** | Per-project CRF, encoder speed, audio bitrate, optional loudness normalization; real ffprobe/audio tests |
+| Seed determinism | **Fixed** | Per-shot `seed_locked` (default on), migration 0003, round-trip test |
+| Queue control | **Fixed** | Pause/resume dispatch, health state, Setup and Generate controls |
+| Integrity | **Fixed** | Scan + safe repair for missing media, orphan scene/board refs, sequence order, captions |
+| CI correctness | **Fixed** | Blocking ruff correctness baseline, bundle budget, OpenAPI drift, Vitest/Playwright/axe |
+| Desktop | **Fixed (v1)** | Native Open/Save, backend supervisor, sidecar-binary lookup; no bundled runtime |
+| Studio rollback | **Fixed** | Global and per-surface Vite flags with tests |
 
 Open/partial items are tracked in
 [[../roadmap/implementation-plan-2026-11.md]].
 
-## Scorecard
+## Scorecard (audit-time, historical)
 
 | Area | Grade | One-line verdict |
 |---|---|---|
@@ -510,20 +517,22 @@ Be fair to the build — these are not small things:
 
 ## Missing Functionality (Product Gaps)
 
-| Capability | Status | Why it matters |
+| Capability | Status | Notes |
 |---|---|---|
-| Take/version history per shot | Missing | Regeneration replaces the shot's URL; old takes are only findable in the global gallery, with no compare/rollback |
-| Persistent/resumable job queue | Missing | Closing the app or a crash loses queued and in-flight work |
-| Render presets (codec, bitrate, resolution, fps, audio normalize) | Missing | One hardcoded H.264 CRF 18 path; no delivery control |
-| Transitions, fades, speed, LUT, titles/subtitles | Missing | Cannot finish a real cut inside the studio |
-| Audio from V1/V2 clips, gain, fades, ducking | Missing/Broken | Generated audio is inaudible and unexported |
-| Project bundle import/export, media relink, proxies | Missing | Projects are not portable; large media kills playback |
-| Real model activation + warmup + OOM fallback | Missing/Broken | "Active" is cosmetic; first generation pays the load cost and OOM has no recovery |
-| Seed lock / deterministic re-run | Broken | Storyboard generation always randomizes |
-| API auth / origin policy | Missing | Local-first does not mean open-to-any-webpage |
-| Tests, CI, migration gate | Missing | Regressions are found by users, in the editor |
-| Eval harness (VBench subset + blind A/B) | Missing | v2 model swaps cannot be justified |
-| Character LoRA training, 3D previz, agent copilot | Roadmap only | Correctly deferred; do not start before the foundation is stable |
+| Take/version history per shot | **Fixed (v1)** | Immutable takes, select/favorite, compare, lineage |
+| Persistent/resumable job queue | **Fixed** | `QueuedJob`, startup recovery, one retry, pause/resume |
+| Render presets (codec, bitrate, resolution, fps, audio normalize) | **Fixed (v1)** | Resolution/fps presets, CRF, encoder speed, audio bitrate, loudnorm; codec remains H.264 |
+| Transitions, fades, speed, LUT, titles/subtitles | **Partial** | Fades, speed, captions; transitions/LUT/titles remain |
+| Audio from V1/V2 clips, gain, fades, ducking | **Fixed (v1)** | Embedded audio + A1 mix, gain/mute/fades/solo; no ducking |
+| Project bundle import/export, media relink, proxies | **Missing** | Projects remain non-portable; integrity repair clears broken pointers |
+| Real model activation + warmup + OOM fallback | **Fixed** | Real activation through loader, preflight, one OOM retry |
+| Seed lock / deterministic re-run | **Fixed** | Persistent `seed_locked`, explicit randomize |
+| API auth / origin policy | **Fixed** | Loopback default, CORS allowlist, optional bearer token |
+| Tests, CI, migration gate | **Fixed** | 82 pytest, 52 Vitest, 12 Playwright, ruff, bundle, Alembic |
+| Eval harness (VBench subset + blind A/B) | **Missing** | Phase 6 v2 program |
+| Character LoRA training | **Missing** | Roadmap; not scoped v1 |
+| 3D previz, agent copilot | **Fixed (v1)** | Lazy three.js previz + blocking lens; plan/approval/undo agent |
+| Bundled Python sidecar | **Missing** | Desktop supervisor can launch one; no runtime is shipped |
 
 ## Phase 0 Verification — Doc Contradictions Resolved
 
@@ -531,8 +540,8 @@ The v2 roadmap's Phase 0 asked for the code truth. Here it is:
 
 | Claim in docs | Code truth |
 |---|---|
-| "Five routers" | **Seven**: projects, jobs, assets, storyboard, elements, shots, models |
-| React 18 | **React 19.2** (`web-app/package.json`) |
+| "Five routers" | **Eleven / 113 routes**: projects, jobs, assets, storyboard, elements, shots, models, planner, review, share, depth |
+| React 18 | **React 19.2** (`web-app/package.json`); legacy UI also runs on it |
 | Chained generation triggers above 505 frames | Triggers above `config.NATIVE_MAX_FRAMES = 121`; chunk size 121, overlap 25 |
 | `NATIVE_MAX_FRAMES = 121` comment says "~20.2s at 25fps" | 121 / 25 = **4.84s**; 20.2s is the old 505-frame number. The comment is stale |
 | `cfg_scale` default 2.0/3.0 | DB `Shot.cfg_scale = 1.0`, `ShotConfig = 2.0`, frontend `DEFAULT_SHOT = 3.0` |

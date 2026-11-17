@@ -1,7 +1,7 @@
 ---
 type: workflows
 created: 2026-10-09
-updated: 2026-10-09
+updated: 2026-11-17
 tags: masking tracking inpainting sam-3 segmentation
 sources:
   - docs/01_system_architecture.md
@@ -23,16 +23,17 @@ per-frame work.
 
 ## Prerequisites
 
-- SAM 3 microservice running (`./run_sam.sh`, port 8001) — start it **before** the
-  backend, or calls fail with "Connection Refused"
-- A frame selected on the timeline; the frontend captures it via `captureFrameBlob()`
-  (`<video>`/`<img>` carry `crossOrigin="anonymous"` so canvas capture isn't tainted)
+- SAM 3 microservice running (`./run_sam.sh`, port 8001) — start it before the
+  backend, or calls fail with "Connection Refused".
+- A frame selected in Studio **Edit** (or the legacy editor). The frontend captures
+  it locally; the Studio buttons are **Edit frame**, **Track**, and **Depth**.
 
 ## Steps — Masking & Inpainting
 
-1. **Enter edit mode** — click the pencil icon on the selected frame. `MaskingCanvas`
-   offers four tools: **Brush** (paint the mask, white = edit area), **Eraser**,
-   **Click** (click an object), **Text** (describe it, e.g. "the sky").
+1. **Enter edit mode** — in Studio Edit, click **Edit frame** (the legacy editor
+   uses the pencil/MaskingCanvas path). Tools: **Brush** (paint the mask, white =
+   edit area), **Eraser**, **Click** (click an object), **Text** (describe it,
+   e.g. "the sky").
 2. **Generate the mask** — all SAM calls go through the backend proxy, never
    directly to :8001:
    - Click → `POST /edit/segment` → SAM `/predict/mask` (`inst_interactive_predictor`); refine with foreground/background clicks (labels 1/0)
@@ -47,8 +48,8 @@ per-frame work.
 
 ## Steps — Object Tracking
 
-1. **Enter tracking mode** — crosshair toggle in `ControlsBar`. Tracking and edit
-   mode are **mutually exclusive**.
+1. **Enter tracking mode** — **Track** in Studio Edit (legacy: crosshair toggle in
+   `ControlsBar`). Tracking and edit mode are mutually exclusive.
 2. **Start** — `TrackingPanel` auto-fires `POST /track/start` with the video path on
    mount (accepts a video file or a frame directory).
 3. **Prompt** — text or click on frame N → `POST /track/prompt` (`session_id`,
@@ -60,6 +61,7 @@ per-frame work.
 5. **Save** — `POST /edit/track/save` exports PNG masks to
    `exports/tracking/<session_id>/masks/` plus a `manifest.json`; reload later via
    `/edit/track/load`. `POST /track/stop` closes the session and frees GPU memory.
+   Studio also supports a local **Depth** overlay from Depth Anything V2 Small.
 
 ## Tips
 

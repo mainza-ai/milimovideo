@@ -7,9 +7,10 @@ the render.
 
 There are two interfaces:
 
-- **Studio** — `http://localhost:5173/studio`. The new shell described here.
-- **Legacy editor** — `http://localhost:5173/`. Still available for older
-  workflows while the studio reaches full parity.
+- **Studio** — `http://localhost:5173/studio`. The current shell described here.
+  The scoped P0–P5 / F0–F5 implementation plan is complete.
+- **Legacy editor** — `http://localhost:5173/`. Frozen fallback for the cutover
+  window; set `VITE_STUDIO_ENABLED=false` to serve it at `/studio` as a rollback.
 
 The desktop shell (Tauri) opens the same Studio shell in a native window.
 
@@ -397,13 +398,17 @@ A 32 GB Mac may refuse a model that cannot fit; that is a correct result, not a 
 ## 14. Verification and troubleshooting
 
 ```bash
+./milimov/bin/python -m compileall -q backend
 ./milimov/bin/python -m pytest
+./milimov/bin/python -m ruff check backend
 ./milimov/bin/python backend/verify_setup.py
+
 cd web-app
 npx tsc -b
 npm run lint
 npm test
 npm run build
+npm run check:bundle
 npm run test:e2e
 curl http://127.0.0.1:8000/health
 ```
@@ -439,4 +444,8 @@ Common issues:
   Chromium and may differ on a desktop compositor.
 - Shorts and lenses are scoped F5: candidate ranges are editable and recipes
   import/export, but there are no template packs.
+- Scoped v1 cut: no transitions, LUTs, titles, or A2 track; search is ranked
+  lexical matching, not embeddings.
 - The depth model is downloaded separately; it is not shipped with the repo.
+- Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is a separate
+  program and is not part of scoped v1.

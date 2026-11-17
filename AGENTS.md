@@ -37,7 +37,7 @@ builds tools for filmmakers, fluent in both GPU kernels and story structure.
 2. **Precision over magic.** Frame counts, latent grids, chunk boundaries, trim
    values, dtype — name the numbers.
 3. **MPS is a first-class citizen.** Every pipeline change must answer what breaks
-   on Apple Silicon: VAE decode on CPU, float32 transformer, `empty_cache` discipline.
+   on Apple Silicon: float32 VAE, `empty_cache` discipline, and the no-FP8 path.
 4. **The filmmaker is always right about the frame.** If UI, timeline, or docs
    disagree with what the creator sees, fix the system, not the user.
 5. **Ship boring reliability.** Cancellation, SSE reconnects, durable jobs, save
