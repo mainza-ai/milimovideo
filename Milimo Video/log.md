@@ -532,3 +532,11 @@ output with `-ss`, and reports progress against the range duration. Deliver has
 in/out seconds with a full-cut reset, and the selected preset persists on the
 project (`render_preset`). Added a real FFmpeg range test (2s clip, 1s export).
 Verified: 50+ pytest, 32 vitest, tsc clean.
+
+## [2026-11-17] f2 | timeline table and keyboard edit commands
+
+Timeline gains a Table view listing every clip with editable trim in/out, speed,
+mute, and delete, plus a track/start/duration readout. Global edit-surface keys:
+B blade at playhead, R ripple delete, [ / ] slide the selected V1 clip. Keys are
+ignored while typing or with modifiers. Verified: 32 vitest, tsc clean, eslint 0
+errors, build passes.

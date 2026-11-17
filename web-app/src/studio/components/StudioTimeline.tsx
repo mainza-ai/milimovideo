@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Captions, Music, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal,
     UnfoldHorizontal, Upload,
@@ -68,6 +68,7 @@ export function StudioTimeline() {
     const [preview, setPreview] = useState<Preview | null>(null);
     const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
     const [audioPickerOpen, setAudioPickerOpen] = useState(false);
+    const [tableView, setTableView] = useState(false);
     const captionFileRef = useRef<HTMLInputElement>(null);
     const { assets } = useStudioAssets();
     const audioAssets = useMemo(() => assets.filter((asset) => asset.type === 'audio'), [assets]);
@@ -276,6 +277,31 @@ export function StudioTimeline() {
         if (result) updateShot(shot.id, result);
     };
 
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || '')
+                || !!target?.isContentEditable;
+            if (typing || event.metaKey || event.ctrlKey || event.altKey) return;
+            if (event.key.toLowerCase() === 'b') {
+                event.preventDefault();
+                void blade();
+            } else if (event.key.toLowerCase() === 'r') {
+                event.preventDefault();
+                rippleDelete();
+            } else if (event.key === '[') {
+                event.preventDefault();
+                slideSelected(-1);
+            } else if (event.key === ']') {
+                event.preventDefault();
+                slideSelected(1);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [currentTime, project, selectedShotId]);
+
     return (
         <section className="st-timeline" aria-label="Timeline">
             <div className="st-timeline-toolbar">
@@ -398,8 +424,17 @@ export function StudioTimeline() {
                 </span>
                 <span style={{ flex: 1 }} />
                 <span style={{ color: 'var(--st-faint)', fontSize: 9 }}>
-                    drag edges to trim · slip/roll move the source window
+                    B blade · R ripple · [ ] slide
                 </span>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={tableView ? 'primary' : 'ghost'}
+                    onClick={() => setTableView(!tableView)}
+                >
+                    {tableView ? 'Timeline' : 'Table'}
+                </button>
             </div>
 
             {audioPickerOpen && (
@@ -481,6 +516,105 @@ export function StudioTimeline() {
                 </div>
             )}
 
+            {tableView ? (
+                <div className="st-list-wrap" style={{ flex: 1 }}>
+                    <table className="st-table">
+                        <caption>Timeline clips — editable equivalent of the tracks</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Track</th>
+                                <th scope="col">Clip</th>
+                                <th scope="col">Start</th>
+                                <th scope="col">Duration</th>
+                                <th scope="col">Trim in/out</th>
+                                <th scope="col">Speed</th>
+                                <th scope="col">Audio</th>
+                                <th scope="col">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {[...layout].sort((a, b) => a.track - b.track || a.start - b.start).map((clip) => {
+                                const sourceFrames = Math.max(
+                                    1,
+                                    (clip.shot.numFrames || 0) - (clip.shot.trimIn || 0) - (clip.shot.trimOut || 0),
+                                );
+                                const speed = clip.shot.speed || 1;
+                                return (
+                                    <tr
+                                        key={clip.id}
+                                        data-selected={clip.id === selectedShotId}
+                                        onClick={() => selectShot(clip.id)}
+                                    >
+                                        <td>T{clip.track + 1}</td>
+                                        <td>{clip.shot.action || clip.shot.prompt || 'Shot'}</td>
+                                        <td className="st-mono">{clip.start.toFixed(2)}s</td>
+                                        <td className="st-mono">{(sourceFrames / fps / speed).toFixed(2)}s</td>
+                                        <td onClick={(event) => event.stopPropagation()}>
+                                            <div style={{ display: 'flex', gap: 4 }}>
+                                                <input
+                                                    className="st-input"
+                                                    style={{ width: 62, height: 26, padding: '2px 5px' }}
+                                                    type="number"
+                                                    min={0}
+                                                    max={clip.shot.numFrames}
+                                                    value={clip.shot.trimIn || 0}
+                                                    aria-label="Trim in"
+                                                    onChange={(event) => updateShot(clip.id, { trimIn: Number(event.target.value) })}
+                                                />
+                                                <input
+                                                    className="st-input"
+                                                    style={{ width: 62, height: 26, padding: '2px 5px' }}
+                                                    type="number"
+                                                    min={0}
+                                                    max={clip.shot.numFrames}
+                                                    value={clip.shot.trimOut || 0}
+                                                    aria-label="Trim out"
+                                                    onChange={(event) => updateShot(clip.id, { trimOut: Number(event.target.value) })}
+                                                />
+                                            </div>
+                                        </td>
+                                        <td onClick={(event) => event.stopPropagation()}>
+                                            <select
+                                                className="st-select"
+                                                style={{ width: 76, height: 26, padding: '2px 5px' }}
+                                                value={speed}
+                                                aria-label="Speed"
+                                                onChange={(event) => updateShot(clip.id, { speed: Number(event.target.value) })}
+                                            >
+                                                {[0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map((rate) => (
+                                                    <option key={rate} value={rate}>{rate}×</option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                        <td onClick={(event) => event.stopPropagation()}>
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                data-variant={clip.shot.audioMuted ? 'danger' : 'ghost'}
+                                                onClick={() => updateShot(clip.id, { audioMuted: !clip.shot.audioMuted })}
+                                            >
+                                                {clip.shot.audioMuted ? 'Muted' : 'Audible'}
+                                            </button>
+                                        </td>
+                                        <td onClick={(event) => event.stopPropagation()}>
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                data-variant="danger"
+                                                onClick={() => deleteShot(clip.id)}
+                                            >
+                                                <Trash2 size={11} /> Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
             <div className="st-timeline-scroll">
                 <div
                     className="st-timeline-inner"
@@ -681,6 +815,7 @@ export function StudioTimeline() {
                     />
                 </div>
             </div>
+            )}
         </section>
     );
 }
