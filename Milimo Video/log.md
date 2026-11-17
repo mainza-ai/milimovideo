@@ -649,3 +649,10 @@ Added TanStack Query around the studio shell and moved health polling onto
 error budget), agent plan history, and a typed document-store adapter over the
 legacy store so the eventual document migration is one file. Command plans now
 record into the agent store. Verified: 39 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f3 | queue position and local estimate
+
+`GET /projects/{id}/active_jobs` now merges the durable queued ledger with
+in-memory running jobs, returning a queue position and a rough workload-based
+seconds estimate. Generate shows both. Added a backend test with a queued video
+job. Verified: 57 pytest, 39 vitest, tsc clean.

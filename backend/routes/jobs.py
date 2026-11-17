@@ -37,19 +37,53 @@ def get_status(job_id: str, session: Session = Depends(get_session)):
     raise HTTPException(status_code=404, detail="Job not found")
 
 @router.get("/projects/{project_id}/active_jobs")
-def get_project_active_jobs(project_id: str):
-    """Returns a list of active job IDs for compliance/persistence."""
+def get_project_active_jobs(project_id: str, session: Session = Depends(get_session)):
+    """Active and queued jobs for a project, with queue position and estimate."""
+    from database import QueuedJob
+
     project_jobs = []
+    seen = set()
     for j_id, meta in active_jobs.items():
         if meta.get("project_id") == project_id:
-            # Return basic info to allow UI to resume polling
+            seen.add(j_id)
             project_jobs.append({
                 "job_id": j_id,
                 "type": meta.get("type", "unknown"),
                 "status": meta.get("status"),
                 "progress": meta.get("progress", 0),
-                "status_message": meta.get("status_message", "")
+                "status_message": meta.get("status_message", ""),
+                "position": 0,
             })
+
+    queued_rows = session.exec(
+        select(QueuedJob)
+        .where(QueuedJob.status.in_(["queued", "running"]))
+        .order_by(QueuedJob.created_at)
+    ).all()
+    position = 0
+    for queued in queued_rows:
+        if queued.job_id in seen:
+            continue
+        try:
+            params = json.loads(queued.params_json or "{}")
+        except json.JSONDecodeError:
+            continue
+        if params.get("project_id") != project_id:
+            continue
+        position += 1
+        frames = int(params.get("num_frames") or 121)
+        width = int(params.get("width") or 768)
+        height = int(params.get("height") or 512)
+        workload = max(0.1, (frames / 121) * ((width * height) / (768 * 512)))
+        project_jobs.append({
+            "job_id": queued.job_id,
+            "type": queued.kind,
+            "status": queued.status,
+            "progress": 0,
+            "status_message": "Queued",
+            "position": position,
+            "estimate_seconds": round(8 + 22 * workload, 1),
+        })
     return project_jobs
 
 @router.post("/jobs/{job_id}/cancel")

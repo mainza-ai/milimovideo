@@ -516,7 +516,11 @@ export function GenerateSurface() {
                             {activeJobs.map((job) => (
                                 <div key={job.job_id} className="st-link-row">
                                     <span className="st-mono">{job.job_id.slice(0, 10)}</span>
-                                    <span style={{ flex: 1 }}>{job.status_message || job.status} · {job.progress}%</span>
+                                    <span style={{ flex: 1 }}>
+                                        {job.position ? `#${job.position} · ` : ''}
+                                        {job.status_message || job.status} · {job.progress}%
+                                        {job.estimate_seconds ? ` · ~${job.estimate_seconds}s` : ''}
+                                    </span>
                                     <button
                                         type="button"
                                         className="st-button"

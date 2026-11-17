@@ -353,6 +353,8 @@ export interface ActiveJob {
     status: string;
     progress: number;
     status_message: string;
+    position?: number;
+    estimate_seconds?: number;
 }
 
 export function useStudioActiveJobs(projectId: string) {
