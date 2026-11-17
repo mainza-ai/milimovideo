@@ -48,10 +48,10 @@ single-engineer guidance.
 | P1 timeline truth | **Done** (P1-01–P1-10) | Alembic baseline + stamped migrations, typed ProjectState/ShotState, generated OpenAPI TS, round-trip/split/revision tests |
 | P2 render fidelity | **Done** (P2-01–P2-08, P2-12–P2-14) | filtergraph units + real renders: V1 timing, V2 alpha, A1, captions, keyframes, speed, range, CRF/encoder/audio-bitrate/loudnorm; pixel and ffprobe assertions |
 | P2 scheduler | **Done for GPU work** (durable `QueuedJob` ledger, one retry, global semaphore, idempotency, startup resume, pause/resume dispatch) | `job_utils`, `QueuedJob`, `Job.shot_id`, startup recovery |
-| P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, setup check |
+| P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, queued/cancellable downloads, setup check |
 | P3 OOM retry | **Done** | one retry at 75% resolution / 8k+1 frames, cache clear, shot params updated, unit tests |
 | P4 UX trust | **Done** (P4-01–P4-07) | takes/favorites, persistent seed lock, save conflict, reconnect, review, plan approval, undo, zero serious/critical axe, 500-card/200-clip perf specs, tracking overlay |
-| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 79 backend, 52 frontend, 12 Playwright (incl. axe/perf/visual/reference CRUD); new modules >80%; total 37%; lint 0 errors |
+| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 82 backend, 52 frontend, 12 Playwright (incl. axe/perf/visual/reference CRUD); new modules >80%; total 37%; lint 0 errors |
 | Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent + separate document stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 12 Playwright incl. visual; store separation covered by E2E |
 | Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking + depth overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip ~275fps perf; depth uses optional Depth Anything V2 Small |
 | Front-end F4 integrity | **Done** | scan + repair for missing media, orphan scene/board references, sequence order, and caption ranges |
@@ -70,7 +70,7 @@ durable ledger are adopted.
 **Verification commands**
 
 ```bash
-./milimov/bin/python -m pytest        # 79 passed
+./milimov/bin/python -m pytest        # 82 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
 cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # clean
 cd web-app && npm run test:e2e        # 12 Playwright tests

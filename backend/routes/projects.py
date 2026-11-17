@@ -1073,8 +1073,8 @@ async def _render_background(
             returncode = await process.wait()
             stderr = (await stderr_task).decode("utf-8", "ignore")
             if cancelled:
+                # emit_progress is the single terminal broadcast for this render.
                 await emit_progress(0, "Render cancelled", status="cancelled")
-                await event_manager.broadcast("cancelled", {"job_id": render_id})
                 return
             if returncode != 0:
                 raise RuntimeError(f"FFmpeg render failed: {stderr[-4000:]}")

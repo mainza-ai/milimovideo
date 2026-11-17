@@ -366,7 +366,8 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 - **Pause queue** stops new GPU dispatch after the current job; **Resume queue**
   releases waiting durable jobs.
 - Pipeline readiness with missing counts.
-- Base model table: real status, size, VRAM estimate, Activate/Unload or Download.
+- Base model table: real status, size, VRAM estimate, Activate/Unload or Download;
+  active downloads expose **Cancel download**.
 - LoRA table: real downloaded/active state, activation, and strength.
 - Depth Anything V2 Small is optional; download it here before using the Depth overlay.
 - Project integrity: **Scan project** reports missing media, orphan shots/scenes,

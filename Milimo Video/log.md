@@ -1043,3 +1043,9 @@ references, orphan board nodes/links, normalizes sequence order, and sanitizes
 caption ranges without deleting files. Setup exposes Repair safe issues after a
 scan. Added a round-trip repair test. Verified: 79 pytest, 52 vitest, ruff clean,
 tsc clean, build + bundle check pass.
+
+## [2026-11-17] setup | cancel model downloads
+
+Setup now exposes Cancel download for active downloads (the API also removes
+queued downloads). Added active, queued, and missing-download tests. Verified:
+82 pytest, tsc clean, eslint 0 errors.

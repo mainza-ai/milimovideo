@@ -74,6 +74,21 @@ export function SetupSurface() {
         }
     };
 
+    const cancelDownload = async (modelId: string, name: string) => {
+        setDownloading(modelId);
+        try {
+            const response = await fetch(apiUrl(`/models/${modelId}/download`), { method: 'DELETE' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Cancel failed');
+            addToast(`Cancelled ${name}`, 'info');
+            await refresh();
+        } catch (exc) {
+            addToast(exc instanceof Error ? exc.message : 'Cancel failed', 'error');
+        } finally {
+            setDownloading(null);
+        }
+    };
+
     const [filter, setFilter] = useState<'all' | 'video' | 'image' | 'segmentation' | 'depth'>('all');
     const [kind, setKind] = useState<'base' | 'lora'>('base');
     const [busy, setBusy] = useState<string | null>(null);
@@ -398,7 +413,17 @@ export function SetupSurface() {
                                         )
                                     )}
                                     {model.status === 'downloading' && (
-                                        <span style={{ color: 'var(--st-warning)', fontSize: 9 }}>downloading…</span>
+                                        <button
+                                            type="button"
+                                            className="st-button"
+                                            data-size="sm"
+                                            data-variant="ghost"
+                                            disabled={downloading === model.id}
+                                            onClick={() => void cancelDownload(model.id, model.name)}
+                                        >
+                                            {downloading === model.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                                            {downloading === model.id ? 'Cancelling…' : 'Cancel download'}
+                                        </button>
                                     )}
                                 </td>
                             </tr>
