@@ -762,6 +762,22 @@ export function useStudioCancel() {
     }, [addToast, updateShot]);
 }
 
+export function useStudioCancelJob() {
+    const addToast = useStudioDocumentStore((state) => state.addToast);
+    return useCallback(async (jobId: string, label = 'Job') => {
+        try {
+            const response = await fetch(apiUrl(`/jobs/${jobId}/cancel`), { method: 'POST' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Cancel failed');
+            addToast(`${label} ${data.status || 'cancelled'}`, 'info');
+            return true;
+        } catch (error) {
+            addToast(error instanceof Error ? error.message : 'Cancel failed', 'error');
+            return false;
+        }
+    }, [addToast]);
+}
+
 export function useStudioCreateRender(projectId: string) {
     const { addToast } = useStudioSelection();
     const trackStates = useStudioDocumentStore((state) => state.trackStates);

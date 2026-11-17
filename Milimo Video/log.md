@@ -1013,3 +1013,9 @@ eslint 0 errors.
 Render history now exposes Cancel for queued/rendering/processing jobs and
 refreshes status after the cancel request. Completes the F2-10 progress/cancel
 path in the studio. Verified: 52 vitest, tsc clean, build + bundle check pass.
+
+## [2026-11-17] exports | shared job cancellation
+
+Added `useStudioCancelJob` and wired it into Deliver and Shorts render history so
+both surfaces can cancel queued/running exports and refresh. Verified: 52 vitest,
+tsc clean, eslint 0 errors.

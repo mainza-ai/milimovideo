@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Film, Loader2, Send } from 'lucide-react';
 import { useStudioDocumentStore } from '../state/documentStore';
-import { useStudioCreateRender, useStudioProject, useStudioRenders } from '../data/useStudioData';
-import { apiUrl, getAssetUrl } from '../../config';
+import {
+    useStudioCancelJob, useStudioCreateRender, useStudioProject, useStudioRenders,
+} from '../data/useStudioData';
+import { getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 const PRESETS = [
@@ -18,8 +20,8 @@ export function DeliverSurface() {
     const project = useStudioProject();
     const { renders, refresh } = useStudioRenders(project.id);
     const createRender = useStudioCreateRender(project.id);
+    const cancelJob = useStudioCancelJob();
     const setProject = useStudioDocumentStore((state) => state.setProject);
-    const addToast = useStudioDocumentStore((state) => state.addToast);
     const saveProject = useStudioDocumentStore((state) => state.saveProject);
     const [preset, setPreset] = useState<typeof PRESETS[number]['id']>(
         (PRESETS.find((item) => item.id === project.renderPreset)?.id || 'project'),
@@ -52,15 +54,7 @@ export function DeliverSurface() {
     };
 
     const cancelRender = async (renderId: string) => {
-        try {
-            const response = await fetch(apiUrl(`/jobs/${renderId}/cancel`), { method: 'POST' });
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || 'Cancel failed');
-            addToast(`Render ${renderId} ${data.status || 'cancelled'}`, 'info');
-            await refresh();
-        } catch (error) {
-            addToast(error instanceof Error ? error.message : 'Cancel failed', 'error');
-        }
+        if (await cancelJob(renderId, `Render ${renderId}`)) await refresh();
     };
 
     const start = async () => {

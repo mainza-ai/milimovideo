@@ -4,7 +4,7 @@ import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 import {
-    useStudioAssets, useStudioCreateRender, useStudioProject, useStudioRenders,
+    useStudioAssets, useStudioCancelJob, useStudioCreateRender, useStudioProject, useStudioRenders,
 } from '../data/useStudioData';
 import { useStudioEditor } from '../state/editorStore';
 import { parseCaptions } from '../captions/parse';
@@ -23,6 +23,7 @@ export function ShortsSurface() {
     const saveProject = useStudioDocumentStore((state) => state.saveProject);
     const setCurrentTime = useStudioDocumentStore((state) => state.setCurrentTime);
     const createRender = useStudioCreateRender(project.id);
+    const cancelJob = useStudioCancelJob();
     const { renders, refresh } = useStudioRenders(project.id);
     const { assets } = useStudioAssets();
     const videoAssets = useMemo(() => assets.filter((asset) => asset.type === 'video'), [assets]);
@@ -332,7 +333,7 @@ export function ShortsSurface() {
                     <span className="st-value" style={{ color: 'var(--st-muted)' }}>No shorts exported yet.</span>
                 ) : (
                     <table className="st-table">
-                        <thead><tr><th>Render</th><th>Status</th><th>Progress</th><th>Output</th></tr></thead>
+                        <thead><tr><th>Render</th><th>Status</th><th>Progress</th><th>Output</th><th>Actions</th></tr></thead>
                         <tbody>
                             {renders.slice(0, 8).map((render) => (
                                 <tr key={render.id}>
@@ -345,6 +346,22 @@ export function ShortsSurface() {
                                                 <Download size={12} /> open
                                             </a>
                                         ) : render.error_message || '—'}
+                                    </td>
+                                    <td>
+                                        {['queued', 'rendering', 'processing'].includes(render.status) && (
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                data-variant="ghost"
+                                                aria-label={`Cancel render ${render.id}`}
+                                                onClick={async () => {
+                                                    if (await cancelJob(render.id, `Render ${render.id}`)) await refresh();
+                                                }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
