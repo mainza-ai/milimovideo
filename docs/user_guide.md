@@ -438,8 +438,9 @@ Common issues:
   `VITE_STUDIO_DISABLED_SURFACES=shorts,setup` to hide specific studio surfaces.
 - Depth overlay requires the optional Depth Anything V2 Small model; object
   tracking and masks are integrated.
-- Tauri packages a native shell and save dialog and can launch a `milimo-backend`
-  sidecar binary if one is shipped; no Python runtime is bundled yet.
+- Tauri provides a native shell with Open/Save dialogs and can launch a
+  `milimo-backend` sidecar binary if one is shipped; no Python runtime is bundled
+  yet.
 - Visual baselines are platform-tolerant; performance is measured in headless
   Chromium and may differ on a desktop compositor.
 - Shorts and lenses are scoped F5: candidate ranges are editable and recipes
