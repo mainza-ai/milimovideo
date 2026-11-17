@@ -86,7 +86,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             
             # Prepare cancellation (and progress updates)
             # Defined INSIDE loop to access chunk_idx for global progress
-            def cancellation_check(step_idx, total_steps, *args):
+            def cancellation_check(step_idx, total_steps, *args, chunk_idx=chunk_idx, num_chunks=num_chunks):
                  if job_id in active_jobs:
                      chunk_progress = step_idx / total_steps
                      
@@ -259,7 +259,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
 
             # 2. Define Pipeline execution wrapper
-            def _run_chunk_pipeline(images_arg, sequence_arg, current_prompt, pipeline_enhance):
+            def _run_chunk_pipeline(images_arg, sequence_arg, current_prompt, pipeline_enhance, chunk_idx=chunk_idx):
                 # Force Negative Prompt for chained chunks to kill static inertia
                 # We start with the user's negative prompt (if any) and append our bans.
                 effective_negative_prompt = negative_prompt or ""
@@ -364,7 +364,12 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             from ltx_pipelines.utils.helpers import smart_inference_mode
             
             @smart_inference_mode()
-            def _run_encode_video():
+            def _run_encode_video(
+                video=video,
+                audio=audio,
+                chunk_output_path=chunk_output_path,
+                video_chunks_number=video_chunks_number,
+            ):
                 encode_video(
                     video=video,
                     fps=float(params.get("fps", 25.0)),

@@ -970,3 +970,10 @@ chained runner had duplicate imports plus a `del`/closure pattern. Fixed all of
 them, removed a redundant LoRA list comprehension, added asset-directory deletion
 coverage, and added `ruff.toml` enforcing E9/F63/F7/F82/F811. CI now installs ruff
 and runs it as a blocking step. Verified: ruff clean, asset delete test passes.
+
+## [2026-11-17] correctness | bind loop closures in chained generation
+
+Enabled flake8-bugbear B023 and bound the chunk index, encoded video/audio, output
+path, and chunk count as defaults in the chained runner. The callbacks already ran
+before the loop advanced, but late binding was fragile. Verified: 72 pytest, ruff
+clean, compileall.

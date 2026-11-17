@@ -11,4 +11,5 @@ select = [
     "F7",   # syntax and control-flow errors
     "F82",  # undefined names, invalid __all__
     "F811", # redefinitions that shadow real bindings
+    "B023", # closures must bind loop variables they capture
 ]
