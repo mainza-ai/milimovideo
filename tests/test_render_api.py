@@ -41,6 +41,101 @@ def _make_clip(path: Path, color: str, seconds: float = 1.0):
     )
 
 
+def _average_rgb(path: Path, seconds: float):
+    raw = subprocess.check_output([
+        "ffmpeg", "-v", "error", "-ss", f"{seconds:.3f}", "-i", str(path),
+        "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+    ])
+    pixels = len(raw) // 3
+    return tuple(
+        sum(raw[channel::3]) / max(1, pixels)
+        for channel in range(3)
+    )
+
+
+def test_render_pixels_follow_computed_timeline(app_client, project):
+    pid = project["id"]
+    generated = Path(config.PROJECTS_DIR) / pid / "generated"
+    _make_clip(generated / "pixel-red.mp4", "red")
+    _make_clip(generated / "pixel-blue.mp4", "blue")
+
+    shots = []
+    for index, name in enumerate(("red", "blue")):
+        shots.append({
+            "id": f"pixel-{name}", "prompt": name, "negative_prompt": "", "seed": 42,
+            "width": 320, "height": 180, "fps": 25, "num_frames": 25,
+            "cfg_scale": 1.0, "enhance_prompt": False, "upscale": False,
+            "pipeline_override": "auto", "track_index": 0, "start_frame": 0,
+            "trim_in": 0, "trim_out": 0, "timeline": [],
+            "video_url": f"/projects/{pid}/generated/pixel-{name}.mp4",
+            "status": "completed", "sequence_index": index,
+        })
+    payload = {
+        "id": pid, "name": "Pixel Render", "fps": 25, "seed": 42,
+        "resolution_w": 320, "resolution_h": 180, "revision": 0,
+        "shots": shots, "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    response = app_client.post(
+        f"/projects/{pid}/render",
+        json={"settings": {"width": 320, "height": 180, "fps": 25}, "track_states": {}},
+    )
+    render_id = response.json()["job_id"]
+    status = app_client.get(f"/status/{render_id}").json()
+    assert status["status"] == "completed", status
+
+    output = generated / f"{render_id}.mp4"
+    first = _average_rgb(output, 0.25)
+    second = _average_rgb(output, 1.75)
+    assert first[0] > first[2] + 50, first
+    assert second[2] > second[0] + 50, second
+
+
+def test_render_v2_alpha_blends_pixels(app_client, project):
+    pid = project["id"]
+    generated = Path(config.PROJECTS_DIR) / pid / "generated"
+    _make_clip(generated / "v1-red.mp4", "red")
+    _make_clip(generated / "v2-blue.mp4", "blue")
+
+    def shot(name, track, opacity=None):
+        data = {
+            "id": f"alpha-{name}", "prompt": name, "negative_prompt": "", "seed": 42,
+            "width": 320, "height": 180, "fps": 25, "num_frames": 25,
+            "cfg_scale": 1.0, "enhance_prompt": False, "upscale": False,
+            "pipeline_override": "auto", "track_index": track,
+            "start_frame": 0, "trim_in": 0, "trim_out": 0, "timeline": [],
+            "video_url": f"/projects/{pid}/generated/{name}.mp4",
+            "status": "completed",
+        }
+        if opacity is not None:
+            data["keyframes"] = [
+                {"frame": 0, "opacity": opacity},
+                {"frame": 24, "opacity": opacity},
+            ]
+        return data
+
+    payload = {
+        "id": pid, "name": "Alpha Render", "fps": 25, "seed": 42,
+        "resolution_w": 320, "resolution_h": 180, "revision": 0,
+        "shots": [
+            {**shot("v1-red", 0), "sequence_index": 0},
+            {**shot("v2-blue", 1, 0.5), "sequence_index": 1},
+        ],
+        "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    response = app_client.post(
+        f"/projects/{pid}/render",
+        json={"settings": {"width": 320, "height": 180, "fps": 25}, "track_states": {}},
+    )
+    render_id = response.json()["job_id"]
+    status = app_client.get(f"/status/{render_id}").json()
+    assert status["status"] == "completed", status
+
+    rgb = _average_rgb(generated / f"{render_id}.mp4", 0.5)
+    assert rgb[0] > 40 and rgb[2] > 40, rgb
+
+
 def test_render_range_exports_a_subsection(app_client, project):
     pid = project["id"]
     generated = Path(config.PROJECTS_DIR) / pid / "generated"

@@ -611,3 +611,10 @@ legacy DBs get the idempotent column repair, are stamped, then upgrade. Kept
 create-all/repair as a safety net until future revisions exist. Added migration
 tests for the stamped version and current columns; verified fresh and legacy DB
 paths manually. Verified: 51 pytest.
+
+## [2026-11-17] render | pixel-level golden assertions
+
+Added real render pixel tests: a red→blue V1 cut samples the correct dominant
+channel in each window, and a 50% V2 overlay produces a blended RGB frame. This
+gives frame-level evidence beyond duration/streams/filtergraph. Verified:
+53 pytest.
