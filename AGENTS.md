@@ -181,7 +181,9 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
   provenance. Roles: `prompt_video`, `prompt_image`, `script_parse`,
   `agent_plan`, `review_critic`, `continuity`. Providers: Gemma (in-process),
   Ollama, LM Studio, OpenAI-compatible, optional OpenAI/Anthropic. See
-  `Milimo Video/systems/llm-settings-audit-2026-11.md`.
+  `Milimo Video/systems/llm-settings-audit-2026-11.md`; local-first completion
+  (provider instances, capability truth, warm-up, eval) is planned in
+  `Milimo Video/systems/llm-local-first-next-2026-11.md`.
 - Desktop: Tauri 2 shell with native open/save dialogs and a backend supervisor
   that prefers a `milimo-backend` sidecar and otherwise starts `run_backend.sh`.
   Bundled Python/Torch runtime remains a follow-up.
@@ -203,9 +205,14 @@ Do not claim these are done:
 - Legacy `/` cutover is gated on the documented two-clean-release window.
 - Scoped-v1 gaps: no transitions/LUT/titles/A2 track, lexical rather than
   embedding search, and no shorts/lens template packs.
-- LLM L4 governance: token/cost telemetry, cloud budget guard, eval gate, and
-  staged profiles are not built. Air-gap and `MILIMO_LLM_CLOUD` are enforced.
-  See `Milimo Video/systems/llm-settings-audit-2026-11.md`.
+- LLM local-first completion (L5–L8): provider instances (oMLX and Strata both
+  map to one `openai_compatible` slot today), capability truth, wrapper-safe
+  image-prompt parsing, discovery-seeded defaults, warm-up/keep-alive, streaming
+  negotiation, local role evaluation, and LLM/VRAM coordination are not built.
+  See `Milimo Video/systems/llm-local-first-next-2026-11.md`.
+- LLM L9 (cloud on top): spend telemetry, cloud budget guard, eval-gated changes,
+  and profiles. Air-gap and `MILIMO_LLM_CLOUD` are enforced. Cloud stays optional
+  and later than the local path.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
 

@@ -72,6 +72,10 @@ model are chosen by the persisted **role plan**, not by a global config flag.
 - Prompt enhancement runs before pipeline selection, so its SSE `progress` update
   (with `enhanced_prompt`) arrives at ~5% — before any denoising.
 - A failed enhancement never fails the job: the original prompt is returned.
+- **Known defect:** some local models answer `prompt_image` with a JSON object
+  (`{"prompt": ...}`); the parser only recognises `enhanced_prompt` and falls back
+  to the raw text, so the wrapper can reach Flux. Fix is L6-01 in
+  [[llm-local-first-next-2026-11]].
 - Cloud providers stay unreachable unless `MILIMO_LLM_CLOUD=1` and air-gap is off.
 
 ## Related

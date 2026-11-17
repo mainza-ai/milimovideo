@@ -1177,3 +1177,24 @@ verify_setup 0 failures; 61 Vitest tests (5 new panel tests); 20 Playwright test
 (3 new LLM specs incl. axe); tsc, ESLint 0 errors, Vite build, bundle budget; live
 API check on a scratch DB including restart persistence and a 409 stale write.
 L4 governance remains deferred. See [[systems/llm-settings-audit-2026-11]].
+
+## [2026-11-17] audit | local-first LLM next steps
+
+Tested the shipped plane against the machine's real local engines: Ollama
+0.40.16 (`llama3.2:3b`, `granite4.1:3b`, `qwen3.6`, nomic embed), oMLX on 8787
+(11 MLX models), and Strata on 47831 (Qwen3.8-Flash-Next, vision + speculative
+decode). Discovery found all three; verify, role routing, live fallback, and
+provenance worked end-to-end.
+
+Measured: Ollama 3B enhancement 2.2 s warm / 7.4 s cold; oMLX 27B 23–25 s;
+Strata completion 3.0 s warm; Strata script parse 31.7 s for 10 shots; oMLX 27B
+cold load 36.2 s. oMLX ignores `stream: true` (0 bytes for 60 s); Strata streams
+`reasoning_content` before content.
+
+Filed [[systems/llm-local-first-next-2026-11]] with findings F1–F11 and phases
+L5–L9: provider instances (oMLX + Strata collide on one `openai_compatible`
+slot), capability truth (oMLX `max_model_len`, non-chat models, vision),
+wrapper-safe prompt parsing (granite returned JSON to `prompt_image`),
+discovery-seeded defaults (default `llama3.1` 404s here), warm-up/keep-alive/
+timeouts, streaming negotiation, context preflight, local role eval, and
+LLM/VRAM coordination. Cloud (L9) stays behind the local gates.

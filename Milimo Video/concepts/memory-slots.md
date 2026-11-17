@@ -34,10 +34,16 @@ Rules: `video ↔ image` are mutually exclusive — `prepare_for("video")` unloa
 before LTX-2 loads, and vice versa. Pipeline swaps always follow the sequence:
 delete reference → `gc.collect()` → empty GPU cache → `prepare_for(slot)` → load.
 
-The `llm` slot is managed differently: `llm.py` sends `keep_alive: 0`
-(configurable via `MILIMO_OLLAMA_KEEP_ALIVE` or the frontend toggle) with every
-Ollama request, then issues an explicit unload after prompt enhancement — the model
-frees memory immediately instead of lingering on Ollama's default 5-minute timeout.
+The `llm` slot is managed differently: the Ollama provider sends its configured
+`keep_alive` (default `0`, editable in Studio → AI & LLM) with every request, so the
+model frees memory immediately instead of lingering on Ollama's default 5-minute
+timeout. `keep_alive: 5m` is a real speed win (7.4 s → 2.2 s for a 3B on the
+reference machine) but pins that model through denoising.
+
+HTTP engines other than Ollama (oMLX, Strata, LM Studio, llama.cpp) are **outside**
+`MemoryManager` today: their load/unload is owned by their own server. A warm 27B
+MLX model plus LTX-2 19B does not fit on 32 GB. See
+[[../systems/llm-local-first-next-2026-11.md]] (F10, L8-01).
 
 ## Why It Matters
 
