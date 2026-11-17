@@ -499,3 +499,11 @@ store, reflected in timeline duration, and rendered with `setpts/speed` plus
 adjacent V1 clips. Added a real FFmpeg test proving 50 frames at 2× renders as a
 1s file, plus filtergraph and round-trip tests. Verified: 44 pytest, 29 vitest,
 tsc clean.
+
+## [2026-11-17] f2 | waveforms, audio fades and solo
+
+A1 clips render decoded waveforms on a canvas with a module-level peak cache.
+Per-clip fade-in/out (seconds) persist and reach the audio filtergraph as
+`afade`; the render honors track solo (soloing one track mutes the rest) and the
+timeline labels expose M/S toggles. Added filtergraph tests for fades and solo.
+Verified: 46 pytest, 29 vitest, tsc clean, eslint 0 errors.

@@ -1491,6 +1491,22 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 650;
+    position: relative;
+    z-index: 1;
+}
+
+.st-waveform-wrap {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    bottom: 2px;
+    opacity: 0.75;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.st-waveform {
+    display: block;
 }
 
 .st-timeline-clip-meta {

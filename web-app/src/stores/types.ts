@@ -51,6 +51,8 @@ export interface Shot {
     audioMuted?: boolean;
     keyframes?: OpacityKeyframe[];
     speed?: number;
+    audioFadeIn?: number;
+    audioFadeOut?: number;
     videoUrl?: string | null; // Derived from jobID
     thumbnailUrl?: string; // Static Preview
     enhancedPromptResult?: string; // Result from backend
@@ -212,10 +214,11 @@ export interface UISlice {
 }
 
 export interface TrackSlice {
-    trackStates: Record<number, { muted: boolean; locked: boolean; hidden: boolean }>;
+    trackStates: Record<number, { muted: boolean; locked: boolean; hidden: boolean; solo?: boolean }>;
     toggleTrackMute: (trackIndex: number) => void;
     toggleTrackLock: (trackIndex: number) => void;
     toggleTrackHidden: (trackIndex: number) => void;
+    toggleTrackSolo: (trackIndex: number) => void;
 }
 
 export interface ElementSlice {

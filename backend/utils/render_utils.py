@@ -70,8 +70,18 @@ def build_complex_filtergraph(
         state = track_states.get(str(track_index)) or track_states.get(track_index) or {}
         return bool(state.get("hidden"))
 
+    def has_solo() -> bool:
+        return any(
+            bool((state or {}).get("solo"))
+            for state in track_states.values()
+        )
+
     def is_muted(track_index: int) -> bool:
         state = track_states.get(str(track_index)) or track_states.get(track_index) or {}
+        if state.get("solo"):
+            return False
+        if has_solo():
+            return True
         return bool(state.get("muted"))
 
     all_shots = v1_shots + v2_shots + a1_shots
@@ -116,6 +126,16 @@ def build_complex_filtergraph(
             chain += f",atempo={speed}"
         if abs(gain - 1.0) > 1e-3:
             chain += f",volume={gain}"
+        output_duration = duration_frames / project_fps
+        fade_in = min(output_duration, max(0.0, float(shot.get("fade_in", 0) or 0)))
+        fade_out = min(output_duration, max(0.0, float(shot.get("fade_out", 0) or 0)))
+        if fade_in > 0:
+            chain += f",afade=t=in:st=0:d={fade_in:.3f}"
+        if fade_out > 0:
+            chain += (
+                f",afade=t=out:st={max(0.0, output_duration - fade_out):.3f}"
+                f":d={fade_out:.3f}"
+            )
         chain += f",adelay={delay_ms}|{delay_ms}{label}"
         filter_chains.append(chain)
         audio_outputs.append(label)

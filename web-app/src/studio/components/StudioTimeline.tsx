@@ -9,6 +9,7 @@ import { useStudioEditor } from '../state/editorStore';
 import { formatDuration } from '../data/useStudioData';
 import { bladeSourceFrame, rollCut, slipShot, trimShot } from '../timeline/ops';
 import { removeCue, upsertCue } from '../captions/cues';
+import { Waveform } from './Waveform';
 import { getAssetUrl } from '../../config';
 import { useStudioAssets } from '../data/useStudioData';
 
@@ -43,6 +44,7 @@ export function StudioTimeline() {
     const {
         currentTime, selectedShotId, selectShot, setCurrentTime, updateShot,
         splitShot, deleteShot, addToast, setProject, addShot, reorderShots,
+        trackStates, toggleTrackMute, toggleTrackSolo,
     } = useTimelineStore(useShallow((state) => ({
         currentTime: state.currentTime,
         selectedShotId: state.selectedShotId,
@@ -55,6 +57,9 @@ export function StudioTimeline() {
         setProject: state.setProject,
         addShot: state.addShot,
         reorderShots: state.reorderShots,
+        trackStates: state.trackStates,
+        toggleTrackMute: state.toggleTrackMute,
+        toggleTrackSolo: state.toggleTrackSolo,
     })));
     const { timelineZoom, setTimelineZoom } = useStudioEditor();
     const [tool, setTool] = useState<Tool>('select');
@@ -465,6 +470,30 @@ export function StudioTimeline() {
                             <div className="st-timeline-label">
                                 <strong style={{ color: track.tone }}>{track.label}</strong>
                                 <span>{track.id === 2 ? 'audio' : track.id === 1 ? 'overlay' : 'main'}</span>
+                                <div style={{ display: 'flex', gap: 3, marginTop: 2 }}>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant={trackStates[track.id]?.muted ? 'danger' : 'ghost'}
+                                        style={{ padding: '1px 5px', fontSize: 8 }}
+                                        onClick={() => toggleTrackMute(track.id)}
+                                        aria-pressed={!!trackStates[track.id]?.muted}
+                                    >
+                                        M
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant={trackStates[track.id]?.solo ? 'primary' : 'ghost'}
+                                        style={{ padding: '1px 5px', fontSize: 8 }}
+                                        onClick={() => toggleTrackSolo(track.id)}
+                                        aria-pressed={!!trackStates[track.id]?.solo}
+                                    >
+                                        S
+                                    </button>
+                                </div>
                             </div>
                             <div
                                 className="st-timeline-lane"
@@ -519,6 +548,11 @@ export function StudioTimeline() {
                                             }}
                                             title={`${clip.shot.action || clip.shot.prompt || 'Shot'} · ${durationFrames}f · in ${trimIn} / out ${trimOut}`}
                                         >
+                                            {track.id === 2 && clip.shot.videoUrl && (
+                                                <span className="st-waveform-wrap">
+                                                    <Waveform url={clip.shot.videoUrl} height={22} />
+                                                </span>
+                                            )}
                                             {tool === 'select' && (
                                                 <>
                                                     <span

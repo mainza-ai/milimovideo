@@ -26,4 +26,10 @@ export const createTrackSlice: StateCreator<TimelineState, [], [], TrackSlice> =
             [idx]: { ...state.trackStates[idx], hidden: !state.trackStates[idx]?.hidden }
         }
     })),
+    toggleTrackSolo: (idx) => set(state => ({
+        trackStates: {
+            ...state.trackStates,
+            [idx]: { ...state.trackStates[idx], solo: !state.trackStates[idx]?.solo }
+        }
+    })),
 });

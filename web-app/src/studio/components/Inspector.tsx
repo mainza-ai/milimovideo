@@ -417,6 +417,36 @@ export function Inspector() {
                                         Reset
                                     </button>
                                 </div>
+                                <div className="st-row" style={{ marginTop: 10 }}>
+                                    <label>
+                                        <span className="st-label">Fade in · {(shot.audioFadeIn ?? 0).toFixed(1)}s</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={2}
+                                            step={0.1}
+                                            value={shot.audioFadeIn ?? 0}
+                                            style={{ width: '100%', accentColor: 'var(--st-accent)' }}
+                                            onChange={(event) => updateShot(shot.id, {
+                                                audioFadeIn: Number(event.target.value),
+                                            })}
+                                        />
+                                    </label>
+                                    <label>
+                                        <span className="st-label">Fade out · {(shot.audioFadeOut ?? 0).toFixed(1)}s</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={2}
+                                            step={0.1}
+                                            value={shot.audioFadeOut ?? 0}
+                                            style={{ width: '100%', accentColor: 'var(--st-accent)' }}
+                                            onChange={(event) => updateShot(shot.id, {
+                                                audioFadeOut: Number(event.target.value),
+                                            })}
+                                        />
+                                    </label>
+                                </div>
                                 <div className="st-meta-grid" style={{ marginTop: 10 }}>
                                     <dt>Track</dt><dd>{shot.trackIndex === 2 ? 'A1' : shot.trackIndex === 1 ? 'V2' : 'V1'}</dd>
                                     <dt>Frames</dt><dd className="st-mono">{shot.numFrames}</dd>

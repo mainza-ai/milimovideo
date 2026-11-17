@@ -65,6 +65,23 @@ def test_opacity_expression_holds_and_interpolates():
     assert "1.000000" in expr  # slope over one second
 
 
+def test_audio_fades_are_written():
+    cmd = _cmd(v1=[_clip(fade_in=0.5, fade_out=0.2)])
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "afade=t=in:st=0:d=0.500" in graph
+    assert "afade=t=out:st=" in graph
+
+
+def test_solo_mutes_other_audio_tracks():
+    both = _cmd(v1=[_clip()], a1=[_clip("/tmp/voice.wav")])
+    both_graph = both[both.index("-filter_complex") + 1]
+    assert both_graph.count("atrim") == 2
+
+    solo = _cmd(v1=[_clip()], a1=[_clip("/tmp/voice.wav")], track_states={"0": {"solo": True}})
+    solo_graph = solo[solo.index("-filter_complex") + 1]
+    assert solo_graph.count("atrim") == 1
+
+
 def test_speed_scales_video_and_audio_time():
     cmd = _cmd(v1=[_clip(speed=2.0, source_frames=50, duration_frames=25)])
     graph = cmd[cmd.index("-filter_complex") + 1]

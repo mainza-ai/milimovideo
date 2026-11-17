@@ -109,6 +109,8 @@ def _shot_dict(shot: Shot) -> dict:
         "audio_gain": shot.audio_gain,
         "audio_muted": shot.audio_muted,
         "speed": shot.speed,
+        "audio_fade_in": shot.audio_fade_in,
+        "audio_fade_out": shot.audio_fade_out,
         "created_at": shot.created_at.isoformat() if shot.created_at else None,
     }
 
@@ -710,6 +712,8 @@ async def _render_background(
                     "duration_frames": duration_frames,
                     "source_frames": source_frames,
                     "speed": speed,
+                    "fade_in": shot.audio_fade_in or 0,
+                    "fade_out": shot.audio_fade_out or 0,
                     "trim_in": shot.trim_in or 0,
                     "keyframes": _parse_json_field(shot.keyframes, []),
                     "gain": shot.audio_gain if shot.audio_gain is not None else 1.0,
