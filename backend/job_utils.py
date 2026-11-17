@@ -30,13 +30,16 @@ async def gpu_job_wrapper(coro):
     logger.info(f"GPU job queued ({_gpu_queue_count} in queue)")
     
     sem = get_gpu_semaphore()
+    acquired = False
     try:
         async with sem:
-            _gpu_queue_count -= 1
+            acquired = True
+            _gpu_queue_count = max(0, _gpu_queue_count - 1)
             logger.info(f"GPU job acquired lock ({_gpu_queue_count} waiting)")
             return await coro
-    except Exception as e:
-        _gpu_queue_count = max(0, _gpu_queue_count - 1)
+    except Exception:
+        if not acquired:
+            _gpu_queue_count = max(0, _gpu_queue_count - 1)
         raise
 
 async def queue_video_task(job_id: str, params: dict):
@@ -98,6 +101,44 @@ async def enqueue_gpu_job(job_id: str, kind: str, params: dict, **extra) -> str:
     return queue_id
 
 
+def _is_oom(exc: Exception) -> bool:
+    if isinstance(exc, MemoryError):
+        return True
+    text = str(exc).lower()
+    return any(token in text for token in (
+        "out of memory",
+        "cuda oom",
+        "mps backend out of memory",
+        "allocation failed",
+        "not enough memory",
+    ))
+
+
+def _oom_retry_params(kind: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    retry = dict(params)
+    if "width" in retry:
+        retry["width"] = max(256, int(round(int(retry["width"]) * 0.75 / 8) * 8))
+    if "height" in retry:
+        retry["height"] = max(256, int(round(int(retry["height"]) * 0.75 / 8) * 8))
+    if kind == "video" and "num_frames" in retry:
+        reduced = max(49, int(round(int(retry["num_frames"]) * 0.75)))
+        retry["num_frames"] = ((reduced - 1) // 8) * 8 + 1
+    return retry
+
+
+def _clear_accelerator_cache() -> None:
+    import gc
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+            torch.mps.empty_cache()
+    except Exception:
+        logger.debug("Could not clear accelerator cache", exc_info=True)
+
+
 async def run_queued_job(queue_id: str) -> None:
     from database import QueuedJob
     from sqlmodel import select
@@ -141,6 +182,50 @@ async def run_queued_job(queue_id: str) -> None:
         status = "completed"
         error = None
     except Exception as exc:
+        from database import QueuedJob
+
+        attempts = 0
+        with Session(engine) as session:
+            current = session.get(QueuedJob, queue_id)
+            attempts = (current.attempts or 0) if current else 0
+
+        if _is_oom(exc) and attempts < 2 and kind in ("video", "image"):
+            retry_params = _oom_retry_params(kind, params)
+            logger.warning(
+                "OOM in job %s; retrying once at %sx%s / %s frames",
+                job_id,
+                retry_params.get("width"),
+                retry_params.get("height"),
+                retry_params.get("num_frames"),
+            )
+            _clear_accelerator_cache()
+            with Session(engine) as session:
+                current = session.get(QueuedJob, queue_id)
+                if current:
+                    current.status = "queued"
+                    current.params_json = json.dumps(retry_params)
+                    current.error_message = f"OOM retry: {exc}"[:1000]
+                    current.started_at = None
+                    session.add(current)
+                    session.commit()
+            update_job_db(job_id, "pending", status_message="OOM: retrying at a smaller preset")
+            shot_id = retry_params.get("shot_id") or retry_params.get("id")
+            if shot_id:
+                update_shot_db(
+                    shot_id,
+                    width=retry_params.get("width"),
+                    height=retry_params.get("height"),
+                    num_frames=retry_params.get("num_frames"),
+                )
+            await broadcast_log(
+                job_id,
+                "Out of memory: retrying once at "
+                f"{retry_params.get('width')}x{retry_params.get('height')}, "
+                f"{retry_params.get('num_frames')} frames",
+            )
+            await run_queued_job(queue_id)
+            return
+
         logger.exception(f"Queued job {job_id} failed: {exc}")
         status = "failed"
         error = str(exc)

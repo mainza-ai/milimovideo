@@ -618,3 +618,11 @@ Added real render pixel tests: a red→blue V1 cut samples the correct dominant
 channel in each window, and a 50% V2 overlay produces a blended RGB frame. This
 gives frame-level evidence beyond duration/streams/filtergraph. Verified:
 53 pytest.
+
+## [2026-11-17] jobs | one-shot OOM retry ladder
+
+Queued video/image jobs now detect torch/MPS OOM messages, clear accelerator
+caches, reduce resolution by 25% (8px aligned) and video frames to an 8k+1 count,
+update the shot's real params, broadcast the retry, and rerun once. Attempts are
+bounded by the durable ledger. Also fixed a double-decrement in the GPU wait
+counter. Added unit tests for detection and retry math. Verified: 55 pytest.
