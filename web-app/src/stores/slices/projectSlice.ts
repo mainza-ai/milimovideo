@@ -137,6 +137,10 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 script_content: project.scriptContent,
                 captions_burn: project.captionsBurn ?? true,
                 render_preset: project.renderPreset ?? null,
+                render_crf: project.renderCrf ?? 18,
+                render_speed: project.renderSpeed ?? 'fast',
+                render_audio_bitrate: project.renderAudioBitrate ?? '192k',
+                render_audio_normalize: project.renderAudioNormalize ?? false,
                 captions: (project.captions || []).map(cue => ({
                     id: cue.id,
                     start_frame: cue.startFrame,
@@ -296,6 +300,10 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 scriptContent: data.script_content, // Load persisted script
                 captionsBurn: data.captions_burn ?? true,
                 renderPreset: data.render_preset || undefined,
+                renderCrf: data.render_crf ?? 18,
+                renderSpeed: data.render_speed || 'fast',
+                renderAudioBitrate: data.render_audio_bitrate || '192k',
+                renderAudioNormalize: data.render_audio_normalize ?? false,
                 captions: (data.captions || []).map((cue: any) => ({
                     id: cue.id || uuidv4(),
                     startFrame: cue.start_frame ?? 0,

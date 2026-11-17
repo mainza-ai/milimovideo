@@ -403,7 +403,13 @@ def test_render_api_matches_computed_timeline(app_client, project):
 
     response = app_client.post(
         f"/projects/{pid}/render",
-        json={"settings": {"width": 320, "height": 180, "fps": 25}, "track_states": {}},
+        json={
+            "settings": {
+                "width": 320, "height": 180, "fps": 25,
+                "audio_bitrate": "256k", "audio_normalize": True,
+            },
+            "track_states": {},
+        },
     )
     assert response.status_code == 200, response.text
     render_id = response.json()["job_id"]
@@ -417,8 +423,10 @@ def test_render_api_matches_computed_timeline(app_client, project):
     assert output.exists()
     probe = subprocess.check_output([
         "ffprobe", "-v", "error", "-show_entries", "format=duration",
-        "-show_entries", "stream=codec_type", "-of", "json", str(output),
+        "-show_entries", "stream=codec_type,bit_rate", "-of", "json", str(output),
     ])
     data = json.loads(probe)
     assert float(data["format"]["duration"]) == pytest.approx(2.0, abs=0.15)
     assert {s["codec_type"] for s in data["streams"]} == {"video", "audio"}
+    audio = next(s for s in data["streams"] if s["codec_type"] == "audio")
+    assert int(audio["bit_rate"]) > 180000

@@ -8,7 +8,7 @@ def test_alembic_baseline_is_stamped(app_client):
     assert "alembic_version" in inspector.get_table_names()
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == "0001_baseline"
+    assert version == "0002_render_settings"
 
 
 def test_current_schema_columns_are_present(app_client):
@@ -22,5 +22,7 @@ def test_current_schema_columns_are_present(app_client):
     project_columns = {column["name"] for column in inspector.get_columns("project")}
     assert {
         "revision", "board_layout", "board_revision", "view_state", "captions",
-        "captions_burn", "render_preset", "script_content", "storyboard_archive",
+        "captions_burn", "render_preset", "render_crf", "render_speed",
+        "render_audio_bitrate", "render_audio_normalize", "script_content",
+        "storyboard_archive",
     } <= project_columns

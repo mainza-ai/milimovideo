@@ -134,6 +134,10 @@ class ProjectState(BaseModel):
     captions: List[CaptionCue] = []
     captions_burn: bool = True
     render_preset: Optional[str] = None
+    render_crf: int = 18
+    render_speed: str = "fast"
+    render_audio_bitrate: str = "192k"
+    render_audio_normalize: bool = False
     script_content: Optional[str] = None
     resolution_w: int = 768
     resolution_h: int = 512
@@ -318,6 +322,7 @@ class RenderSettings(BaseModel):
     crf: int = 18
     preset: str = "fast"
     audio_bitrate: str = "192k"
+    audio_normalize: bool = False
 
 
 class RenderRequest(BaseModel):

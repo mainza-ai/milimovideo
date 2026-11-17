@@ -29,10 +29,26 @@ export function DeliverSurface() {
     const [rangeStart, setRangeStart] = useState(0);
     const [rangeEnd, setRangeEnd] = useState(totalDuration);
     const [fit, setFit] = useState<'pad' | 'crop'>('pad');
+    const [crf, setCrf] = useState(project.renderCrf ?? 18);
+    const [speed, setSpeed] = useState(project.renderSpeed ?? 'fast');
+    const [audioBitrate, setAudioBitrate] = useState(project.renderAudioBitrate ?? '192k');
+    const [audioNormalize, setAudioNormalize] = useState(project.renderAudioNormalize ?? false);
 
     useEffect(() => {
         setRangeEnd((current) => (current > totalDuration ? totalDuration : current || totalDuration));
     }, [totalDuration]);
+
+    useEffect(() => {
+        setCrf(project.renderCrf ?? 18);
+        setSpeed(project.renderSpeed ?? 'fast');
+        setAudioBitrate(project.renderAudioBitrate ?? '192k');
+        setAudioNormalize(project.renderAudioNormalize ?? false);
+    }, [project.id, project.renderCrf, project.renderSpeed, project.renderAudioBitrate, project.renderAudioNormalize]);
+
+    const persistRenderSettings = (patch: Partial<typeof project>) => {
+        setProject({ ...project, ...patch });
+        void saveProject();
+    };
 
     const start = async () => {
         const selected = PRESETS.find((item) => item.id === preset) || PRESETS[0];
@@ -45,8 +61,10 @@ export function DeliverSurface() {
                 start_frame: Math.round(Math.min(rangeStart, rangeEnd) * project.fps),
                 end_frame: Math.round(Math.max(rangeStart, rangeEnd) * project.fps),
                 fit,
-                crf: 18,
-                preset: 'fast',
+                crf,
+                preset: speed,
+                audio_bitrate: audioBitrate,
+                audio_normalize: audioNormalize,
             });
             await refresh();
         } finally {
@@ -104,6 +122,77 @@ export function DeliverSurface() {
                         </button>
                     ))}
                 </div>
+            </div>
+
+            <div className="st-panel" style={{ marginBottom: 14 }}>
+                <h3 className="st-panel-title">Encoding</h3>
+                <div className="st-form-grid">
+                    <label className="st-field">
+                        <span>CRF · {crf} {crf <= 18 ? '(quality)' : crf >= 26 ? '(small file)' : ''}</span>
+                        <input
+                            type="range"
+                            min={12}
+                            max={32}
+                            step={1}
+                            value={crf}
+                            aria-label="Render CRF"
+                            onChange={(event) => setCrf(Number(event.target.value))}
+                            onPointerUp={() => persistRenderSettings({ renderCrf: crf })}
+                            onKeyUp={() => persistRenderSettings({ renderCrf: crf })}
+                            style={{ accentColor: 'var(--st-accent)' }}
+                        />
+                    </label>
+                    <label className="st-field">
+                        <span>Encoder speed</span>
+                        <select
+                            className="st-select"
+                            value={speed}
+                            onChange={(event) => {
+                                const next = event.target.value;
+                                setSpeed(next);
+                                persistRenderSettings({ renderSpeed: next });
+                            }}
+                        >
+                            {['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow'].map((item) => (
+                                <option key={item} value={item}>{item}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="st-field">
+                        <span>Audio bitrate</span>
+                        <select
+                            className="st-select"
+                            value={audioBitrate}
+                            onChange={(event) => {
+                                const next = event.target.value;
+                                setAudioBitrate(next);
+                                persistRenderSettings({ renderAudioBitrate: next });
+                            }}
+                        >
+                            {['96k', '128k', '192k', '256k', '320k'].map((item) => (
+                                <option key={item} value={item}>{item}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <div className="st-field" style={{ justifyContent: 'end' }}>
+                        <span>Audio</span>
+                        <label className="st-chip" style={{ cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
+                            <input
+                                type="checkbox"
+                                checked={audioNormalize}
+                                onChange={(event) => {
+                                    const next = event.target.checked;
+                                    setAudioNormalize(next);
+                                    persistRenderSettings({ renderAudioNormalize: next });
+                                }}
+                            />
+                            Normalize loudness
+                        </label>
+                    </div>
+                </div>
+                <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 8 }}>
+                    Values persist with the project. Normalization applies a single-pass loudnorm at -16 LUFS.
+                </p>
             </div>
 
             <div className="st-panel" style={{ marginBottom: 14 }}>

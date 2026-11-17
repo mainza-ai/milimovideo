@@ -539,6 +539,30 @@
         "title": "CreateProjectRequest",
         "type": "object"
       },
+      "DepthRequest": {
+        "properties": {
+          "image_path": {
+            "title": "Image Path",
+            "type": "string"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot Id"
+          }
+        },
+        "required": [
+          "image_path"
+        ],
+        "title": "DepthRequest",
+        "type": "object"
+      },
       "DownloadRequest": {
         "description": "Request to start a model download.",
         "properties": {
@@ -1152,6 +1176,21 @@
             "title": "Name",
             "type": "string"
           },
+          "render_audio_bitrate": {
+            "default": "192k",
+            "title": "Render Audio Bitrate",
+            "type": "string"
+          },
+          "render_audio_normalize": {
+            "default": false,
+            "title": "Render Audio Normalize",
+            "type": "boolean"
+          },
+          "render_crf": {
+            "default": 18,
+            "title": "Render Crf",
+            "type": "integer"
+          },
           "render_preset": {
             "anyOf": [
               {
@@ -1162,6 +1201,11 @@
               }
             ],
             "title": "Render Preset"
+          },
+          "render_speed": {
+            "default": "fast",
+            "title": "Render Speed",
+            "type": "string"
           },
           "resolution_h": {
             "default": 512,
@@ -1241,9 +1285,22 @@
             "$ref": "#/components/schemas/RenderSettings",
             "default": {
               "audio_bitrate": "192k",
+              "audio_normalize": false,
               "crf": 18,
+              "fit": "pad",
               "preset": "fast"
             }
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
           },
           "track_states": {
             "additionalProperties": {
@@ -1265,6 +1322,11 @@
             "title": "Audio Bitrate",
             "type": "string"
           },
+          "audio_normalize": {
+            "default": false,
+            "title": "Audio Normalize",
+            "type": "boolean"
+          },
           "crf": {
             "default": 18,
             "title": "Crf",
@@ -1280,6 +1342,15 @@
               }
             ],
             "title": "End Frame"
+          },
+          "fit": {
+            "default": "pad",
+            "enum": [
+              "pad",
+              "crop"
+            ],
+            "title": "Fit",
+            "type": "string"
           },
           "fps": {
             "anyOf": [
@@ -4558,6 +4629,56 @@
         ]
       }
     },
+    "/projects/{project_id}/depth": {
+      "post": {
+        "operationId": "estimate_depth_projects__project_id__depth_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DepthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Estimate Depth",
+        "tags": [
+          "depth"
+        ]
+      }
+    },
     "/projects/{project_id}/elements": {
       "get": {
         "operationId": "get_elements_projects__project_id__elements_get",
@@ -4682,6 +4803,47 @@
           }
         },
         "summary": "Get Project Images",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/integrity": {
+      "get": {
+        "description": "Report orphaned data, missing media, and ordering problems without mutating.",
+        "operationId": "project_integrity_projects__project_id__integrity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Project Integrity",
         "tags": [
           "projects"
         ]
@@ -5414,6 +5576,57 @@
           }
         },
         "summary": "Ai Parse",
+        "tags": [
+          "storyboard"
+        ]
+      }
+    },
+    "/projects/{project_id}/storyboard/ai-parse-jobs": {
+      "post": {
+        "description": "Queue AI parsing instead of loading the model inside this request.",
+        "operationId": "ai_parse_job_projects__project_id__storyboard_ai_parse_jobs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptParseRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ai Parse Job",
         "tags": [
           "storyboard"
         ]

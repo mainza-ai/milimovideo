@@ -104,6 +104,7 @@ def build_complex_filtergraph(
     crf: int = 18,
     preset: str = "fast",
     audio_bitrate: str = "192k",
+    audio_normalize: bool = False,
     captions_path: Optional[str] = None,
     start_seconds: float = 0.0,
     duration_seconds: Optional[float] = None,
@@ -322,6 +323,12 @@ def build_complex_filtergraph(
             f"{''.join(audio_outputs)}amix=inputs={len(audio_outputs)}:"
             f"duration=longest:dropout_transition=0{final_audio_label}"
         )
+
+    if final_audio_label and audio_normalize:
+        filter_chains.append(
+            f"{final_audio_label}loudnorm=I=-16:TP=-1.5:LRA=11[a_norm]"
+        )
+        final_audio_label = "[a_norm]"
 
     cmd.extend(["-filter_complex", ";".join(filter_chains)])
     cmd.extend(["-map", final_video_label])

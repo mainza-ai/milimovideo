@@ -244,6 +244,10 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         captions=_parse_json_field(project.captions, []),
         captions_burn=bool(project.captions_burn),
         render_preset=project.render_preset,
+        render_crf=project.render_crf or 18,
+        render_speed=project.render_speed or "fast",
+        render_audio_bitrate=project.render_audio_bitrate or "192k",
+        render_audio_normalize=bool(project.render_audio_normalize),
         script_content=project.script_content,
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
@@ -319,6 +323,12 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     db_project.captions = json.dumps(_sanitize_captions(state.captions))
     db_project.captions_burn = bool(state.captions_burn)
     db_project.render_preset = state.render_preset
+    db_project.render_crf = max(0, min(51, state.render_crf))
+    db_project.render_speed = state.render_speed if state.render_speed in {
+        "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow",
+    } else "fast"
+    db_project.render_audio_bitrate = state.render_audio_bitrate
+    db_project.render_audio_normalize = bool(state.render_audio_normalize)
     db_project.script_content = state.script_content
     
     db_project.updated_at = datetime.utcnow()
@@ -929,6 +939,7 @@ async def _render_background(
                 crf=settings.crf,
                 preset=settings.preset,
                 audio_bitrate=settings.audio_bitrate,
+                audio_normalize=settings.audio_normalize,
                 captions_path=captions_path,
                 start_seconds=range_start / max(1, fps),
                 duration_seconds=range_duration,

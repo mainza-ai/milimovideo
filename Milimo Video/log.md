@@ -937,3 +937,12 @@ active-surface guard, and the root route all honor the flags. Added `.env.exampl
 and parser tests. Removed stale "use the legacy editor" guidance now that Studio
 owns script import, audio uploads, exports, tracking, masks, and inpaint.
 Verified: 50 vitest, tsc clean, eslint 0 errors, build pass.
+
+## [2026-11-17] deliver | persisted encoding controls
+
+Completed P2-07: projects persist CRF, encoder speed, audio bitrate, and loudness
+normalization. Deliver exposes all four, sends them to the render API, and keeps
+them with the project. The filtergraph applies single-pass loudnorm after the
+audio mix. Added Alembic revision 0002 (column-safe for fresh and legacy DBs),
+round-trip/clamp tests, filtergraph tests, and a real ffprobe assertion for a
+256k normalized export. Verified: 71 pytest, 50 vitest, tsc clean, build pass.

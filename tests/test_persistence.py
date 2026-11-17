@@ -289,3 +289,38 @@ def test_split_shot_keeps_order_and_timeline(app_client, project):
 
     reloaded = app_client.get(f"/projects/{pid}").json()["shots"]
     assert [s["id"] for s in reloaded] == ["one", body["new_shot"]["id"], "two"]
+
+
+def test_render_quality_settings_roundtrip_and_clamp(app_client, project):
+    pid = project["id"]
+    payload = {
+        "id": pid,
+        "name": "Render settings",
+        "fps": 25,
+        "seed": 42,
+        "resolution_w": 768,
+        "resolution_h": 512,
+        "revision": 0,
+        "shots": [],
+        "scenes": [],
+        "render_crf": 23,
+        "render_speed": "slow",
+        "render_audio_bitrate": "256k",
+        "render_audio_normalize": True,
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    body = app_client.get(f"/projects/{pid}").json()
+    assert body["render_crf"] == 23
+    assert body["render_speed"] == "slow"
+    assert body["render_audio_bitrate"] == "256k"
+    assert body["render_audio_normalize"] is True
+
+    payload.update({
+        "revision": body["revision"],
+        "render_crf": 99,
+        "render_speed": "made-up",
+    })
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    clamped = app_client.get(f"/projects/{pid}").json()
+    assert clamped["render_crf"] == 51
+    assert clamped["render_speed"] == "fast"

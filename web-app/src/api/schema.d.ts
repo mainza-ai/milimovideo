@@ -845,6 +845,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/depth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Estimate Depth */
+        post: operations["estimate_depth_projects__project_id__depth_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/elements": {
         parameters: {
             query?: never;
@@ -875,6 +892,26 @@ export interface paths {
          * @description List all generated images for a project.
          */
         get: operations["get_project_images_projects__project_id__images_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/integrity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Project Integrity
+         * @description Report orphaned data, missing media, and ordering problems without mutating.
+         */
+        get: operations["project_integrity_projects__project_id__integrity_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1140,6 +1177,26 @@ export interface paths {
          *     Both paths include element matching.
          */
         post: operations["ai_parse_projects__project_id__storyboard_ai_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/storyboard/ai-parse-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ai Parse Job
+         * @description Queue AI parsing instead of loading the model inside this request.
+         */
+        post: operations["ai_parse_job_projects__project_id__storyboard_ai_parse_jobs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2177,6 +2234,13 @@ export interface components {
              */
             seed: number;
         };
+        /** DepthRequest */
+        DepthRequest: {
+            /** Image Path */
+            image_path: string;
+            /** Shot Id */
+            shot_id?: string | null;
+        };
         /**
          * DownloadRequest
          * @description Request to start a model download.
@@ -2419,8 +2483,28 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /**
+             * Render Audio Bitrate
+             * @default 192k
+             */
+            render_audio_bitrate: string;
+            /**
+             * Render Audio Normalize
+             * @default false
+             */
+            render_audio_normalize: boolean;
+            /**
+             * Render Crf
+             * @default 18
+             */
+            render_crf: number;
             /** Render Preset */
             render_preset?: string | null;
+            /**
+             * Render Speed
+             * @default fast
+             */
+            render_speed: string;
             /**
              * Resolution H
              * @default 512
@@ -2455,11 +2539,15 @@ export interface components {
             /**
              * @default {
              *       "audio_bitrate": "192k",
+             *       "audio_normalize": false,
              *       "crf": 18,
+             *       "fit": "pad",
              *       "preset": "fast"
              *     }
              */
             settings: components["schemas"]["RenderSettings"];
+            /** Source Path */
+            source_path?: string | null;
             /**
              * Track States
              * @default {}
@@ -2478,12 +2566,23 @@ export interface components {
              */
             audio_bitrate: string;
             /**
+             * Audio Normalize
+             * @default false
+             */
+            audio_normalize: boolean;
+            /**
              * Crf
              * @default 18
              */
             crf: number;
             /** End Frame */
             end_frame?: number | null;
+            /**
+             * Fit
+             * @default pad
+             * @enum {string}
+             */
+            fit: "pad" | "crop";
             /** Fps */
             fps?: number | null;
             /** Height */
@@ -4565,6 +4664,41 @@ export interface operations {
             };
         };
     };
+    estimate_depth_projects__project_id__depth_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DepthRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_elements_projects__project_id__elements_get: {
         parameters: {
             query?: never;
@@ -4632,6 +4766,37 @@ export interface operations {
         };
     };
     get_project_images_projects__project_id__images_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    project_integrity_projects__project_id__integrity_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5131,6 +5296,41 @@ export interface operations {
         };
     };
     ai_parse_projects__project_id__storyboard_ai_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScriptParseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_parse_job_projects__project_id__storyboard_ai_parse_jobs_post: {
         parameters: {
             query?: never;
             header?: never;

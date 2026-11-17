@@ -133,7 +133,8 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 The export is the computed cut: magnetic V1 from `sequence_index`, free V2/A1,
 track mute/hidden, embedded audio + A1 mix (`amix duration=longest`), gain/mute,
 fades, solo, speed (`setpts`/`atempo`), trim, opacity/scale/pan/volume keyframes,
-caption ASS burn-in, render range, and presets. Verify with real FFmpeg renders,
+caption ASS burn-in, render range, persisted CRF/encoder-speed/audio-bitrate,
+optional loudness normalization, and presets. Verify with real FFmpeg renders,
 not just filtergraph strings.
 
 ### Studio capabilities

@@ -117,3 +117,22 @@ def test_keyframes_add_alpha_expression_to_the_clip():
     assert "geq=" in graph
     assert "alpha(X,Y)" in graph
     assert "format=rgba" in graph
+
+
+def test_audio_normalization_and_bitrate_are_applied():
+    cmd = _cmd(v1=[_clip()], a1=[_clip("/tmp/voice.wav")], audio_normalize=True)
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "amix=inputs=2" in graph
+    assert "loudnorm=I=-16:TP=-1.5:LRA=11[a_norm]" in graph
+    maps = [cmd[index + 1] for index, value in enumerate(cmd) if value == "-map"]
+    assert "[a_norm]" in maps
+
+    off = _cmd(v1=[_clip()], a1=[_clip("/tmp/voice.wav")])
+    off_graph = off[off.index("-filter_complex") + 1]
+    assert "loudnorm" not in off_graph
+
+
+def test_audio_bitrate_is_written_to_the_command():
+    cmd = _cmd(v1=[_clip()], audio_bitrate="256k")
+    assert "-b:a" in cmd
+    assert cmd[cmd.index("-b:a") + 1] == "256k"

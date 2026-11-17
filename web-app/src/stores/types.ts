@@ -152,6 +152,10 @@ export interface Project {
     captions?: CaptionCue[];
     captionsBurn?: boolean;
     renderPreset?: string;
+    renderCrf?: number;
+    renderSpeed?: string;
+    renderAudioBitrate?: string;
+    renderAudioNormalize?: boolean;
 }
 
 export interface ProjectSlice {

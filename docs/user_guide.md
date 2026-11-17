@@ -329,6 +329,8 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 - Presets: project, 1080p, 720p, vertical 9:16, square 1:1, portrait 4:5.
 - **Render range**: in/out seconds; full-cut reset.
 - **Fit** chooses letterbox (**Pad**) or center-crop (**Crop**) for a different output aspect.
+- **Encoding** sets CRF (quality/size), encoder speed, audio bitrate, and optional
+  loudness normalization. These values persist with the project.
 - **Burn captions** toggles ASS burn-in.
 - **Create export** queues a real FFmpeg render through the job ledger.
 - Render history shows status, progress, errors, and an output link.
