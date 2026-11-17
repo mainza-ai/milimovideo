@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { API_BASE_URL } from '../../config';
 import type { TimelineState, ElementSlice, StoryElement, ParsedScene } from '../types';
 
 export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlice> = (set, get) => ({
@@ -8,7 +9,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
     fetchElements: async (projectId) => {
         try {
             // The backend returns snake_case, frontend uses camelCase for triggerWord
-            const res = await fetch(`http://localhost:8000/projects/${projectId}/elements`);
+            const res = await fetch(`${API_BASE_URL}/projects/${projectId}/elements`);
             const data = await res.json();
             const elements = data.map((e: any) => ({
                 ...e,
@@ -28,7 +29,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
                 description: elementData.description,
                 trigger_word: elementData.triggerWord // backend expects snake_case
             };
-            const res = await fetch(`http://localhost:8000/projects/${projectId}/elements`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${projectId}/elements`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -51,7 +52,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
             if (elementData.description !== undefined) payload.description = elementData.description;
             if (elementData.triggerWord !== undefined) payload.trigger_word = elementData.triggerWord; // backend expects snake_case
 
-            const res = await fetch(`http://localhost:8000/elements/${elementId}`, {
+            const res = await fetch(`${API_BASE_URL}/elements/${elementId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -73,7 +74,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
 
     deleteElement: async (elementId) => {
         try {
-            const res = await fetch(`http://localhost:8000/elements/${elementId}`, { method: 'DELETE' });
+            const res = await fetch(`${API_BASE_URL}/elements/${elementId}`, { method: 'DELETE' });
             if (res.ok) {
                 const { elements } = get();
                 set({ elements: elements.filter(e => e.id !== elementId) });
@@ -87,7 +88,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
 
         addToast("Queuing Visual Generation...", "info");
         try {
-            const res = await fetch(`http://localhost:8000/elements/${elementId}/visualize`, {
+            const res = await fetch(`${API_BASE_URL}/elements/${elementId}/visualize`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -111,7 +112,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
             // Start Polling 
             const poll = async () => {
                 try {
-                    const statusRes = await fetch(`http://localhost:8000/status/${jobId}`);
+                    const statusRes = await fetch(`${API_BASE_URL}/status/${jobId}`);
                     if (!statusRes.ok) return; // Retry?
                     const status = await statusRes.json();
 
@@ -160,7 +161,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
         if (!jobId || jobId === "true") return; // Can't cancel if no ID
 
         try {
-            await fetch(`http://localhost:8000/jobs/${jobId}/cancel`, { method: 'POST' });
+            await fetch(`${API_BASE_URL}/jobs/${jobId}/cancel`, { method: 'POST' });
             addToast("Cancellation requested.", "info");
             // The poller will catch the 'cancelled' status and clean up
         } catch (e) {
@@ -172,7 +173,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
     parseScript: async (text: string) => {
         try {
             const project_id = get().project.id;
-            const res = await fetch(`http://localhost:8000/projects/${project_id}/script/parse`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project_id}/script/parse`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ script_text: text })
@@ -201,7 +202,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
                     matched_elements: shot.matched_elements || undefined,
                 })),
             }));
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/commit`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/storyboard/commit`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -222,7 +223,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
     aiParseScript: async (text: string) => {
         try {
             const project_id = get().project.id;
-            const res = await fetch(`http://localhost:8000/projects/${project_id}/storyboard/ai-parse`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project_id}/storyboard/ai-parse`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ script_text: text })
@@ -242,7 +243,7 @@ export const createElementSlice: StateCreator<TimelineState, [], [], ElementSlic
     updateSceneName: async (sceneId: string, name: string) => {
         const { project } = get();
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/scenes/${sceneId}`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/storyboard/scenes/${sceneId}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name })

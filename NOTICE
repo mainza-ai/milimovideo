@@ -1,0 +1,15 @@
+Milimo Video
+Copyright 2026 Mainza Kangombe
+
+This product includes software and model integrations from third parties:
+
+- LTX-2 / LTX-2.5 (Lightricks) — see LTX-2/LICENSE and the LTX model license.
+- FLUX.2 (Black Forest Labs) — see flux2/LICENSE.md and model cards.
+- SAM 3 (Meta) — see sam3/LICENSE and the SAM 3 model card.
+- React, Vite, FastAPI, SQLModel, FFmpeg and other dependencies — see their
+  respective licenses.
+- Canvas interaction patterns were informed by Kubona (Apache 2.0),
+  https://github.com/mainza-ai/kubona, and tldraw's public documentation.
+
+Model weights are not distributed with this repository. Users are responsible
+for complying with each model's license and acceptable-use terms.

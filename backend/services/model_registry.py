@@ -161,6 +161,7 @@ class ModelRegistry:
             model_id = entry["id"]
             abs_path = self._resolve_path(entry["relative_path"])
             temp_path = abs_path + DOWNLOAD_TEMP_SUFFIX
+            hf_temp_path = abs_path + ".incomplete"
 
             info = ModelInfo(
                 id=model_id,
@@ -196,10 +197,11 @@ class ModelRegistry:
             elif self._check_file_exists(abs_path):
                 info.status = ModelStatus.DOWNLOADED
                 info.downloaded_bytes = self._get_file_size(abs_path)
-            # Check for partial download
-            elif os.path.exists(temp_path):
+            # Check for partial download (our suffix and HuggingFace's).
+            elif os.path.exists(temp_path) or os.path.exists(hf_temp_path):
+                partial = temp_path if os.path.exists(temp_path) else hf_temp_path
                 info.status = ModelStatus.DOWNLOADING
-                info.downloaded_bytes = self._get_file_size(temp_path)
+                info.downloaded_bytes = self._get_file_size(partial)
                 if info.size_bytes and info.size_bytes > 0:
                     info.download_progress = info.downloaded_bytes / info.size_bytes
                 info.error_message = "Download interrupted — resume available"
@@ -277,7 +279,7 @@ class ModelRegistry:
                 ...
             }
         """
-        pipelines_to_check = [pipeline] if pipeline else ["video", "image", "segmentation"]
+        pipelines_to_check = [pipeline] if pipeline else ["video", "image", "segmentation", "depth"]
         result = {}
 
         for pipe in pipelines_to_check:

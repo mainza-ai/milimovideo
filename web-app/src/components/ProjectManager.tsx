@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 import { useTimelineStore } from '../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 import { X, Plus, FolderOpen, Trash2, Clock, Film } from 'lucide-react';
@@ -35,7 +36,7 @@ export const ProjectManager = ({ onClose }: { onClose: () => void }) => {
 
     const fetchProjects = async () => {
         try {
-            const res = await fetch('http://localhost:8000/projects');
+            const res = await fetch(API_BASE_URL + '/projects');
             const data = await res.json();
             setProjects(data);
         } catch (e) {

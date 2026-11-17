@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { API_BASE_URL } from '../../config';
 import type { TimelineState, ShotSlice, Shot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { getAssetUrl } from '../../config';
@@ -36,6 +37,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             trackIndex: 0,
             trimIn: 0,
             trimOut: 0,
+            speed: 1,
 
             // Overrides
             ...config
@@ -70,6 +72,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 else if (k === 'cfgScale') snakeUpdates['cfg_scale'] = v;
                 else if (k === 'enhancePrompt') snakeUpdates['enhance_prompt'] = v;
                 else if (k === 'lastJobId') snakeUpdates['last_job_id'] = v;
+                else if (k === 'selectedTakeId') snakeUpdates['selected_take_id'] = v;
+                else if (k === 'favoriteTakeId') snakeUpdates['favorite_take_id'] = v;
                 else if (k === 'videoUrl') snakeUpdates['video_url'] = v;
                 else if (k === 'thumbnailUrl') snakeUpdates['thumbnail_url'] = v;
                 else if (k === 'pipelineOverride') snakeUpdates['pipeline_override'] = v;
@@ -77,14 +81,28 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 else if (k === 'startFrame') snakeUpdates['start_frame'] = v;
                 else if (k === 'trimIn') snakeUpdates['trim_in'] = v;
                 else if (k === 'trimOut') snakeUpdates['trim_out'] = v;
+                else if (k === 'audioGain') snakeUpdates['audio_gain'] = v;
+                else if (k === 'audioMuted') snakeUpdates['audio_muted'] = v;
+                else if (k === 'audioFadeIn') snakeUpdates['audio_fade_in'] = v;
+                else if (k === 'audioFadeOut') snakeUpdates['audio_fade_out'] = v;
                 else if (k === 'autoContinue') snakeUpdates['auto_continue'] = v;
                 else if (k === 'sceneId') snakeUpdates['scene_id'] = v;
+                else if (k === 'sequenceIndex') snakeUpdates['sequence_index'] = v;
+                else if (k === 'shotType') snakeUpdates['shot_type'] = v;
+                else if (k === 'timeline' && Array.isArray(v)) {
+                    snakeUpdates['timeline'] = v.map((t: any) => ({
+                        type: t.type,
+                        path: t.path,
+                        frame_index: t.frameIndex ?? t.frame_index ?? 0,
+                        strength: t.strength ?? 1.0,
+                    }));
+                }
                 // Simple fields that match but better be explicit or just fall through if key is same (action, dialogue, character are same)
                 else snakeUpdates[k] = v;
             }
 
             // 3. Send Network Request
-            await fetch(`http://localhost:8000/shots/${id}`, {
+            await fetch(`${API_BASE_URL}/shots/${id}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(snakeUpdates)
@@ -102,7 +120,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         if (!shot) return;
 
         try {
-            const res = await fetch(`http://localhost:8000/shots/${id}/split`, {
+            const res = await fetch(`${API_BASE_URL}/shots/${id}/split`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ split_frame: splitFrame })
@@ -132,14 +150,26 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 startFrame: s.start_frame || 0,
                 trimIn: s.trim_in || 0,
                 trimOut: s.trim_out || 0,
-                timeline: (s.timeline || []).map((t: any) => ({
+                audioGain: s.audio_gain ?? 1,
+                audioMuted: s.audio_muted ?? false,
+                keyframes: Array.isArray(s.keyframes) ? s.keyframes : [],
+                blocking: Array.isArray(s.blocking) ? s.blocking : [],
+                speed: s.speed ?? 1,
+                audioFadeIn: s.audio_fade_in ?? 0,
+                audioFadeOut: s.audio_fade_out ?? 0,
+                timeline: (typeof s.timeline === "string"
+                    ? (() => { try { return JSON.parse(s.timeline || "[]"); } catch { return []; } })()
+                    : (s.timeline || [])
+                ).map((t: any) => ({
                     id: uuidv4(),
                     type: t.type,
                     path: t.path,
-                    frameIndex: t.frame_index,
-                    strength: t.strength
+                    frameIndex: t.frame_index ?? t.frameIndex ?? 0,
+                    strength: t.strength ?? 1.0
                 })),
                 lastJobId: s.last_job_id,
+                selectedTakeId: s.selected_take_id,
+                favoriteTakeId: s.favorite_take_id,
                 videoUrl: s.video_url ? getAssetUrl(s.video_url) : undefined,
                 thumbnailUrl: getAssetUrl(s.thumbnail_url),
                 enhancedPromptResult: s.enhanced_prompt_result
@@ -240,15 +270,16 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         }
     })),
 
-    generateShot: async (shotId: string) => {
+    generateShot: async (shotId: string, forceNewSeed = false) => {
         const { addToast, updateShot } = get();
         try {
             // Optimistic update
             updateShot(shotId, { isGenerating: true, statusMessage: "Queued..." });
 
-            const res = await fetch(`http://localhost:8000/shots/${shotId}/generate`, {
-                method: 'POST'
-            });
+            const res = await fetch(
+                `${API_BASE_URL}/shots/${shotId}/generate${forceNewSeed ? '?randomize_seed=true' : ''}`,
+                { method: 'POST' }
+            );
 
             if (!res.ok) throw new Error("Gen failed");
             const data = await res.json();
@@ -278,12 +309,12 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             frameForm.append('file', frameFile);
             frameForm.append('project_id', project.id);
 
-            const frameRes = await fetch('http://localhost:8000/upload', {
+            const frameRes = await fetch(API_BASE_URL + '/upload', {
                 method: 'POST',
                 body: frameForm
             });
             const frameData = await frameRes.json();
-            const imagePath = frameData.access_path; // Absolute path on server
+            const imagePath = frameData.url; // Resolved server-side; never expose fs paths
 
             // 2. Upload Mask
             const maskBlob = await (await fetch(maskDataUrl)).blob();
@@ -292,12 +323,12 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             maskForm.append('file', maskFile);
             maskForm.append('project_id', project.id);
 
-            const maskRes = await fetch('http://localhost:8000/upload', {
+            const maskRes = await fetch(API_BASE_URL + '/upload', {
                 method: 'POST',
                 body: maskForm
             });
             const maskData = await maskRes.json();
-            const maskPath = maskData.access_path;
+            const maskPath = maskData.url;
 
             // 3. Trigger In-Painting
             addToast("Starting generation...", "info");
@@ -311,7 +342,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 lastJobId: jobId
             });
 
-            const inpaintRes = await fetch(`http://localhost:8000/edit/inpaint?job_id=${jobId}`, {
+            const inpaintRes = await fetch(`${API_BASE_URL}/edit/inpaint?job_id=${jobId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -344,7 +375,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 // Optimistic UI state just turns to "Cancelling...", it leaves isGenerating=true 
                 // until the backend `cancelled` SSE broadcast actually unlocks it.
                 updateShot(shotId, { statusMessage: "Cancelling..." });
-                await fetch(`http://localhost:8000/jobs/${shot.lastJobId}/cancel`, { method: 'POST' });
+                await fetch(`${API_BASE_URL}/jobs/${shot.lastJobId}/cancel`, { method: 'POST' });
                 addToast("Cancellation requested.", "info");
             } catch (e) {
                 console.error("Failed to cancel job", e);
@@ -369,7 +400,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         }
 
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/batch-generate`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/storyboard/batch-generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ shot_ids: shotIds })
@@ -418,7 +449,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         });
 
         try {
-            await fetch(`http://localhost:8000/projects/${project.id}/storyboard/shots/reorder`, {
+            await fetch(`${API_BASE_URL}/projects/${project.id}/storyboard/shots/reorder`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ scene_id: sceneId, shot_ids: shotIds })
@@ -433,7 +464,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         const { project, addToast, loadProject } = get();
 
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/shots/add`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/storyboard/shots/add`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -467,7 +498,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         }));
 
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/shots/${shotId}`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/storyboard/shots/${shotId}`, {
                 method: 'DELETE'
             });
 
@@ -482,7 +513,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
     generateThumbnail: async (shotId: string, force?: boolean) => {
         const { project, addToast, updateShot } = get();
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/generate-thumbnails`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/storyboard/generate-thumbnails`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ shot_ids: [shotId], force: !!force })
@@ -510,7 +541,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
     batchGenerateThumbnails: async (shotIds: string[]) => {
         const { project, addToast, updateShot } = get();
         try {
-            const res = await fetch(`http://localhost:8000/projects/${project.id}/storyboard/generate-thumbnails`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}/storyboard/generate-thumbnails`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ shot_ids: shotIds })
@@ -539,8 +570,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         }
     },
 
-    pushStoryboardToTimeline: () => {
-        const { project, addToast, updateShot } = get();
+    pushStoryboardToTimeline: async () => {
+        const { project, addToast, updateShot, patchShot } = get();
 
         // Collect all completed shots (with video) in scene/index order
         const scenes = project.scenes || [];
@@ -567,15 +598,20 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         // Place sequentially on V1 (trackIndex 0)
         let currentFrame = 0;
         for (const shot of orderedShots) {
-            updateShot(shot.id, {
+            const updates = {
                 trackIndex: 0,
                 startFrame: currentFrame,
                 trimIn: 0,
-                trimOut: shot.numFrames,
-            });
+                trimOut: 0,
+            };
+            updateShot(shot.id, updates);
+            // Persist each placement immediately; local-only changes were lost
+            // on reload and produced zero-length clips when trimOut == numFrames.
+            await patchShot(shot.id, updates);
             currentFrame += shot.numFrames;
         }
 
+        await get().saveProject();
         addToast(`Placed ${orderedShots.length} shots on timeline`, "success");
     },
 });

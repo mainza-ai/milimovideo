@@ -9,7 +9,7 @@ import { ImagesView } from './Images/ImagesView';
 import { useTimelineStore, getLastProjectId } from '../stores/timelineStore';
 import { ProjectManager } from './ProjectManager';
 import { ExportModal } from './ExportModal';
-import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon } from 'lucide-react';
+import { Save, Command, Share, FolderOpen, Undo as UndoIcon, Redo as RedoIcon, Sparkles } from 'lucide-react';
 import { PanelErrorBoundary } from './ErrorBoundary';
 import { LLMSettings } from './LLMSettings';
 import { ModelLibrary } from './ModelLibrary';
@@ -19,7 +19,8 @@ import { useShallow } from 'zustand/react/shallow';
 export const Layout = ({ children }: { children: React.ReactNode }) => {
     const {
         project, saveProject, addToast, isPlaying, setIsPlaying,
-        deleteShot, selectedShotId, loadProject, viewMode, setViewMode
+        deleteShot, selectedShotId, loadProject, viewMode, setViewMode,
+        saveStatus, saveError
     } = useTimelineStore(useShallow(state => ({
         project: state.project,
         saveProject: state.saveProject,
@@ -30,7 +31,9 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
         selectedShotId: state.selectedShotId,
         loadProject: state.loadProject,
         viewMode: state.viewMode,
-        setViewMode: state.setViewMode
+        setViewMode: state.setViewMode,
+        saveStatus: state.saveStatus,
+        saveError: state.saveError,
     })));
     const [showProjects, setShowProjects] = useState(false);
     const [showExports, setShowExports] = useState(false);
@@ -194,6 +197,14 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                                 value={project.name}
                                 onChange={(e) => useTimelineStore.getState().setProject({ ...project, name: e.target.value })}
                             />
+                            <button
+                                type="button"
+                                onClick={() => window.location.assign('/studio')}
+                                className="ml-3 px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-milimo-500/15 text-milimo-300 border border-milimo-500/30 hover:bg-milimo-500/25 transition-colors flex items-center gap-1.5"
+                                title="Open the new studio shell (/studio)"
+                            >
+                                <Sparkles size={11} /> New Studio
+                            </button>
                             {/* View Switcher */}
                             <div className="flex bg-white/5 p-0.5 rounded-lg border border-white/5 ml-4">
                                 <button
@@ -254,8 +265,26 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
 
                     <LLMSettings />
 
-                    <div className="flex items-center gap-2 text-[10px] text-white/30 mr-4">
-                        <Command size={12} /> <span className="font-mono">S</span> to Save
+                    <div className="flex items-center gap-2 text-[10px] mr-4">
+                        {saveStatus === 'saving' && <span className="text-white/40">Saving…</span>}
+                        {saveStatus === 'saved' && <span className="text-emerald-400/80">Saved</span>}
+                        {saveStatus === 'conflict' && (
+                            <button
+                                onClick={() => loadProject(project.id)}
+                                className="text-amber-300 hover:text-amber-200"
+                                title={saveError || 'Reload the latest project'}
+                            >
+                                Conflict — reload
+                            </button>
+                        )}
+                        {saveStatus === 'error' && (
+                            <span className="text-red-300" title={saveError || 'Save failed'}>Save failed</span>
+                        )}
+                        {saveStatus === 'idle' && (
+                            <span className="flex items-center gap-2 text-white/30">
+                                <Command size={12} /> <span className="font-mono">S</span> to Save
+                            </span>
+                        )}
                     </div>
                     <button
                         onClick={() => saveProject()}

@@ -28,7 +28,8 @@ export const computeTimelineLayout = (project: any): TimelineClip[] => {
 
         // Calculate duration based on frame count and trims
         const rawDuration = (shot.numFrames - (shot.trimIn || 0) - (shot.trimOut || 0));
-        const duration = Math.max(1, rawDuration) / fps;
+        const speed = Math.min(4, Math.max(0.25, shot.speed || 1));
+        const duration = Math.max(1, rawDuration) / fps / speed;
 
         let start = 0;
 

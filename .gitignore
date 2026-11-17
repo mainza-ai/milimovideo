@@ -2,6 +2,8 @@
 .DS_Store
 .Thumbnails
 .Trashes
+.obsidian/
+*.db.bak-*
 
 # Environment
 milimov/
@@ -88,3 +90,21 @@ backend/test_*.py
 # Frontend Build Artifacts
 web-app/dist/
 web-app/frontend.log
+
+# Playwright
+web-app/test-results/
+web-app/playwright-report/
+
+# Coverage
+.coverage
+htmlcov/
+
+# Local model benchmarks (generated)
+benchmarks/
+
+# Tauri
+web-app/src-tauri/target/
+web-app/src-tauri/gen/schemas/
+
+# Desktop backend log
+backend.desktop.log

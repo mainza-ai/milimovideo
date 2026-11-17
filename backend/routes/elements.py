@@ -2,7 +2,9 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks, UploadFile, File,
 from schemas import ElementCreate, ElementUpdate, ElementVisualizeRequest, InpaintRequest, TrackingSaveRequest
 from typing import List, Optional
 import os
+import asyncio
 import logging
+import json
 import config
 
 # Lazy imports to avoid circular deps with managers if they import models
@@ -13,6 +15,43 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["elements"])
 
+
+def _parse_points(raw: str) -> list[list[float]]:
+    """Parse SAM point prompts safely. Never eval request data."""
+    import json
+    import math
+
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=422, detail=f"points must be a JSON array: {exc}")
+    if not isinstance(data, list) or not data:
+        raise HTTPException(status_code=422, detail="points must be a non-empty array")
+    if len(data) > 256:
+        raise HTTPException(status_code=422, detail="points exceeds 256 coordinate pairs")
+    points: list[list[float]] = []
+    for item in data:
+        if not isinstance(item, (list, tuple)) or len(item) != 2:
+            raise HTTPException(status_code=422, detail="each point must be [x, y]")
+        x, y = item
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (x, y)):
+            raise HTTPException(status_code=422, detail="point coordinates must be numbers")
+        x, y = float(x), float(y)
+        if not (math.isfinite(x) and math.isfinite(y)) or abs(x) > 1_000_000 or abs(y) > 1_000_000:
+            raise HTTPException(status_code=422, detail="point coordinates out of range")
+        points.append([x, y])
+    return points
+
+def _normalize_trigger(value: Optional[str]) -> Optional[str]:
+    """Store trigger words with a single leading @ so prompts match reliably."""
+    if value is None:
+        return None
+    cleaned = value.strip().lstrip("@")
+    return f"@{cleaned}" if cleaned else None
+
+
 @router.post("/projects/{project_id}/elements")
 async def create_element(project_id: str, element: ElementCreate):
     return element_manager.create_element(
@@ -20,7 +59,7 @@ async def create_element(project_id: str, element: ElementCreate):
         element.name, 
         element.type, 
         element.description, 
-        element.trigger_word,
+        _normalize_trigger(element.trigger_word),
         element.image_path
     )
 
@@ -39,6 +78,8 @@ async def update_element(element_id: str, update: ElementUpdate):
     updates = update.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "trigger_word" in updates:
+        updates["trigger_word"] = _normalize_trigger(updates["trigger_word"])
     result = element_manager.update_element(element_id, updates)
     if not result:
         raise HTTPException(status_code=404, detail=f"Element {element_id} not found")
@@ -77,25 +118,46 @@ async def visualize_element(element_id: str, req: ElementVisualizeRequest, backg
     
     # Create Job
     job_id = f"job_{uuid.uuid4().hex[:8]}"
-    
+    from database import Element
+    with Session(engine) as session:
+        element = session.get(Element, element_id)
+        project_id = element.project_id if element else None
+        job = Job(
+            id=job_id,
+            project_id=project_id,
+            type="element",
+            status="queued",
+            prompt=req.prompt_override or (element.description if element else None),
+            params_json=json.dumps({"element_id": element_id}),
+            created_at=datetime.now(timezone.utc),
+            status_message="Queued",
+        )
+        session.add(job)
+        session.commit()
+
     # Register in Active Memory (for immediate polling)
     active_jobs[job_id] = {
-        "status": "pending",
+        "status": "queued",
         "progress": 0,
         "status_message": "Queued...",
-        "type": "element_visual",
-        "project_id": "unknown",
+        "stage": "queued",
+        "type": "element",
+        "project_id": project_id,
         "cancelled": False
     }
 
-    # Queue Task
-    background_tasks.add_task(
-        element_manager.generate_visual_task, 
-        job_id, 
-        element_id, 
-        req.prompt_override, 
-        req.guidance_scale,
-        req.enable_ae
+    # Queue Task through the same durable GPU ledger as video/image work.
+    from job_utils import enqueue_gpu_job
+    await enqueue_gpu_job(
+        job_id,
+        "element",
+        {
+            "element_id": element_id,
+            "project_id": project_id,
+            "prompt_override": req.prompt_override,
+            "guidance": req.guidance_scale,
+            "enable_ae": req.enable_ae,
+        },
     )
     
     return {"job_id": job_id, "status": "queued"}
@@ -110,13 +172,18 @@ async def inpaint_image(job_id: str, req: InpaintRequest, background_tasks: Back
     from database import engine as db_engine, Job
     from datetime import datetime, timezone
 
-    mask_path = req.mask_path
+    from file_utils import resolve_path
+
+    image_path = resolve_path(req.image_path)
+    mask_path = resolve_path(req.mask_path) if req.mask_path else None
 
     # Priority: explicit mask > text-based SAM > point-based SAM
     if not mask_path and req.text_mask:
-        mask_path = await inpainting_manager.get_mask_from_text(req.image_path, req.text_mask)
+        mask_path = await inpainting_manager.get_mask_from_text(image_path, req.text_mask)
     elif not mask_path and req.points:
-        mask_path = await inpainting_manager.get_mask_from_sam(req.image_path, eval(req.points))
+        mask_path = await inpainting_manager.get_mask_from_sam(
+            image_path, _parse_points(req.points)
+        )
 
     if not mask_path:
         return {"status": "error", "message": "No mask provided or generated"}
@@ -124,7 +191,7 @@ async def inpaint_image(job_id: str, req: InpaintRequest, background_tasks: Back
     # Extract project_id from image path: .../projects/{project_id}/...
     project_id = None
     try:
-        rel = req.image_path.replace(config.PROJECTS_DIR, "").strip(os.sep)
+        rel = image_path.replace(config.PROJECTS_DIR, "").strip(os.sep)
         parts = rel.split(os.sep)
         if parts:
             project_id = parts[0]
@@ -147,6 +214,7 @@ async def inpaint_image(job_id: str, req: InpaintRequest, background_tasks: Back
             job = Job(
                 id=job_id,
                 project_id=project_id,
+                shot_id=req.shot_id,
                 type="inpaint",
                 status="pending",
                 prompt=req.prompt,
@@ -158,7 +226,16 @@ async def inpaint_image(job_id: str, req: InpaintRequest, background_tasks: Back
     except Exception as e:
         logger.error(f"Failed to persist inpaint Job record: {e}")
 
-    background_tasks.add_task(inpainting_manager.process_inpaint, job_id, req.image_path, mask_path, req.prompt)
+    from job_utils import enqueue_gpu_job
+    await enqueue_gpu_job(
+        job_id,
+        "inpaint",
+        {
+            "image_path": image_path,
+            "mask_path": mask_path,
+            "prompt": req.prompt,
+        },
+    )
 
     return {"status": "queued", "job_id": job_id, "mask_path": mask_path}
 
@@ -171,14 +248,15 @@ async def segment_preview(
     multimask: bool = Form(False),
 ):
     """Point-based segmentation preview. Proxies to SAM /predict/mask."""
-    import requests as http_requests
+    import httpx
     try:
         files = {"image": (image.filename, await image.read(), image.content_type)}
         data = {"points": points, "labels": labels, "multimask": str(multimask).lower()}
-        res = http_requests.post(
-            f"http://localhost:{config.SAM_SERVICE_PORT}/predict/mask",
-            files=files, data=data
-        )
+        async with httpx.AsyncClient(timeout=120) as client:
+            res = await client.post(
+                f"http://localhost:{config.SAM_SERVICE_PORT}/predict/mask",
+                files=files, data=data,
+            )
         if res.status_code == 200:
             from fastapi.responses import StreamingResponse
             import io
@@ -198,14 +276,15 @@ async def detect_objects(
     confidence: float = Form(0.5),
 ):
     """Text-based multi-object detection. Proxies to SAM /detect."""
-    import requests as http_requests
+    import httpx
     try:
         files = {"image": (image.filename, await image.read(), image.content_type)}
         data = {"text": text, "confidence": str(confidence)}
-        res = http_requests.post(
-            f"http://localhost:{config.SAM_SERVICE_PORT}/detect",
-            files=files, data=data
-        )
+        async with httpx.AsyncClient(timeout=120) as client:
+            res = await client.post(
+                f"http://localhost:{config.SAM_SERVICE_PORT}/detect",
+                files=files, data=data,
+            )
         if res.status_code == 200:
             return res.json()
         else:
@@ -224,14 +303,15 @@ async def segment_by_text(
     confidence: float = Form(0.5),
 ):
     """Text-based segmentation. Proxies to SAM /segment/text, returns merged mask PNG."""
-    import requests as http_requests
+    import httpx
     try:
         files = {"image": (image.filename, await image.read(), image.content_type)}
         data = {"text": text, "confidence": str(confidence)}
-        res = http_requests.post(
-            f"http://localhost:{config.SAM_SERVICE_PORT}/segment/text",
-            files=files, data=data
-        )
+        async with httpx.AsyncClient(timeout=120) as client:
+            res = await client.post(
+                f"http://localhost:{config.SAM_SERVICE_PORT}/segment/text",
+                files=files, data=data,
+            )
         if res.status_code == 200:
             from fastapi.responses import StreamingResponse
             import io
@@ -303,7 +383,9 @@ async def track_start(req: TrackStartRequest):
     video_path = os.path.normpath(video_path)
     logger.info(f"Track start — resolved video path: {video_path}")
 
-    result = tracking_manager.start_session(video_path, req.session_id)
+    result = await asyncio.to_thread(
+        tracking_manager.start_session, video_path, req.session_id
+    )
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
@@ -312,7 +394,8 @@ async def track_start(req: TrackStartRequest):
 @router.post("/track/prompt")
 async def track_add_prompt(req: TrackPromptRequest):
     """Add a text/point/box prompt to a tracking session."""
-    result = tracking_manager.add_prompt(
+    result = await asyncio.to_thread(
+        tracking_manager.add_prompt,
         session_id=req.session_id,
         frame_idx=req.frame_idx,
         text=req.text,
@@ -330,7 +413,8 @@ async def track_add_prompt(req: TrackPromptRequest):
 @router.post("/track/propagate")
 async def track_propagate(req: TrackPropagateRequest):
     """Propagate tracking across video frames."""
-    result = tracking_manager.propagate(
+    result = await asyncio.to_thread(
+        tracking_manager.propagate,
         session_id=req.session_id,
         direction=req.direction,
         start_frame=req.start_frame,
@@ -344,7 +428,7 @@ async def track_propagate(req: TrackPropagateRequest):
 @router.post("/track/stop")
 async def track_stop(req: TrackStopRequest):
     """Stop a tracking session and free resources."""
-    result = tracking_manager.stop_session(req.session_id)
+    result = await asyncio.to_thread(tracking_manager.stop_session, req.session_id)
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result
@@ -353,7 +437,9 @@ async def track_stop(req: TrackStopRequest):
 @router.post("/track/remove")
 async def track_remove_object(req: TrackRemoveRequest):
     """Remove an object from the tracking session."""
-    result = tracking_manager.remove_object(req.session_id, req.obj_id)
+    result = await asyncio.to_thread(
+        tracking_manager.remove_object, req.session_id, req.obj_id
+    )
     if "error" in result:
         raise HTTPException(status_code=500, detail=result["error"])
     return result

@@ -28,10 +28,29 @@ class ElementManager:
             if element:
                 active_jobs[job_id]["project_id"] = element.project_id
 
+        import job_events
+        from memory_manager import memory_manager
+        from services.memory import costs
+
+        project_id = active_jobs.get(job_id, {}).get("project_id")
+        job_events.register(job_id, project_id=project_id, kind="element")
+        decision = memory_manager.admit_job(job_id, "image", {"reference_count": 1})
+        if not decision.ok:
+            from services.memory.models import MemoryDeferred
+
+            if decision.retryable:
+                raise MemoryDeferred(decision.reason or "waiting for memory")
+            await job_events.terminal(
+                job_id, "failed", stage="admission", error=decision.reason,
+                message=f"Element visual blocked: {decision.reason}",
+                data={"downgrade": decision.downgrade},
+            )
+            return
+
         # 2. Update Status
         active_jobs[job_id]["status"] = "processing"
         active_jobs[job_id]["status_message"] = "Generating..."
-        update_job_progress(job_id, 10, "Initializing...")
+        update_job_progress(job_id, 10, "Loading Flux…", stage="loading")
 
         try:
             # 3. generate_visual is async but internally blocking (Flux). 
@@ -44,10 +63,13 @@ class ElementManager:
             path = await self.generate_visual(element_id, prompt_override, guidance, enable_ae, job_id)
             
             if path:
-                # Success
                 active_jobs[job_id]["status"] = "completed"
                 active_jobs[job_id]["progress"] = 100
                 active_jobs[job_id]["status_message"] = "Completed"
+                await job_events.terminal(
+                    job_id, "completed", stage="completed", message="Element visual ready",
+                    output_path=path, progress=100, data={"type": "element", "project_id": project_id},
+                )
                 # Need to update DB job record too if we want persistence, 
                 # but currently we don't create a DB Job record for elements in the route!
                 # We only created in active_jobs.
@@ -57,14 +79,25 @@ class ElementManager:
                 # Failed (or cancelled inside)
                 if active_jobs[job_id].get("cancelled"):
                     active_jobs[job_id]["status"] = "cancelled"
+                    await job_events.terminal(
+                        job_id, "cancelled", stage="cancelled", message="Cancelled"
+                    )
                 else:
                     active_jobs[job_id]["status"] = "failed"
                     active_jobs[job_id]["status_message"] = "Generation failed"
+                    await job_events.terminal(
+                        job_id, "failed", stage="denoising", error="Generation returned no visual",
+                        message="Element visual failed",
+                    )
 
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
             active_jobs[job_id]["status"] = "failed"
             active_jobs[job_id]["status_message"] = str(e)
+            await job_events.terminal(
+                job_id, "failed", stage="denoising", error=str(e),
+                message=f"Element visual failed: {e}",
+            )
 
 
     def create_element(self, project_id: str, name: str, type: str, description: str, trigger_word: str = None, image_path: str = None) -> Element:
@@ -264,15 +297,20 @@ class ElementManager:
         # For MVP Agentic Mode, we run it directly (blocking the worker thread but it's okay for single user).
         
         try:
-            image = flux_inpainter.generate_image(
-                prompt=final_prompt,
-                width=1024,
-                height=1024,
-                guidance=guidance,
-                enable_true_cfg=False, # Disable True CFG for element generation to ensure stability
-                enable_ae=enable_ae, # User controlled (default True)
-                ip_adapter_images=element_images, # Pass visual conditioning found from triggers!
-                callback=cancellation_check
+            import asyncio
+            loop = asyncio.get_running_loop()
+            image = await loop.run_in_executor(
+                None,
+                lambda: flux_inpainter.generate_image(
+                    prompt=final_prompt,
+                    width=1024,
+                    height=1024,
+                    guidance=guidance,
+                    enable_true_cfg=False,
+                    enable_ae=enable_ae,
+                    ip_adapter_images=element_images,
+                    callback=cancellation_check,
+                ),
             )
                 
             # Save Image

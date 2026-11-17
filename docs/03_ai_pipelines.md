@@ -392,42 +392,78 @@ flowchart TD
 
 ### Central Memory Manager (`memory_manager.py`)
 
-On Apple Silicon with unified memory, GPU models share the same physical RAM. The `MemoryManager` enforces mutual exclusion between heavy models to prevent OOM:
+On Apple Silicon with unified memory, GPU models share the same physical RAM.
+Slots still enforce mutual exclusion, but they are now backed by a **measured
+budget** (`backend/services/memory/`):
 
 ```mermaid
 flowchart TD
-    subgraph Slots["Memory Slots"]
-        VIDEO["video — LTX-2 (~76GB)"]
-        IMAGE["image — Flux 2 (~36GB)"]
-        LLM["llm — Ollama (variable)"]
-    end
+    SNAP["snapshot(): total, reserve, MPS ceiling,<br/>physical free, free swap, pressure,<br/>in-process slots, external engines, SAM"]
+    EST["costs.estimate(kind, params):<br/>base + workspace + upscale, ×1.05"]
+    ADMIT{"admit: fits ceiling,<br/>physical free + margin,<br/>free swap?"}
+    WAIT["MemoryDeferred → job.waiting<br/>(bounded, re-dispatch)"]
+    DOWN["suggest_downgrade → largest fitting preset<br/>(apply before allocation)"]
+    REFUSE["terminal job.failed<br/>with estimate + suggestions"]
+    PREP["prepare_for(slot): unload conflicts,<br/>lease slot, then load"]
 
-    subgraph Rules["Conflict Rules"]
-        R1["video ↔ image: mutually exclusive"]
-        R2["llm: managed via Ollama keep_alive API"]
-    end
-
-    PREPARE["memory_manager.prepare_for(slot)"] --> CHECK{Conflicts?}
-    CHECK -->|Yes| UNLOAD["Unload conflicting slot"]
-    CHECK -->|No| LOAD["Proceed to load"]
-    UNLOAD --> FLUSH["gc.collect() + mps.empty_cache()"]
-    FLUSH --> LOAD
+    SNAP --> ADMIT
+    EST --> ADMIT
+    ADMIT -->|yes| PREP
+    ADMIT -->|transient| WAIT
+    ADMIT -->|permanent| DOWN
+    DOWN -->|fits| PREP
+    DOWN -->|no| REFUSE
 ```
+
+**Budget inputs:** total RAM, a 15% reserve, `torch.mps.recommended_max_memory()`,
+`psutil.virtual_memory().available`, free swap, `kern.memorystatus_vm_pressure_level`,
+resident slots, external engines, and SAM. Swap **occupancy** is reported but is not
+itself a refusal: macOS keeps swap allocated after a heavy job, so admission uses
+free swap + physical free + pressure.
+
+**Admission runs before every heavy load** — video, image, chained, ai_parse,
+inpaint, element, pipeline activation, LLM warm/reserve. The decision carries
+`retryable`, the reclaimable set, suggestions, and a `downgrade` preset. A
+transient refusal raises `MemoryDeferred` and becomes a visible wait; a permanent
+one applies the fitting preset (upscale off → fewer frames → smaller resolution)
+and persists it to the Job/QueuedJob/Shot before any allocation.
 
 **Slot lifecycle:**
-- `model_engine.py` calls `prepare_for("video")` before loading any LTX pipeline → unloads Flux
+- `model_engine.py` calls `prepare_for("video")` before loading any LTX pipeline →
+  unloads Flux and any warm `llm_http` engine; a failed load releases the slot.
 - `flux_wrapper.py` calls `prepare_for("image")` before loading Flux → unloads LTX
-- `flux_wrapper.py` `unload()` calls `release("image")` to update slot tracking
+  and `llm_http`; failures release the image slot.
+- Slots carry `leases`; a leased slot is never evicted. Activation/deactivation is
+  refused while a job is active.
+- Idle TTL (`MILIMO_MEMORY_TTL_*`) and pressure evict unleased slots; `keep-warm`
+  pins one. `/system/memory/unload` and `/keep-warm` are the manual controls.
+- Engine adapters measure Ollama (`/api/ps`), oMLX (`/v1/models/status`), and use a
+  declared `memory_gb` for Strata/generic engines. SAM is lazy and released via
+  `/unload`.
+- The sampler records a 1 s peak trace per stage into `Job.memory_json`.
 
-### Ollama Keep-Alive Control
+**Scheduling:** the durable `QueuedJob` ledger feeds one GPU semaphore. Dispatch is
+ordered by priority (video/image 20, inpaint 30, element 50, ai_parse/depth 60),
+then by the slot already resident, then FIFO. A “waiting for memory” row sleeps on
+its own timer and is re-dispatched without holding the semaphore. The OOM retry
+drops upscale, steps, and frames, re-admits, and emits `job.retrying`.
 
-`llm.py` sends `keep_alive: config.OLLAMA_KEEP_ALIVE` (default `"0"`) in every Ollama generate request. After prompt enhancement completes, an explicit unload request is sent:
+### Local LLM residency and keep-alive
 
-```python
-requests.post(url, json={"model": model, "keep_alive": 0, "prompt": "", "stream": False})
-```
+Each provider instance carries its own `keep_alive` (default `"0"` for Ollama)
+and timeout. `MILIMO_OLLAMA_KEEP_ALIVE` seeds the first-boot value, then Studio
+→ AI & LLM is authoritative.
 
-This frees the Ollama model (e.g., gemma3-27b at ~49GB VRAM) immediately, rather than waiting for the default 5-minute timeout. Configurable via `MILIMO_OLLAMA_KEEP_ALIVE` env var or the frontend AI Settings toggle (`LLMSettings.tsx`).
+- `keep_alive: 0` unloads the model after the call; `5m` keeps it warm (a 3B on
+  the reference machine went from 7.4 s cold to 2.2 s warm).
+- After enhancement, `runtime.release_local()` unloads **every model a role could
+  have used** and the provider default, and releases the `llm_http` slot. It waits
+  for the engine's response and reports engines that own their residency.
+- oMLX, Strata, LM Studio, and llama.cpp own their load/unload; Milimo does not
+  pretend it freed them. `prepare_for("video"/"image")` drops the slot before a
+  heavy model loads.
+- A cold 27B oMLX load took 36 s on the reference machine; the panel's **Warm**
+  action separates that from inference and records `last_load_ms`.
 
 ### Device Selection
 ```python
@@ -475,44 +511,116 @@ When `enable_ae` toggle changes between calls:
 | Flux IP-Adapter | `backend/models/flux2/ip-adapter.safetensors` |
 | SAM 3 Checkpoint | `backend/models/sam3/sam3.pt` |
 
-## 6. Prompt Enhancement
+## 6. LLM Configuration & Prompt Enhancement
 
-### 6.1 LLM Dispatcher (`llm.py`)
+### 6.1 Role runtime (`services/llm/`)
 
-All prompt enhancement routes through a single dispatcher module `llm.py` that selects between two providers:
+Prompt rewriting is a **role** in a persisted configuration plane, not a
+two-provider switch. `llm.py` keeps its public
+`enhance_prompt(prompt, system_prompt, is_video, text_encoder)` signature as a
+compatibility facade and maps `is_video` to `prompt_video` / `prompt_image`;
+`services/llm/runtime.py` resolves the role to an ordered plan of provider
+**instances** and executes it.
 
-| Provider | Config Value | Model | Enhancement Method |
+| Provider type | Wire | Local | Notes |
 |---|---|---|---|
-| **Gemma** (built-in) | `gemma` | Gemma 3 (LTX-2 text encoder) | Direct `text_encoder._enhance()` on-device |
-| **Ollama** (local) | `ollama` | Any Ollama model (e.g., gemma3-27b) | HTTP API `POST /api/generate` |
+| Gemma | `gemma_native` | yes | in-process LTX text encoder; `prompt_video` only |
+| Ollama | `ollama_native` | yes | `/api/tags`, `/api/show`, `/api/generate`; `keep_alive` |
+| oMLX / Strata / LM Studio / vLLM / llama.cpp | `openai_chat` | yes | `/v1/models`, `/chat/completions`; images and SSE where supported |
+| OpenAI | `openai_chat` | no | opt-in; budget + air-gap required |
+| Anthropic | `anthropic_messages` | no | opt-in; budget + air-gap required |
+
+Instances use stable ids (`ollama`, `openai_compatible@127.0.0.1:8787`), so several
+OpenAI-compatible engines can serve different roles at once. Each hop carries its
+own base URL, timeout, keep-alive, model, and per-role sampling.
+
+The runtime adds:
+
+- **Context preflight** — estimated tokens vs the catalog's context window; fail
+  fast with the limit instead of a provider 400.
+- **Capability gating** — embedding/tool/audio entries cannot serve a text role.
+- **Budget checks** — local calls are free; cloud calls need a positive daily budget
+  and a known price, otherwise they refuse before egress.
+- **Cancellation** at hop boundaries, plus **telemetry** (last load, latency,
+  tokens/s) and prompt provenance in `Job.params_json.llm`.
+- **Streaming negotiation** — SSE where supported, with a first-byte timeout and a
+  non-stream fallback (oMLX has both streamed and stalled).
 
 ```python
-# Usage (all callers use the same API):
-from llm import enhance_prompt
-enhanced = enhance_prompt(prompt, system_prompt="...", is_video=True, text_encoder=te)
+# Compatibility API used by every worker:
+from llm import enhance_prompt, prepare_text_encoder
+text_encoder = prepare_text_encoder(pipeline, is_video=True)  # None for HTTP roles
+enhanced, is_reference_only = enhance_prompt(
+    prompt, system_prompt="...", is_video=True, text_encoder=text_encoder,
+)
 ```
 
-**Ollama features:**
-- `keep_alive: config.OLLAMA_KEEP_ALIVE` sent with every request (default `"0"` = unload immediately)
-- Explicit unload request after enhancement to free VRAM before generation
-- Vision model detection via `/api/tags` — models with `mllama`, `clip`, `llava` families tagged as `is_vision: true`
-- Settings API: `GET/PATCH /settings/llm` + `GET /settings/llm/models`
-- Frontend: model dropdown with 👁️ vision badges, "Keep Model Loaded" toggle
+### 6.2 Roles
 
-**VLM Structured JSON Extraction:**
-- If an input image is provided (`has_input_image=True`), the system prompt instructs the VLM to analyze it.
+| Role | Default | Why |
+|---|---|---|
+| `prompt_video` | Gemma | already loaded with LTX; cinematic prompt schema |
+| `prompt_image` | local HTTP | Flux has no LTX text encoder |
+| `script_parse` | local HTTP | text-only; avoids loading the video pipeline |
+| `agent_plan` | local HTTP | command-dock planning |
+| `review_critic` | local HTTP | future take/frame critique |
+| `continuity` | local HTTP | future cross-shot checks |
+
+Roles can be explicitly **unassigned**. Each supports ordered fallbacks, and a
+role change persists across restarts.
+
+### 6.3 Configuration, discovery, and eval
+
+- **Storage** — `app_setting.key = "llm"`, schema v3 (adds declared `memory_gb`),
+  revision CAS, redacted keys.
+- **Discovery** — loopback scan identified by catalog shape; 401/403 reports
+  `needs_key`; attach is idempotent by normalised base URL.
+- **Capability catalog** — context (`/api/show`, `max_model_len`, `meta`),
+  parameter size, quantization, vision, chat/embedding flags.
+- **Verify / Warm** — live catalog check and measured model load.
+- **Eval** — shot/image/script fixtures through the saved plan, pass rate and p50
+  per role, persisted as `last_eval`; **Apply recommended** reassigns the tested
+  models. With the eval gate on, a cloud role needs a passing eval.
+- **Profiles** — Sovereign local, Local preferred, Hybrid.
+- **API** — `GET/PUT/PATCH /settings/llm`, `/models`, `/discover`, `/attach`,
+  `/providers/{id}/{verify,warm}`, `/test` and `/test/stream`, `/health`, `/eval`,
+  `/eval/apply`, `/profiles/{name}`, `/spend`.
+
+### 6.4 VLM structured JSON extraction
+
+- If an input image is provided (`has_input_image=True`), the system prompt instructs
+  the VLM to analyze it.
 - The VLM outputs a **JSON object** with `enhanced_prompt` and `is_reference_only`.
-- If the image is a Character Sheet or Turnaround (`is_reference_only=True`), the VLM extracts detailed visual descriptions into the prompt, and the `tasks/video.py` dispatcher **drops the image conditioning** to force LTX-2 into Text-to-Video mode, preventing generation failure on frozen 2D character sheets.
+  The parser also accepts `prompt`, `text`, `image_prompt`, `result`, and `output`,
+  strips fences, and falls back to the original prompt if a bare object cannot be
+  unwrapped. (Some local models answer `{"prompt": …}`; that no longer reaches Flux.)
+- If the image is a Character Sheet or Turnaround (`is_reference_only=True`),
+  `tasks/video.py` **drops the image conditioning** to force text-to-video,
+  preventing a frozen 2D reference from breaking generation.
 
-**System prompts:**
-- `VIDEO_SYSTEM_PROMPT` — concise, action-focused descriptions for video generation
-- `IMAGE_SYSTEM_PROMPT` — vivid, detailed descriptions for image generation
+### 6.5 Image input
+
+When a caller has a reference image, it is sent on the provider's native wire:
+
+| Wire | Payload |
+|---|---|
+| Ollama | `images: [base64]` |
+| OpenAI-compatible | `messages[].content = [{type: text}, {type: image_url}]` |
+| Anthropic | base64 image content block |
+| Gemma | LTX `enhance_i2v()` with a resized tensor |
+
+### 6.6 System prompts and callers
+
+**System prompts:** `get_video_system_prompt(duration_seconds, has_input_image)`
+(concise action plus an audio layer and JSON output) and `IMAGE_SYSTEM_PROMPT`
+(vivid, single-paragraph image prompts).
 
 **Callers:**
 - `tasks/video.py` — ti2vid, ic_lora, keyframe, single-frame Flux paths
 - `tasks/chained.py` — chunk 0 and narrative continuation for chunks 1+
 - `tasks/image.py` — standalone image generation
 - `storyboard/manager.py` — chunk continuation prompts
+- `services/ai_storyboard.py` — `script_parse`
 
 ### Element Injection
 
@@ -524,22 +632,24 @@ enhanced = enhance_prompt(prompt, system_prompt="...", is_video=True, text_encod
 ### 7.1 Overview
 
 **File**: `services/ai_storyboard.py`
-**Model**: Gemma 3 text encoder (reused from LTX-2 pipeline via `model_engine.manager`)
-**Endpoint**: `POST /projects/{id}/storyboard/ai-parse`
+**Role**: `script_parse` (local HTTP model by default; Gemma only when assigned)
+**Endpoint**: `POST /projects/{id}/storyboard/ai-parse` and the queued job variant
 
-Uses the Gemma text encoder's **chat completion interface** (`_enhance()`) to intelligently parse free-form text into structured scenes and shots. This provides a smarter alternative to the regex-based `ScriptParser` — handling non-standard scripts, treatments, and prose descriptions.
+Runs free-form text through the `script_parse` role to produce structured scenes
+and shots. A local HTTP model (Ollama/oMLX/Strata/LM Studio) needs **no pipeline
+load**; the LTX Gemma text encoder is fetched only when the role resolves to
+Gemma. This provides a smarter alternative to the regex-based `ScriptParser` for
+non-standard scripts, treatments, and prose.
 
 ### 7.2 Pipeline
 
 ```mermaid
 flowchart TD
     UI[ScriptInput — Brain icon] --> API["POST /storyboard/ai-parse"]
-    API --> CHECK{Gemma loaded?}
-    CHECK -->|Yes| GEMMA["ai_parse_script(text, text_encoder)"]
+    API --> CHECK{"script_parse" role usable?}
     CHECK -->|No| REGEX["Fallback: script_parser.parse_script()"]
-    
-    GEMMA --> BUILD["Build chat messages:<br/>system = AI_STORYBOARD_SYSTEM_PROMPT<br/>user = script text"]
-    BUILD --> ENHANCE["text_encoder._enhance(messages, max_new_tokens=1024)"]
+    CHECK -->|Yes| BUILD["Build chat messages:<br/>system = AI_STORYBOARD_SYSTEM_PROMPT<br/>user = script text"]
+    BUILD --> ENHANCE["runtime.complete(): local HTTP model<br/>or Gemma text encoder if assigned"]
     ENHANCE --> EXTRACT["_extract_json(): strip markdown fences,<br/>regex search for JSON array"]
     EXTRACT --> VALIDATE["_validate_scenes(): normalize shot_types,<br/>sanitize DialogueLine/character types"]
     

@@ -1,0 +1,18 @@
+# Explicit baseline: enforce correctness rules that catch real bugs, while the
+# legacy style backlog (imports, typing modernization, unused locals) is frozen
+# rather than mass-rewritten.
+target-version = "py312"
+line-length = 120
+
+[lint]
+select = [
+    "E9",   # syntax/runtime errors
+    "F63",  # invalid comparison/format strings
+    "F7",   # syntax and control-flow errors
+    "F82",  # undefined names, invalid __all__
+    "F811", # redefinitions that shadow real bindings
+    "B023", # closures must bind loop variables they capture
+    "F841", # unused locals often hide incomplete wiring
+    "RUF006", # keep references to fire-and-forget asyncio tasks
+    "ASYNC221", # async functions must not block the loop with subprocesses
+]

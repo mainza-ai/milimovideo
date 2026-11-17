@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback } from 'react';
+import { API_BASE_URL } from '../../config';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
 import {
@@ -6,7 +7,7 @@ import {
 } from 'lucide-react';
 import './LoRAManager.css';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 
 interface ActiveLoRA {
     model_id: string;

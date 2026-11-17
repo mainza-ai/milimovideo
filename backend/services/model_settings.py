@@ -99,9 +99,12 @@ class ModelSettingsService:
     def _get_model_dirs(self) -> dict[str, str]:
         """Return known model directory paths."""
         return {
-            "ltx2": os.path.join(config.PROJECT_ROOT, "ltx2", "models"),
-            "flux2": getattr(config, "FLUX_WEIGHTS_PATH", os.path.join(config.PROJECT_ROOT, "flux2_models")),
-            "sam3": os.path.join(config.PROJECT_ROOT, "sam3", "checkpoints"),
+            "ltx2": os.path.join(config.PROJECT_ROOT, "LTX-2", "models"),
+            "flux2": getattr(
+                config, "FLUX_WEIGHTS_PATH",
+                os.path.join(config.BACKEND_DIR, "models", "flux2"),
+            ),
+            "sam3": os.path.join(config.BACKEND_DIR, "models", "sam3"),
             "hf_cache": os.path.join(os.path.expanduser("~"), ".cache", "huggingface"),
         }
 

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../config';
 /**
  * GlobalAudioManager — Web Audio API Implementation
  * 
@@ -94,7 +95,7 @@ export class GlobalAudioManager {
         clips.forEach(clip => {
             if (!clip.videoUrl) return;
 
-            const url = clip.videoUrl.startsWith('http') ? clip.videoUrl : `http://localhost:8000${clip.videoUrl}`;
+            const url = clip.videoUrl.startsWith('http') ? clip.videoUrl : `${API_BASE_URL}${clip.videoUrl}`;
 
             let entry = this.entries.get(clip.id);
 
@@ -217,7 +218,10 @@ export class GlobalAudioManager {
             if (!entry || !entry.buffer) return;
 
             const startTime = (clip.startFrame || 0) / fps;
-            const duration = clip.numFrames / fps;
+            const duration = Math.max(
+                0,
+                (clip.numFrames || 0) - (clip.trimIn || 0) - (clip.trimOut || 0)
+            ) / fps;
             const endTime = startTime + duration;
             const trimInTime = (clip.trimIn || 0) / fps;
 

@@ -15,9 +15,12 @@ graph TD
     subgraph "Core Infrastructure"
         database[database.py]
         events[events.py]
+        job_events[job_events.py]
         schemas[schemas.py]
         job_utils[job_utils.py]
         file_utils[file_utils.py]
+        mem_budget["services/memory/*"]
+        benchmark[benchmark_models.py]
     end
 
     subgraph "API Routes"
@@ -27,6 +30,8 @@ graph TD
         r_assets[routes/assets.py]
         r_elements[routes/elements.py]
         r_storyboard[routes/storyboard.py]
+        r_settings[routes/settings.py]
+        r_memory[routes/memory.py]
     end
 
     subgraph "Task Engine"
@@ -36,6 +41,7 @@ graph TD
         t_image[tasks/image.py]
         model_engine[model_engine.py]
         llm[llm.py]
+        svc_llm["services/llm/*"]
         memory_mgr[memory_manager.py]
     end
 
@@ -52,9 +58,20 @@ graph TD
     %% Server imports
     server --> config
     server --> database
+    server --> r_settings
+    r_settings --> svc_llm
+    llm --> svc_llm
+    t_video --> llm
+    t_image --> llm
     server --> events
+    server --> job_events
     server --> routes_init
     server --> job_utils
+    server --> memory_mgr
+    job_utils --> job_events
+    job_events --> events
+    memory_mgr --> mem_budget
+    benchmark --> mem_budget
 
     %% Routes aggregation
     routes_init --> r_projects
@@ -62,6 +79,7 @@ graph TD
     routes_init --> r_assets
     routes_init --> r_elements
     routes_init --> r_storyboard
+    routes_init --> r_memory
 
     %% Route dependencies
     r_projects --> database
@@ -340,6 +358,7 @@ graph TD
 | `file_utils.py` | 5 files import | `config` | Path resolution — utility |
 | `model_engine.py` | 3 files import | `config` | GPU model management — LTX-2 pipelines |
 | `models/flux_wrapper.py` | 4 files import | 0 (external: torch, flux2, diffusers) | GPU model management — Flux 2 singleton |
+| `services/llm/runtime.py` | `llm.py`, settings routes | `store`, `providers`, `budget` | Role plans, preflight, execution, provenance |
 
 ### Critical Path Files (Frontend)
 | File | Inbound Deps | Outbound Deps | Role |
@@ -368,7 +387,8 @@ graph TD
 | `tracking_manager` | `managers/tracking_manager.py` | Module-level | SAM video tracking HTTP client (session lifecycle + propagation) |
 | `script_parser` | `services/script_parser.py` | Module-level | Screenplay text parser |
 | `event_manager` | `events.py` | Module-level | SSE broadcast to all connected clients |
-| `memory_manager` | `memory_manager.py` | Module-level | Central GPU memory coordinator — mutual exclusion between LTX and Flux |
+| `memory_manager` | `memory_manager.py` | Module-level | Central GPU memory coordinator — mutual exclusion between LTX, Flux, and `llm_http` |
+| `llm_settings` | `services/llm/store.py` | Module-level | Revisioned LLM settings document + provider instances |
 
 ## 4. API Endpoint Map
 
@@ -385,9 +405,15 @@ graph TD
 | POST | `/projects/{id}/render` | projects | `render_project` |
 | GET | `/projects/{id}/render/{render_id}/download` | projects | `download_render` |
 | GET | `/projects/{id}/images` | projects | `get_project_images` |
-| GET | `/settings/llm` | projects | `get_llm_settings` — current provider, model, keep_alive |
-| PATCH | `/settings/llm` | projects | `update_llm_settings` — change provider/model/keep_alive at runtime |
-| GET | `/settings/llm/models` | projects | `list_ollama_models` — Ollama `/api/tags` with vision detection |
+| GET/PUT/PATCH | `/settings/llm` | settings | Redacted snapshot, revisioned save (409 on stale), air-gap patch |
+| GET | `/settings/llm/models` | settings | Catalog with context/vision/chat flags (`?deep=true` adds Ollama `/api/show`) |
+| POST | `/settings/llm/discover` · `/attach` | settings | Shape-verified loopback scan; attach/refresh an instance |
+| POST | `/settings/llm/providers/{id}/verify` · `/warm` | settings | Live catalog check; measured model load |
+| POST | `/settings/llm/test` · `/test/stream` | settings | Saved-plan prompt test; SSE with non-stream fallback |
+| GET | `/settings/llm/health` | settings | Role resolution, telemetry, missing models, budget, profiles |
+| POST | `/settings/llm/eval` · `/eval/apply` | settings | Local role fixtures; apply the recommended plan |
+| POST | `/settings/llm/profiles/{name}` | settings | sovereign / local_preferred / hybrid |
+| GET | `/settings/llm/spend` · POST `/budget` | settings | Cloud ledger; daily budget and eval gate |
 | GET | `/status/{job_id}` | jobs | `get_job_status` |
 | GET | `/projects/{id}/active_jobs` | jobs | `list_active_jobs` |
 | POST | `/jobs/{job_id}/cancel` | jobs | `cancel_job` |

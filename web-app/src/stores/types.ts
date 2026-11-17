@@ -24,6 +24,7 @@ export interface Shot {
     prompt: string;
     negativePrompt: string;
     seed: number;
+    seedLocked?: boolean;
     width: number;
     height: number;
     numFrames: number;
@@ -46,10 +47,20 @@ export interface Shot {
 
     // Result
     lastJobId?: string;
+    selectedTakeId?: string;
+    favoriteTakeId?: string;
+    audioGain?: number;
+    audioMuted?: boolean;
+    keyframes?: OpacityKeyframe[];
+    blocking?: BlockingNode[];
+    speed?: number;
+    audioFadeIn?: number;
+    audioFadeOut?: number;
     videoUrl?: string | null; // Derived from jobID
     thumbnailUrl?: string; // Static Preview
     enhancedPromptResult?: string; // Result from backend
     statusMessage?: string; // Real-time status text
+    stage?: string; // queued | enhancing | loading | denoising | upscaling | encoding | saving
     currentPrompt?: string; // Live evolving prompt during generation
     etaSeconds?: number; // Estimated time remaining
 
@@ -104,6 +115,31 @@ export interface ParsedScene {
     shots: ParsedShot[];
 }
 
+export interface BlockingNode {
+    id: string;
+    type: 'camera' | 'character' | 'object';
+    label: string;
+    x: number;
+    y: number;
+    rotation?: number;
+}
+
+export interface OpacityKeyframe {
+    frame: number;
+    opacity: number;
+    scale?: number;
+    x?: number;
+    y?: number;
+    volume?: number;
+}
+
+export interface CaptionCue {
+    id: string;
+    startFrame: number;
+    endFrame: number;
+    text: string;
+}
+
 export interface Project {
     id: string;
     name: string;
@@ -114,6 +150,14 @@ export interface Project {
     resolutionH: number;
     seed: number; // Global seed
     scriptContent?: string;
+    revision?: number;
+    captions?: CaptionCue[];
+    captionsBurn?: boolean;
+    renderPreset?: string;
+    renderCrf?: number;
+    renderSpeed?: string;
+    renderAudioBitrate?: string;
+    renderAudioNormalize?: boolean;
 }
 
 export interface ProjectSlice {
@@ -123,6 +167,9 @@ export interface ProjectSlice {
     // Asset Management
     assetRefreshVersion: number;
     triggerAssetRefresh: () => void;
+
+    saveStatus: 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
+    saveError: string | null;
 
     // Async
     saveProject: () => Promise<void>;
@@ -146,7 +193,7 @@ export interface ShotSlice {
     removeConditioning: (shotId: string, itemId: string) => void;
 
     getShotStartTime: (shotId: string) => number;
-    generateShot: (shotId: string) => Promise<void>;
+    generateShot: (shotId: string, forceNewSeed?: boolean) => Promise<void>;
     inpaintShot: (shotId: string, frameDataUrl: string, maskDataUrl: string, prompt: string) => Promise<void>;
     cancelShotGeneration: (shotId: string) => Promise<void>;
 
@@ -161,7 +208,7 @@ export interface ShotSlice {
     batchGenerateThumbnails: (shotIds: string[]) => Promise<void>;
 
     // Phase 3: Timeline integration
-    pushStoryboardToTimeline: () => void;
+    pushStoryboardToTimeline: () => Promise<void>;
 }
 
 export interface PlaybackSlice {
@@ -190,10 +237,11 @@ export interface UISlice {
 }
 
 export interface TrackSlice {
-    trackStates: Record<number, { muted: boolean; locked: boolean; hidden: boolean }>;
+    trackStates: Record<number, { muted: boolean; locked: boolean; hidden: boolean; solo?: boolean }>;
     toggleTrackMute: (trackIndex: number) => void;
     toggleTrackLock: (trackIndex: number) => void;
     toggleTrackHidden: (trackIndex: number) => void;
+    toggleTrackSolo: (trackIndex: number) => void;
 }
 
 export interface ElementSlice {

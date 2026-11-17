@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { API_BASE_URL } from '../../config';
 import type { TimelineState, ProjectSlice, Project } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { getAssetUrl } from '../../config';
@@ -14,6 +15,7 @@ export const DEFAULT_PROJECT: Project = {
             prompt: "A cinematic shot...",
             negativePrompt: DEFAULT_NEGATIVE_PROMPT,
             seed: 42,
+            seedLocked: true,
             width: 768,
             height: 512,
             numFrames: 121,
@@ -35,6 +37,9 @@ export const DEFAULT_PROJECT: Project = {
     seed: 42
 };
 
+let saveInFlight: Promise<void> | null = null;
+let saveQueued = false;
+
 const LAST_PROJECT_KEY = 'milimo_last_project_id';
 const saveLastProjectId = (projectId: string) => {
     try {
@@ -55,13 +60,21 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
         ]
     },
     assetRefreshVersion: 0,
+    saveStatus: 'idle',
+    saveError: null,
 
     setProject: (p) => set({ project: p }),
 
     triggerAssetRefresh: () => set(state => ({ assetRefreshVersion: state.assetRefreshVersion + 1 })),
 
     saveProject: async () => {
+        if (saveInFlight) {
+            saveQueued = true;
+            return saveInFlight;
+        }
+        const run = async () => {
         const { project, addToast } = get();
+        set({ saveStatus: 'saving', saveError: null });
         try {
             // Convert to snake_case for backend
             const payload = {
@@ -71,12 +84,16 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 seed: project.seed,
                 resolution_w: project.resolutionW,
                 resolution_h: project.resolutionH,
-                shots: project.shots.map(s => ({
+                revision: project.revision,
+                shots: project.shots.map((s, order) => ({
                     id: s.id,
                     prompt: s.prompt,
                     negative_prompt: s.negativePrompt,
                     seed: s.seed,
+                    seed_locked: s.seedLocked ?? true,
                     width: s.width,
+                    height: s.height,
+                    fps: s.fps || project.fps,
                     num_frames: s.numFrames,
                     cfg_scale: s.cfgScale,
                     enhance_prompt: s.enhancePrompt,
@@ -86,18 +103,30 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     start_frame: s.startFrame,
                     trim_in: s.trimIn,
                     trim_out: s.trimOut,
+                    audio_gain: s.audioGain ?? 1,
+                    audio_muted: s.audioMuted ?? false,
+                    keyframes: s.keyframes ?? [],
+                    blocking: s.blocking ?? [],
+                    speed: s.speed ?? 1,
+                    audio_fade_in: s.audioFadeIn ?? 0,
+                    audio_fade_out: s.audioFadeOut ?? 0,
                     auto_continue: s.autoContinue,
                     scene_id: s.sceneId,
+                    index: s.index,
+                    sequence_index: order,
+                    shot_type: s.shotType,
                     action: s.action,
                     dialogue: s.dialogue,
                     character: s.character,
                     timeline: s.timeline.map(t => ({
                         type: t.type,
                         path: t.path,
-                        frameIndex: t.frameIndex,
+                        frame_index: t.frameIndex,
                         strength: t.strength
                     })),
                     last_job_id: s.lastJobId,
+                    selected_take_id: s.selectedTakeId,
+                    favorite_take_id: s.favoriteTakeId,
                     thumbnail_url: s.thumbnailUrl,
                     video_url: s.videoUrl
                 })),
@@ -106,25 +135,64 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     index: sc.index,
                     name: sc.name,
                     script_content: sc.scriptContent
+                })),
+                script_content: project.scriptContent,
+                captions_burn: project.captionsBurn ?? true,
+                render_preset: project.renderPreset ?? null,
+                render_crf: project.renderCrf ?? 18,
+                render_speed: project.renderSpeed ?? 'fast',
+                render_audio_bitrate: project.renderAudioBitrate ?? '192k',
+                render_audio_normalize: project.renderAudioNormalize ?? false,
+                captions: (project.captions || []).map(cue => ({
+                    id: cue.id,
+                    start_frame: cue.startFrame,
+                    end_frame: cue.endFrame,
+                    text: cue.text
                 }))
             };
 
-            const res = await fetch(`http://localhost:8000/projects/${project.id}`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${project.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            if (res.ok) addToast("Project saved successfully", "success");
-            else {
-                const err = await res.json();
+            if (res.ok) {
+                const data = await res.json().catch(() => ({}));
+                set(state => ({
+                    project: {
+                        ...state.project,
+                        revision: typeof data.revision === "number" ? data.revision : state.project.revision
+                    }
+                }));
+                set({ saveStatus: 'saved' });
+                addToast("Project saved successfully", "success");
+            } else {
+                const err = await res.json().catch(() => ({}));
                 console.error("Save failed", err);
-                addToast("Failed to save project", "error");
+                if (res.status === 409) {
+                    set({ saveStatus: 'conflict', saveError: err.detail || 'Revision conflict' });
+                    addToast("Save conflict: reload the project before saving again.", "error");
+                } else {
+                    set({ saveStatus: 'error', saveError: err.detail || `HTTP ${res.status}` });
+                    addToast("Failed to save project", "error");
+                }
             }
         } catch (e) {
             console.error("Save error", e);
+            set({ saveStatus: 'error', saveError: String(e) });
             addToast("Failed to save project", "error");
         }
+        };
+
+        saveInFlight = run().finally(() => {
+            saveInFlight = null;
+            if (saveQueued) {
+                saveQueued = false;
+                void get().saveProject();
+            }
+        });
+        return saveInFlight;
     },
 
     createNewProject: async (name: string, settings) => {
@@ -133,7 +201,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
         const finalSettings = { ...defaults, ...settings };
 
         try {
-            const res = await fetch('http://localhost:8000/projects', {
+            const res = await fetch(API_BASE_URL + '/projects', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -154,7 +222,8 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 fps: data.fps || finalSettings.fps,
                 resolutionW: data.resolution_w || finalSettings.resolutionW,
                 resolutionH: data.resolution_h || finalSettings.resolutionH,
-                seed: data.seed || finalSettings.seed
+                seed: data.seed || finalSettings.seed,
+                revision: typeof data.revision === "number" ? data.revision : 0,
             };
 
             set({ project: newProject, selectedShotId: null });
@@ -168,7 +237,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
     loadProject: async (id: string) => {
         const { addToast } = get();
         try {
-            const res = await fetch(`http://localhost:8000/projects/${id}`);
+            const res = await fetch(`${API_BASE_URL}/projects/${id}`);
             if (!res.ok) throw new Error("Load failed");
 
             const data = await res.json();
@@ -180,13 +249,16 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 resolutionW: data.resolution_w || 768,
                 resolutionH: data.resolution_h || 512,
                 seed: data.seed || 42,
+                revision: typeof data.revision === "number" ? data.revision : 0,
                 shots: (data.shots || []).map((s: any) => ({
                     id: s.id,
                     prompt: s.prompt,
                     negativePrompt: s.negative_prompt,
                     seed: s.seed,
+                    seedLocked: s.seed_locked ?? true,
                     width: s.width,
                     height: s.height,
+                    fps: s.fps,
                     numFrames: s.num_frames,
                     cfgScale: s.cfg_scale,
                     enhancePrompt: s.enhance_prompt ?? true,
@@ -196,25 +268,51 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     startFrame: s.start_frame || 0,
                     trimIn: s.trim_in || 0,
                     trimOut: s.trim_out || 0,
+                    audioGain: s.audio_gain ?? 1,
+                    audioMuted: s.audio_muted ?? false,
+                    keyframes: Array.isArray(s.keyframes) ? s.keyframes : [],
+                    blocking: Array.isArray(s.blocking) ? s.blocking : [],
+                    speed: s.speed ?? 1,
+                    audioFadeIn: s.audio_fade_in ?? 0,
+                    audioFadeOut: s.audio_fade_out ?? 0,
                     autoContinue: s.auto_continue,
                     sceneId: s.scene_id,
+                    index: s.index,
+                    shotType: s.shot_type,
                     action: s.action,
                     dialogue: s.dialogue,
                     character: s.character,
-                    timeline: (s.timeline || []).map((t: any) => ({
+                    timeline: (typeof s.timeline === "string"
+                        ? (() => { try { return JSON.parse(s.timeline || "[]"); } catch { return []; } })()
+                        : (s.timeline || [])
+                    ).map((t: any) => ({
                         id: uuidv4(), // Generate temporary UI IDs
                         type: t.type,
                         path: t.path,
-                        frameIndex: t.frame_index,
-                        strength: t.strength
+                        frameIndex: t.frame_index ?? t.frameIndex ?? 0,
+                        strength: t.strength ?? 1.0
                     })),
                     lastJobId: s.last_job_id,
+                    selectedTakeId: s.selected_take_id,
+                    favoriteTakeId: s.favorite_take_id,
                     videoUrl: s.video_url ? getAssetUrl(s.video_url) : undefined,  // Use DB value
                     thumbnailUrl: getAssetUrl(s.thumbnail_url),
                     enhancedPromptResult: s.enhanced_prompt_result, // Map from backend
                     matchedElements: s.matched_elements ? (typeof s.matched_elements === 'string' ? JSON.parse(s.matched_elements) : s.matched_elements) : undefined,
                 })),
                 scriptContent: data.script_content, // Load persisted script
+                captionsBurn: data.captions_burn ?? true,
+                renderPreset: data.render_preset || undefined,
+                renderCrf: data.render_crf ?? 18,
+                renderSpeed: data.render_speed || 'fast',
+                renderAudioBitrate: data.render_audio_bitrate || '192k',
+                renderAudioNormalize: data.render_audio_normalize ?? false,
+                captions: (data.captions || []).map((cue: any) => ({
+                    id: cue.id || uuidv4(),
+                    startFrame: cue.start_frame ?? 0,
+                    endFrame: cue.end_frame ?? 0,
+                    text: cue.text ?? '',
+                })),
                 scenes: (data.scenes || []).map((sc: any) => ({
                     id: sc.id,
                     index: sc.index,
@@ -224,7 +322,12 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 }))
             };
 
-            set({ project: loadedProject, selectedShotId: loadedProject.shots[0]?.id || null });
+            set({
+                project: loadedProject,
+                selectedShotId: loadedProject.shots[0]?.id || null,
+                saveStatus: 'idle',
+                saveError: null,
+            });
             saveLastProjectId(id);  // Remember last opened project
             addToast("Project loaded", "success");
         } catch (e) {
@@ -240,7 +343,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
     deleteProject: async (id: string) => {
         const { addToast, project } = get();
         try {
-            await fetch(`http://localhost:8000/projects/${id}`, { method: 'DELETE' });
+            await fetch(`${API_BASE_URL}/projects/${id}`, { method: 'DELETE' });
             addToast("Project deleted", "success");
 
             if (project.id === id) {

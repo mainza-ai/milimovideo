@@ -4,13 +4,14 @@ import sys
 # Base Directories
 BACKEND_DIR = os.path.abspath(os.path.dirname(__file__))
 PROJECT_ROOT = os.path.dirname(BACKEND_DIR)
-PROJECTS_DIR = os.path.join(BACKEND_DIR, "projects")
+PROJECTS_DIR = os.environ.get("MILIMO_PROJECTS_DIR", os.path.join(BACKEND_DIR, "projects"))
 GENERATED_DIR = os.path.join(BACKEND_DIR, "generated") # Legacy Support
 
 # LTX-2 Paths
 LTX_DIR = os.path.join(PROJECT_ROOT, "LTX-2")
 LTX_CORE_DIR = os.path.join(LTX_DIR, "packages/ltx-core/src")
 LTX_PIPELINES_DIR = os.path.join(LTX_DIR, "packages/ltx-pipelines/src")
+FLUX_SRC_DIR = os.path.join(PROJECT_ROOT, "flux2", "src")
 
 # Model Paths (Can be updated to point to specific weights)
 MODELS_DIR = os.path.join(BACKEND_DIR, "models")
@@ -26,12 +27,70 @@ DOWNLOAD_PROGRESS_INTERVAL = 2.0  # seconds between SSE progress updates
 FLUX_IP_ADAPTER_PATH = os.path.join(MODELS_DIR, "flux-ip-adapter.safetensors") # Placeholder
 LTX_IP_ADAPTER_PATH = os.path.join(MODELS_DIR, "ltx-ip-adapter.safetensors")   # Placeholder
 
-# Service Ports
-API_PORT = 8000
-SAM_SERVICE_PORT = 8001
+# Service Ports / exposure
+API_PORT = int(os.environ.get("MILIMO_API_PORT", "8000"))
+# Local-first default. Set MILIMO_HOST=0.0.0.0 only with MILIMO_API_TOKEN.
+API_HOST = os.environ.get("MILIMO_HOST", "127.0.0.1")
+SAM_SERVICE_PORT = int(os.environ.get("MILIMO_SAM_PORT", "8001"))
+
+# Comma-separated allowlist. Empty means the safe local defaults.
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "MILIMO_CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "http://localhost:4173,http://127.0.0.1:4173,"
+        "http://tauri.localhost,https://tauri.localhost",
+    ).split(",")
+    if origin.strip()
+]
+# Optional bearer token. Required when binding to a non-loopback host.
+API_TOKEN = os.environ.get("MILIMO_API_TOKEN", "").strip()
+
+# Debug artifacts (request dumps, error dumps). Never on by default.
+DEBUG = os.environ.get("MILIMO_DEBUG", "0") == "1"
+SKIP_VRAM_CHECK = os.environ.get("MILIMO_SKIP_VRAM_CHECK", "0") == "1"
+VRAM_ESTIMATE_VIDEO_GB = 40.0
+VRAM_ESTIMATE_IMAGE_GB = 24.0
+
+# ── Memory budget / residency ─────────────────────────────────────
+# Measured budget: model weights + workspace + external engines, not file sizes.
+MEMORY_ENFORCE = os.environ.get("MILIMO_MEMORY_ENFORCE", "1") == "1"
+MEMORY_RESERVE_GB = float(os.environ.get("MILIMO_MEMORY_RESERVE_GB", "16"))
+MEMORY_SWAP_LIMIT_PERCENT = float(os.environ.get("MILIMO_MEMORY_SWAP_LIMIT_PERCENT", "85"))
+MPS_MEMORY_FRACTION = float(os.environ.get("MILIMO_MPS_MEMORY_FRACTION", "0.85"))
+# Idle eviction TTLs in seconds; 0 disables eviction for that slot.
+MEMORY_IDLE_TTL_SEC = {
+    "video": int(os.environ.get("MILIMO_MEMORY_TTL_VIDEO", "300")),
+    "image": int(os.environ.get("MILIMO_MEMORY_TTL_IMAGE", "300")),
+    "llm_http": int(os.environ.get("MILIMO_MEMORY_TTL_LLM", "120")),
+    "sam": int(os.environ.get("MILIMO_MEMORY_TTL_SAM", "600")),
+    "depth": int(os.environ.get("MILIMO_MEMORY_TTL_DEPTH", "300")),
+}
+MEMORY_KEEP_WARM = os.environ.get("MILIMO_MEMORY_KEEP_WARM", "0") == "1"
+# Conservative fallback for an engine that reports no resident bytes.
+MEMORY_UNKNOWN_ENGINE_GB = float(os.environ.get("MILIMO_MEMORY_UNKNOWN_ENGINE_GB", "24"))
+MEMORY_MONITOR_INTERVAL_SEC = float(os.environ.get("MILIMO_MEMORY_MONITOR_INTERVAL", "15"))
+
+# Optional terminal-job webhook for local automations (off by default).
+JOB_WEBHOOK_URL = os.environ.get("MILIMO_JOB_WEBHOOK", "").strip()
+JOB_WEBHOOK_TOKEN = os.environ.get("MILIMO_JOB_WEBHOOK_TOKEN", "").strip()
+
+# Upload safety
+MAX_UPLOAD_MB = int(os.environ.get("MILIMO_MAX_UPLOAD_MB", "2048"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+ALLOWED_UPLOAD_EXTENSIONS = {
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff",
+    ".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi",
+    ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac",
+    ".srt", ".vtt", ".json", ".txt", ".md",
+}
 
 # Database
-DATABASE_URL = f"sqlite:///{os.path.join(BACKEND_DIR, 'milimovideo.db')}"
+DATABASE_URL = os.environ.get(
+    "MILIMO_DATABASE_URL",
+    f"sqlite:///{os.path.join(BACKEND_DIR, 'milimovideo.db')}",
+)
 
 # Generation Defaults
 DEFAULT_RESOLUTION_W = 768
@@ -52,6 +111,8 @@ def setup_paths():
         sys.path.insert(0, LTX_PIPELINES_DIR)
     if LTX_CORE_DIR not in sys.path:
         sys.path.insert(0, LTX_CORE_DIR)
+    if FLUX_SRC_DIR not in sys.path:
+        sys.path.insert(0, FLUX_SRC_DIR)
 
 # Ensure directories exist
 os.makedirs(PROJECTS_DIR, exist_ok=True)
@@ -81,11 +142,18 @@ FILTER_PRESETS = [
 ]
 
 # ── LLM Configuration ─────────────────────────────────────────────
-# Provider: "gemma" (built-in LTX text encoder) or "ollama" (local LLM)
+# Legacy env defaults. These only seed the first-boot persisted settings
+# document; the live plane is services/llm (Studio Setup -> AI & LLM). Do not
+# branch on these values in new code.
 LLM_PROVIDER = os.environ.get("MILIMO_LLM_PROVIDER", "gemma")
 OLLAMA_BASE_URL = os.environ.get("MILIMO_OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("MILIMO_OLLAMA_MODEL", "llama3.1")
 # "0" = unload model immediately after use (saves ~49GB during generation)
 # "5m" = keep loaded 5 minutes (Ollama default, faster re-prompts but wastes RAM)
 OLLAMA_KEEP_ALIVE = os.environ.get("MILIMO_OLLAMA_KEEP_ALIVE", "0")
+
+# Make the editable LTX/Flux checkouts importable even when the venv was built
+# for a different repository location. server.py imports routes immediately,
+# and routes import tasks -> ltx_pipelines, so this must run at import time.
+setup_paths()
 

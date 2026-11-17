@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../../config';
 import WaveSurfer from 'wavesurfer.js';
 import { useTimelineStore } from '../../stores/timelineStore';
 
@@ -50,7 +51,7 @@ export const AudioClip = ({ clip, zoom, color = '#a3e635' }: Props) => {
 
             const url = clip.shot.videoUrl.startsWith('http')
                 ? clip.shot.videoUrl
-                : `http://localhost:8000${clip.shot.videoUrl}`;
+                : `${API_BASE_URL}${clip.shot.videoUrl}`;
 
             // Detect Safari for backend selection
             const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);

@@ -1,4 +1,5 @@
 import { useRef, useEffect, useMemo, useState, memo, forwardRef } from 'react';
+import { API_BASE_URL } from '../../config';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 import { Play, Pause, SkipBack, SkipForward, Maximize, Brush, Crosshair } from 'lucide-react';
@@ -52,7 +53,7 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
     useEffect(() => {
         if (internalRef.current && shot?.videoUrl) {
             const currentSrc = internalRef.current.src;
-            const newSrc = shot.videoUrl.startsWith('http') ? shot.videoUrl : `http://localhost:8000${shot.videoUrl}`;
+            const newSrc = shot.videoUrl.startsWith('http') ? shot.videoUrl : `${API_BASE_URL}${shot.videoUrl}`;
             if (currentSrc !== newSrc && !currentSrc.endsWith(shot.videoUrl)) {
                 internalRef.current.src = newSrc;
                 internalRef.current.load();
@@ -124,7 +125,7 @@ const VideoSurface = memo(forwardRef<HTMLVideoElement, { shot: any; isPlaying: b
     if (isImage) {
         return (
             <img
-                src={shot.videoUrl.startsWith('http') ? shot.videoUrl : `http://localhost:8000${shot.videoUrl}`}
+                src={shot.videoUrl.startsWith('http') ? shot.videoUrl : `${API_BASE_URL}${shot.videoUrl}`}
                 className="w-full h-full object-contain"
                 crossOrigin="anonymous"
                 alt="Generated Shot"

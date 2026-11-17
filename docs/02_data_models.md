@@ -95,10 +95,13 @@ erDiagram
         string id PK "job_XXXXXXXX"
         string project_id FK "nullable"
         string type "generation | inpaint"
-        string status "pending | processing | completed | failed | cancelled"
+        string status "pending | queued | processing | completed | failed | cancelled"
         int progress "0-100"
+        string stage "nullable — queued/enhancing/loading/denoising/upscaling/encoding/saving"
+        datetime started_at "nullable"
         datetime created_at
         datetime completed_at "nullable"
+        string memory_json "nullable — sampler peak/stage trace"
         string output_path "nullable"
         string error_message "nullable"
         string prompt "nullable"
@@ -390,7 +393,23 @@ classDiagram
 | `shot` | `id` (UUID hex) | → project (FK) | Atomic unit: generation spec + timeline clip |
 | `element` | `id` (UUID hex) | indexed by project_id | Story elements (characters/locations/objects) with trigger words for IP-Adapter |
 | `asset` | `id` (UUID hex) | nullable project_id | Uploaded/generated media files. `meta_json` stores generation params (prompt, seed, guidance, reference elements). |
-| `job` | `id` (string) | nullable project_id | Async task tracking with progress and results. Status transitions: `pending → processing → completed/failed/cancelled`. |
+| `job` | `id` (string) | nullable project_id | Async task tracking with progress, stage, start time, per-job memory trace, and results. Status transitions: `pending/queued → processing → completed/failed/cancelled`. |
+| `queuedjob` | `id` (string) | job_id | Durable dispatch ledger: kind, params (incl. memory-retry markers), status, attempts, timestamps. |
+| `app_setting` | `key` (string) | none | Versioned JSON documents. `llm` holds `LLMSettings` v3 (provider instances with `memory_gb`, roles, budget, last eval, revision); `llm_spend` holds the daily cloud ledger. |
+
+### LLM settings document (`app_setting.key = "llm"`)
+
+| Field | Meaning |
+|---|---|
+| `schema_version` / `revision` | Document version and CAS token; stale `PUT` returns 409 |
+| `providers` | Instance map keyed by stable id (`ollama`, `openai_compatible@host:port`) with type, wire, base URL, model, timeout, keep-alive, declared `memory_gb`, and secret status |
+| `roles` | Six role assignments (`prompt_video`, `prompt_image`, `script_parse`, `agent_plan`, `review_critic`, `continuity`) with provider/model/fallback/sampling; empty provider = explicitly unassigned |
+| `budget` | `daily_usd` (0 disables cloud spend) and `eval_gate` |
+| `last_eval` | Server-written pass rate, p50, cases, and per-role provider/model; a client cannot forge it |
+
+Secrets are sealed with AES-256-GCM when `MILIMO_SECRET_KEY` is set; reads return
+only `has_key`, `secret_source`, and `key_status`. The spend ledger is a separate
+`app_setting` row capped at the last 200 entries.
 
 ### Connection Configuration
 ```python
@@ -403,7 +422,11 @@ engine = create_engine(
 ```
 
 ### Zombie Job Recovery
-On server startup, the lifespan handler queries for jobs with `status="processing"` and marks them as `"failed"`. This prevents stale lock-up from crashed workers.
+On server startup, lifespan fails `Job` rows whose worker died and marks the
+matching `QueuedJob` row failed (stage `recovery`), emitting one terminal event. It
+does **not** silently re-run a heavy job: re-admission must happen first. Rows that
+are still `queued` with a live `Job` are dispatched normally. A queued cancel
+clears both rows and emits `job.cancelled`.
 
 ## 5. Data Storage Layout
 

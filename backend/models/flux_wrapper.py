@@ -159,7 +159,8 @@ class FluxInpainter:
 
         # Unload conflicting models (e.g., LTX) before loading Flux
         from memory_manager import memory_manager
-        memory_manager.prepare_for("image")
+        from services.memory import costs
+        memory_manager.prepare_for("image", model_id="flux2", cost_gb=costs.IMAGE_BASE_GB)
 
         try:
             from flux2.util import load_ae, load_flow_model, load_text_encoder, FLUX2_MODEL_INFO
@@ -228,9 +229,11 @@ class FluxInpainter:
             
         except ImportError as e:
             logger.error(f"Failed to import flux2 modules: {e}")
+            memory_manager.release("image")
             raise
         except Exception as e:
             logger.error(f"Failed to load Flux 2: {e}")
+            memory_manager.release("image")
             raise
 
     def load_ip_adapter(self):
@@ -781,8 +784,6 @@ class FluxInpainter:
                 
                 mask_flat = torch.from_numpy(mask_arr).reshape(1, -1, 1).to(self.device).to(self.dtype)
                 
-                # Generator
-                generator = torch.Generator(device=self.device).manual_seed(seed)
                 noise = torch.randn_like(x_orig)
                 
                 # Start Img2Img style?

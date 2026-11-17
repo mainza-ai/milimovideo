@@ -114,7 +114,7 @@ graph TD
 |---|---|
 | `handleServerEvent(type, data)` | Processes SSE events and updates relevant shot state |
 
-**SSE Event Types Handled:**
+**SSE Event Types Handled (legacy mapping):**
 | Event Type | Action |
 |---|---|
 | `progress` | Update shot `progress`, `statusMessage`, `etaSeconds`, `enhancedPromptResult` |
@@ -270,8 +270,31 @@ useEffect(() => {
 - `ControlsBar` — only re-renders on play/edit/tracking state changes. Includes Crosshair icon for tracking mode toggle.
 - `TrackingPanel` — self-contained session state management (idle/starting/prompting/propagating/done/error), not connected to global store. Supports mask export via `POST /edit/track/save` and reload via `POST /edit/track/load`.
 
-### G. SSE Provider
-`SSEProvider.tsx` wraps the app in a React context that manages the `EventSource` lifecycle. On mount, it syncs any in-flight jobs via `jobPoller`. The connection uses exponential backoff on errors (1s → 10s max). It replaces the previous inline SSE listener that was tightly coupled to the store.
+### G. SSE Provider and Studio job state
+`SSEProvider.tsx` owns one `EventSource` for the whole app. It reconnects with
+exponential backoff (1 s → 10 s), passes the last seen event id for replay, ignores
+native `error` events with no data, and on connect dispatches `milimo:resync`.
+
+Typed `job.*` events are handled twice: `studio/events/jobBridge.ts` updates the
+Studio job/shot state and notifications, and a legacy adapter maps them to
+`progress`/`complete`/`error`/`cancelled` for the frozen editor. Other system events
+(render, downloads, models, memory, queue) refresh their hooks and toast where
+appropriate.
+
+Studio job/notification state:
+
+| Store | Owns |
+|---|---|
+| `studio/state/jobStore.ts` | `activeJobs` (authoritative replace from `/active_jobs`), `history`, `unread`, `metrics` |
+| `studio/events/jobBridge.ts` | Job→shot progress/ETA/take, terminal toast/notification, `milimo:job-terminal` |
+| `studio/notifications/preferences.ts` | persisted toasts/OS/sound and per-project mute |
+| `studio/components/StudioToastLayer.tsx` | the single `aria-live` toast region |
+| `studio/components/ActivityCenter.tsx` | active/history popover, cancel/retry, document title + dock badge |
+
+`jobStore` additions: `upsertActive` merges an immediate local job;
+`finish` moves a terminal job to history and increments unread; `clearUnread` resets
+the badge. A missed terminal is cleared by the resync/status reconcile, not by
+accumulating active rows.
 
 ### H. Safari Draggable Hover Bug
 Elements with `draggable={true}` in Safari WebKit silently swallow CSS pointer events, completely neutralizing CSS `:hover` and `group-hover` pseudo-classes on child overlays.
@@ -287,16 +310,17 @@ sequenceDiagram
     participant Shot as ShotSlice.updateShot
     participant UI as UI Components
 
-    Backend->>SSE: broadcast("progress", {job_id, progress, status})
-    SSE->>Server: handleServerEvent("progress", data)
-    Server->>Server: Find shot by lastJobId match
-    Server->>Shot: updateShot(shotId, {progress, statusMessage, etaSeconds})
+    Backend->>SSE: job.stage {job_id, shot_id, stage, progress, step, total, eta}
+    SSE->>Bridge: handleStudioJobEvent(data)
+    Bridge->>Shot: updateShot(shotId, {progress, stage, statusMessage, etaSeconds})
+    SSE->>Server: legacy map → handleServerEvent("progress", data)
+    Server->>Shot: updateShot(shotId, {progress, statusMessage})
     Shot->>UI: Zustand selector triggers re-render
 
     Note over Backend: On completion
-    Backend->>SSE: broadcast("complete", {job_id, url, thumbnail_url, asset_id})
-    SSE->>Server: handleServerEvent("complete", data)
-    Server->>Shot: updateShot(shotId, {isGenerating: false, videoUrl, thumbnailUrl})
-    Server->>Server: triggerAssetRefresh() — bumps assetRefreshVersion
+    Backend->>SSE: job.completed {job_id, shot_id, url, thumbnail_url, memory}
+    SSE->>Bridge: terminal → finish job, toast, refresh
+    Bridge->>Shot: updateShot(shotId, {isGenerating: false, videoUrl, thumbnailUrl})
+    Bridge->>Server: triggerAssetRefresh() via milimo:job-terminal
     Shot->>UI: CinematicPlayer loads new video, MediaLibrary refreshes
 ```

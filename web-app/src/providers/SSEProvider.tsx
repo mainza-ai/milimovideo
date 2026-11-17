@@ -1,141 +1,154 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { eventUrl } from '../config';
 import { useTimelineStore } from '../stores/timelineStore';
 import { useShallow } from 'zustand/react/shallow';
 import { pollJobStatus } from '../utils/jobPoller';
 import { SSEContext } from '../hooks/useSSE';
+import {
+    handleStudioJobEvent,
+    handleStudioSystemEvent,
+    type StudioJobEvent,
+} from '../studio/events/jobBridge';
 
 const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [isConnected, setIsConnected] = useState(false);
     const [lastEventTime, setLastEventTime] = useState(0);
     const eventSourceRef = useRef<EventSource | null>(null);
-    const handleServerEvent = useTimelineStore(useShallow(state => state.handleServerEvent));
-    const handleModelEvent = useTimelineStore(useShallow(state => state.handleModelEvent));
+    const lastEventIdRef = useRef<string>('');
+    const handleServerEvent = useTimelineStore(useShallow((state) => state.handleServerEvent));
+    const handleModelEvent = useTimelineStore(useShallow((state) => state.handleModelEvent));
 
-    // Sync active jobs on mount
+    // Sync active jobs on mount (legacy store).
     useEffect(() => {
         const syncActiveShots = async () => {
-            // Check any shot that thinks it is generating
             const { project } = useTimelineStore.getState();
-            const activeShots = project.shots.filter(s => s.isGenerating && s.lastJobId);
-            if (activeShots.length > 0) {
-                console.log(`[SSE] Syncing ${activeShots.length} active shots...`);
-                for (const shot of activeShots) {
-                    if (shot.lastJobId) {
-                        pollJobStatus(shot.lastJobId, shot.id);
-                    }
-                }
+            const activeShots = project.shots.filter((s) => s.isGenerating && s.lastJobId);
+            for (const shot of activeShots) {
+                if (shot.lastJobId) pollJobStatus(shot.lastJobId, shot.id);
             }
         };
-        syncActiveShots();
-    }, []); // Run once on mount
+        void syncActiveShots();
+    }, []);
 
-    // Connection Management
     useEffect(() => {
-        let retryTimeout: any;
+        let retryTimeout: ReturnType<typeof setTimeout> | undefined;
         let retryCount = 0;
+
+        const mapLegacy = (event: StudioJobEvent) => {
+            if (event.event === 'job.completed') {
+                handleServerEvent('complete', {
+                    job_id: event.job_id,
+                    url: event.url,
+                    thumbnail_url: event.thumbnail_url,
+                    type: event.type || 'video',
+                    shot_id: event.shot_id,
+                    actual_frames: event.actual_frames,
+                });
+            } else if (event.event === 'job.failed') {
+                handleServerEvent('error', {
+                    job_id: event.job_id,
+                    message: event.error || event.message || 'Generation failed',
+                });
+            } else if (event.event === 'job.cancelled') {
+                handleServerEvent('cancelled', { job_id: event.job_id });
+            } else {
+                handleServerEvent('progress', {
+                    job_id: event.job_id,
+                    progress: event.progress ?? 0,
+                    status: 'processing',
+                    message: event.message,
+                    enhanced_prompt: event.enhanced_prompt,
+                });
+            }
+        };
 
         const connect = () => {
             if (eventSourceRef.current?.readyState === EventSource.OPEN) return;
+            const query = lastEventIdRef.current
+                ? `?last_event_id=${encodeURIComponent(lastEventIdRef.current)}`
+                : '';
+            console.log('[SSE] Connecting to /events...', lastEventIdRef.current || '');
+            const es = new EventSource(eventUrl(`/events${query}`));
 
-            console.log("[SSE] Connecting to /events...");
-            const es = new EventSource('http://localhost:8000/events');
+            const mark = (event: MessageEvent) => {
+                if (event.lastEventId) lastEventIdRef.current = event.lastEventId;
+                setLastEventTime(Date.now());
+            };
 
             es.onopen = () => {
-                console.log("[SSE] Connected!");
+                console.log('[SSE] Connected!');
                 setIsConnected(true);
                 retryCount = 0;
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('milimo:resync'));
+                }
+                const { project } = useTimelineStore.getState();
+                for (const shot of project.shots) {
+                    if (shot.isGenerating && shot.lastJobId) {
+                        pollJobStatus(shot.lastJobId, shot.id);
+                    }
+                }
             };
 
             es.onerror = (err) => {
-                console.warn("[SSE] Connection Error:", err);
+                console.warn('[SSE] Connection Error:', err);
                 setIsConnected(false);
                 es.close();
                 eventSourceRef.current = null;
-
-                // Exponential backoff
                 const delay = Math.min(1000 * Math.pow(2, retryCount), 10000);
-                retryCount++;
-                console.log(`[SSE] Reconnecting in ${delay}ms...`);
+                retryCount += 1;
                 retryTimeout = setTimeout(connect, delay);
             };
 
-            // Generic Message Handler (if event type is 'message')
-            es.onmessage = () => {
-                // Heartbeats or generic messages
+            const listen = (type: string, handler: (data: Record<string, unknown>, raw: MessageEvent) => void) => {
+                es.addEventListener(type, (event: MessageEvent) => {
+                    mark(event);
+                    // A native EventSource `error` event has no data; onerror
+                    // owns reconnection. Only parse real named-event payloads.
+                    if (typeof event.data !== 'string' || event.data === 'undefined' || event.data === '') {
+                        return;
+                    }
+                    try {
+                        handler(JSON.parse(event.data), event);
+                    } catch (err) {
+                        console.error(`[SSE] Failed to parse ${type}`, err);
+                    }
+                });
             };
 
-            // Custom Event Handlers
+            const jobTypes = [
+                'job.queued', 'job.waiting', 'job.started', 'job.stage', 'job.progress',
+                'job.retrying', 'job.cancelling', 'job.completed', 'job.failed', 'job.cancelled',
+            ];
+            for (const type of jobTypes) {
+                listen(type, (data) => {
+                    const event = { ...(data as unknown as StudioJobEvent), event: type };
+                    handleStudioJobEvent(event);
+                    mapLegacy(event);
+                });
+            }
 
-            es.addEventListener('progress', (e: MessageEvent) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    handleServerEvent('progress', data);
-                    setLastEventTime(Date.now());
-                } catch (err) {
-                    console.error("[SSE] Failed to parse progress", err);
-                }
-            });
+            listen('progress', (data) => handleServerEvent('progress', data));
+            listen('complete', (data) => handleServerEvent('complete', data));
+            listen('error', (data) => handleServerEvent('error', data));
+            listen('cancelled', (data) => handleServerEvent('cancelled', data));
+            listen('log', () => undefined);
 
-            es.addEventListener('complete', (e: MessageEvent) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    handleServerEvent('complete', data);
-                    setLastEventTime(Date.now());
-                } catch (err) {
-                    console.error("[SSE] Failed to parse complete", err);
-                }
-            });
-
-            es.addEventListener('error', (e: MessageEvent) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    handleServerEvent('error', data);
-                } catch (err) {
-                    console.error("[SSE] Failed to parse backend error", err);
-                }
-            });
-
-            es.addEventListener('log', (e: MessageEvent) => {
-                try {
-                    JSON.parse(e.data);
-                } catch (err) {
-                    console.error("[SSE] Failed to parse log", err);
-                }
-            });
-
-            // ── Model Management Events ──────────────────────────────
-            es.addEventListener('download_progress', (e: MessageEvent) => {
-                try {
-                    handleModelEvent('download_progress', JSON.parse(e.data));
-                } catch (err) {
-                    console.error("[SSE] Failed to parse download_progress", err);
-                }
-            });
-
-            es.addEventListener('download_complete', (e: MessageEvent) => {
-                try {
-                    handleModelEvent('download_complete', JSON.parse(e.data));
-                    setLastEventTime(Date.now());
-                } catch (err) {
-                    console.error("[SSE] Failed to parse download_complete", err);
-                }
-            });
-
-            es.addEventListener('download_error', (e: MessageEvent) => {
-                try {
-                    handleModelEvent('download_error', JSON.parse(e.data));
-                } catch (err) {
-                    console.error("[SSE] Failed to parse download_error", err);
-                }
-            });
-
-            es.addEventListener('model_status_change', (e: MessageEvent) => {
-                try {
-                    handleModelEvent('model_status_change', JSON.parse(e.data));
-                } catch (err) {
-                    console.error("[SSE] Failed to parse model_status_change", err);
-                }
-            });
+            // Model/download/render/memory/system events: Studio refresh + legacy.
+            for (const type of [
+                'download_queued', 'download_progress', 'download_complete', 'download_error',
+                'queue_updated', 'model_status_change', 'lora_updated',
+                'render_progress', 'render_completed', 'render_failed', 'render_cancelled',
+                'ai_parse_complete', 'ai_parse_failed', 'depth_complete', 'depth_failed',
+                'memory.pressure', 'memory.evicted', 'queue.paused', 'queue.resumed',
+            ]) {
+                listen(type, (data) => {
+                    handleStudioSystemEvent(type, data);
+                    if (['download_progress', 'download_complete', 'download_error', 'model_status_change'].includes(type)) {
+                        handleModelEvent(type, data);
+                    }
+                });
+            }
 
             eventSourceRef.current = es;
         };
@@ -143,14 +156,14 @@ const SSEProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         connect();
 
         return () => {
-            console.log("[SSE] Cleaning up...");
+            console.log('[SSE] Cleaning up...');
             if (eventSourceRef.current) {
                 eventSourceRef.current.close();
                 eventSourceRef.current = null;
             }
-            clearTimeout(retryTimeout);
+            if (retryTimeout) clearTimeout(retryTimeout);
         };
-    }, []);
+    }, [handleModelEvent, handleServerEvent]);
 
     return (
         <SSEContext.Provider value={{ isConnected, lastEventTime }}>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../config';
 
 import { Users, MapPin, Box, Plus, Trash2, X } from 'lucide-react';
 
@@ -35,7 +36,7 @@ export const ElementManager = () => {
     const fetchElements = async () => {
         setIsLoading(true);
         try {
-            const res = await fetch(`http://localhost:8000/projects/${projectId}/elements`);
+            const res = await fetch(`${API_BASE_URL}/projects/${projectId}/elements`);
             if (res.ok) {
                 const data = await res.json();
                 setElements(data);
@@ -51,7 +52,7 @@ export const ElementManager = () => {
         if (!newName || !newDesc) return;
 
         try {
-            const res = await fetch(`http://localhost:8000/projects/${projectId}/elements`, {
+            const res = await fetch(`${API_BASE_URL}/projects/${projectId}/elements`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -75,7 +76,7 @@ export const ElementManager = () => {
 
     const handleDelete = async (id: string) => {
         try {
-            const res = await fetch(`http://localhost:8000/elements/${id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_BASE_URL}/elements/${id}`, { method: 'DELETE' });
             if (res.ok) {
                 setElements(prev => prev.filter(e => e.id !== id));
             }

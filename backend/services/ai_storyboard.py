@@ -55,21 +55,23 @@ You MUST respond with valid JSON only — no markdown, no explanation.
 
 def ai_parse_script(
     text: str,
-    text_encoder,
+    text_encoder=None,
     max_new_tokens: int = 4096,
     seed: int = 42,
     project_elements: list = None,
 ) -> list[dict]:
     """
-    Use Gemma 3 to intelligently parse script text into scenes/shots.
-    
+    Parse script text into scenes/shots through the `script_parse` LLM role.
+
     Args:
         text: Raw script or treatment text.
-        text_encoder: A GemmaTextEncoderModelBase instance with model+processor loaded.
-        max_new_tokens: Max tokens for Gemma to generate.
+        text_encoder: Optional GemmaTextEncoderModelBase. Required only when the
+            `script_parse` role resolves to the in-process Gemma provider; a local
+            HTTP provider (Ollama/LM Studio) needs no pipeline load.
+        max_new_tokens: Max tokens for the model to generate.
         seed: RNG seed for reproducibility.
         project_elements: Optional list of elements to match characters against.
-    
+
     Returns:
         List of dicts matching ScriptParser output format:
         [{\"name\": str, \"shots\": [{\"action\": str, \"dialogue\": str|None, ...}]}]
@@ -84,20 +86,23 @@ def ai_parse_script(
             system_prompt = system_prompt + "\n" + manifest
             logger.info(f"AI prompt enriched with {len(project_elements)} element(s)")
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"Break this into a storyboard:\n\n{text}"},
-    ]
-
     try:
-        # Use the Gemma _enhance interface (chat completion)
-        raw_output = text_encoder._enhance(
-            messages=messages,
-            max_new_tokens=max_new_tokens,
-            seed=seed,
-        )
+        from services.llm import runtime
 
-        logger.info(f"AI Parse raw output ({len(raw_output)} chars): {raw_output[:500]}")
+        result = runtime.complete(
+            "script_parse",
+            f"Break this into a storyboard:\n\n{text}",
+            system=system_prompt,
+            text_encoder=text_encoder,
+            seed=seed,
+            max_tokens=max_new_tokens,
+            json_mode=True,
+        )
+        raw_output = result.text
+        logger.info(
+            "AI parse via %s/%s (%sms): %s",
+            result.provider, result.model, result.latency_ms, raw_output[:300],
+        )
 
         # Extract JSON from response (handle markdown fences)
         parsed = _extract_json(raw_output)
@@ -126,9 +131,15 @@ def _extract_json(text: str) -> list | dict:
     text = re.sub(r"```\s*$", "", text)
     text = text.strip()
 
-    # Try direct parse first
+    # Try direct parse first. Local models in JSON mode sometimes wrap the
+    # array in an object ({"scenes": [...]}) even when asked for a bare array.
     try:
-        return json.loads(text)
+        value = json.loads(text)
+        if isinstance(value, dict):
+            for key in ("scenes", "storyboard", "shots"):
+                if isinstance(value.get(key), list):
+                    return value[key]
+        return value
     except json.JSONDecodeError:
         pass
 

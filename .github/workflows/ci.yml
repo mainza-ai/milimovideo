@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, "fix/**", "feat/**"]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install CPU torch and backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ./LTX-2/packages/ltx-core -e ./LTX-2/packages/ltx-pipelines -e ./flux2
+          pip install -r backend/requirements.txt
+      - name: Compile
+        run: python -m compileall -q backend
+      - name: Tests
+        run: python -m pytest --cov=backend --cov-report=term
+      - name: Install linter
+        run: pip install ruff
+      - name: Lint (correctness rules; legacy style backlog baselined in ruff.toml)
+        run: ruff check backend --output-format=github
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+      - name: Install frontend for E2E
+        working-directory: web-app
+        run: npm ci
+      - name: Verify generated API contract
+        working-directory: web-app
+        run: |
+          npm run gen:api
+          git diff --exit-code openapi.json src/api/schema.d.ts
+      - name: Install Playwright browser
+        working-directory: web-app
+        run: npx playwright install --with-deps chromium
+      - name: Playwright smoke (stubbed shell + real backend CRUD)
+        working-directory: web-app
+        run: npm run test:e2e
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+      - run: npm ci
+      - run: npx tsc -b --pretty false
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: npm run check:bundle

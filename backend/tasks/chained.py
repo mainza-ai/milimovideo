@@ -6,14 +6,14 @@ import logging
 import subprocess
 import torch
 import config
-from job_utils import active_jobs, broadcast_log, broadcast_progress, update_job_db
+from job_utils import active_jobs, broadcast_log, broadcast_progress, update_job_db, update_job_progress, update_shot_db
 from file_utils import get_project_output_paths
 from ltx_pipelines.utils.media_io import encode_video
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 from ltx_pipelines.utils.helpers import cleanup_memory
-import config
 from events import event_manager
+import job_events
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             
             # Prepare cancellation (and progress updates)
             # Defined INSIDE loop to access chunk_idx for global progress
-            def cancellation_check(step_idx, total_steps, *args):
+            def cancellation_check(step_idx, total_steps, *args, chunk_idx=chunk_idx, num_chunks=num_chunks):
                  if job_id in active_jobs:
                      chunk_progress = step_idx / total_steps
                      
@@ -103,7 +103,13 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                      active_jobs[job_id]["eta_seconds"] = eta
                      
                      # 3. Status Message
-                     active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks} ({int(chunk_progress*100)}%)"
+                     active_jobs[job_id]["status_message"] = f"Chunk {chunk_idx+1}/{num_chunks} · {int(chunk_progress*100)}%"
+                     update_job_progress(
+                         job_id, global_progress,
+                         f"Chunk {chunk_idx+1}/{num_chunks} · {int(chunk_progress*100)}%",
+                         stage="denoising", step=step_idx, total=total_steps,
+                         eta_seconds=eta,
+                     )
 
                  if active_jobs.get(job_id, {}).get("cancelled", False):
                      raise RuntimeError(f"Job {job_id} cancelled by user.")
@@ -111,7 +117,11 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             await update_ui(f"Generating chunk {chunk_idx+1}/{num_chunks}...")
             # Calculate roughly global progress? 
             # Chunk progress is local. Global = (chunk_idx / num_chunks) * 100.
-            await broadcast_progress(job_id, int((chunk_idx / num_chunks) * 100))
+            update_job_progress(
+                job_id, int((chunk_idx / num_chunks) * 100),
+                f"Starting chunk {chunk_idx+1}/{num_chunks}",
+                stage="denoising",
+            )
             
             # 1. Prepare configuration via Manager
             # We pass the text encoder here so the manager can use it for prompt enhancement
@@ -119,8 +129,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Force auto_continue if enhance_prompt is active (Smart Prompt Evolution)
             should_auto_continue = params.get("auto_continue", False) or params.get("enhance_prompt", False)
 
-            if chunk_idx > 0 and should_auto_continue and config.LLM_PROVIDER.lower() == "gemma":
-                 if hasattr(pipeline, "stage_1_model_ledger"):
+            if chunk_idx > 0 and should_auto_continue:
+                 from llm import prepare_text_encoder
+                 if prepare_text_encoder(pipeline, is_video=True) is not None:
                      logger.info("Retrieving text encoder for narrative prompt generation (Gemma)...")
                      try:
                          text_encoder = pipeline.stage_1_model_ledger.text_encoder()
@@ -138,16 +149,13 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             chunk_prompt = chunk_config.get("prompt", prompt)
             chunk_images = chunk_config.get("images", []) # list of (path, idx, strength)
             chunk_media_sequence = chunk_config.get("media_sequence", []) # list of paths
-            overlap_count = 0
             frames_to_trim = 0
             
             # The storyboard manager now handles extracting the overlap frames and
             # injecting them into chunk_media_sequence natively. We calculate how many 
             # frames to trim based on the length of the conditioning sequence.
             if chunk_idx > 0:
-                requested_pixel_overlap = len(chunk_media_sequence)
-                overlap_count = requested_pixel_overlap
-                frames_to_trim = requested_pixel_overlap
+                frames_to_trim = len(chunk_media_sequence)
                 logger.info(f"Chunk Video Conditioning: {len(chunk_media_sequence)} frames.")
             # Critical Fix for Extend + Smart Continue:
             # If this is the first chunk, and we have global input images (from Extend timeline),
@@ -165,12 +173,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             if chunk_idx == 0 and params.get("enhance_prompt", True):
                 from llm import enhance_prompt as llm_enhance
                 
-                # For Gemma, we need the text encoder
-                text_encoder = None
-                if config.LLM_PROVIDER.lower() == "gemma" and hasattr(pipeline, "stage_1_model_ledger"):
-                     try:
-                         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-                     except: pass
+                # Only load the LTX text encoder when the role resolves to Gemma.
+                from llm import prepare_text_encoder
+                text_encoder = prepare_text_encoder(pipeline, is_video=True)
                 
                 # Detect extend mode
                 is_extend = (chunk_idx == 0 and chunk_images)
@@ -200,7 +205,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                      )
 
                 try:
-                    logger.info(f"Enhancing Chunk 0 prompt via {config.LLM_PROVIDER} (Extend={is_extend})...")
+                    logger.info(f"Enhancing Chunk 0 prompt via the resolved LLM role (Extend={is_extend})...")
                     enhanced, _ = llm_enhance(
                         prompt=effective_prompt,
                         system_prompt=sys_prompt,
@@ -208,10 +213,12 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                         text_encoder=text_encoder,
                         image_path=chunk_images[0][0] if chunk_images else None,
                         seed=seed,
+                        cancel_check=lambda: active_jobs.get(job_id, {}).get("cancelled", False),
                     )
                     if enhanced:
                         chunk_prompt = enhanced
-                        active_jobs[job_id]["current_prompt"] = chunk_prompt
+                        if job_id in active_jobs:
+                            active_jobs[job_id]["current_prompt"] = chunk_prompt
                         
                         # CRITICAL FIX: Update the Global Story Goal!
                         logger.info(f"Updating Global Story Goal to match enhanced Chunk 0 prompt...")
@@ -223,6 +230,11 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     if text_encoder is not None:
                         del text_encoder
                         cleanup_memory()
+                    try:
+                        from llm import release_local_models
+                        release_local_models()
+                    except Exception:
+                        pass
                 
             
             # Expose current prompt to UI
@@ -238,25 +250,25 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 status_msg = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
                 active_jobs[job_id]["status_message"] = status_msg
                 
-                # Broadcast the new target narrative to the frontend!
-                await broadcast_progress(
-                    job_id, 
-                    progress=int((chunk_idx / num_chunks) * 100), 
-                    message=status_msg,
-                    enhanced_prompt=chunk_prompt
+                update_job_progress(
+                    job_id, int((chunk_idx / num_chunks) * 100),
+                    status_msg, stage="denoising", enhanced_prompt=chunk_prompt,
                 )
             
             logger.info(f"Starting chunk {chunk_idx}: {chunk_prompt[:50]}...")
             
-            # Check cancellation again before expensive call
+            # Check cancellation again before expensive call. Never break into
+            # the stitch path: a partial chunk list must not be reported as a
+            # completed film.
             if job_id not in active_jobs or active_jobs[job_id].get("cancelled", False):
-                break
-            
+                raise RuntimeError(f"Job {job_id} cancelled by user.")
+
             # Update status
-            active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
+            if job_id in active_jobs:
+                active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
 
             # 2. Define Pipeline execution wrapper
-            def _run_chunk_pipeline(images_arg, sequence_arg, current_prompt, pipeline_enhance):
+            def _run_chunk_pipeline(images_arg, sequence_arg, current_prompt, pipeline_enhance, chunk_idx=chunk_idx):
                 # Force Negative Prompt for chained chunks to kill static inertia
                 # We start with the user's negative prompt (if any) and append our bans.
                 effective_negative_prompt = negative_prompt or ""
@@ -281,8 +293,10 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 )
                 
             # 3. Run Pipeline
-            # Returns (video, audio) 
+            # Returns (video, audio)
             # Note: We no longer expect a latent tensor back
+            video = None
+            audio = None
             try:
                 result = await loop.run_in_executor(
                     None, _run_chunk_pipeline, chunk_images, chunk_media_sequence, chunk_prompt, do_pipeline_enhance
@@ -340,14 +354,16 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                     # Expecting [F, H, W, C] from decode_video output convention
                     video = video[frames_to_trim:]
                 
-                # Trim Audio: [B, C, Samples] or [C, Samples]
+                # Trim Audio at the START, matching the video. Trimming the end
+                # shifted every chunk's audio by ~1s and desynced the stitch.
                 if audio is not None:
                      fps = float(params.get("fps", 25.0))
                      trim_samples = int(frames_to_trim * (AUDIO_SAMPLE_RATE / fps))
-                     if audio.ndim == 3:
-                        audio = audio[:, :, :-trim_samples]
-                     elif audio.ndim == 2:
-                        audio = audio[:, :-trim_samples]
+                     if trim_samples > 0:
+                        if audio.ndim == 3:
+                            audio = audio[:, :, trim_samples:]
+                        elif audio.ndim == 2:
+                            audio = audio[:, trim_samples:]
             
             video_chunks_number = get_video_chunks_number(chunk_size, TilingConfig.default())
             
@@ -357,7 +373,12 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             from ltx_pipelines.utils.helpers import smart_inference_mode
             
             @smart_inference_mode()
-            def _run_encode_video():
+            def _run_encode_video(
+                video=video,
+                audio=audio,
+                chunk_output_path=chunk_output_path,
+                video_chunks_number=video_chunks_number,
+            ):
                 encode_video(
                     video=video,
                     fps=float(params.get("fps", 25.0)),
@@ -373,12 +394,20 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             await storyboard_manager.commit_chunk(chunk_idx, chunk_output_path, chunk_prompt)
             last_chunk_output = chunk_output_path
             
-            # Cleanup memory
-            del video
-            del audio
+            # Cleanup memory (drop references before emptying the cache)
+            video = None
+            audio = None
             cleanup_memory()
 
+        if active_jobs.get(job_id, {}).get("cancelled", False):
+            raise RuntimeError(f"Job {job_id} cancelled by user.")
+        if len(files_to_stitch) != num_chunks:
+            raise RuntimeError(
+                f"Chained generation incomplete: {len(files_to_stitch)}/{num_chunks} chunks"
+            )
+
         # Final stitching complete
+        update_job_progress(job_id, 94, "Stitching chunks…", stage="saving")
         logger.info(f"All chunks generated successfully. Stitching {len(files_to_stitch)} parts...")
         
         # Ensure output directories exist
@@ -389,7 +418,6 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         final_output_path = paths["output_path"]
         
         # Stitch videos using ffmpeg
-        concat_list = os.path.join(workspace_dir, f"{job_id}_concat_list.txt")
         # We re-encode to avoid codec mismatches between original chunks and trimmed chunks.
         input_args = []
         filter_parts = []
@@ -411,7 +439,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         ]
         
         try:
-            subprocess.run(cmd, cwd=output_dir, check=True)
+            await asyncio.to_thread(subprocess.run, cmd, cwd=output_dir, check=True)
             logger.info(f"Stitched video saved to {final_output_path}")
         except subprocess.CalledProcessError as e:
             logger.error(f"Stitching failed with audio: {e}. Retrying video only...")
@@ -425,7 +453,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 "-movflags", "+faststart",
                 "-y", final_output_path
             ]
-            subprocess.run(cmd_v, cwd=output_dir, check=True)
+            await asyncio.to_thread(subprocess.run, cmd_v, cwd=output_dir, check=True)
             logger.info(f"Stitched video (video-only) saved to {final_output_path}")
         
         # Detect actual frame count (DURATION PROBE) to sync UI for Chained Generation
@@ -434,7 +462,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # Probe the file DURATION (more accurate for player sync than packet count)
             # -show_entries format=duration
             cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", final_output_path]
-            res = subprocess.check_output(cmd).decode("utf-8").strip()
+            res = (await asyncio.to_thread(subprocess.check_output, cmd)).decode("utf-8").strip()
             
             if res:
                 duration_sec = float(res)
@@ -452,13 +480,16 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         # GENERATE THUMBNAIL (For Timeline UI)
         # Generate thumbnail from final video
         thumb_path = paths["thumbnail_path"]
-        thumbnail_web_path = None
         try:
-            subprocess.run([
-                "ffmpeg", "-y", "-i", final_output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            await asyncio.to_thread(
+                subprocess.run,
+                ["ffmpeg", "-y", "-i", final_output_path, "-ss", "00:00:00.500",
+                 "-vframes", "1", thumb_path],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             logger.info(f"Generated thumbnail: {thumb_path}")
-            thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}" if project_id else thumb_path
         except Exception as e:
             logger.warning(f"Failed to generate thumbnail: {e}")
 
@@ -474,23 +505,26 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             relative_output = final_output_path
             relative_thumb = thumb_path
         
-        # Update job record
-        update_job_db(
-            job_id, 
-            "completed", 
-            output_path=relative_output,
-            enhanced_prompt=chunk_prompt, # Using last chunk prompt as enhanced? Or we should aggregate?
-            actual_frames=actual_frames,
-            thumbnail_path=relative_thumb
+        shot_id = params.get("shot_id") or params.get("id")
+        if shot_id:
+            update_shot_db(
+                shot_id,
+                video_url=relative_output,
+                thumbnail_url=relative_thumb,
+                last_job_id=job_id,
+                selected_take_id=job_id,
+                actual_frames=actual_frames,
+                status="completed",
+            )
+            logger.info(f"Updated Shot {shot_id} with chained video: {relative_output}")
+
+        await job_events.terminal(
+            job_id, "completed", stage="completed", message="Done",
+            output_path=relative_output, thumbnail_path=relative_thumb,
+            actual_frames=actual_frames, progress=100,
+            enhanced_prompt=chunk_prompt,
+            data={"type": "video"},
         )
-        
-        await event_manager.broadcast("complete", {
-            "job_id": job_id, 
-            "url": relative_output,  # Use project-scoped URL
-            "type": "video",
-            "actual_frames": actual_frames,
-            "thumbnail_url": relative_thumb  # Use project-scoped URL
-        })
         
     finally:
         # Cleanup split files and artifacts

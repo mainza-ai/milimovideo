@@ -1,4 +1,5 @@
 import { useTimelineStore } from '../stores/timelineStore';
+import { API_BASE_URL } from '../config';
 import { getAssetUrl } from '../config';
 
 /**
@@ -9,7 +10,19 @@ import { getAssetUrl } from '../config';
 export const pollJobStatus = async (jobId: string, shotId: string) => {
     console.log(`[Sync] Checking status for job ${jobId}...`);
     try {
-        const res = await fetch(`http://localhost:8000/status/${jobId}`);
+        const res = await fetch(`${API_BASE_URL}/status/${jobId}`);
+        if (res.status === 404) {
+            // The job no longer exists (cleared DB or expired). Do not leave a
+            // permanent spinner behind.
+            const { updateShot } = useTimelineStore.getState();
+            updateShot(shotId, {
+                isGenerating: false,
+                status: 'pending',
+                statusMessage: undefined,
+                progress: undefined,
+            });
+            return;
+        }
         if (!res.ok) return;
 
         const statusData = await res.json();

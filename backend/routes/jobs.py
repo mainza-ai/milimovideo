@@ -3,8 +3,10 @@ from sqlmodel import Session, select
 from database import get_session, Job, Shot, Project
 from schemas import GenerateAdvancedRequest, GenerateImageRequest
 from tasks.video import generate_video_task
-from tasks.image import generate_image_task
 from job_utils import active_jobs, update_job_db, update_shot_db
+from events import event_manager
+import job_events
+import asyncio
 import uuid
 import logging
 from datetime import datetime, timezone
@@ -18,40 +20,114 @@ router = APIRouter(tags=["jobs"])
 def get_status(job_id: str, session: Session = Depends(get_session)):
     # 1. Check Active Memory State (Fastest)
     if job_id in active_jobs:
-        return active_jobs[job_id]
-        
+        meta = dict(active_jobs[job_id])
+        meta.setdefault("progress", 0)
+        return meta
+
     # 2. Fallback to DB
     job = session.get(Job, job_id)
     if job:
         return {
             "status": job.status,
-            "video_url": job.output_path, # Legacy naming
+            "video_url": job.output_path,  # Legacy naming
             "error": job.error_message,
             "created_at": job.created_at,
             "completed_at": job.completed_at,
             "enhanced_prompt": job.enhanced_prompt,
             "status_message": job.status_message,
             "actual_frames": job.actual_frames,
-            "thumbnail_url": job.thumbnail_path
+            "thumbnail_url": job.thumbnail_path,
+            "progress": job.progress,
+            "stage": job.stage,
+            "started_at": job.started_at,
+            "memory": json.loads(job.memory_json) if job.memory_json else None,
         }
     
     raise HTTPException(status_code=404, detail="Job not found")
 
 @router.get("/projects/{project_id}/active_jobs")
-def get_project_active_jobs(project_id: str):
-    """Returns a list of active job IDs for compliance/persistence."""
+def get_project_active_jobs(project_id: str, session: Session = Depends(get_session)):
+    """Active and queued jobs for a project, with queue position and estimate."""
+    from database import QueuedJob
+
     project_jobs = []
+    seen = set()
     for j_id, meta in active_jobs.items():
         if meta.get("project_id") == project_id:
-            # Return basic info to allow UI to resume polling
+            seen.add(j_id)
             project_jobs.append({
                 "job_id": j_id,
-                "type": meta.get("type", "unknown"),
+                "type": meta.get("type", meta.get("kind", "unknown")),
+                "kind": meta.get("type", meta.get("kind", "unknown")),
+                "shot_id": meta.get("shot_id"),
                 "status": meta.get("status"),
+                "stage": meta.get("stage"),
+                "step": meta.get("step"),
+                "total": meta.get("total"),
+                "eta_seconds": meta.get("eta_seconds"),
+                "started_at": meta.get("started_at"),
                 "progress": meta.get("progress", 0),
-                "status_message": meta.get("status_message", "")
+                "status_message": meta.get("status_message", ""),
+                "position": 0,
             })
+
+    queued_rows = session.exec(
+        select(QueuedJob)
+        .where(QueuedJob.status.in_(["queued", "running"]))
+        .order_by(QueuedJob.created_at)
+    ).all()
+    position = 0
+    for queued in queued_rows:
+        if queued.job_id in seen:
+            continue
+        try:
+            params = json.loads(queued.params_json or "{}")
+        except json.JSONDecodeError:
+            continue
+        if params.get("project_id") != project_id:
+            continue
+        position += 1
+        frames = int(params.get("num_frames") or 121)
+        width = int(params.get("width") or 768)
+        height = int(params.get("height") or 512)
+        workload = max(0.1, (frames / 121) * ((width * height) / (768 * 512)))
+        job_row = session.get(Job, queued.job_id)
+        project_jobs.append({
+            "job_id": queued.job_id,
+            "type": queued.kind,
+            "kind": queued.kind,
+            "shot_id": job_row.shot_id if job_row else params.get("shot_id"),
+            "status": queued.status,
+            "stage": "queued",
+            "progress": job_row.progress if job_row else 0,
+            "status_message": job_row.status_message if job_row else "Queued",
+            "position": position,
+            "started_at": job_row.started_at if job_row else None,
+            "estimate_seconds": round(8 + 22 * workload, 1),
+        })
     return project_jobs
+
+@router.get("/jobs/queue")
+def queue_state():
+    from job_utils import is_gpu_busy, is_queue_paused
+    return {"paused": is_queue_paused(), **is_gpu_busy()}
+
+
+@router.post("/jobs/queue/pause")
+async def pause_queue():
+    from job_utils import is_queue_paused, set_queue_paused
+    set_queue_paused(True)
+    await event_manager.broadcast("queue.paused", {"paused": True})
+    return {"paused": is_queue_paused()}
+
+
+@router.post("/jobs/queue/resume")
+async def resume_queue():
+    from job_utils import is_queue_paused, set_queue_paused
+    set_queue_paused(False)
+    await event_manager.broadcast("queue.resumed", {"paused": False})
+    return {"paused": is_queue_paused()}
+
 
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str, session: Session = Depends(get_session)):
@@ -62,18 +138,76 @@ async def cancel_job(job_id: str, session: Session = Depends(get_session)):
         active_jobs[job_id]["cancelled"] = True
         active_jobs[job_id]["status"] = "cancelling"
         active_jobs[job_id]["status_message"] = "Cancelling..."
-        # update_job_db(job_id, "cancelled") # Don't sync DB yet; let worker see flag first!
+        active_jobs[job_id]["stage"] = "cancelling"
+        await job_events.cancelling(job_id)
         return {"status": "cancelling"}
-    
-    # 2. Pending DB Cancel (if not yet picked up by worker)
+
+    # 2. Not running: cancel the Job and its durable queue row together.
     job = session.get(Job, job_id)
-    if job and job.status == "pending":
+    if job and job.status in ("pending", "queued"):
         job.status = "cancelled"
+        job.stage = "cancelled"
+        job.status_message = "Cancelled before start"
+        job.completed_at = datetime.now(timezone.utc)
         session.add(job)
+        from database import QueuedJob
+        queued = session.exec(
+            select(QueuedJob)
+            .where(QueuedJob.job_id == job_id)
+            .where(QueuedJob.status.in_(["queued", "running"]))
+        ).first()
+        if queued:
+            queued.status = "cancelled"
+            queued.completed_at = datetime.now(timezone.utc)
+            queued.error_message = "Cancelled before start"
+            session.add(queued)
         session.commit()
+        await job_events.terminal(
+            job_id, "cancelled", stage="cancelled", message="Cancelled before start"
+        )
         return {"status": "cancelled"}
-        
+
+    if job:
+        return {"status": job.status}
     return {"status": "not_found_or_already_done"}
+
+
+@router.get("/metrics/jobs")
+def job_metrics(days: int = 7, session: Session = Depends(get_session)):
+    """Small error-budget readout: job outcomes by type for the recent window."""
+    from datetime import timedelta
+    from collections import Counter
+    since = datetime.utcnow() - timedelta(days=max(1, min(days, 90)))
+    jobs = session.exec(select(Job).where(Job.created_at >= since)).all()
+    by_type = Counter(j.type for j in jobs)
+    by_status = Counter(j.status for j in jobs)
+    failures = [
+        {"job_id": j.id, "type": j.type, "error": j.error_message}
+        for j in jobs if j.status == "failed"
+    ][-20:]
+    peaks = []
+    for job in jobs:
+        if job.memory_json:
+            try:
+                trace = json.loads(job.memory_json)
+                if trace.get("peak_gb"):
+                    peaks.append(float(trace["peak_gb"]))
+            except Exception:
+                pass
+    from job_utils import queue_wait_stats
+    from memory_manager import memory_manager
+
+    return {
+        "window_days": days,
+        "total": len(jobs),
+        "by_type": dict(by_type),
+        "by_status": dict(by_status),
+        "recent_failures": failures,
+        "memory_peak_gb": round(max(peaks), 2) if peaks else None,
+        "memory": memory_manager.counters(),
+        "queue": queue_wait_stats(),
+        "events": event_manager.stats(),
+    }
 
 
 @router.get("/gpu/status")
@@ -95,7 +229,19 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     import config
     
     job_id = f"job_{uuid.uuid4().hex[:8]}"
-    
+    shot_id = req.shot_config.id if req.shot_config.id else None
+
+    # Idempotency: a double-click must not create two GPU jobs for one shot.
+    if shot_id:
+        existing = session.exec(
+            select(Job)
+            .where(Job.shot_id == shot_id)
+            .where(Job.status.in_(["pending", "processing"]))
+            .order_by(Job.created_at.desc())
+        ).first()
+        if existing:
+            return {"job_id": existing.id, "status": "already_queued"}
+
     # Validated Params
     params = req.shot_config.model_dump()
     params["job_id"] = job_id
@@ -105,7 +251,6 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     # --- Unified Generation Prep ---
     # If this is tied to a Storyboard Shot, we use StoryboardManager to build the exact payload
     # which securely loads Concept Art (`thumbnail_url`) and `matched_elements`
-    from database import Shot
     shot = session.get(Shot, req.shot_config.id) if req.shot_config.id else None
     
     if shot:
@@ -206,10 +351,16 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
                                  import subprocess
                                  if not os.path.exists(last_frame_path):
                                      os.makedirs(os.path.dirname(last_frame_path), exist_ok=True)
-                                     subprocess.run([
-                                         "ffmpeg", "-y", "-sseof", "-1.0", "-i", fs_cond_path, 
-                                         "-q:v", "2", "-update", "1", last_frame_path
-                                     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                     await asyncio.to_thread(
+                                        subprocess.run,
+                                        [
+                                            "ffmpeg", "-y", "-sseof", "-1.0", "-i", fs_cond_path,
+                                            "-q:v", "2", "-update", "1", last_frame_path,
+                                        ],
+                                        check=True,
+                                        stdout=subprocess.DEVNULL,
+                                        stderr=subprocess.DEVNULL,
+                                    )
                                  
                                  cond_path = last_frame_path
 
@@ -232,6 +383,7 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     job = Job(
         id=job_id,
         project_id=req.project_id,
+        shot_id=shot_id,
         type="advanced",
         status="pending",
         created_at=datetime.now(timezone.utc),
@@ -240,9 +392,9 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     )
     session.add(job)
     session.commit()
-    from job_utils import queue_video_task
-    background_tasks.add_task(queue_video_task, job_id, params)
-    
+    from job_utils import enqueue_gpu_job
+    await enqueue_gpu_job(job_id, "video", params)
+
     return {"job_id": job_id, "status": "queued"}
 
 # Legacy Alias
@@ -251,11 +403,14 @@ async def generate_video(req: GenerateAdvancedRequest, background_tasks: Backgro
     return await generate_advanced(req, background_tasks, session)
 
 @router.post("/generate/image")
-def generate_image(req: GenerateImageRequest, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
+async def generate_image(req: GenerateImageRequest, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     
+    params = req.model_dump()
     job = Job(
         id=job_id,
+        project_id=req.project_id,
+        shot_id=params.get("shot_id"),
         type="image",
         status="pending",
         params_json=req.model_dump_json(),
@@ -263,8 +418,8 @@ def generate_image(req: GenerateImageRequest, background_tasks: BackgroundTasks,
     )
     session.add(job)
     session.commit()
-    
-    params = req.model_dump()
-    background_tasks.add_task(generate_image_task, job_id, params)
-    
+
+    from job_utils import enqueue_gpu_job
+    await enqueue_gpu_job(job_id, "image", params)
+
     return {"job_id": job_id, "status": "queued"}

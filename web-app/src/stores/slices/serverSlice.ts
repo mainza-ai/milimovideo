@@ -1,4 +1,5 @@
 import type { StateCreator } from 'zustand';
+import { API_BASE_URL } from '../../config';
 import type { TimelineState, ServerSlice } from '../types';
 import { getAssetUrl } from '../../config';
 
@@ -78,7 +79,7 @@ export const createServerSlice: StateCreator<TimelineState, [], [], ServerSlice>
             addToast(`Export: ${data.message} (${data.progress}%)`, "info");
 
         } else if (type === 'render_complete') {
-            const downloadUrl = `http://localhost:8000${data.video_url}`;
+            const downloadUrl = `${API_BASE_URL}${data.video_url}`;
             addToast("Export Complete! Opening video...", "success");
             window.open(downloadUrl, '_blank');
 

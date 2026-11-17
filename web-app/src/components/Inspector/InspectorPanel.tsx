@@ -1,4 +1,5 @@
 import { useTimelineStore } from '../../stores/timelineStore';
+import { API_BASE_URL } from '../../config';
 import { useShallow } from 'zustand/react/shallow';
 import { Settings, Play, Trash2 } from 'lucide-react';
 import { useEffect } from 'react';
@@ -55,7 +56,7 @@ export const InspectorPanel = () => {
         updateShot(shot.id, { isGenerating: true, progress: 0 });
 
         try {
-            const response = await fetch('http://localhost:8000/generate/advanced', {
+            const response = await fetch(API_BASE_URL + '/generate/advanced', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -125,7 +126,7 @@ export const InspectorPanel = () => {
 
         try {
             // 1. Get Last Frame
-            const res = await fetch(`http://localhost:8000/shot/${jobId}/last-frame`, {
+            const res = await fetch(`${API_BASE_URL}/shot/${jobId}/last-frame`, {
                 method: 'POST'
             });
             if (!res.ok) {
