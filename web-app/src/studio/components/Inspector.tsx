@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Loader2, Play, RotateCcw, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getAssetUrl } from '../../config';
@@ -35,7 +36,11 @@ export function Inspector() {
     const cancel = useStudioCancel();
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioTakes(shot?.id);
     const selectTake = useStudioSelectTake();
-    const { inspectorTab, setInspectorTab, setInspectorOpen, inspectorOpen } = useStudioEditor();
+    const {
+        inspectorTab, setInspectorTab, setInspectorOpen, inspectorOpen,
+        inspectorWidth, setInspectorWidth,
+    } = useStudioEditor();
+    const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
 
     const matchedElements = !shot?.matchedElements?.length
         ? []
@@ -47,7 +52,32 @@ export function Inspector() {
     if (!inspectorOpen) return null;
 
     return (
-        <aside className="st-inspector" aria-label="Inspector">
+        <aside
+            className="st-inspector"
+            aria-label="Inspector"
+            style={{ width: inspectorWidth, flexBasis: inspectorWidth }}
+        >
+            <div
+                className="st-inspector-resize"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize inspector"
+                onPointerDown={(event) => {
+                    event.preventDefault();
+                    resizeState.current = { startX: event.clientX, startWidth: inspectorWidth };
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                }}
+                onPointerMove={(event) => {
+                    if (!resizeState.current) return;
+                    const delta = resizeState.current.startX - event.clientX;
+                    setInspectorWidth(resizeState.current.startWidth + delta);
+                }}
+                onPointerUp={(event) => {
+                    resizeState.current = null;
+                    event.currentTarget.releasePointerCapture(event.pointerId);
+                }}
+                onPointerCancel={() => { resizeState.current = null; }}
+            />
             <div className="st-inspector-head">
                 <div className="st-inspector-tabs" role="tablist" aria-label="Inspector sections">
                     {TABS.map((tab) => (

@@ -89,10 +89,11 @@ function StudioShell() {
 
     return (
         <div className="studio-root">
+            <a className="st-skip-link" href="#studio-main">Skip to workspace</a>
             <TopBar />
             <div className="st-body">
                 <ModeRail />
-                <main className="st-main">
+                <main className="st-main" id="studio-main" tabIndex={-1}>
                     <div className="st-surface" data-focus={focusMode}>
                         {surface}
                     </div>

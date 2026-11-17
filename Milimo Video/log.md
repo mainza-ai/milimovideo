@@ -425,3 +425,12 @@ completed output link. E2E paths are fixed and cleaned by a pre-Playwright
 tables; the local venv path is detected from the repo root. Boot hydration now
 picks the most recently updated project. Verified: 3 Playwright, 41 pytest,
 23 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f0 | resizable inspector, skip link, keyboard clips, axe
+
+Inspector width is now pointer-resizable and persisted. Added a skip link and
+focusable main region; timeline clips and trim handles are keyboard reachable
+(Enter/Space select, Delete ripple-delete, arrow-key trim). Added Playwright axe
+coverage (WCAG A/AA, zero critical) plus a keyboard surface-navigation test, and
+deduplicated API stubs across E2E specs. Verified: 5 Playwright, 23 vitest, tsc
+clean, eslint 0 errors.

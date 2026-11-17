@@ -64,6 +64,24 @@
     outline-offset: 2px;
 }
 
+.st-skip-link {
+    position: absolute;
+    top: -60px;
+    left: 12px;
+    z-index: 200;
+    padding: 8px 12px;
+    border-radius: var(--st-radius-sm);
+    background: var(--st-accent);
+    color: #041014;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.st-skip-link:focus {
+    top: 8px;
+}
+
 /* ── Top bar ─────────────────────────────────────────────── */
 .st-topbar {
     height: 52px;
@@ -351,6 +369,35 @@
     background: var(--st-panel);
     border-left: 1px solid var(--st-border);
     min-height: 0;
+    position: relative;
+}
+
+.st-inspector-resize {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    width: 8px;
+    z-index: 25;
+    cursor: col-resize;
+}
+
+.st-inspector-resize::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 3px;
+    width: 2px;
+    height: 44px;
+    border-radius: 2px;
+    background: transparent;
+    transform: translateY(-50%);
+    transition: background 120ms ease;
+}
+
+.st-inspector-resize:hover::after,
+.st-inspector-resize:focus-visible::after {
+    background: var(--st-accent);
 }
 
 .st-inspector-head {
