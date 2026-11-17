@@ -10,11 +10,14 @@ interface Props {
     selected: boolean;
     pinned: boolean;
     linkSource?: boolean;
-    onSelect: () => void;
+    onSelect: (event: React.MouseEvent) => void;
     onDragStart: (event: React.PointerEvent, shotId: string) => void;
+    onResize: (event: React.PointerEvent, shotId: string) => void;
 }
 
-export function ShotCard({ shot, index, position, selected, pinned, linkSource, onSelect, onDragStart }: Props) {
+export function ShotCard({
+    shot, index, position, selected, pinned, linkSource, onSelect, onDragStart, onResize,
+}: Props) {
     const videoUrl = useAssetUrl(shot.videoUrl);
     const thumbnailUrl = useAssetUrl(shot.thumbnailUrl);
     const media = videoUrl || thumbnailUrl;
@@ -34,10 +37,13 @@ export function ShotCard({ shot, index, position, selected, pinned, linkSource, 
                 height: position.height,
             }}
             onPointerDown={(event) => onDragStart(event, shot.id)}
-            onClick={onSelect}
+            onClick={(event) => onSelect(event)}
             aria-label={`Shot ${index + 1}: ${shot.action || shot.prompt || 'Untitled'}`}
         >
-            <div className="st-shot-card-media">
+            <div
+                className="st-shot-card-media"
+                style={{ height: Math.max(70, Math.min(200, position.height * 0.52)) }}
+            >
                 {media ? (
                     isImage ? <img src={media} alt="" loading="lazy" /> : <video src={media} muted playsInline preload="metadata" />
                 ) : (
@@ -65,6 +71,16 @@ export function ShotCard({ shot, index, position, selected, pinned, linkSource, 
                     <span><GripVertical size={10} /></span>
                 </div>
             </div>
+            <span
+                className="st-shot-card-resize"
+                role="slider"
+                tabIndex={-1}
+                aria-label={`Resize shot ${index + 1}`}
+                aria-valuenow={Math.round(position.width)}
+                aria-valuemin={200}
+                aria-valuemax={1200}
+                onPointerDown={(event) => onResize(event, shot.id)}
+            />
         </button>
     );
 }

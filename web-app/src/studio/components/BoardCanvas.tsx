@@ -67,12 +67,24 @@ export function BoardCanvas() {
         setMinimapOpen, boardFollowSelection, setFollowSelection, resetBoard,
         boardAreas, boardLinks, boardMode, setBoardMode, linkKind, setLinkKind,
         selectedAreaId, selectArea, addArea, updateArea, removeArea, addLink, removeLink,
-        boardQuery, setBoardQuery,
+        boardQuery, setBoardQuery, selectedShotIds, selectShots, toggleShotSelection,
     } = useStudioEditor();
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
+    const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
     const drag = useRef<{ x: number; y: number; cameraX: number; cameraY: number } | null>(null);
-    const cardDrag = useRef<{ id: string; x: number; y: number; origX: number; origY: number } | null>(null);
+    const cardDrag = useRef<{
+        startX: number;
+        startY: number;
+        items: Array<{ id: string; origX: number; origY: number }>;
+    } | null>(null);
+    const cardResize = useRef<{
+        id: string;
+        startX: number;
+        startY: number;
+        origW: number;
+        origH: number;
+    } | null>(null);
     const areaDrag = useRef<{
         mode: 'create' | 'move' | 'resize';
         id?: string;
@@ -169,6 +181,57 @@ export function BoardCanvas() {
         });
     }, [project.shots, setBoardPosition]);
 
+    const selectedPositions = useCallback(() => selectedShotIds
+        .map((id, index) => ({ id, position: boardPositions[id] || fallbackPosition(index) }))
+        .filter(({ position }) => !!position), [boardPositions, selectedShotIds]);
+
+    const alignSelected = (mode: 'left' | 'top' | 'center-h' | 'center-v' | 'right' | 'bottom') => {
+        const items = selectedPositions();
+        if (items.length < 2) return;
+        const minX = Math.min(...items.map(({ position }) => position.x));
+        const maxX = Math.max(...items.map(({ position }) => position.x + position.width));
+        const minY = Math.min(...items.map(({ position }) => position.y));
+        const maxY = Math.max(...items.map(({ position }) => position.y + position.height));
+        for (const { id, position } of items) {
+            if (mode === 'left') setBoardPosition(id, { x: minX });
+            else if (mode === 'right') setBoardPosition(id, { x: maxX - position.width });
+            else if (mode === 'top') setBoardPosition(id, { y: minY });
+            else if (mode === 'bottom') setBoardPosition(id, { y: maxY - position.height });
+            else if (mode === 'center-h') setBoardPosition(id, { x: (minX + maxX) / 2 - position.width / 2 });
+            else setBoardPosition(id, { y: (minY + maxY) / 2 - position.height / 2 });
+        }
+    };
+
+    const distributeSelected = (axis: 'h' | 'v') => {
+        const items = selectedPositions();
+        if (items.length < 3) return;
+        const sorted = [...items].sort((a, b) => (
+            axis === 'h' ? a.position.x - b.position.x : a.position.y - b.position.y
+        ));
+        const first = sorted[0];
+        const last = sorted[sorted.length - 1];
+        const start = axis === 'h' ? first.position.x : first.position.y;
+        const end = axis === 'h'
+            ? last.position.x + last.position.width
+            : last.position.y + last.position.height;
+        const span = end - start;
+        const totalSizes = sorted.reduce(
+            (sum, item) => sum + (axis === 'h' ? item.position.width : item.position.height),
+            0,
+        );
+        const gap = (span - totalSizes) / (sorted.length - 1);
+        let cursor = start;
+        for (const item of sorted) {
+            if (axis === 'h') {
+                setBoardPosition(item.id, { x: Math.round(cursor) });
+                cursor += item.position.width + gap;
+            } else {
+                setBoardPosition(item.id, { y: Math.round(cursor) });
+                cursor += item.position.height + gap;
+            }
+        }
+    };
+
     const toWorld = useCallback((clientX: number, clientY: number) => {
         const rect = hostRef.current?.getBoundingClientRect();
         if (!rect) return { x: 0, y: 0 };
@@ -238,6 +301,15 @@ export function BoardCanvas() {
         }
         if (boardMode === 'link') return;
         selectArea(null);
+        if (event.shiftKey) {
+            const rect = hostRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            setMarquee({ x0: x, y0: y, x1: x, y1: y });
+            (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+            return;
+        }
         drag.current = {
             x: event.clientX,
             y: event.clientY,
@@ -261,16 +333,32 @@ export function BoardCanvas() {
             }
             return;
         }
+        if (event.shiftKey) return;
+        const ids = selectedShotIds.includes(shotId) ? selectedShotIds : [shotId];
+        if (!selectedShotIds.includes(shotId)) selectShot(shotId);
+        cardDrag.current = {
+            startX: event.clientX,
+            startY: event.clientY,
+            items: ids
+                .map((id) => ({ id, position: boardPositions[id] }))
+                .filter((item) => !!item.position)
+                .map((item) => ({ id: item.id, origX: item.position!.x, origY: item.position!.y })),
+        };
+    };
+
+    const startCardResize = (event: React.PointerEvent, shotId: string) => {
+        event.stopPropagation();
         const position = boardPositions[shotId];
         if (!position) return;
-        cardDrag.current = {
+        if (!selectedShotIds.includes(shotId)) selectShot(shotId);
+        cardResize.current = {
             id: shotId,
-            x: event.clientX,
-            y: event.clientY,
-            origX: position.x,
-            origY: position.y,
+            startX: event.clientX,
+            startY: event.clientY,
+            origW: position.width,
+            origH: position.height,
         };
-        selectShot(shotId);
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     };
 
     const onPointerMove = (event: React.PointerEvent) => {
@@ -281,12 +369,32 @@ export function BoardCanvas() {
                 y: drag.current.cameraY + (event.clientY - drag.current.y),
             });
         }
+        if (marquee) {
+            const rect = hostRef.current?.getBoundingClientRect();
+            if (rect) {
+                setMarquee({
+                    ...marquee,
+                    x1: event.clientX - rect.left,
+                    y1: event.clientY - rect.top,
+                });
+            }
+        }
         if (cardDrag.current) {
-            const deltaX = (event.clientX - cardDrag.current.x) / boardCamera.zoom;
-            const deltaY = (event.clientY - cardDrag.current.y) / boardCamera.zoom;
-            setBoardPosition(cardDrag.current.id, {
-                x: Math.round((cardDrag.current.origX + deltaX) / 8) * 8,
-                y: Math.round((cardDrag.current.origY + deltaY) / 8) * 8,
+            const deltaX = (event.clientX - cardDrag.current.startX) / boardCamera.zoom;
+            const deltaY = (event.clientY - cardDrag.current.startY) / boardCamera.zoom;
+            for (const item of cardDrag.current.items) {
+                setBoardPosition(item.id, {
+                    x: Math.round((item.origX + deltaX) / 8) * 8,
+                    y: Math.round((item.origY + deltaY) / 8) * 8,
+                });
+            }
+        }
+        if (cardResize.current) {
+            const deltaX = (event.clientX - cardResize.current.startX) / boardCamera.zoom;
+            const deltaY = (event.clientY - cardResize.current.startY) / boardCamera.zoom;
+            setBoardPosition(cardResize.current.id, {
+                width: Math.max(200, Math.round(cardResize.current.origW + deltaX)),
+                height: Math.max(160, Math.round(cardResize.current.origH + deltaY)),
             });
         }
         if (areaDrag.current) {
@@ -317,6 +425,26 @@ export function BoardCanvas() {
     };
 
     const endDrag = () => {
+        if (marquee) {
+            const rect = hostRef.current?.getBoundingClientRect();
+            if (rect) {
+                const a = toWorld(rect.left + Math.min(marquee.x0, marquee.x1), rect.top + Math.min(marquee.y0, marquee.y1));
+                const b = toWorld(rect.left + Math.max(marquee.x0, marquee.x1), rect.top + Math.max(marquee.y0, marquee.y1));
+                const hits = project.shots
+                    .map((shot, index) => ({ id: shot.id, position: boardPositions[shot.id] || fallbackPosition(index) }))
+                    .filter(({ position }) => (
+                        position.x + position.width >= a.x
+                        && position.x <= b.x
+                        && position.y + position.height >= a.y
+                        && position.y <= b.y
+                    ))
+                    .map(({ id }) => id);
+                if (hits.length) selectShots(hits);
+                else selectShots([]);
+            }
+            setMarquee(null);
+        }
+        cardResize.current = null;
         if (areaDrag.current?.mode === 'create' && areaDraft) {
             if (areaDraft.width > 40 && areaDraft.height > 40) {
                 addArea({
@@ -455,6 +583,49 @@ export function BoardCanvas() {
                 <button type="button" className="st-button" data-size="sm" onClick={arrange} title="Arrange cards">
                     <Grid3X3 size={13} /> Arrange
                 </button>
+                {selectedShotIds.length >= 2 && (
+                    <>
+                        <select
+                            className="st-select"
+                            style={{ width: 104, height: 27, padding: '2px 6px' }}
+                            value=""
+                            aria-label="Align selected cards"
+                            onChange={(event) => {
+                                if (event.target.value) alignSelected(event.target.value as Parameters<typeof alignSelected>[0]);
+                            }}
+                        >
+                            <option value="">Align…</option>
+                            <option value="left">Left</option>
+                            <option value="center-h">Center H</option>
+                            <option value="right">Right</option>
+                            <option value="top">Top</option>
+                            <option value="center-v">Center V</option>
+                            <option value="bottom">Bottom</option>
+                        </select>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="ghost"
+                            disabled={selectedShotIds.length < 3}
+                            onClick={() => distributeSelected('h')}
+                            title="Distribute horizontally"
+                        >
+                            Dist H
+                        </button>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="ghost"
+                            disabled={selectedShotIds.length < 3}
+                            onClick={() => distributeSelected('v')}
+                            title="Distribute vertically"
+                        >
+                            Dist V
+                        </button>
+                    </>
+                )}
                 <button type="button" className="st-button" data-size="sm" onClick={fit} title="Fit board">
                     <Maximize2 size={13} /> Fit
                 </button>
@@ -596,18 +767,36 @@ export function BoardCanvas() {
                                         shot={shot}
                                         index={index}
                                         position={position}
-                                        selected={selectedShotId === shot.id}
+                                        selected={selectedShotIds.includes(shot.id)}
                                         pinned={!!boardPinned[shot.id]}
                                         linkSource={linkSource === shot.id}
-                                        onSelect={() => {
-                                            selectShot(shot.id);
+                                        onSelect={(event) => {
+                                            if (event.shiftKey) {
+                                                toggleShotSelection(shot.id);
+                                                return;
+                                            }
+                                            if (!selectedShotIds.includes(shot.id)) selectShot(shot.id);
                                             setCurrentTime(0);
                                         }}
                                         onDragStart={startCardDrag}
+                                        onResize={startCardResize}
                                     />
                                 );
                             })}
                         </div>
+                    )}
+
+                    {marquee && (
+                        <div
+                            className="st-board-marquee"
+                            style={{
+                                left: Math.min(marquee.x0, marquee.x1),
+                                top: Math.min(marquee.y0, marquee.y1),
+                                width: Math.abs(marquee.x1 - marquee.x0),
+                                height: Math.abs(marquee.y1 - marquee.y0),
+                            }}
+                            aria-hidden="true"
+                        />
                     )}
 
                     <div className="st-board-zoom">

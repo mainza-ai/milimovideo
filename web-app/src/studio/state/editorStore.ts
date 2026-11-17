@@ -38,6 +38,7 @@ interface EditorState {
     activeSurface: StudioSurface;
     storyView: StoryView;
     selectedShotId: string | null;
+    selectedShotIds: string[];
     selectedSceneId: string | null;
     inspectorTab: 'shot' | 'prompt' | 'motion' | 'takes' | 'audio' | 'review' | 'history';
     boardCamera: Camera;
@@ -62,6 +63,8 @@ interface EditorState {
     setSurface: (surface: StudioSurface) => void;
     setStoryView: (view: StoryView) => void;
     selectShot: (shotId: string | null) => void;
+    selectShots: (shotIds: string[]) => void;
+    toggleShotSelection: (shotId: string) => void;
     selectScene: (sceneId: string | null) => void;
     setInspectorTab: (tab: EditorState['inspectorTab']) => void;
     setCamera: (camera: Camera) => void;
@@ -111,6 +114,7 @@ export const useStudioEditor = create<EditorState>()(
             activeSurface: 'story',
             storyView: 'board',
             selectedShotId: null,
+            selectedShotIds: [],
             selectedSceneId: null,
             inspectorTab: 'shot',
             boardCamera: DEFAULT_CAMERA,
@@ -134,7 +138,26 @@ export const useStudioEditor = create<EditorState>()(
             focusMode: 'none',
             setSurface: (activeSurface) => set({ activeSurface }),
             setStoryView: (storyView) => set({ storyView }),
-            selectShot: (selectedShotId) => set({ selectedShotId }),
+            selectShot: (selectedShotId) => set({
+                selectedShotId,
+                selectedShotIds: selectedShotId ? [selectedShotId] : [],
+            }),
+            selectShots: (selectedShotIds) => set({
+                selectedShotIds,
+                selectedShotId: selectedShotIds.length ? selectedShotIds[selectedShotIds.length - 1] : null,
+            }),
+            toggleShotSelection: (shotId) => set((state) => {
+                const exists = state.selectedShotIds.includes(shotId);
+                const selectedShotIds = exists
+                    ? state.selectedShotIds.filter((id) => id !== shotId)
+                    : [...state.selectedShotIds, shotId];
+                return {
+                    selectedShotIds,
+                    selectedShotId: selectedShotIds.length
+                        ? selectedShotIds[selectedShotIds.length - 1]
+                        : null,
+                };
+            }),
             selectScene: (selectedSceneId) => set({ selectedSceneId }),
             setInspectorTab: (inspectorTab) => set({ inspectorTab }),
             setCamera: (boardCamera) => set({ boardCamera }),
@@ -224,6 +247,7 @@ export const useStudioEditor = create<EditorState>()(
                 activeSurface: state.activeSurface,
                 storyView: state.storyView,
                 selectedShotId: state.selectedShotId,
+                selectedShotIds: state.selectedShotIds,
                 inspectorTab: state.inspectorTab,
                 boardCamera: state.boardCamera,
                 boardPositions: state.boardPositions,

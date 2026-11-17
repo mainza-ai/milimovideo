@@ -9,6 +9,8 @@ describe('studio editor board semantics', () => {
             boardMode: 'select',
             linkKind: 'thread',
             selectedAreaId: null,
+            selectedShotId: null,
+            selectedShotIds: [],
         });
     });
 
@@ -30,6 +32,21 @@ describe('studio editor board semantics', () => {
         useStudioEditor.getState().removeArea(id);
         expect(useStudioEditor.getState().boardAreas[id]).toBeUndefined();
         expect(useStudioEditor.getState().selectedAreaId).toBeNull();
+    });
+
+    it('tracks a multi-selection with a primary shot', () => {
+        const state = useStudioEditor.getState();
+        state.selectShots(['a', 'b']);
+        expect(useStudioEditor.getState().selectedShotIds).toEqual(['a', 'b']);
+        expect(useStudioEditor.getState().selectedShotId).toBe('b');
+
+        useStudioEditor.getState().toggleShotSelection('a');
+        expect(useStudioEditor.getState().selectedShotIds).toEqual(['b']);
+        expect(useStudioEditor.getState().selectedShotId).toBe('b');
+
+        useStudioEditor.getState().toggleShotSelection('b');
+        expect(useStudioEditor.getState().selectedShotIds).toEqual([]);
+        expect(useStudioEditor.getState().selectedShotId).toBeNull();
     });
 
     it('dedupes typed links and rejects self links', () => {

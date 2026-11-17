@@ -1025,6 +1025,31 @@
     background: rgba(6, 178, 235, 0.08);
 }
 
+.st-board-marquee {
+    position: absolute;
+    z-index: 15;
+    border: 1px dashed var(--st-accent);
+    background: rgba(6, 178, 235, 0.08);
+    pointer-events: none;
+}
+
+.st-shot-card-resize {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 12px;
+    height: 12px;
+    border-right: 2px solid var(--st-muted);
+    border-bottom: 2px solid var(--st-muted);
+    cursor: nwse-resize;
+    opacity: 0.55;
+}
+
+.st-shot-card-resize:hover {
+    border-color: var(--st-accent);
+    opacity: 1;
+}
+
 .st-board-zoom {
     position: absolute;
     left: 12px;

@@ -442,3 +442,11 @@ Checked in `web-app/openapi.json` + generated `src/api/schema.d.ts` with a
 health, plan, review, and share payloads; studio hooks now reject contract drift
 instead of silently shaping unknown JSON. Added the Kubona Apache-2.0 attribution
 file. Verified: 27 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f1 | multi-select, marquee, resize, align/distribute
+
+Board authoring gained a multi-selection model (primary + set), Shift-click
+toggles, Shift-drag marquee selects intersecting cards, dragging any selected
+card moves the whole set, cards have a resize handle with live width/height, and
+the toolbar can align left/center/right/top/middle/bottom and distribute H/V for
+3+ cards. Verified: 28 vitest, tsc clean, eslint 0 errors.
