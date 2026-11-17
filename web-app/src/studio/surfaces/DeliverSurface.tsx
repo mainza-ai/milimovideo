@@ -28,6 +28,7 @@ export function DeliverSurface() {
     const totalDuration = Math.max(0.1, ...layout.map((clip) => clip.end));
     const [rangeStart, setRangeStart] = useState(0);
     const [rangeEnd, setRangeEnd] = useState(totalDuration);
+    const [fit, setFit] = useState<'pad' | 'crop'>('pad');
 
     useEffect(() => {
         setRangeEnd((current) => (current > totalDuration ? totalDuration : current || totalDuration));
@@ -43,6 +44,7 @@ export function DeliverSurface() {
                 fps: project.fps,
                 start_frame: Math.round(Math.min(rangeStart, rangeEnd) * project.fps),
                 end_frame: Math.round(Math.max(rangeStart, rangeEnd) * project.fps),
+                fit,
                 crf: 18,
                 preset: 'fast',
             });
@@ -142,6 +144,27 @@ export function DeliverSurface() {
                         onClick={() => { setRangeStart(0); setRangeEnd(totalDuration); }}
                     >
                         Full cut
+                    </button>
+                    <span className="st-chip">Fit</span>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant={fit === 'pad' ? 'primary' : 'ghost'}
+                        onClick={() => setFit('pad')}
+                        title="Letterbox to preserve the full frame"
+                    >
+                        Pad
+                    </button>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant={fit === 'crop' ? 'primary' : 'ghost'}
+                        onClick={() => setFit('crop')}
+                        title="Center-crop to fill the output"
+                    >
+                        Crop
                     </button>
                 </div>
             </div>

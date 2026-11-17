@@ -810,6 +810,7 @@ async def _render_background(
                 captions_path=captions_path,
                 start_seconds=range_start / max(1, fps),
                 duration_seconds=range_duration,
+                fit=settings.fit,
             )
 
             logger.info("Executing render FFmpeg: %s", " ".join(cmd))

@@ -87,6 +87,7 @@ export function ShortsSurface() {
                 fps,
                 start_frame: Math.round(selected.start * fps),
                 end_frame: Math.round(selected.end * fps),
+                fit: 'crop',
                 crf: 18,
                 preset: 'fast',
             });

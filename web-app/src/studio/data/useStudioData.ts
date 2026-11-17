@@ -655,6 +655,7 @@ export function useStudioCreateRender(projectId: string) {
         fps: number;
         start_frame?: number;
         end_frame?: number;
+        fit?: 'pad' | 'crop';
         crf?: number;
         preset?: string;
     }) => {

@@ -805,3 +805,11 @@ keyboard map, generation/takes/inpaint, editing/tracking/blocking/3D, review/sha
 agent plans, search, deliver, shorts, setup, privacy, troubleshooting, and limits.
 Updated plan/frontend/audit tables to the measured state. AGENTS.md and the user
 guide are now tracked.
+
+## [2026-11-17] deliver | pad/crop reframe for variants
+
+RenderSettings gained `fit: pad|crop`. Crop scales to cover and center-crops to
+the output frame, so shorts/vertical variants are true reframes rather than
+letterboxes. Deliver exposes Pad/Crop; Shorts always crops. Added filtergraph and
+real FFmpeg tests asserting a 180×320 output from a 320×180 source. Verified:
+60 pytest, 44 vitest, tsc clean.

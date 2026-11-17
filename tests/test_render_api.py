@@ -136,6 +136,43 @@ def test_render_v2_alpha_blends_pixels(app_client, project):
     assert rgb[0] > 40 and rgb[2] > 40, rgb
 
 
+def test_render_crop_fits_a_vertical_frame(app_client, project):
+    pid = project["id"]
+    generated = Path(config.PROJECTS_DIR) / pid / "generated"
+    _make_clip(generated / "crop.mp4", "green")
+    shot = {
+        "id": f"crop-shot-{pid}", "prompt": "crop", "negative_prompt": "", "seed": 42,
+        "width": 320, "height": 180, "fps": 25, "num_frames": 25,
+        "cfg_scale": 1.0, "enhance_prompt": False, "upscale": False,
+        "pipeline_override": "auto", "track_index": 0, "start_frame": 0,
+        "trim_in": 0, "trim_out": 0, "timeline": [],
+        "video_url": f"/projects/{pid}/generated/crop.mp4", "status": "completed",
+    }
+    payload = {
+        "id": pid, "name": "Crop Render", "fps": 25, "seed": 42,
+        "resolution_w": 320, "resolution_h": 180, "revision": 0,
+        "shots": [shot], "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    response = app_client.post(
+        f"/projects/{pid}/render",
+        json={"settings": {
+            "width": 180, "height": 320, "fps": 25, "fit": "crop",
+        }, "track_states": {}},
+    )
+    render_id = response.json()["job_id"]
+    status = app_client.get(f"/status/{render_id}").json()
+    assert status["status"] == "completed", status
+
+    probe = json.loads(subprocess.check_output([
+        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        "-show_entries", "stream=width,height", "-of", "json",
+        str(generated / f"{render_id}.mp4"),
+    ]))
+    stream = probe["streams"][0]
+    assert (stream["width"], stream["height"]) == (180, 320)
+
+
 def test_render_range_exports_a_subsection(app_client, project):
     pid = project["id"]
     generated = Path(config.PROJECTS_DIR) / pid / "generated"

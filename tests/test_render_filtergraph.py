@@ -16,7 +16,7 @@ def _clip(path="/tmp/a.mp4", **overrides):
     return clip
 
 
-def _cmd(v1=None, a1=None, track_states=None):
+def _cmd(v1=None, a1=None, track_states=None, **kwargs):
     return build_complex_filtergraph(
         project_fps=25,
         project_width=320,
@@ -26,6 +26,7 @@ def _cmd(v1=None, a1=None, track_states=None):
         a1_shots=a1 or [],
         output_path="/tmp/out.mp4",
         track_states=track_states or {},
+        **kwargs,
     )
 
 
@@ -80,6 +81,14 @@ def test_solo_mutes_other_audio_tracks():
     solo = _cmd(v1=[_clip()], a1=[_clip("/tmp/voice.wav")], track_states={"0": {"solo": True}})
     solo_graph = solo[solo.index("-filter_complex") + 1]
     assert solo_graph.count("atrim") == 1
+
+
+def test_crop_fit_covers_the_output_frame():
+    cmd = _cmd(v1=[_clip()], fit="crop")
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "force_original_aspect_ratio=increase" in graph
+    assert "crop=320:180" in graph
+    assert "pad=320:180" not in graph
 
 
 def test_speed_scales_video_and_audio_time():

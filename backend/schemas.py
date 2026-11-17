@@ -314,6 +314,7 @@ class RenderSettings(BaseModel):
     fps: Optional[int] = None
     start_frame: Optional[int] = None
     end_frame: Optional[int] = None
+    fit: Literal["pad", "crop"] = "pad"
     crf: int = 18
     preset: str = "fast"
     audio_bitrate: str = "192k"

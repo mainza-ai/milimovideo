@@ -107,6 +107,7 @@ def build_complex_filtergraph(
     captions_path: Optional[str] = None,
     start_seconds: float = 0.0,
     duration_seconds: Optional[float] = None,
+    fit: str = "pad",
 ) -> List[str]:
     """Build an FFmpeg filtergraph that matches the NLE timeline.
 
@@ -221,15 +222,23 @@ def build_complex_filtergraph(
                 f"[{input_idx}:v]trim=start={trim_in_s}:duration={source_duration_s}"
                 f",setpts=(PTS-STARTPTS)/{speed}"
             )
-            fc += f",scale={project_width}:{project_height}:force_original_aspect_ratio=decrease"
-            if overlay:
-                # Transparent padding keeps V2 from blacking out V1.
+            if fit == "crop":
                 fc += (
-                    f",pad={project_width}:{project_height}:(ow-iw)/2:(oh-ih)/2:color=black@0"
-                    ",format=rgba"
+                    f",scale={project_width}:{project_height}:force_original_aspect_ratio=increase"
+                    f",crop={project_width}:{project_height}"
                 )
+                if overlay:
+                    fc += ",format=rgba"
             else:
-                fc += f",pad={project_width}:{project_height}:(ow-iw)/2:(oh-ih)/2:color=black"
+                fc += f",scale={project_width}:{project_height}:force_original_aspect_ratio=decrease"
+                if overlay:
+                    # Transparent padding keeps V2 from blacking out V1.
+                    fc += (
+                        f",pad={project_width}:{project_height}:(ow-iw)/2:(oh-ih)/2:color=black@0"
+                        ",format=rgba"
+                    )
+                else:
+                    fc += f",pad={project_width}:{project_height}:(ow-iw)/2:(oh-ih)/2:color=black"
 
             keyframes = shot.get("keyframes") or []
             transform = transform_expressions(keyframes, project_fps)
