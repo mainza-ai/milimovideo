@@ -731,3 +731,9 @@ reset. Verified: 43 vitest, tsc clean, eslint 0 errors.
 Added draggable, editable, deletable note cards on the board, created at the
 viewport center. Notes are included in board-scoped undo/redo and the persisted
 editor layout. Added store tests. Verified: 44 vitest, tsc clean.
+
+## [2026-11-17] f4 | active LoRA stack strength
+
+Setup reads the active LoRA stack for the video slot and exposes a per-LoRA
+strength slider that PATCHes the live stack (0–200%) after pointer-up. Activation
+refreshes the stack. Verified: 44 vitest, tsc clean, eslint 0 errors.

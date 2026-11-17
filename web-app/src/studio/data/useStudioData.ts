@@ -357,6 +357,45 @@ export interface ActiveJob {
     estimate_seconds?: number;
 }
 
+export interface ActiveLora {
+    model_id: string;
+    name: string;
+    strength: number;
+    role: string;
+}
+
+export function useStudioLoras(slot: 'video' | 'image' = 'video') {
+    const addToast = useTimelineStore((state) => state.addToast);
+    const [loras, setLoras] = useState<ActiveLora[]>([]);
+    const refresh = useCallback(async () => {
+        try {
+            const response = await fetch(apiUrl(`/models/loras/${slot}`));
+            const data = response.ok ? await response.json() : { loras: [] };
+            setLoras(Array.isArray(data.loras) ? data.loras : []);
+        } catch {
+            setLoras([]);
+        }
+    }, [slot]);
+    useEffect(() => { void refresh(); }, [refresh]);
+
+    const setStrength = useCallback(async (modelId: string, strength: number) => {
+        const response = await fetch(apiUrl(`/models/${modelId}/lora`), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ strength }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Could not update LoRA strength', 'error');
+            return false;
+        }
+        await refresh();
+        return true;
+    }, [addToast, refresh]);
+
+    return { loras, refresh, setStrength };
+}
+
 export function useStudioActiveJobs(projectId: string) {
     const jobs = useStudioJobs((state) => state.activeJobs);
     const setJobs = useStudioJobs((state) => state.setActiveJobs);

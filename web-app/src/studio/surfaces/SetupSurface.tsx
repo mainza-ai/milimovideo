@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react';
 import {
     CheckCircle2, Cpu, HardDrive, Loader2, RefreshCw, ShieldCheck, TriangleAlert,
 } from 'lucide-react';
-import { useStudioHealth, useStudioMetrics, useStudioModels } from '../data/useStudioData';
+import {
+    useStudioHealth, useStudioLoras, useStudioMetrics, useStudioModels,
+} from '../data/useStudioData';
 
 function formatBytes(bytes?: number | null): string {
     if (!bytes || bytes <= 0) return '—';
@@ -13,6 +15,7 @@ function formatBytes(bytes?: number | null): string {
 export function SetupSurface() {
     const { health, error } = useStudioHealth();
     const { models, pipelines, loading, refresh, setActive } = useStudioModels();
+    const { loras, refresh: refreshLoras, setStrength } = useStudioLoras('video');
     const metrics = useStudioMetrics(7);
     const [filter, setFilter] = useState<'all' | 'video' | 'image' | 'segmentation'>('all');
     const [kind, setKind] = useState<'base' | 'lora'>('base');
@@ -207,7 +210,7 @@ export function SetupSurface() {
                                             disabled={busy === model.id}
                                             onClick={async () => {
                                                 setBusy(model.id);
-                                                try { await setActive(model, true); } finally { setBusy(null); }
+                                                try { if (await setActive(model, true)) await refreshLoras(); } finally { setBusy(null); }
                                             }}
                                         >
                                             {busy === model.id ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
@@ -215,20 +218,39 @@ export function SetupSurface() {
                                         </button>
                                     )}
                                     {model.status === 'active' && (
-                                        <button
-                                            type="button"
-                                            className="st-button"
-                                            data-size="sm"
-                                            data-variant="danger"
-                                            disabled={busy === model.id}
-                                            onClick={async () => {
-                                                setBusy(model.id);
-                                                try { await setActive(model, false); } finally { setBusy(null); }
-                                            }}
-                                        >
-                                            {busy === model.id ? <Loader2 size={12} className="animate-spin" /> : null}
-                                            Unload
-                                        </button>
+                                        <>
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                data-variant="danger"
+                                                disabled={busy === model.id}
+                                                onClick={async () => {
+                                                    setBusy(model.id);
+                                                    try { if (await setActive(model, false)) await refreshLoras(); } finally { setBusy(null); }
+                                                }}
+                                            >
+                                                {busy === model.id ? <Loader2 size={12} className="animate-spin" /> : null}
+                                                Unload
+                                            </button>
+                                            {kind === 'lora' && loras.find((lora) => lora.model_id === model.id) && (
+                                                <label style={{ display: 'block', marginTop: 5, color: 'var(--st-muted)', fontSize: 9 }}>
+                                                    Strength · {Math.round((loras.find((lora) => lora.model_id === model.id)?.strength ?? 1) * 100)}%
+                                                    <input
+                                                        type="range"
+                                                        min={0}
+                                                        max={200}
+                                                        defaultValue={Math.round((loras.find((lora) => lora.model_id === model.id)?.strength ?? 1) * 100)}
+                                                        style={{ width: '100%', accentColor: 'var(--st-accent)' }}
+                                                        aria-label={`${model.name} strength`}
+                                                        onPointerUp={(event) => void setStrength(
+                                                            model.id,
+                                                            Number(event.currentTarget.value) / 100,
+                                                        )}
+                                                    />
+                                                </label>
+                                            )}
+                                        </>
                                     )}
                                     {model.status !== 'downloaded' && model.status !== 'active' && (
                                         <span style={{ color: 'var(--st-faint)', fontSize: 9 }}>
