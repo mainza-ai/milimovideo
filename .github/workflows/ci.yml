@@ -24,8 +24,10 @@ jobs:
         run: python -m compileall -q backend
       - name: Tests
         run: python -m pytest --cov=backend --cov-report=term
-      - name: Lint (non-blocking while legacy code is frozen)
-        run: ruff check backend --output-format=github || true
+      - name: Install linter
+        run: pip install ruff
+      - name: Lint (correctness rules; legacy style backlog baselined in ruff.toml)
+        run: ruff check backend --output-format=github
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

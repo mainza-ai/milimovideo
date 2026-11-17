@@ -172,7 +172,6 @@ async def generate_advanced(req: GenerateAdvancedRequest, background_tasks: Back
     # --- Unified Generation Prep ---
     # If this is tied to a Storyboard Shot, we use StoryboardManager to build the exact payload
     # which securely loads Concept Art (`thumbnail_url`) and `matched_elements`
-    from database import Shot
     shot = session.get(Shot, req.shot_config.id) if req.shot_config.id else None
     
     if shot:

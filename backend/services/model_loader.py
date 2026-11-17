@@ -181,13 +181,6 @@ class ModelLoaderService:
         model = model_registry.get_model_info(model_id)
         slot = "video" if model and model.pipeline == "video" else "image"
 
-        removed = False
-        self._active_loras[slot] = [
-            l for l in self._active_loras[slot]
-            if l.model_id != model_id or not (removed := True)  # noqa: remove and flag
-        ]
-
-        # Simpler removal
         original_len = len(self._active_loras.get(slot, []))
         self._active_loras[slot] = [
             l for l in self._active_loras.get(slot, [])

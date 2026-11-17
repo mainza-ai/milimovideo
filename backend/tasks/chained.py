@@ -12,7 +12,6 @@ from ltx_pipelines.utils.media_io import encode_video
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 from ltx_pipelines.utils.helpers import cleanup_memory
-import config
 from events import event_manager
 
 logger = logging.getLogger(__name__)
@@ -285,8 +284,10 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 )
                 
             # 3. Run Pipeline
-            # Returns (video, audio) 
+            # Returns (video, audio)
             # Note: We no longer expect a latent tensor back
+            video = None
+            audio = None
             try:
                 result = await loop.run_in_executor(
                     None, _run_chunk_pipeline, chunk_images, chunk_media_sequence, chunk_prompt, do_pipeline_enhance
@@ -379,9 +380,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             await storyboard_manager.commit_chunk(chunk_idx, chunk_output_path, chunk_prompt)
             last_chunk_output = chunk_output_path
             
-            # Cleanup memory
-            del video
-            del audio
+            # Cleanup memory (drop references before emptying the cache)
+            video = None
+            audio = None
             cleanup_memory()
 
         if active_jobs.get(job_id, {}).get("cancelled", False):

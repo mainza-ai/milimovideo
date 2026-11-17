@@ -2,6 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from typing import Optional
 import os
 import re
+import shutil
 import uuid
 import config
 from file_utils import get_base_dir

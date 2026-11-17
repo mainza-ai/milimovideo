@@ -960,3 +960,13 @@ Added `npm run check:bundle`: it fails when the built JS total exceeds 2 MB or a
 single chunk exceeds 800 KB. Current build is 1,518 KiB across 3 chunks, largest
 564 KiB. Wired the check into CI after `npm run build` and the verification matrix.
 Verified locally: build pass, bundle check pass.
+
+## [2026-11-17] correctness | fix undefined names and gate ruff
+
+Ruff's correctness rules found real defects: `/assets/{id}` deletion called
+`shutil` without importing it, Flux image completion referenced `out_path` and
+`out_filename` outside their closure (the Asset record silently failed), and the
+chained runner had duplicate imports plus a `del`/closure pattern. Fixed all of
+them, removed a redundant LoRA list comprehension, added asset-directory deletion
+coverage, and added `ruff.toml` enforcing E9/F63/F7/F82/F811. CI now installs ruff
+and runs it as a blocking step. Verified: ruff clean, asset delete test passes.

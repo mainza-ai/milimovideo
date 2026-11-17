@@ -268,7 +268,12 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     import json
                     from database import Asset
                     from datetime import datetime
-                    
+
+                    out_filename = f"{job_id}.jpg"
+                    out_path = get_project_output_paths(job_id, project_id)["output_path"].replace(
+                        ".mp4", ".jpg"
+                    )
+
                     # Construct metadata for re-use
                     meta = {
                         "prompt": prompt,
