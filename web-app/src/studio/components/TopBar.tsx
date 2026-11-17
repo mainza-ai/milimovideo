@@ -36,6 +36,7 @@ export function TopBar() {
     const addToast = useStudioDocumentStore((state) => state.addToast);
     const loadProject = useStudioDocumentStore((state) => state.loadProject);
     const createNewProject = useStudioDocumentStore((state) => state.createNewProject);
+    const deleteProject = useStudioDocumentStore((state) => state.deleteProject);
     const [menuOpen, setMenuOpen] = useState(false);
     const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
     // zundo's temporal store is attached to the document store.
@@ -105,6 +106,7 @@ export function TopBar() {
                         value={project.name}
                         aria-label="Project name"
                         onChange={(event) => useStudioDocumentStore.getState().setProject({ ...project, name: event.target.value })}
+                        onBlur={() => void saveProject()}
                     />
                     <button
                         type="button"
@@ -144,6 +146,21 @@ export function TopBar() {
                                         <span className="st-mono">{item.id.slice(0, 8)}</span>
                                     </button>
                                 ))}
+                            </div>
+                            <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--st-border)' }}>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    data-variant="danger"
+                                    onClick={async () => {
+                                        if (!window.confirm(`Delete “${project.name}”? This removes its files and records.`)) return;
+                                        await deleteProject(project.id);
+                                        setMenuOpen(false);
+                                    }}
+                                >
+                                    Delete current project
+                                </button>
                             </div>
                         </div>
                     )}

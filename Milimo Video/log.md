@@ -863,3 +863,9 @@ Edit now overlays the active caption cue on the program monitor when caption
 burn-in is enabled, using the same frame range as the render. The overlay follows
 the playback clock with a tiny subscriber, so the rest of the surface stays
 isolated. Verified: 44 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] shell | delete project and save rename
+
+Project menu can delete the current project with confirmation; project name
+commits on blur. This closes the remaining basic project-management handoff to the
+legacy editor. Verified: 44 vitest, tsc clean, eslint 0 errors.
