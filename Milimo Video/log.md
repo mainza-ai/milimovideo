@@ -1095,3 +1095,8 @@ board toolbar is 1167px in 786/730px containers, and top-bar tabs overlap the
 project switcher at 1024. Documented P0–P3 findings, missing UX functionality, and
 F6 chrome-stabilization tasks; updated the frontend-refactor plan, implementation
 plan, and wiki index.
+
+## [2026-11-17] docs | link F6 audit from AGENTS
+
+Added the F6 chrome-stabilization finding to AGENTS.md's remaining/deferred list
+so agents do not treat the Studio layout as finished.

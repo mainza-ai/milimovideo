@@ -185,6 +185,9 @@ Do not claim these are done:
 - Legacy `/` cutover is gated on the documented two-clean-release window.
 - Scoped-v1 gaps: no transitions/LUT/titles/A2 track, lexical rather than
   embedding search, and no shorts/lens template packs.
+- F6 chrome stabilization: the Studio is too dense and breaks at ~1024px
+  (top-bar collision, board-toolbar overflow, clipped rail labels, hidden
+  Inspector tabs). See `Milimo Video/systems/studio-ux-audit-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
 
