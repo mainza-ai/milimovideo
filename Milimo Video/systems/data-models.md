@@ -20,7 +20,7 @@ related:
 
 The persistence layer: everything the studio remembers lives in SQLite via
 SQLModel/SQLAlchemy (`backend/milimovideo.db`), mirrored by Pydantic schemas on the
-API boundary and TypeScript types in the frontend. Nine tables, one entity graph,
+API boundary and TypeScript types in the frontend. Ten tables, one entity graph,
 Alembic-managed.
 
 ## Components
@@ -43,12 +43,25 @@ models introduced between revisions.
 | `job` | project_id, shot_id, type, status (pending\|processing\|completed\|failed\|cancelled), progress, output_path, thumbnail_path, error_message, prompt, params_json, enhanced_prompt, status_message, actual_frames, request_id, resume_policy | user-facing job state |
 | `sharelink` | token, project_id, created_at, revoked | capability links for review |
 | `reviewitem` | project_id, shot_id, kind (comment\|approval), frame, body, status, author, created_at | frame comments and approvals |
+| `appsetting` | key (PK), value_json, updated_at | versioned JSON documents: `llm` (`LLMSettings` v2) and `llm_spend` (daily cloud ledger) |
+
+**LLM settings document** (`app_setting.key = "llm"`): `schema_version` 2 and a
+`revision` CAS token; `providers` keyed by instance id (`ollama`,
+`openai_compatible@host:port`) with type, wire, base URL, model, timeout,
+keep-alive, and secret status; `roles` for the six filmmaking jobs with
+provider/model/fallback/sampling (empty provider = explicitly unassigned);
+`budget` (`daily_usd`, `eval_gate`); and server-written `last_eval`. Credentials
+are sealed with AES-256-GCM when `MILIMO_SECRET_KEY` is set and never returned by
+reads. `app_setting.key = "llm_spend"` keeps the day's cloud ledger, capped at 200
+entries.
 
 **Pydantic schemas** (`backend/schemas.py`): typed `ProjectState`, `ShotState`,
 `SceneState`, `CaptionCue`, `TimelineItem`, `BoardLayoutPayload`/`BoardNode`/
 `BoardArea`/`BoardLink`, `RenderRequest`/`RenderSettings` (fit, CRF, preset,
 audio bitrate, loudness normalize, optional source_path), `ElementCreate`/
-`ElementUpdate`, review/share/plan payloads, `DepthRequest`.
+`ElementUpdate`, review/share/plan payloads, `DepthRequest`. The LLM plane has its own typed models in
+`services/llm/models.py` (`LLMSettings`, `LLMProviderConfig`, `LLMRoleAssignment`,
+`LLMBudgetConfig`, `LLMEvalSummary`).
 
 **TypeScript types** (`web-app/src/stores/types.ts` and
 `web-app/src/studio/data/useStudioData.ts`) mirror the backend: `Shot` (incl.
@@ -66,6 +79,7 @@ contracts cover health/plans/review/share.
 | `0002_render_settings` | `render_crf`, `render_speed`, `render_audio_bitrate`, `render_audio_normalize` |
 | `0003_seed_lock` | `shot.seed_locked` |
 | `0004_asset_thumbnail` | `asset.thumbnail_url` for uploaded-video posters |
+| `0005_app_settings` | `app_setting` table for the revisioned LLM settings document and spend ledger |
 
 **On-disk storage** (under `backend/`): `projects/{id}/generated/`,
 `projects/{id}/thumbnails/`, `projects/{id}/assets/{general,references,elements}/`,

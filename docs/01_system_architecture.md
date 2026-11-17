@@ -7,7 +7,7 @@ Milimo Video is a local-first, AI-native cinematic studio with a split architect
 - **Frontend**: React 18 / Vite / TypeScript — UI, Timeline State, Multi-Track NLE, Preview Player
 - **Backend**: Python / FastAPI — Model Inference, Asset Management, Job Queue, Database
 - **AI Models**: LTX-2 (Video), Flux 2 (Image/Inpainting), SAM 3 (Segmentation)
-- **LLM**: Configurable prompt enhancement — Gemma (built-in) or Ollama (local)
+- **LLM**: Local-first provider/role plane — Gemma (in-process), Ollama, oMLX, Strata, LM Studio, OpenAI-compatible; optional cloud behind budget, eval gate, and air-gap
 - **Memory**: Central `MemoryManager` enforces mutual exclusion between GPU models
 - **Microservice**: SAM 3 runs as a separate FastAPI server on port 8001
 
@@ -93,8 +93,10 @@ graph TD
     subgraph "Memory Management"
         MemMgr[MemoryManager] -->|"prepare_for('video')"| ME
         MemMgr -->|"prepare_for('image')"| FluxW
-        LLM_Dispatch -->|"provider=ollama"| Ollama_API[Ollama API :11434]
-        LLM_Dispatch -->|"provider=gemma"| Gemma_TE[Gemma 3 Text Encoder]
+        LLM_Dispatch[services/llm role runtime] -->|"ollama_native"| Ollama_API[Ollama :11434]
+        LLM_Dispatch -->|"openai_chat"| Local_HTTP[oMLX :8787 / Strata :47831 / LM Studio / vLLM]
+        LLM_Dispatch -->|"gemma_native"| Gemma_TE[Gemma 3 Text Encoder]
+        LLM_Dispatch -.->|"opt-in"| Cloud[OpenAI / Anthropic]
     end
 
     subgraph "AI Inference"
@@ -134,7 +136,7 @@ graph TD
 | **UI Refresh Sync** | HTTP GET `/status/{job_id}` | One-shot job state recovery on page load via `jobPoller`. |
 | **Worker → LTX-2** | Direct Python Import | `ModelManager` loads LTX-2 pipelines into VRAM. One pipeline cached at a time. `MemoryManager.prepare_for("video")` unloads Flux first. |
 | **Worker → Flux 2** | Direct Python Import | `FluxInpainter` singleton for image gen + inpainting. `MemoryManager.prepare_for("image")` unloads LTX first. |
-| **Prompt Enhancement** | Configurable via `llm.py` | `enhance_prompt()` routes to Gemma (built-in) or Ollama (HTTP API). Ollama sends `keep_alive: 0` to unload after use. |
+| **Prompt Enhancement** | Role runtime (`services/llm`) | `llm.py` maps media kind to `prompt_video`/`prompt_image`; orders provider instances with fallbacks, checks context and budget, and records provenance. HTTP enhancement runs before the video pipeline loads; local models are released afterwards. |
 | **Backend → SAM** | HTTP REST (port 8001) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. |
 | **Timeline → Player** | Headless rAF subscription | `PlaybackEngine` drives `currentTime` via `requestAnimationFrame` with cached layout. `CinematicPlayer` subscribes with throttled drift correction (250ms). |
 | **Playback → Audio** | `GlobalAudioManager` singleton | Web Audio API (`AudioContext` + `AudioBufferSourceNode`) for precise cross-browser playback. Buffers decoded upfront; drift tolerance 0.3s. |
@@ -212,7 +214,7 @@ Shot editing panel with sub-components.
 | Component | Role |
 |---|---|
 | `InspectorPanel.tsx` | Master panel — shows selected shot details, generate/cancel/extend |
-| `LLMSettings.tsx` | AI settings — provider selection (Gemma/Ollama), model dropdown with 👁️ vision badges, keep_alive toggle |
+| `LLMSettings.tsx` (legacy) | Two-provider `prompt_video` quick switch; links to Studio for everything else |
 | `ShotParameters.tsx` | Resolution, frames, FPS, seed controls |
 | `AdvancedSettings.tsx` | CFG scale, pipeline override, enhance prompt toggle, enable AE, True CFG |
 | `ConditioningEditor.tsx` | Image/video conditioning management with drag-drop |
@@ -234,3 +236,18 @@ Isolated segmentation and tracking service.
 | `POST /track/remove` | Remove prompt from tracking session |
 | `POST /edit/track/save` | Export tracking masks + metadata to disk |
 | `POST /edit/track/load` | Reload saved tracking data from disk |
+
+### G. The LLM Configuration Plane
+Persisted, local-first, and cloud-optional.
+
+| Component | Role |
+|---|---|
+| `services/llm/store.py` | Revisioned `LLMSettings` v2 document in `app_setting`: provider instances, roles, budget, last eval; redacted reads; key source/status |
+| `services/llm/providers.py` | Wire adapters (`gemma_native`, `ollama_native`, `openai_chat`, `anthropic_messages`) with images, streaming, warm/unload, and capability parsing |
+| `services/llm/runtime.py` | Role plans, context preflight, budget checks, fallback, cancellation, telemetry, prompt provenance |
+| `services/llm/discovery.py` | Loopback scan identified by catalog shape (not just an open port); `needs_key` on 401/403 |
+| `services/llm/eval.py` + `fixtures.py` | Local shot/image/script fixtures, pass rate and p50, recommended plan |
+| `services/llm/budget.py` | Fail-closed cloud pricing, daily ledger, spend summary |
+| `services/llm/profiles.py` | Sovereign local / Local preferred / Hybrid routing presets |
+| `routes/settings.py` | Snapshot, revisioned save, air-gap patch, budget, models, discover/attach, verify/warm/remove, test + SSE test, health, eval/apply, profiles, spend |
+| `LLM demos: Studio Setup → AI & LLM` | Provider cards, capability table, role matrix, Check plan, eval table, budget/profiles, streaming test |

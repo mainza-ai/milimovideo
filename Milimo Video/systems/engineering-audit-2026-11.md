@@ -1,7 +1,7 @@
 ---
 type: systems
 created: 2026-11-16
-updated: 2026-11-16
+updated: 2026-11-17
 tags: audit security correctness persistence jobs nle render quality
 sources:
   - backend/
@@ -540,7 +540,7 @@ The v2 roadmap's Phase 0 asked for the code truth. Here it is:
 
 | Claim in docs | Code truth |
 |---|---|
-| "Five routers" | **Eleven / 113 routes**: projects, jobs, assets, storyboard, elements, shots, models, planner, review, share, depth |
+| "Five routers" | **Eleven / 113 routes at audit time** (now twelve / 133 with the settings router): projects, jobs, assets, storyboard, elements, shots, models, planner, review, share, depth |
 | React 18 | **React 19.2** (`web-app/package.json`); legacy UI also runs on it |
 | Chained generation triggers above 505 frames | Triggers above `config.NATIVE_MAX_FRAMES = 121`; chunk size 121, overlap 25 |
 | `NATIVE_MAX_FRAMES = 121` comment says "~20.2s at 25fps" | 121 / 25 = **4.84s**; 20.2s is the old 505-frame number. The comment is stale |

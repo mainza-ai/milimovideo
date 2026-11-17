@@ -478,6 +478,17 @@ Common issues:
   intersects the cue timings.
 - **3D blank:** WebGL may be unavailable; the modal reports it and the editor stays
   usable.
+- **A role stopped working:** Setup → AI & LLM → **Check plan** lists role models
+  missing from a live catalog. Reassign the role or attach/verify the engine.
+- **Provider unreachable:** use **Verify**; check the base URL, that the engine is
+  running, and `needs key` for authenticated endpoints.
+- **Cloud call refused:** cloud needs `MILIMO_LLM_CLOUD=1`, air-gap off, a positive
+  daily budget, and a known model price. The error names the missing condition.
+- **Prompt enhancement is slow:** the model was cold. **Warm** it, or raise its
+  `keep_alive`; a 27B load can take ~36 s, a 3B a few seconds.
+- **Enhancement did nothing:** the role may be unassigned or the provider failed.
+  The job keeps the original prompt and records the failed role in
+  `Job.params_json.llm`.
 
 ---
 

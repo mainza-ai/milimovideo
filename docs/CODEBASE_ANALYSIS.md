@@ -43,7 +43,7 @@ The frontend relies on a single `useTimelineStore` composed from **7 slices** (P
 Real-time progress uses SSE (`EventManager` → `ServerSlice.handleServerEvent`). On page refresh, `jobPoller.ts` performs a one-shot sync to recover in-flight job state from the database.
 
 ### 5. Storyboard → Timeline Pipeline
-Scripts are parsed into `Scene` → `Shot` hierarchies via two paths: **`ScriptParser`** (regex-based screenwriting format) for instant structured parsing, or **`ai_parse_script()`** (Gemma 3 AI via LTX-2 text encoder) for intelligent free-form text analysis with cinematic shot type suggestions. The storyboard supports AI concept art thumbnails (Flux 2, 512×320), batch video generation, drag-to-reorder shots, scene name editing, and Push to Timeline to commit scenes/shots directly into the NLE.
+Scripts are parsed into `Scene` → `Shot` hierarchies via two paths: **`ScriptParser`** (regex-based screenwriting format) for instant structured parsing, or **`ai_parse_script()`** (the `script_parse` role: a local HTTP model by default, Gemma when assigned) for intelligent free-form text analysis with cinematic shot type suggestions. The storyboard supports AI concept art thumbnails (Flux 2, 512×320), batch video generation, drag-to-reorder shots, scene name editing, and Push to Timeline to commit scenes/shots directly into the NLE.
 
 ### 6. SAM 3 as Isolated Microservice
 SAM 3 runs on port 8001 as a standalone FastAPI server (`sam3/start_sam_server.py`). It supports text-prompted segmentation (`Sam3Processor`), click-to-segment (`inst_interactive_predictor`), and video object tracking (`Sam3VideoPredictor`, lazy-loaded with MPS/CUDA/CPU device auto-detection). The main backend communicates with it via HTTP POST through `InpaintingManager` and `TrackingManager`. Inpaint jobs are persisted as `Job` DB records for status polling via `/status/{job_id}`.
@@ -59,14 +59,23 @@ The codebase is designed to run on Apple Silicon (MPS) with CUDA as the primary 
 `MemoryManager` (in `memory_manager.py`) enforces mutual exclusion between heavy GPU models on unified memory. On Apple Silicon, LTX-2 (~76GB), Flux 2 (~36GB), and Ollama (~49GB) can collectively exceed 128GB. The manager uses a slot-based conflict system:
 - `model_engine.py` calls `prepare_for("video")` before loading LTX → unloads Flux
 - `flux_wrapper.py` calls `prepare_for("image")` before loading Flux → unloads LTX
-- Ollama is managed externally via `keep_alive: 0` to unload after use
+- `llm_http` marks a local LLM call; `prepare_for("video"/"image")` drops it, and
+  `runtime.release_local()` unloads every local role model after enhancement
 
-### 9. Configurable LLM Provider
-Prompt enhancement routes through `llm.py`, a unified dispatcher supporting two providers:
-- **Gemma** (built-in): Uses the LTX-2 text encoder's `_enhance()` method directly on-device
-- **Ollama** (local): HTTP API to any Ollama model with `keep_alive` control for VRAM management
-
-The provider is configurable at runtime via `GET/PATCH /settings/llm` endpoints and the `LLMSettings.tsx` frontend component. Vision-capable Ollama models are auto-detected via `/api/tags`.
+### 9. Local-First LLM Configuration Plane
+Prompt enhancement and script parsing are roles in a persisted plane
+(`services/llm/`), not a global switch:
+- **Providers**: Gemma (in-process), Ollama, oMLX, Strata, LM Studio, and any
+  OpenAI-compatible server, plus opt-in OpenAI/Anthropic. Instances are keyed by
+  stable id (`ollama`, `openai_compatible@host:port`), so several coexist.
+- **Roles**: `prompt_video`, `prompt_image`, `script_parse`, `agent_plan`,
+  `review_critic`, `continuity`, with ordered fallbacks and explicit unassignment.
+- **Runtime**: context preflight, capability gating, fallback, cancellation,
+  streaming negotiation, telemetry, and `Job.params_json.llm` provenance.
+- **Plane**: discovery, capability catalog, verify/warm, local role eval +
+  recommended plan, cloud budget/eval gate, and staged profiles in Studio Setup.
+- **Generation**: HTTP enhancement runs before the video pipeline loads; local
+  models are released afterwards and tracked by the `llm_http` memory slot.
 
 ## Technology Stack
 
@@ -81,7 +90,7 @@ The provider is configurable at runtime via `GET/PATCH /settings/llm` endpoints 
 | **Video AI** | LTX-2 (19B Dual-Stream Transformer, three pipelines + chained gen) |
 | **Image AI** | Flux 2 Klein 9B (FluxInpainter with IP-Adapter, True CFG, RePaint inpainting) |
 | **Segmentation AI** | SAM 3 (microservice on port 8001, `Sam3Processor` + `inst_interactive_predictor` + `Sam3VideoPredictor` with MPS/CUDA/CPU device support) |
-| **Prompt Enhancement** | Configurable: Gemma (built-in) or Ollama (local LLM via HTTP API) |
+| **Prompt Enhancement** | Local-first role plane: Gemma (in-process), Ollama, oMLX, Strata, LM Studio, OpenAI-compatible; optional cloud |
 | **Memory Management** | Central `MemoryManager` — slot-based mutual exclusion for GPU models |
 | **Video Processing** | FFmpeg (thumbnails, frame extraction, encoding, overlap trimming, concat) |
 | **Animation** | Framer Motion |

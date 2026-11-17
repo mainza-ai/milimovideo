@@ -6,12 +6,15 @@ tags: llm local-first ollama omlx strata roles roadmap implemented
 sources:
   - llm-settings-audit-2026-11.md
   - ../../backend/services/llm/
+  - ../../backend/routes/settings.py
   - ../../backend/tasks/video.py
   - ../../backend/memory_manager.py
+  - ../../web-app/src/studio/surfaces/LLMSettingsPanel.tsx
 related:
   - llm-settings-audit-2026-11.md
   - prompt-enhancement.md
   - architecture.md
+  - data-models.md
   - ../concepts/memory-slots.md
   - ../roadmap/implementation-plan-2026-11.md
 ---
@@ -55,6 +58,25 @@ All three engines were running; a scratch backend seeded from discovery:
 - Guards: air-gap refuses a cloud call, the eval gate refuses a cloud assignment,
   a 600k-char prompt fails preflight with the 131072 limit, and an in-use
   instance cannot be removed.
+
+### Where the plane lives
+
+| Layer | File |
+|---|---|
+| Settings document, instances, CAS, redaction, telemetry | `backend/services/llm/store.py` |
+| Instance ids and URL normalisation | `backend/services/llm/instances.py` |
+| Capability classification, context extraction, default picker | `backend/services/llm/capabilities.py` |
+| Wire adapters: catalog, images, streaming, warm/unload | `backend/services/llm/providers.py` |
+| Role plans, preflight, budget, fallback, provenance | `backend/services/llm/runtime.py` |
+| Shape-verified loopback discovery | `backend/services/llm/discovery.py` |
+| Role fixtures and eval | `backend/services/llm/eval.py`, `fixtures.py` |
+| Cloud pricing and daily ledger | `backend/services/llm/budget.py` |
+| Sovereign / local / hybrid presets | `backend/services/llm/profiles.py` |
+| Compatibility facade (`enhance_prompt`) | `backend/llm.py` |
+| HTTP surface | `backend/routes/settings.py` |
+| Memory slot and unload policy | `backend/memory_manager.py`, `runtime.release_local()` |
+| Generation integration | `tasks/video.py`, `tasks/chained.py`, `tasks/image.py`, `storyboard/manager.py` |
+| Studio UI | `web-app/src/studio/surfaces/LLMSettingsPanel.tsx` (+ legacy header popover) |
 
 ### Still open
 

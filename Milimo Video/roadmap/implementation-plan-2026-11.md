@@ -85,10 +85,10 @@ regression, and the durable ledger are adopted.
 **Verification commands**
 
 ```bash
-./milimov/bin/python -m pytest        # 82 passed
+./milimov/bin/python -m pytest        # 125 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
 cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # clean
-cd web-app && npm run test:e2e        # 17 Playwright tests
+cd web-app && npm run test:e2e        # 21 Playwright tests
 curl http://127.0.0.1:8000/health     # device/queue/slots/disk
 ```
 

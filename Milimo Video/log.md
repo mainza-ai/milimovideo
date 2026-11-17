@@ -1231,3 +1231,22 @@ and fell back when stalled), eval 100% (1.9 s / 6.4 s / 17.0 s), apply plan,
 air-gap + eval-gate refusals, 131072-token preflight, unload to empty `/api/ps`,
 and Strata vision describing a generated image. 125 backend, 61 Vitest, 21
 Playwright, ruff/tsc/ESLint/build/bundle clean.
+
+## [2026-11-17] docs | README, technical docs, and wiki sync
+
+Brought the human-facing docs up to the implemented LLM plane. README gained a
+"Local-first AI configuration" section, a twelve-router/133-route surface, the
+`0005_app_settings` revision, the optional LLM environment variables, updated
+verification counts (125/61/21), and the LLM caveats. The architecture doc now
+diagrams the role runtime and local HTTP engines and adds a configuration-plane
+component table; data models document the `app_setting` table, schema v2,
+sealed keys, and spend ledger; AI pipelines replace the two-provider section with
+the role runtime, residency/release rules, discovery/eval/budget, image wires,
+and role-based script parsing; execution flow shows pre-pipeline enhancement and
+the `script_parse` path; file dependencies map the settings router and
+`services/llm/*`.
+
+Wiki: data models add `appsetting`/`0005`, cloud-engines records the implemented
+guardrails, the v2 LLM-slot recommendation points at per-role eval, and the
+local-first page gains a file/route map. See
+[[systems/llm-local-first-next-2026-11]].

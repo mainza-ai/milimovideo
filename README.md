@@ -98,6 +98,31 @@ a backend supervisor.
 
 ![Milimo Image Generation](assets/milimo_video_image_generation.png)
 
+### Local-first AI configuration
+
+Every AI text job is a role, not a global toggle. **Setup → AI & LLM** manages
+provider *instances* (`ollama`, `openai_compatible@127.0.0.1:8787`, …), so Ollama,
+oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
+
+- **Roles** — `prompt_video`, `prompt_image`, `script_parse`, `agent_plan`,
+  `review_critic`, and `continuity` route independently with ordered fallbacks.
+  Gemma only serves video prompts inside a loaded LTX pipeline; image and script
+  roles use a local HTTP model.
+- **Capability truth** — the catalog reports context window, parameter size,
+  vision, and chat/embedding eligibility. Embedding and tool/audio models cannot
+  be assigned to a text role.
+- **Discovery and health** — scan loopback ports, attach an engine, verify it,
+  warm it, and read load time / tokens-per-second. `Check plan` names any role
+  model missing from a live catalog.
+- **Eval and presets** — run local shot/image/script fixtures, record pass rate
+  and p50 per role, apply the recommended plan, and stage Sovereign local /
+  Local preferred / Hybrid profiles.
+- **Cloud on top** — cloud calls require `MILIMO_LLM_CLOUD=1`, air-gap off, a
+  positive daily budget, and a known per-model rate. Unknown prices fail closed;
+  an optional eval gate requires a passing eval before a cloud role is saved.
+- **Vision and provenance** — reference images are sent over Ollama/OpenAI/
+  Anthropic wires, and each take records the model that enhanced its prompt.
+
 ## 🛠️ Architecture
 
 ![Milimo Architecture](assets/Milimo_Video_Studio_Architecture_infograph.png)
@@ -110,18 +135,20 @@ a backend supervisor.
 | **Video AI** | LTX-2 19B — `ti2vid`, `ic_lora`, `keyframe`, chained generation |
 | **Image AI** | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint inpainting |
 | **Segmentation** | SAM 3 microservice (port 8001) — text/box/click masks and video tracking |
-| **Prompt AI** | Gemma 3 via the LTX text encoder; optional Ollama path |
+| **Prompt AI** | Local-first role plane — Gemma 3 in-process, Ollama, oMLX, Strata, LM Studio, vLLM/llama.cpp; optional cloud behind a daily budget, eval gate, and air-gap |
 | **Processing** | FFmpeg/ffprobe — render, probes, thumbnails, frame extraction, stitching |
 | **Desktop** | Tauri 2 — native Open/Save dialogs, backend supervisor, sidecar-binary lookup |
 
 ### Backend surface
 
-- Eleven routers and 113 routes: projects, jobs, assets, storyboard, elements,
-  shots, models, planner, review, share, depth.
+- Twelve routers and 133 routes: projects, jobs, assets, storyboard, elements,
+  shots, models, planner, review, share, depth, settings.
 - Pydantic write boundaries, generated OpenAPI TypeScript, and zod contract checks.
 - Alembic baseline `0001_baseline` plus `0002_render_settings`,
-  `0003_seed_lock`, and `0004_asset_thumbnail`; legacy DBs are repaired and
-  stamped at head.
+  `0003_seed_lock`, `0004_asset_thumbnail`, and `0005_app_settings`; legacy DBs
+  are repaired and stamped at head.
+- LLM plane: persisted settings with provider instances and revision CAS,
+  capability-aware discovery, role eval, cloud spend ledger, and staged profiles.
 - `QueuedJob` ledger, one global GPU semaphore, one OOM retry, startup recovery,
   idempotent shot jobs, pause/resume dispatch, queue position/estimate.
 - `X-Request-ID`, timing logs, `/health`, `/metrics/jobs`, and an error-budget UI.
@@ -153,6 +180,8 @@ a backend supervisor.
   [SAM 3 Bible](docs/sam3-bible.md)
 - [Implementation plan](Milimo%20Video/roadmap/implementation-plan-2026-11.md) —
   scoped v1 status, remaining/deferred items, verification matrix.
+- [LLM local-first plan](Milimo%20Video/systems/llm-local-first-next-2026-11.md) —
+  live measurements, findings, and the implemented L5–L9 plane.
 
 ## 🚀 Getting Started
 
@@ -197,6 +226,11 @@ still runs.
 
 Open **`http://localhost:5173/studio`** for the Studio shell. The legacy editor is
 at `/`.
+
+Local LLM engines are discovered automatically. Optional environment:
+`MILIMO_LLM_CLOUD=1` enables cloud providers (still gated by air-gap, budget, and
+price), `MILIMO_SECRET_KEY` seals stored API keys with AES-256-GCM, and
+`MILIMO_LLM_RATE_CARD` points at a JSON price override.
 
 Desktop:
 
@@ -250,22 +284,23 @@ masking/tracking toggles. New work belongs in Studio.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                    # 82 tests
+./milimov/bin/python -m pytest                    # 125 tests
 ./milimov/bin/python -m ruff check backend        # correctness rules
 ./milimov/bin/python backend/verify_setup.py      # 0 failures expected
 
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                          # 56 tests
+npm test                                          # 61 tests
 npm run build
 npm run check:bundle                              # JS budget
-npm run test:e2e                                  # 17 Playwright tests
+npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 84 backend tests, 56 Vitest tests, and 17 Playwright
+The last verified run was 125 backend tests, 61 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
-responsive layout/overflow, perf, and visual checks.
+LLM settings (stream/eval/profile), responsive layout/overflow, perf, and visual
+checks.
 
 ## 🧭 Project layout
 
@@ -290,8 +325,13 @@ dev_diary/         Build log and social notes
   lexical matching, not embeddings; Shorts/lenses have no template packs.
 - **Depth model** is downloaded separately and is not shipped in the repo.
 - **Visual baselines** are platform-tolerant and locally generated.
-- **Phase 6 v2 work** (eval harness, model swaps, MLX/FP8 lanes, agent crew) is a
-  separate program, not part of scoped v1.
+- **LLM caveats:** cancelling a non-stream HTTP call is timeout-bounded rather
+  than a socket abort; chained chunk-0 enhancement still follows the pipeline
+  load; Strata reports no context window; cloud list prices are reference data
+  (`MILIMO_LLM_RATE_CARD` overrides); vision detection is heuristic; the legacy
+  `/` popover edits only `prompt_video`.
+- **Phase 6 v2 work** (model-artifact eval, model swaps, MLX/FP8 lanes, agent
+  crew) is a separate program, not part of scoped v1.
 
 ## 🤝 Community
 

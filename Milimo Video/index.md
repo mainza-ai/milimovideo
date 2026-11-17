@@ -16,8 +16,8 @@ navigate, then drills into pages.
 - [systems/nle-timeline](systems/nle-timeline.md) — the magnetic timeline: V1/V2/A1
   tracks, Zustand store, PlaybackEngine, snapEngine.
 - [systems/data-models](systems/data-models.md) — SQLite/SQLModel entities
-  (Project/Scene/Shot/Element/Asset/Job), Pydantic schemas, TypeScript types,
-  on-disk storage layout.
+  (Project/Scene/Shot/Element/Asset/Job/AppSetting), Pydantic schemas, TypeScript
+  types, Alembic revisions, and the LLM settings/spend documents.
 - [systems/frontend-state](systems/frontend-state.md) — the Zustand 7-slice
   "God Store": slice inventory, persist/zundo config, selector discipline and
   perf strategies, server-sync via SSE.

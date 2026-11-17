@@ -41,6 +41,15 @@ local GPU hot path, semaphore, and memory slots are untouched. Local (LTX-2 / Fl
 Ollama-Gemma) remains the default; cloud runs concurrently with local work and the
 studio keeps working fully offline with zero cloud calls.
 
+## Implementation status (2026-11-17)
+
+The text-engine half of this proposal is now real and local-first: provider
+instances, role routing, discovery/verify/warm, a local role eval, a daily cloud
+budget with fail-closed pricing, an eval gate for cloud role assignments, and
+Sovereign/Local/Hybrid profiles. Cloud egress still requires `MILIMO_LLM_CLOUD=1`,
+air-gap off, a positive budget, and a known rate. Video/image cloud engines remain
+out of scope. See [[../systems/llm-local-first-next-2026-11]].
+
 ## Alternatives Considered
 
 - **Local-only (status quo)**: kept as the default. The proposal doesn't replace it.

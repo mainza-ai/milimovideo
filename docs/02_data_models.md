@@ -391,6 +391,21 @@ classDiagram
 | `element` | `id` (UUID hex) | indexed by project_id | Story elements (characters/locations/objects) with trigger words for IP-Adapter |
 | `asset` | `id` (UUID hex) | nullable project_id | Uploaded/generated media files. `meta_json` stores generation params (prompt, seed, guidance, reference elements). |
 | `job` | `id` (string) | nullable project_id | Async task tracking with progress and results. Status transitions: `pending → processing → completed/failed/cancelled`. |
+| `app_setting` | `key` (string) | none | Versioned JSON documents. `llm` holds `LLMSettings` v2 (provider instances, roles, budget, last eval, revision); `llm_spend` holds the daily cloud ledger. |
+
+### LLM settings document (`app_setting.key = "llm"`)
+
+| Field | Meaning |
+|---|---|
+| `schema_version` / `revision` | Document version and CAS token; stale `PUT` returns 409 |
+| `providers` | Instance map keyed by stable id (`ollama`, `openai_compatible@host:port`) with type, wire, base URL, model, timeout, keep-alive, and secret status |
+| `roles` | Six role assignments (`prompt_video`, `prompt_image`, `script_parse`, `agent_plan`, `review_critic`, `continuity`) with provider/model/fallback/sampling; empty provider = explicitly unassigned |
+| `budget` | `daily_usd` (0 disables cloud spend) and `eval_gate` |
+| `last_eval` | Server-written pass rate, p50, cases, and per-role provider/model; a client cannot forge it |
+
+Secrets are sealed with AES-256-GCM when `MILIMO_SECRET_KEY` is set; reads return
+only `has_key`, `secret_source`, and `key_status`. The spend ledger is a separate
+`app_setting` row capped at the last 200 entries.
 
 ### Connection Configuration
 ```python

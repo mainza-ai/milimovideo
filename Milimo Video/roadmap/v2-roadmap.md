@@ -114,7 +114,9 @@ Phase 0 begins.
 
 - **Qwen3.x 4B–9B class** for prompt rewriting (replaces/augments Gemma 3; Apache
   2.0, ungated — no HF gating friction). Keep Ollama as the runtime; keep the
-  `keep_alive: 0` unload discipline.
+  `keep_alive: 0` unload discipline. *The role plane now makes this a per-role
+  choice rather than a swap; models are compared with the local eval before
+  assignment — see [[../systems/llm-local-first-next-2026-11]].*
 - **Qwen3-VL 8B** (6.1GB, 256K context, native video understanding) for shot analysis
   and pre-viz critique — the VLM in the VQQA refinement loop (below).
 

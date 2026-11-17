@@ -40,15 +40,19 @@ sequenceDiagram
     Worker->>Worker: Check num_frames == 1 → delegate to Flux 2 (skip LTX)
     Worker->>Worker: Check num_frames > 505 → delegate to chained gen
 
+    Note over Worker: HTTP prompt role (before the pipeline loads)
+    Worker->>Worker: Resolve prompt_video/prompt_image; if not Gemma, enhance now
+    Worker->>Utils: update_job_db(enhanced_prompt), release local LLM models
+
     Worker->>ME: load_pipeline("ti2vid", loras)
-    ME->>ME: Unload previous pipeline (gc + cache clear)
+    ME->>ME: Unload previous pipeline (gc + cache clear), drop llm_http
     ME->>LTX: TI2VidTwoStagesPipeline(checkpoint, ...)
     ME->>ME: MPS fix: force VAE to float32
     ME-->>Worker: Pipeline ready
 
-    Note over Worker: Prompt Enhancement
+    Note over Worker: In-pipeline enhancement (Gemma role only)
     Worker->>Worker: llm.enhance_prompt(prompt, text_encoder, image_path)
-    Worker->>Utils: update_shot_db(shot_id, {enhanced_prompt_result: ...})
+    Worker->>Utils: update_job_db(enhanced_prompt), release local LLM models
     Worker->>Utils: broadcast_progress(job_id, 5, enhanced_prompt)
     Utils-->>UI: SSE event: {type: "progress", enhanced_prompt: "..."}
 
@@ -347,23 +351,27 @@ sequenceDiagram
     participant API as FastAPI
     participant ME as ModelManager
     participant Gemma as Gemma 3 Text Encoder
+    participant LLM as services/llm runtime
     participant AIS as ai_storyboard.py
     participant Parser as ScriptParser (fallback)
 
     UI->>Store: aiParseScript(scriptText)
     Store->>API: POST /projects/{id}/storyboard/ai-parse {script_text}
 
-    API->>ME: manager.current_pipeline (check Gemma loaded)
-    
-    alt Gemma Available
-        API->>AIS: ai_parse_script(text, text_encoder)
+    API->>API: runtime.resolve("script_parse")
+
+    alt role usable
+        opt script_parse is Gemma
+            API->>ME: load_pipeline("ti2vid") for the text encoder
+        end
+        API->>AIS: ai_parse_script(text, text_encoder=None|encoder)
         AIS->>AIS: Build chat messages (system + user)
-        AIS->>Gemma: text_encoder._enhance(messages, max_new_tokens=1024)
-        Gemma-->>AIS: Raw JSON text
-        AIS->>AIS: _extract_json() — strip fences, parse JSON
+        AIS->>LLM: runtime.complete() — local HTTP model, or Gemma encoder
+        LLM-->>AIS: Raw JSON text
+        AIS->>AIS: _extract_json() — strip fences, unwrap {"scenes": [...]}
         AIS->>AIS: _validate_scenes() — normalize shot_types
         AIS-->>API: List[ParsedScene]
-    else Gemma Not Loaded
+    else no usable provider
         API->>Parser: script_parser.parse_script(text) — regex fallback
         Parser-->>API: List[ParsedScene]
     end
