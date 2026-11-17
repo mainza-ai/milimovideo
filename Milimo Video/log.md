@@ -1085,3 +1085,13 @@ databases, backups, projects, and user data intact. Updated AGENTS.md for React
 deliver/shorts/desktop capabilities, the explicit remaining/deferred gaps, and the
 current verification matrix including ruff, bundle budget, OpenAPI drift, and
 `cargo check`.
+
+## [2026-11-17] audit | studio chrome, density, and responsive layout
+
+Added [[systems/studio-ux-audit-2026-11]] with live Playwright measurements at
+2048/1440/1280/1024/900/768. Confirmed: mode-rail labels all clip (53–85px labels
+in 40px buttons), Inspector tabs are 486px in a 319px scrollbar-less scroller,
+board toolbar is 1167px in 786/730px containers, and top-bar tabs overlap the
+project switcher at 1024. Documented P0–P3 findings, missing UX functionality, and
+F6 chrome-stabilization tasks; updated the frontend-refactor plan, implementation
+plan, and wiki index.

@@ -51,10 +51,15 @@ at `/`.
 | **F4 Review** | **Done for scoped F4** | Plan cards/approval/undo, recipes, comments/approvals/activity, needs-you, share links, compare, ranked search, takes, deliver presets, LoRA activation/strength, reviewer→agent E2E |
 | **F4 Library/Deliver** | **Done for scoped F4** | Assets/references/takes/search tabs, master-reference CRUD with image/trigger, ranked local search, take lineage + select/favorite, presets, render history, caption burn toggle, CRF/encoder/audio/loudness controls, integrity scan/repair |
 | **F5 Shorts/lenses** | **Done for scoped F5** | Shorts candidates/scores/editable range/source export; pipeline lens recipe import/export; blocking lens; lazy 3D previz; Yjs board spike; Tauri shell with native open/save, a built debug binary, and sidecar-binary resolution. A bundled Python runtime is not shipped |
+| **F6 Chrome stabilization** | **Planned — P0** | See [[../systems/studio-ux-audit-2026-11.md]]: top-bar collision at ~1024, board toolbar overflow, clipped mode rail labels, hidden inspector tabs, 7–10px type, sub-28px controls |
 
-**Next:** keep `/` until the final cutover gates are green. A bundled Python
-sidecar binary remains the only F5 packaging gap; the supervisor resolves one
-when it exists and falls back to `run_backend.sh`.
+**Next:** F6 chrome stabilization from
+[[../systems/studio-ux-audit-2026-11.md]]. The shell is functionally complete but
+breaks at 1024px: nav overlaps, the board toolbar overflows, the mode rail clips
+labels, and the Inspector hides tabs in a scrollbar-less scroller. Keep `/` until
+the final cutover gates are green. A bundled Python sidecar binary remains the only
+F5 packaging gap; the supervisor resolves one when it exists and otherwise falls
+back to `run_backend.sh`.
 
 ## Why This Refactor
 
@@ -273,6 +278,30 @@ the agent plan, the new take is approved, and the old version remains comparable
 
 Do not start F5 before F2/F4 gates. The pipeline/blocking/3D lenses are
 differentiators, not v1 requirements.
+
+### F6 — Chrome, Density, and Responsive Stabilization (P0–P3)
+
+Driven by [[../systems/studio-ux-audit-2026-11.md]]. This is a chrome/layout pass,
+not a board/timeline engine rewrite.
+
+| Task | Priority | Change | Acceptance | Effort |
+|---|---|---|---|---|
+| F6-01 | P0 | Responsive top bar; compact surface switcher at <1280 | All surfaces clickable at 1024/1280/1440; no overlaps | S |
+| F6-02 | P0 | Board toolbar groups + `More` menu; flexible search | No child outside the toolbar at 1440/1024; actions reachable | M |
+| F6-03 | P0 | Inspector primary tabs + overflow menu/chevrons | Active tab always visible; no hidden scrollbar | S |
+| F6-04 | P0 | Mode rail 72px labelled or icon-only + tooltip | No clipped labels 2048–768; accessible names | S |
+| F6-05 | P1 | Type/spacing tokens: 12–13px base, 11px meta, 4/8/12/16/24/32 | No body text <11px; all-caps only for section labels | M |
+| F6-06 | P1 | Control heights: 32px min, 40px rail, 28px table exception | Primary controls ≥32px | M |
+| F6-07 | P1 | Status hierarchy; one contextual primary action | Save/health summary only in the top bar | S |
+| F6-08 | P1 | Card quick actions, context menu, bulk action bar | Generate/open/duplicate/delete without Inspector | M |
+| F6-09 | P2 | Collapsible spine, Generate panes, Inspector, dock | Persisted collapse state; stage remains usable | M |
+| F6-10 | P2 | Command palette + shortcut sheet | `⌘K` reaches every surface/action; help panel | M |
+| F6-11 | P3 | Density/layout preference | Preference survives reload | S |
+| F6-12 | P0 | Responsive visual/overflow tests at 5 widths | CI fails on nav overlap, toolbar overflow, clipped labels | S |
+
+**F6 gate:** no overlapping top-bar controls; no clipped rail/tabs/toolbars; no
+hidden active Inspector tab; no body text below 11px; primary controls ≥32px; every
+surface reachable at 2048/1440/1024/900/768; axe and keyboard gates green.
 
 ## Gates
 

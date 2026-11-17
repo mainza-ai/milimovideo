@@ -38,6 +38,10 @@ navigate, then drills into pages.
   Story/Generate/Edit/Review/Library/Deliver/Shorts/Setup surfaces, board + timeline
   as peers, canonical shot graph, separate stores, canvas/timeline engines,
   performance budgets, and the remaining scoped gaps.
+- [systems/studio-ux-audit-2026-11](systems/studio-ux-audit-2026-11.md) — 2026-11
+  chrome/density audit: measured 1024px nav collision, board-toolbar overflow,
+  clipped rail labels, hidden Inspector tabs, typography/control-size evidence,
+  missing UX functionality, and the F6 stabilization plan.
 
 ## Models
 - [models/ltx-2](models/ltx-2.md) — LTX-2 19B dual-stream transformer: the three

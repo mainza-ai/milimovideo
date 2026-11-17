@@ -57,6 +57,7 @@ single-engineer guidance.
 | Front-end F4 integrity | **Done** | scan + repair for missing media, orphan scene/board references, sequence order, and caption ranges |
 | Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview with start/end conditioning/batch/inpaint/favorites, queue position, pause/resume, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets, encoding controls, and in-flight render cancel) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; shorts/lens packaging remains scoped v1 |
 | Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native open/save/build + sidecar-binary resolution |
+| Front-end F6 | **Planned — P0** | chrome stabilization: top-bar collision, board-toolbar overflow, clipped rail labels, hidden inspector tabs, type/control density |
 
 **Still open / deferred:**
 
@@ -67,6 +68,10 @@ single-engineer guidance.
   crew remain a separate model-artifact program.
 - **Scoped-v1 gaps** — no transitions/LUT/titles/A2 track, lexical rather than
   embedding search, and no shorts/lens template packs.
+- **F6 chrome stabilization** — the Studio works but is too dense and breaks at
+  ~1024px. The audit and prioritized F6 tasks live in
+  [[frontend-refactor-2026-11]] and
+  [[../systems/studio-ux-audit-2026-11]].
 - **Visual baselines** — platform-tolerant and locally generated.
 
 Depth uses an optional local Depth Anything V2 Small model downloaded in Setup.
