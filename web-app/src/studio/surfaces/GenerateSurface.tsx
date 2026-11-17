@@ -26,7 +26,7 @@ export function GenerateSurface() {
     const cancel = useStudioCancel();
     const [promptDraft, setPromptDraft] = useState<string | null>(null);
     const [batchBusy, setBatchBusy] = useState(false);
-    const [preview, setPreview] = useState<{ url: string | null; status: string } | null>(null);
+    const [preview, setPreview] = useState<{ url: string | null; status: string; path?: string } | null>(null);
     const [lensOpen, setLensOpen] = useState(false);
     const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(project.id);
 
@@ -80,6 +80,27 @@ export function GenerateSurface() {
         updateShot(shot.id, { prompt: next });
     };
 
+    const attachPreview = (frameIndex: number) => {
+        if (!preview?.path) return;
+        const timeline = shot.timeline.filter((item) => item.frameIndex !== frameIndex);
+        updateShot(shot.id, {
+            timeline: [
+                ...timeline,
+                {
+                    id: `conditioning_${preview.path}_${frameIndex}`,
+                    type: 'image',
+                    path: preview.path,
+                    frameIndex,
+                    strength: 1,
+                },
+            ],
+        });
+        useStudioDocumentStore.getState().addToast(
+            frameIndex === 0 ? 'Attached as the start frame' : 'Attached as the end frame',
+            'success',
+        );
+    };
+
     const previewFrame = async () => {
         setPreview({ url: null, status: 'queued' });
         try {
@@ -107,15 +128,18 @@ export function GenerateSurface() {
                 if (status.status === 'completed' && status.video_url) {
                     const path = status.video_url as string;
                     updateShot(shot.id, {
-                        timeline: [{
-                            id: `preview_${jobId}`,
-                            type: 'image',
-                            path,
-                            frameIndex: 0,
-                            strength: 1,
-                        }, ...shot.timeline],
+                        timeline: [
+                            ...shot.timeline.filter((item) => item.frameIndex !== 0),
+                            {
+                                id: `preview_${jobId}`,
+                                type: 'image',
+                                path,
+                                frameIndex: 0,
+                                strength: 1,
+                            },
+                        ],
                     });
-                    setPreview({ url: getAssetUrl(path) || null, status: 'completed' });
+                    setPreview({ url: getAssetUrl(path) || null, status: 'completed', path });
                     useStudioDocumentStore.getState().addToast('Preview frame attached at frame 0', 'success');
                     return;
                 }
@@ -322,10 +346,50 @@ export function GenerateSurface() {
                                 <span>{preview.status}</span>
                             </div>
                         )}
-                        <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
-                            Attached as conditioning at frame 0. Video generation still requires approval.
-                        </p>
-                    </div>
+                        {preview.path && (
+                        <div className="st-button-row" style={{ marginTop: 8 }}>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                onClick={() => attachPreview(0)}
+                            >
+                                Use as start frame
+                            </button>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                onClick={() => attachPreview(Math.max(0, shot.numFrames - 1))}
+                            >
+                                Use as end frame
+                            </button>
+                        </div>
+                    )}
+                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                        New previews attach at frame 0. End-frame conditioning uses frame {Math.max(0, shot.numFrames - 1)}.
+                    </p>
+                    {shot.timeline.length > 0 && (
+                        <div className="st-link-list" style={{ marginTop: 8 }}>
+                            {shot.timeline.map((item) => (
+                                <div className="st-link-row" key={item.id}>
+                                    <span className="st-chip">{item.frameIndex === 0 ? 'start' : item.frameIndex >= shot.numFrames - 1 ? 'end' : `frame ${item.frameIndex}`}</span>
+                                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.path}</span>
+                                    <button
+                                        type="button"
+                                        className="st-icon-button"
+                                        aria-label={`Remove conditioning at frame ${item.frameIndex}`}
+                                        onClick={() => updateShot(shot.id, {
+                                            timeline: shot.timeline.filter((candidate) => candidate.id !== item.id),
+                                        })}
+                                    >
+                                        <X size={11} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 )}
 
                 <div className="st-panel" style={{ marginTop: 16 }}>

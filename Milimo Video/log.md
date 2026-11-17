@@ -1000,3 +1000,10 @@ Enabled ASYNC221. Stitching, duration probes, thumbnail generation, last-frame
 extraction, and source probing now run through `asyncio.to_thread` instead of
 blocking the loop inside async routes/tasks. Added a real last-frame extraction
 test. Verified: 75 pytest, ruff clean, compileall.
+
+## [2026-11-17] generate | start/end frame conditioning
+
+Preview stills can now be attached as frame 0 or the final frame, replaced per
+frame, removed individually, and are listed with their frame index. Preview
+generation still attaches frame 0 automatically. Verified: 52 vitest, tsc clean,
+eslint 0 errors.

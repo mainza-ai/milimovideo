@@ -202,7 +202,9 @@ when the count is invalid. The lens copies/saves a reproducible recipe as JSON a
 ### Preview first
 
 **Preview frame** generates a still with the current prompt and attaches it as
-frame-0 conditioning. Inspect it before spending video time.
+frame-0 conditioning. Use **Use as end frame** to attach the same still at the
+last frame, or remove either conditioning image from the list. Inspect it before
+spending video time.
 
 ### Takes and favorites
 
