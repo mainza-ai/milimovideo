@@ -167,7 +167,6 @@ not just filtergraph strings.
   built).
 - Legacy `/` cutover is gated on the documented two-clean-release window.
 - Visual baselines are platform-tolerant but still local-generated.
-- Legacy `/` cutover.
 
 ---
 
