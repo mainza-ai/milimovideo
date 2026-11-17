@@ -816,7 +816,7 @@ export interface paths {
         };
         /**
          * Get Project Active Jobs
-         * @description Returns a list of active job IDs for compliance/persistence.
+         * @description Active and queued jobs for a project, with queue position and estimate.
          */
         get: operations["get_project_active_jobs_projects__project_id__active_jobs_get"];
         put?: never;
@@ -1140,6 +1140,23 @@ export interface paths {
          *     Both paths include element matching.
          */
         post: operations["ai_parse_projects__project_id__storyboard_ai_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/storyboard/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Storyboard Archive */
+        get: operations["get_storyboard_archive_projects__project_id__storyboard_archive_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1600,6 +1617,23 @@ export interface paths {
         patch: operations["update_shot_partial_shots__shot_id__patch"];
         trace?: never;
     };
+    "/shots/{shot_id}/favorite-take": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Favorite Take */
+        post: operations["favorite_take_shots__shot_id__favorite_take_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/shots/{shot_id}/generate": {
         parameters: {
             query?: never;
@@ -1932,6 +1966,11 @@ export interface components {
         };
         /** BoardArea */
         BoardArea: {
+            /**
+             * Collapsed
+             * @default false
+             */
+            collapsed: boolean;
             /** Color */
             color?: string | null;
             /** Height */
@@ -2198,6 +2237,11 @@ export interface components {
             /** Priority */
             priority?: number | null;
         };
+        /** FavoriteTakeRequest */
+        FavoriteTakeRequest: {
+            /** Job Id */
+            job_id?: string | null;
+        };
         /** GenerateAdvancedRequest */
         GenerateAdvancedRequest: {
             /** Project Id */
@@ -2278,6 +2322,8 @@ export interface components {
             points?: string | null;
             /** Prompt */
             prompt: string;
+            /** Shot Id */
+            shot_id?: string | null;
             /** Text Mask */
             text_mask?: string | null;
         };
@@ -2357,6 +2403,11 @@ export interface components {
              * @default []
              */
             captions: components["schemas"]["CaptionCue"][];
+            /**
+             * Captions Burn
+             * @default true
+             */
+            captions_burn: boolean;
             /** Created At */
             created_at?: number | null;
             /**
@@ -2368,6 +2419,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Render Preset */
+            render_preset?: string | null;
             /**
              * Resolution H
              * @default 512
@@ -2384,18 +2437,16 @@ export interface components {
              * Scenes
              * @default []
              */
-            scenes: {
-                [key: string]: unknown;
-            }[];
+            scenes: components["schemas"]["SceneState"][];
+            /** Script Content */
+            script_content?: string | null;
             /**
              * Seed
              * @default 42
              */
             seed: number;
             /** Shots */
-            shots: {
-                [key: string]: unknown;
-            }[];
+            shots: components["schemas"]["ShotState"][];
             /** Updated At */
             updated_at?: number | null;
         };
@@ -2431,6 +2482,8 @@ export interface components {
              * @default 18
              */
             crf: number;
+            /** End Frame */
+            end_frame?: number | null;
             /** Fps */
             fps?: number | null;
             /** Height */
@@ -2440,6 +2493,8 @@ export interface components {
              * @default fast
              */
             preset: string;
+            /** Start Frame */
+            start_frame?: number | null;
             /** Width */
             width?: number | null;
         };
@@ -2504,6 +2559,19 @@ export interface components {
             body?: string | null;
             /** Status */
             status?: ("open" | "resolved") | null;
+        };
+        /** SceneState */
+        SceneState: {
+            /** Id */
+            id?: string | null;
+            /** Index */
+            index?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Script Content */
+            script_content?: string | null;
+        } & {
+            [key: string]: unknown;
         };
         /** ScriptParseRequest */
         ScriptParseRequest: {
@@ -2638,6 +2706,167 @@ export interface components {
              * @default 768
              */
             width: number;
+        };
+        /** ShotState */
+        ShotState: {
+            /** Action */
+            action?: string | null;
+            /**
+             * Audio Fade In
+             * @default 0
+             */
+            audio_fade_in: number;
+            /**
+             * Audio Fade Out
+             * @default 0
+             */
+            audio_fade_out: number;
+            /**
+             * Audio Gain
+             * @default 1
+             */
+            audio_gain: number;
+            /**
+             * Audio Muted
+             * @default false
+             */
+            audio_muted: boolean;
+            /**
+             * Auto Continue
+             * @default false
+             */
+            auto_continue: boolean;
+            /**
+             * Blocking
+             * @default []
+             */
+            blocking: unknown[];
+            /**
+             * Cfg Scale
+             * @default 2
+             */
+            cfg_scale: number;
+            /** Character */
+            character?: string | null;
+            /** Created At */
+            created_at?: unknown | null;
+            /** Dialogue */
+            dialogue?: string | null;
+            /**
+             * Enhance Prompt
+             * @default true
+             */
+            enhance_prompt: boolean;
+            /** Enhanced Prompt Result */
+            enhanced_prompt_result?: string | null;
+            /** Favorite Take Id */
+            favorite_take_id?: string | null;
+            /** Fps */
+            fps?: number | null;
+            /**
+             * Height
+             * @default 512
+             */
+            height: number;
+            /** Id */
+            id?: string | null;
+            /** Index */
+            index?: number | null;
+            /**
+             * Keyframes
+             * @default []
+             */
+            keyframes: unknown[];
+            /** Last Job Id */
+            last_job_id?: string | null;
+            /** Matched Elements */
+            matched_elements?: unknown | null;
+            /**
+             * Negative Prompt
+             * @default
+             */
+            negative_prompt: string | null;
+            /**
+             * Num Frames
+             * @default 121
+             */
+            num_frames: number;
+            /**
+             * Pipeline Override
+             * @default auto
+             */
+            pipeline_override: string | null;
+            /** Project Id */
+            project_id?: string | null;
+            /**
+             * Prompt
+             * @default
+             */
+            prompt: string | null;
+            /** Scene Id */
+            scene_id?: string | null;
+            /**
+             * Seed
+             * @default 42
+             */
+            seed: number;
+            /** Selected Take Id */
+            selected_take_id?: string | null;
+            /** Sequence Index */
+            sequence_index?: number | null;
+            /** Shot Type */
+            shot_type?: string | null;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
+            /**
+             * Start Frame
+             * @default 0
+             */
+            start_frame: number;
+            /**
+             * Status
+             * @default pending
+             */
+            status: string;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /**
+             * Timeline
+             * @default []
+             */
+            timeline: unknown[];
+            /**
+             * Track Index
+             * @default 0
+             */
+            track_index: number;
+            /**
+             * Trim In
+             * @default 0
+             */
+            trim_in: number;
+            /**
+             * Trim Out
+             * @default 0
+             */
+            trim_out: number;
+            /**
+             * Upscale
+             * @default false
+             */
+            upscale: boolean;
+            /** Video Url */
+            video_url?: string | null;
+            /**
+             * Width
+             * @default 768
+             */
+            width: number;
+        } & {
+            [key: string]: unknown;
         };
         /** SplitShotRequest */
         SplitShotRequest: {
@@ -4936,6 +5165,37 @@ export interface operations {
             };
         };
     };
+    get_storyboard_archive_projects__project_id__storyboard_archive_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     batch_generate_projects__project_id__storyboard_batch_generate_post: {
         parameters: {
             query?: never;
@@ -5711,6 +5971,41 @@ export interface operations {
                 "application/json": {
                     [key: string]: unknown;
                 };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    favorite_take_shots__shot_id__favorite_take_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shot_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FavoriteTakeRequest"];
             };
         };
         responses: {

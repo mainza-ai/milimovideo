@@ -126,6 +126,11 @@
       },
       "BoardArea": {
         "properties": {
+          "collapsed": {
+            "default": false,
+            "title": "Collapsed",
+            "type": "boolean"
+          },
           "color": {
             "anyOf": [
               {
@@ -697,6 +702,23 @@
         "title": "EnqueueRequest",
         "type": "object"
       },
+      "FavoriteTakeRequest": {
+        "properties": {
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          }
+        },
+        "title": "FavoriteTakeRequest",
+        "type": "object"
+      },
       "GenerateAdvancedRequest": {
         "properties": {
           "project_id": {
@@ -863,6 +885,17 @@
           "prompt": {
             "title": "Prompt",
             "type": "string"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot Id"
           },
           "text_mask": {
             "anyOf": [
@@ -1090,6 +1123,11 @@
             "title": "Captions",
             "type": "array"
           },
+          "captions_burn": {
+            "default": true,
+            "title": "Captions Burn",
+            "type": "boolean"
+          },
           "created_at": {
             "anyOf": [
               {
@@ -1113,6 +1151,17 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "render_preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Preset"
           },
           "resolution_h": {
             "default": 512,
@@ -1138,11 +1187,21 @@
           "scenes": {
             "default": [],
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/SceneState"
             },
             "title": "Scenes",
             "type": "array"
+          },
+          "script_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Content"
           },
           "seed": {
             "default": 42,
@@ -1151,8 +1210,7 @@
           },
           "shots": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ShotState"
             },
             "title": "Shots",
             "type": "array"
@@ -1212,6 +1270,17 @@
             "title": "Crf",
             "type": "integer"
           },
+          "end_frame": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Frame"
+          },
           "fps": {
             "anyOf": [
               {
@@ -1238,6 +1307,17 @@
             "default": "fast",
             "title": "Preset",
             "type": "string"
+          },
+          "start_frame": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Frame"
           },
           "width": {
             "anyOf": [
@@ -1389,6 +1469,57 @@
           }
         },
         "title": "ReviewCommentUpdate",
+        "type": "object"
+      },
+      "SceneState": {
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "script_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Content"
+          }
+        },
+        "title": "SceneState",
         "type": "object"
       },
       "ScriptParseRequest": {
@@ -1648,6 +1779,351 @@
           "prompt"
         ],
         "title": "ShotConfig",
+        "type": "object"
+      },
+      "ShotState": {
+        "additionalProperties": true,
+        "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "audio_fade_in": {
+            "default": 0.0,
+            "title": "Audio Fade In",
+            "type": "number"
+          },
+          "audio_fade_out": {
+            "default": 0.0,
+            "title": "Audio Fade Out",
+            "type": "number"
+          },
+          "audio_gain": {
+            "default": 1.0,
+            "title": "Audio Gain",
+            "type": "number"
+          },
+          "audio_muted": {
+            "default": false,
+            "title": "Audio Muted",
+            "type": "boolean"
+          },
+          "auto_continue": {
+            "default": false,
+            "title": "Auto Continue",
+            "type": "boolean"
+          },
+          "blocking": {
+            "default": [],
+            "items": {},
+            "title": "Blocking",
+            "type": "array"
+          },
+          "cfg_scale": {
+            "default": 2.0,
+            "title": "Cfg Scale",
+            "type": "number"
+          },
+          "character": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character"
+          },
+          "created_at": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "dialogue": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dialogue"
+          },
+          "enhance_prompt": {
+            "default": true,
+            "title": "Enhance Prompt",
+            "type": "boolean"
+          },
+          "enhanced_prompt_result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enhanced Prompt Result"
+          },
+          "favorite_take_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Favorite Take Id"
+          },
+          "fps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fps"
+          },
+          "height": {
+            "default": 512,
+            "title": "Height",
+            "type": "integer"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "keyframes": {
+            "default": [],
+            "items": {},
+            "title": "Keyframes",
+            "type": "array"
+          },
+          "last_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Job Id"
+          },
+          "matched_elements": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Elements"
+          },
+          "negative_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Negative Prompt"
+          },
+          "num_frames": {
+            "default": 121,
+            "title": "Num Frames",
+            "type": "integer"
+          },
+          "pipeline_override": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "auto",
+            "title": "Pipeline Override"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "",
+            "title": "Prompt"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene Id"
+          },
+          "seed": {
+            "default": 42,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "selected_take_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Take Id"
+          },
+          "sequence_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sequence Index"
+          },
+          "shot_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot Type"
+          },
+          "speed": {
+            "default": 1.0,
+            "title": "Speed",
+            "type": "number"
+          },
+          "start_frame": {
+            "default": 0,
+            "title": "Start Frame",
+            "type": "integer"
+          },
+          "status": {
+            "default": "pending",
+            "title": "Status",
+            "type": "string"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "timeline": {
+            "default": [],
+            "items": {},
+            "title": "Timeline",
+            "type": "array"
+          },
+          "track_index": {
+            "default": 0,
+            "title": "Track Index",
+            "type": "integer"
+          },
+          "trim_in": {
+            "default": 0,
+            "title": "Trim In",
+            "type": "integer"
+          },
+          "trim_out": {
+            "default": 0,
+            "title": "Trim Out",
+            "type": "integer"
+          },
+          "upscale": {
+            "default": false,
+            "title": "Upscale",
+            "type": "boolean"
+          },
+          "video_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Url"
+          },
+          "width": {
+            "default": 768,
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "title": "ShotState",
         "type": "object"
       },
       "SplitShotRequest": {
@@ -3955,7 +4431,7 @@
     },
     "/projects/{project_id}/active_jobs": {
       "get": {
-        "description": "Returns a list of active job IDs for compliance/persistence.",
+        "description": "Active and queued jobs for a project, with queue position and estimate.",
         "operationId": "get_project_active_jobs_projects__project_id__active_jobs_get",
         "parameters": [
           {
@@ -4938,6 +5414,46 @@
           }
         },
         "summary": "Ai Parse",
+        "tags": [
+          "storyboard"
+        ]
+      }
+    },
+    "/projects/{project_id}/storyboard/archive": {
+      "get": {
+        "operationId": "get_storyboard_archive_projects__project_id__storyboard_archive_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Storyboard Archive",
         "tags": [
           "storyboard"
         ]
@@ -6004,6 +6520,56 @@
           }
         },
         "summary": "Update Shot Partial",
+        "tags": [
+          "shots"
+        ]
+      }
+    },
+    "/shots/{shot_id}/favorite-take": {
+      "post": {
+        "operationId": "favorite_take_shots__shot_id__favorite_take_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shot_id",
+            "required": true,
+            "schema": {
+              "title": "Shot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FavoriteTakeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Favorite Take",
         "tags": [
           "shots"
         ]

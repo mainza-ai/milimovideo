@@ -330,7 +330,8 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     scene_payload_ids = set()
     scenes_to_add = []
 
-    for sc_data in state.scenes:
+    for sc_state in state.scenes:
+        sc_data = sc_state.model_dump(exclude_unset=True)
         sc_id = sc_data.get("id")
         if not sc_id:
              sc_id = uuid.uuid4().hex
@@ -376,7 +377,8 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     
     new_shots_to_add = []
     
-    for order, s_data in enumerate(state.shots):
+    for order, shot_state in enumerate(state.shots):
+        s_data = shot_state.model_dump(exclude_unset=True)
         shot_id = s_data.get("id")
         if not shot_id:
             shot_id = uuid.uuid4().hex

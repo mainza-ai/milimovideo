@@ -678,3 +678,10 @@ Edit gained a top-down blocking lens: draggable camera/character/object nodes,
 camera rotation, labels, add/remove/reset, and shot context. Positions persist
 on the shot as sanitized `blocking` JSON. Added backend round-trip/clamp tests.
 Verified: 58 pytest, 42 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] contracts | typed ProjectState
+
+Replaced `List[dict]` in ProjectState with typed `ShotState` and `SceneState`
+models (extra fields allowed for forward compatibility). Save uses
+`exclude_unset` so partial clients still patch rather than overwrite with
+defaults. Regenerated OpenAPI/client types. Verified: 58 pytest, tsc clean.

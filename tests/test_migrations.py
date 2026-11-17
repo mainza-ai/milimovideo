@@ -15,7 +15,7 @@ def test_current_schema_columns_are_present(app_client):
     inspector = inspect(engine)
     shot_columns = {column["name"] for column in inspector.get_columns("shot")}
     assert {
-        "sequence_index", "selected_take_id", "favorite_take_id", "keyframes",
+        "sequence_index", "selected_take_id", "favorite_take_id", "keyframes", "blocking",
         "speed", "audio_gain", "audio_muted", "audio_fade_in", "audio_fade_out",
     } <= shot_columns
 

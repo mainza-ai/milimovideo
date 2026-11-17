@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Any, Dict, List, Optional, Literal
 
 class TimelineItem(BaseModel):
@@ -70,11 +70,67 @@ class CaptionCue(BaseModel):
     text: str = ""
 
 
+class SceneState(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: Optional[str] = None
+    index: Optional[int] = None
+    name: Optional[str] = None
+    script_content: Optional[str] = None
+
+
+class ShotState(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    id: Optional[str] = None
+    project_id: Optional[str] = None
+    scene_id: Optional[str] = None
+    index: Optional[int] = None
+    sequence_index: Optional[int] = None
+    prompt: Optional[str] = ""
+    width: int = 768
+    height: int = 512
+    seed: int = 42
+    num_frames: int = 121
+    fps: Optional[int] = None
+    cfg_scale: float = 2.0
+    negative_prompt: Optional[str] = ""
+    enhance_prompt: bool = True
+    upscale: bool = False
+    pipeline_override: Optional[str] = "auto"
+    auto_continue: bool = False
+    status: str = "pending"
+    thumbnail_url: Optional[str] = None
+    video_url: Optional[str] = None
+    track_index: int = 0
+    start_frame: int = 0
+    trim_in: int = 0
+    trim_out: int = 0
+    action: Optional[str] = None
+    dialogue: Optional[str] = None
+    character: Optional[str] = None
+    shot_type: Optional[str] = None
+    timeline: List[Any] = []
+    matched_elements: Optional[Any] = None
+    keyframes: List[Any] = []
+    blocking: List[Any] = []
+    enhanced_prompt_result: Optional[str] = None
+    last_job_id: Optional[str] = None
+    selected_take_id: Optional[str] = None
+    favorite_take_id: Optional[str] = None
+    audio_gain: float = 1.0
+    audio_muted: bool = False
+    audio_fade_in: float = 0.0
+    audio_fade_out: float = 0.0
+    speed: float = 1.0
+    created_at: Optional[Any] = None
+
+
 class ProjectState(BaseModel):
     id: str
     name: str
-    shots: List[dict]
-    scenes: List[dict] = []
+    shots: List[ShotState]
+    scenes: List[SceneState] = []
     captions: List[CaptionCue] = []
     captions_burn: bool = True
     render_preset: Optional[str] = None
