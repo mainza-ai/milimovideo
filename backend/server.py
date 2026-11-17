@@ -180,7 +180,8 @@ async def add_cors_headers(request: Request, call_next):
 
     # Optional bearer-token gate. Defaults to off for loopback single-user use.
     path = request.url.path
-    if config.API_TOKEN and path not in PUBLIC_PATHS:
+    share_route = path.startswith("/share/")
+    if config.API_TOKEN and path not in PUBLIC_PATHS and not share_route:
         import hmac
         if not hmac.compare_digest(_request_token(request), config.API_TOKEN):
             return Response(status_code=401, content="Unauthorized")

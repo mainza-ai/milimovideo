@@ -2,6 +2,7 @@ import {
     CheckCircle2, CloudOff, HardDrive, MessageSquare, MonitorPlay, Redo2, Save, Share2, TriangleAlert, Undo2,
 } from 'lucide-react';
 import { useStore } from 'zustand';
+import { apiUrl } from '../../config';
 import { useStudioData, useStudioReview } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
 import { useTimelineStore } from '../../stores/timelineStore';
@@ -21,6 +22,7 @@ export function TopBar() {
     const needsYou = review.summary.open + review.summary.changes_requested;
     const { activeSurface, setSurface, inspectorOpen, setInspectorOpen } = useStudioEditor();
     const { saveStatus, saveError, saveProject } = useTimelineStore();
+    const addToast = useTimelineStore((state) => state.addToast);
     // zundo's temporal store is attached to the document store.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const temporalStore = (useTimelineStore as any).temporal;
@@ -35,6 +37,22 @@ export function TopBar() {
                 : saveStatus === 'saved' ? 'Saved' : 'Unsaved';
     const saveTone = saveStatus === 'error' || saveStatus === 'conflict' ? 'bad'
         : saveStatus === 'saving' ? 'warn' : 'good';
+
+    const createShareLink = async () => {
+        const response = await fetch(apiUrl(`/projects/${project.id}/share`), { method: 'POST' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Could not create a share link', 'error');
+            return;
+        }
+        const url = `${window.location.origin}${data.path}`;
+        try {
+            await navigator.clipboard.writeText(url);
+            addToast('Review link copied', 'success');
+        } catch {
+            window.prompt('Review link (copy it):', url);
+        }
+    };
 
     return (
         <header className="st-topbar">
@@ -120,7 +138,13 @@ export function TopBar() {
                 <button type="button" className="st-icon-button" title="Toggle inspector" onClick={() => setInspectorOpen(!inspectorOpen)}>
                     <MonitorPlay size={15} />
                 </button>
-                <button type="button" className="st-icon-button" title="Share / review link (F4)" disabled>
+                <button
+                    type="button"
+                    className="st-icon-button"
+                    title={health?.auth_required ? 'Share links need local no-token mode' : 'Copy review link'}
+                    disabled={health?.auth_required}
+                    onClick={() => void createShareLink()}
+                >
                     <Share2 size={15} />
                 </button>
             </div>

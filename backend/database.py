@@ -162,6 +162,19 @@ class Job(SQLModel, table=True):
     resume_policy: str = Field(default="fail")  # fail | resume
     request_id: Optional[str] = Field(default=None, index=True)
 
+class ShareLink(SQLModel, table=True):
+    """Capability link for a reviewer.
+
+    Only the hash is stored; the token is returned once when the link is
+    created. Share routes are read-only plus comments/approvals.
+    """
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    project_id: str = Field(index=True)
+    token_hash: str = Field(index=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    revoked: bool = False
+
+
 class ReviewItem(SQLModel, table=True):
     """Frame-accurate review comments and per-shot approvals.
 

@@ -334,3 +334,15 @@ The review hook now refreshes every 15s, and the top bar shows a "needs you"
 pill (open comments + change requests) that jumps to Review. This is the
 editor-side half of F4-06; the reviewer share link remains open.
 Verified: 36 pytest, 16 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] review | capability share links
+
+Added `share_link` (token hash only) plus `POST /projects/{id}/share`,
+`DELETE /projects/{id}/share/{id}`, and `/share/{token}` read + comment/approval
+routes. Share routes are read-only over the document; the reviewer page at
+`/studio/share/<token>` plays the cut, attaches comments at a frame, and records
+approve/changes decisions. Links are revocable and disabled when
+`MILIMO_API_TOKEN` is set (media would otherwise need the studio token). Top-bar
+Share copies the link. Added backend lifecycle/read-only tests and a shared-page
+mount test. Verified: 39 pytest, 17 vitest, tsc clean, eslint 0 errors, build.
+Live DB backed up and `sharelink` created.

@@ -265,6 +265,20 @@ class SelectTakeRequest(BaseModel):
     job_id: str
 
 
+class ShareCommentRequest(BaseModel):
+    shot_id: Optional[str] = None
+    frame: int = 0
+    body: str
+    author: str = "reviewer"
+
+
+class ShareApprovalRequest(BaseModel):
+    shot_id: str
+    status: Literal["approved", "changes_requested"]
+    note: str = ""
+    author: str = "reviewer"
+
+
 class ReviewCommentRequest(BaseModel):
     shot_id: Optional[str] = None
     frame: int = 0

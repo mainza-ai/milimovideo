@@ -15,10 +15,21 @@ import { SetupSurface } from './surfaces/SetupSurface';
 import { useStudioEditor, type StudioSurface } from './state/editorStore';
 import { useStudioProject, useStudioBoardSync } from './data/useStudioData';
 import { useTimelineStore } from '../stores/timelineStore';
+import { SharedReviewPage } from './SharedReviewPage';
 
 const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver', 'setup'];
 
 export function StudioApp() {
+    const shareMatch = typeof window !== 'undefined'
+        ? window.location.pathname.match(/^\/studio\/share\/([^/]+)/)
+        : null;
+    if (shareMatch) {
+        return <SharedReviewPage token={decodeURIComponent(shareMatch[1])} />;
+    }
+    return <StudioShell />;
+}
+
+function StudioShell() {
     const { activeSurface, setSurface, inspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode } = useStudioEditor();
     const project = useStudioProject();
     useStudioBoardSync(project.id);
