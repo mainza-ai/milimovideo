@@ -856,3 +856,10 @@ Pipeline lens is no longer read-only: prompt, negative, frames, seed, resolution
 model, enhance, and upscale are editable, validation and estimate update from the
 draft, and Apply writes the recipe back to the shot through the undoable document
 store. Recipe JSON export/download remains. Verified: 44 vitest, tsc clean.
+
+## [2026-11-17] f2 | live caption preview on the stage
+
+Edit now overlays the active caption cue on the program monitor when caption
+burn-in is enabled, using the same frame range as the render. The overlay follows
+the playback clock with a tiny subscriber, so the rest of the surface stays
+isolated. Verified: 44 vitest, tsc clean, eslint 0 errors.

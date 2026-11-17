@@ -259,6 +259,12 @@ export function EditSurface() {
                         </div>
                     )}
 
+                    <CaptionOverlay
+                        captions={project.captions || []}
+                        fps={fps}
+                        burn={project.captionsBurn ?? true}
+                    />
+
                     {guides.grid && <div className="st-guide st-guide-grid" aria-hidden="true" />}
                     {guides.safe && <div className="st-guide st-guide-safe" aria-hidden="true" />}
                     {guides.thirds && <div className="st-guide st-guide-thirds" aria-hidden="true" />}
@@ -467,6 +473,23 @@ export function EditSurface() {
             )}
         </div>
     );
+}
+
+function CaptionOverlay({
+    captions,
+    fps,
+    burn,
+}: {
+    captions: Array<{ id: string; startFrame: number; endFrame: number; text: string }>;
+    fps: number;
+    burn: boolean;
+}) {
+    const currentTime = useStudioDocumentStore((state) => state.currentTime);
+    if (!burn) return null;
+    const frame = Math.round(currentTime * fps);
+    const cue = captions.find((item) => frame >= item.startFrame && frame < item.endFrame);
+    if (!cue) return null;
+    return <div className="st-caption-overlay">{cue.text}</div>;
 }
 
 function TimecodeDisplay({ totalDuration, fps }: { totalDuration: number; fps: number }) {
