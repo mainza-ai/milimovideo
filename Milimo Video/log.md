@@ -869,3 +869,11 @@ isolated. Verified: 44 vitest, tsc clean, eslint 0 errors.
 Project menu can delete the current project with confirmation; project name
 commits on blur. This closes the remaining basic project-management handoff to the
 legacy editor. Verified: 44 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] verify | post-split full matrix
+
+After the studio/legacy document-store split, crop reframing, tracking, lens app
+mode, caption preview, uploads, and project management: 61 pytest, 44 vitest,
+10 Playwright (shell, CRUD, export, upload, reviewer-agent, axe, keyboard, perf
+board/timeline, visual), tsc clean, eslint 0 errors, Vite build pass,
+verify_setup 0 failures. Board pan 57.8 fps; timeline scroll 230.7 fps.
