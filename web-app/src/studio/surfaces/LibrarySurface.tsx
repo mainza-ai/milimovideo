@@ -62,7 +62,7 @@ export function LibrarySurface() {
     };
 
     const saveElement = async () => {
-        if (!draft || !draft.name.trim() || !draft.trigger_word.trim()) return;
+        if (!draft || !draft.name.trim()) return;
         setSavingElement(true);
         try {
             const saved = editingElement
@@ -397,12 +397,12 @@ export function LibrarySurface() {
                                     </select>
                                 </label>
                                 <label className="st-field">
-                                    <span>Trigger word</span>
+                                    <span>Trigger word · optional</span>
                                     <input
                                         className="st-input"
                                         value={draft.trigger_word}
                                         onChange={(event) => setDraft({ ...draft, trigger_word: event.target.value })}
-                                        placeholder="mara"
+                                        placeholder="auto from name"
                                     />
                                 </label>
                                 <label className="st-field">
@@ -444,7 +444,7 @@ export function LibrarySurface() {
                                     type="button"
                                     className="st-button"
                                     data-variant="primary"
-                                    disabled={savingElement || elementImageBusy || !draft.name.trim() || !draft.trigger_word.trim()}
+                                    disabled={savingElement || elementImageBusy || !draft.name.trim()}
                                     onClick={() => void saveElement()}
                                 >
                                     {savingElement ? 'Saving…' : editingElement ? 'Save reference' : 'Create reference'}
