@@ -37,6 +37,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             trackIndex: 0,
             trimIn: 0,
             trimOut: 0,
+            speed: 1,
 
             // Overrides
             ...config
@@ -149,6 +150,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 audioGain: s.audio_gain ?? 1,
                 audioMuted: s.audio_muted ?? false,
                 keyframes: Array.isArray(s.keyframes) ? s.keyframes : [],
+                speed: s.speed ?? 1,
                 timeline: (typeof s.timeline === "string"
                     ? (() => { try { return JSON.parse(s.timeline || "[]"); } catch { return []; } })()
                     : (s.timeline || [])

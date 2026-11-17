@@ -42,7 +42,7 @@ export function StudioTimeline() {
     const project = useTimelineStore((state) => state.project);
     const {
         currentTime, selectedShotId, selectShot, setCurrentTime, updateShot,
-        splitShot, deleteShot, addToast, setProject, addShot,
+        splitShot, deleteShot, addToast, setProject, addShot, reorderShots,
     } = useTimelineStore(useShallow((state) => ({
         currentTime: state.currentTime,
         selectedShotId: state.selectedShotId,
@@ -54,6 +54,7 @@ export function StudioTimeline() {
         addToast: state.addToast,
         setProject: state.setProject,
         addShot: state.addShot,
+        reorderShots: state.reorderShots,
     })));
     const { timelineZoom, setTimelineZoom } = useStudioEditor();
     const [tool, setTool] = useState<Tool>('select');
@@ -116,6 +117,21 @@ export function StudioTimeline() {
         }
         deleteShot(selectedShotId);
         addToast('Clip removed — V1 rippled', 'info');
+    };
+
+    const slideSelected = (direction: -1 | 1) => {
+        if (!selectedShotId) return;
+        const v1Indices = project.shots
+            .map((shot, index) => (shot.trackIndex === 0 ? index : -1))
+            .filter((index) => index >= 0);
+        const current = project.shots.findIndex((shot) => shot.id === selectedShotId);
+        const position = v1Indices.indexOf(current);
+        const target = position >= 0 ? v1Indices[position + direction] : undefined;
+        if (target == null) {
+            addToast('No adjacent V1 clip to slide against', 'info');
+            return;
+        }
+        reorderShots(current, target);
     };
 
     const changeCaptions = (next: CaptionCue[]) => {
@@ -291,6 +307,26 @@ export function StudioTimeline() {
                 <button type="button" className="st-button" data-size="sm" data-variant="ghost" onClick={rippleDelete} title="Ripple delete selected clip">
                     <Trash2 size={12} /> Ripple
                 </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    onClick={() => slideSelected(-1)}
+                    title="Slide selected V1 clip earlier"
+                >
+                    ◀ Slide
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    onClick={() => slideSelected(1)}
+                    title="Slide selected V1 clip later"
+                >
+                    Slide ▶
+                </button>
                 <button type="button" className="st-button" data-size="sm" onClick={addCue} title="Add a caption cue at the playhead">
                     <Captions size={12} /> Caption
                 </button>
@@ -441,10 +477,12 @@ export function StudioTimeline() {
                                     const neighborPreview = preview?.neighborId === clip.id ? preview : null;
                                     const trimIn = neighborPreview?.neighborTrimIn ?? activePreview?.trimIn ?? clip.shot.trimIn ?? 0;
                                     const trimOut = neighborPreview?.neighborTrimOut ?? activePreview?.trimOut ?? clip.shot.trimOut ?? 0;
-                                    const durationFrames = Math.max(
+                                    const sourceFrames = Math.max(
                                         1,
                                         (clip.shot.numFrames || 0) - trimIn - trimOut,
                                     );
+                                    const speed = Math.min(4, Math.max(0.25, clip.shot.speed || 1));
+                                    const durationFrames = Math.max(1, Math.round(sourceFrames / speed));
                                     const durationSeconds = durationFrames / fps;
                                     const left = clip.start * timelineZoom;
                                     const clippedWidth = Math.max(8, durationSeconds * timelineZoom);

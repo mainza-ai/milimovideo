@@ -108,6 +108,7 @@ def _shot_dict(shot: Shot) -> dict:
         "selected_take_id": shot.selected_take_id,
         "audio_gain": shot.audio_gain,
         "audio_muted": shot.audio_muted,
+        "speed": shot.speed,
         "created_at": shot.created_at.isoformat() if shot.created_at else None,
     }
 
@@ -688,12 +689,14 @@ async def _render_background(
                     logger.warning(f"Render skipping missing media: {shot.video_url}")
                     continue
 
-                duration_frames = max(
+                source_frames = max(
                     0,
                     (shot.num_frames or 121) - (shot.trim_in or 0) - (shot.trim_out or 0),
                 )
-                if duration_frames <= 0:
+                if source_frames <= 0:
                     continue
+                speed = min(4.0, max(0.25, shot.speed or 1.0))
+                duration_frames = max(1, round(source_frames / speed))
 
                 if shot.track_index == 0:
                     start_frame = v1_cursor
@@ -705,6 +708,8 @@ async def _render_background(
                     "path": resolved,
                     "start_frame": start_frame,
                     "duration_frames": duration_frames,
+                    "source_frames": source_frames,
+                    "speed": speed,
                     "trim_in": shot.trim_in or 0,
                     "keyframes": _parse_json_field(shot.keyframes, []),
                     "gain": shot.audio_gain if shot.audio_gain is not None else 1.0,

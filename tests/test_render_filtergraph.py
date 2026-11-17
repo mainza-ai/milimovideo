@@ -65,6 +65,14 @@ def test_opacity_expression_holds_and_interpolates():
     assert "1.000000" in expr  # slope over one second
 
 
+def test_speed_scales_video_and_audio_time():
+    cmd = _cmd(v1=[_clip(speed=2.0, source_frames=50, duration_frames=25)])
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "setpts=(PTS-STARTPTS)/2.0" in graph
+    assert "atempo=2.0" in graph
+    assert "trim=start=0.0:duration=2.0" in graph
+
+
 def test_keyframes_add_alpha_expression_to_the_clip():
     cmd = _cmd(v1=[_clip(keyframes=[{"frame": 0, "opacity": 0.2}, {"frame": 24, "opacity": 1.0}])])
     graph = cmd[cmd.index("-filter_complex") + 1]

@@ -100,13 +100,20 @@ def build_complex_filtergraph(
         duration_frames = max(0, int(shot.get("duration_frames", 0)))
         if duration_frames <= 0:
             return
+        source_frames = max(1, int(shot.get("source_frames", duration_frames)))
+        speed = min(4.0, max(0.25, float(shot.get("speed", 1.0) or 1.0)))
         trim_in_s = int(shot.get("trim_in", 0)) / project_fps
-        duration_s = duration_frames / project_fps
+        source_duration_s = source_frames / project_fps
         start_s = int(shot.get("start_frame", 0)) / project_fps
         delay_ms = max(0, int(round(start_s * 1000)))
         gain = float(shot.get("gain", 1.0) or 1.0)
         label = f"[a_{input_index}]"
-        chain = f"[{input_index}:a]atrim=start={trim_in_s}:duration={duration_s},asetpts=PTS-STARTPTS"
+        chain = (
+            f"[{input_index}:a]atrim=start={trim_in_s}:duration={source_duration_s}"
+            ",asetpts=PTS-STARTPTS"
+        )
+        if abs(speed - 1.0) > 1e-3:
+            chain += f",atempo={speed}"
         if abs(gain - 1.0) > 1e-3:
             chain += f",volume={gain}"
         chain += f",adelay={delay_ms}|{delay_ms}{label}"
@@ -127,13 +134,18 @@ def build_complex_filtergraph(
             path = shot.get("path")
             if not path:
                 continue
+            source_frames = max(1, int(shot.get("source_frames", duration_frames)))
+            speed = min(4.0, max(0.25, float(shot.get("speed", 1.0) or 1.0)))
             start_s = int(shot.get("start_frame", 0)) / project_fps
             end_s = start_s + duration_frames / project_fps
             trim_in_s = int(shot.get("trim_in", 0)) / project_fps
-            duration_s = duration_frames / project_fps
+            source_duration_s = source_frames / project_fps
 
             cmd.extend(["-i", path])
-            fc = f"[{input_idx}:v]trim=start={trim_in_s}:duration={duration_s},setpts=PTS-STARTPTS"
+            fc = (
+                f"[{input_idx}:v]trim=start={trim_in_s}:duration={source_duration_s}"
+                f",setpts=(PTS-STARTPTS)/{speed}"
+            )
             fc += f",scale={project_width}:{project_height}:force_original_aspect_ratio=decrease"
             if overlay:
                 # Transparent padding keeps V2 from blacking out V1.

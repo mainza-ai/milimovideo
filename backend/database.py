@@ -90,6 +90,7 @@ class Shot(SQLModel, table=True):
     audio_gain: float = 1.0
     audio_muted: bool = False
     keyframes: Optional[str] = None  # JSON [{frame, opacity}]
+    speed: float = 1.0  # playback rate; 2.0 halves the clip duration
 
     # Results
     video_url: Optional[str] = None
@@ -221,6 +222,7 @@ def _add_missing_columns() -> None:
             "audio_gain": "FLOAT NOT NULL DEFAULT 1.0",
             "audio_muted": "BOOLEAN NOT NULL DEFAULT 0",
             "keyframes": "TEXT",
+            "speed": "FLOAT NOT NULL DEFAULT 1.0",
         },
         "job": {
             "resume_policy": "TEXT NOT NULL DEFAULT 'fail'",

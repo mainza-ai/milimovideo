@@ -50,6 +50,7 @@ export interface Shot {
     audioGain?: number;
     audioMuted?: boolean;
     keyframes?: OpacityKeyframe[];
+    speed?: number;
     videoUrl?: string | null; // Derived from jobID
     thumbnailUrl?: string; // Static Preview
     enhancedPromptResult?: string; // Result from backend

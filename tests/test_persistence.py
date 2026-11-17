@@ -159,6 +159,19 @@ def test_project_takes_lists_completed_outputs(app_client, project):
     assert body["takes"][0]["shot_label"] == "take library"
 
 
+def test_shot_speed_roundtrip(app_client, project):
+    pid = project["id"]
+    payload = {
+        "id": pid, "name": "Speed", "fps": 25, "seed": 42,
+        "resolution_w": 768, "resolution_h": 512, "revision": 0,
+        "shots": [_shot("speed-shot", "fast", sequence_index=0, speed=2.0)],
+        "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    loaded = app_client.get(f"/projects/{pid}").json()
+    assert loaded["shots"][0]["speed"] == 2.0
+
+
 def test_project_script_content_roundtrip(app_client, project):
     pid = project["id"]
     payload = {

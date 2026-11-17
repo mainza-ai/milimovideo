@@ -490,3 +490,12 @@ side-by-side and a draggable wipe, both synced to the same clip-local frame and
 playback state. Added toggleable grid, safe-area, and rule-of-thirds guides over
 the stage. Compare buttons disable until a second take exists. Verified: 29
 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f2 | clip rate and slide
+
+Added per-shot playback speed (0.25–4×): persisted, mapped through the document
+store, reflected in timeline duration, and rendered with `setpts/speed` plus
+`atempo` for embedded/standalone audio. Timeline gained Slide ◀/▶ for reordering
+adjacent V1 clips. Added a real FFmpeg test proving 50 frames at 2× renders as a
+1s file, plus filtergraph and round-trip tests. Verified: 44 pytest, 29 vitest,
+tsc clean.

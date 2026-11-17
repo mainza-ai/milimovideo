@@ -183,6 +183,18 @@ export function Inspector() {
                                             />
                                         </label>
                                     </div>
+                                    <label style={{ display: 'block', marginTop: 8 }}>
+                                        <span className="st-label">Speed · timeline duration</span>
+                                        <select
+                                            className="st-select"
+                                            value={shot.speed ?? 1}
+                                            onChange={(event) => updateShot(shot.id, { speed: Number(event.target.value) })}
+                                        >
+                                            {[0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4].map((rate) => (
+                                                <option key={rate} value={rate}>{rate}×</option>
+                                            ))}
+                                        </select>
+                                    </label>
                                 </div>
                                 <div className="st-inspector-section">
                                     <span className="st-label">Visual references</span>
