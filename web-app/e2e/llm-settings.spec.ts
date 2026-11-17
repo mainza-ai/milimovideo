@@ -85,8 +85,24 @@ test('discovery attaches a local server and verification reports it', async ({ p
     await expect(page.getByText('http://localhost:11434')).toBeVisible();
     await page.getByRole('button', { name: 'Attach' }).click();
     await expect(page.getByLabel('Ollama base URL')).toHaveValue('http://localhost:11434');
-    await expect(page.getByTestId('llm-panel').getByText('unsaved changes')).toBeVisible();
+    await expect(page.getByText('revision 1', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: /Verify/ }).nth(1).click();
     await expect(page.getByText(/ok · 9 ms/)).toBeVisible();
+});
+
+test('the saved plan can be streamed, evaluated, and staged by profile', async ({ page }) => {
+    await openSetup(page);
+    const panel = page.getByTestId('llm-panel');
+
+    await panel.getByRole('button', { name: 'Run test' }).click();
+    await expect(panel.getByText('A slow dolly-in on a rain-soaked street.')).toBeVisible();
+    await expect(panel.getByText(/ollama\/qwen3:8b/)).toBeVisible();
+
+    await panel.getByRole('button', { name: 'Run eval' }).click();
+    await expect(panel.getByText(/last 100%/)).toBeVisible();
+    await expect(panel.getByText('script_parse')).toBeVisible();
+
+    await panel.getByRole('button', { name: 'Sovereign local' }).click();
+    await expect(panel.getByTestId('llm-air-gap')).toHaveText(/air-gapped/);
 });

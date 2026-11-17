@@ -29,6 +29,8 @@ interface Snapshot {
     air_gapped: boolean;
     temperature: number;
     max_tokens: number;
+    budget?: { daily_usd: number; eval_gate: boolean };
+    last_eval?: unknown;
     providers: Record<string, ProviderConfig>;
     roles: Record<string, RoleAssignment>;
 }
@@ -99,6 +101,8 @@ export const LLMSettings: React.FC = () => {
                         max_tokens: next.max_tokens,
                         providers: next.providers,
                         roles: next.roles,
+                        budget: next.budget ?? { daily_usd: 0, eval_gate: false },
+                        last_eval: next.last_eval ?? null,
                     }),
                 },
             );

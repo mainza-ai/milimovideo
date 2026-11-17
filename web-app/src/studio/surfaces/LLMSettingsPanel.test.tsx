@@ -11,11 +11,14 @@ function json(data: unknown, status = 200): Response {
 
 function snapshot() {
     return {
-        schema_version: 1,
+        schema_version: 2,
         revision: 3,
+        air_gapped: true,
+        budget: { daily_usd: 0, eval_gate: false },
+        last_eval: null,
+        spend: { date: '2026-11-17', total_usd: 0, entries: [] },
         active_provider: 'gemma',
         active_model: 'ltx-gemma3',
-        air_gapped: true,
         temperature: 0.7,
         max_tokens: 400,
         cloud_enabled: false,
@@ -25,19 +28,19 @@ function snapshot() {
         ],
         providers: {
             gemma: {
-                type: 'gemma', name: 'Gemma 3 (LTX text encoder)', base_url: '', default_model: 'ltx-gemma3',
+                id: 'gemma', type: 'gemma', name: 'Gemma 3 (LTX text encoder)', base_url: '', default_model: 'ltx-gemma3',
                 wire: 'gemma_native', enabled: true, is_local: true, timeout_sec: 120, keep_alive: '0',
                 api_key: null, has_key: false, secret_source: 'none', key_status: 'none',
                 last_success_at: null, last_fault: null,
             },
             ollama: {
-                type: 'ollama', name: 'Ollama', base_url: 'http://127.0.0.1:11434', default_model: 'qwen3:8b',
+                id: 'ollama', type: 'ollama', name: 'Ollama', base_url: 'http://127.0.0.1:11434', default_model: 'qwen3:8b',
                 wire: 'ollama_native', enabled: true, is_local: true, timeout_sec: 120, keep_alive: '0',
                 api_key: null, has_key: false, secret_source: 'none', key_status: 'none',
                 last_success_at: null, last_fault: null,
             },
             openai: {
-                type: 'openai', name: 'OpenAI', base_url: 'https://api.openai.com/v1', default_model: '',
+                id: 'openai', type: 'openai', name: 'OpenAI', base_url: 'https://api.openai.com/v1', default_model: '',
                 wire: 'openai_chat', enabled: false, is_local: false, timeout_sec: 120, keep_alive: '0',
                 api_key: null, has_key: false, secret_source: 'none', key_status: 'missing',
                 last_success_at: null, last_fault: null,
@@ -57,6 +60,7 @@ interface Call {
 
 function stubFetch(overrides: { put?: () => Response } = {}) {
     const calls: Call[] = [];
+    let state = snapshot() as ReturnType<typeof snapshot>;
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         calls.push({ url, init });
@@ -65,6 +69,18 @@ function stubFetch(overrides: { put?: () => Response } = {}) {
         }
         if (url.includes('/settings/llm/providers/')) {
             return json({ ok: true, provider: 'ollama', wire: 'ollama_native', latency_ms: 12, models: ['qwen3:8b'] });
+        }
+        if (url.includes('/settings/llm/attach')) {
+            const body = JSON.parse(String(init?.body || '{}'));
+            state = {
+                ...state,
+                revision: state.revision + 1,
+                providers: {
+                    ...state.providers,
+                    ollama: { ...state.providers.ollama, base_url: body.base_url },
+                },
+            };
+            return json(state);
         }
         if (url.includes('/settings/llm/discover')) {
             return json({
@@ -80,9 +96,10 @@ function stubFetch(overrides: { put?: () => Response } = {}) {
         }
         if (init?.method === 'PUT') {
             if (overrides.put) return overrides.put();
-            return json({ ...snapshot(), revision: 4 });
+            state = { ...state, revision: 4 };
+            return json(state);
         }
-        return json(snapshot());
+        return json(state);
     }));
     return calls;
 }
@@ -151,8 +168,7 @@ describe('LLMSettingsPanel', () => {
         fireEvent.click(screen.getByRole('button', { name: /Scan local servers/ }));
         await waitFor(() => expect(screen.getByRole('button', { name: 'Attach' })).toBeTruthy());
         fireEvent.click(screen.getByRole('button', { name: 'Attach' }));
-        expect(screen.getByLabelText('Ollama base URL')).toHaveProperty('value', 'http://localhost:11434');
-        expect(screen.getByText('unsaved changes')).toBeTruthy();
+        expect(await screen.findByLabelText('Ollama base URL')).toHaveProperty('value', 'http://localhost:11434');
     });
 
     it('verifies a provider and reports latency', async () => {

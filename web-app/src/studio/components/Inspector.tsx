@@ -317,6 +317,16 @@ export function Inspector() {
                                             <div className="st-take-body">
                                                 <div className="st-mono" style={{ color: 'var(--st-secondary)' }}>{take.job_id.slice(0, 10)}</div>
                                                 <div>{take.model || take.type} · seed {take.seed ?? '—'}</div>
+                                                {take.llm?.provider && (
+                                                    <div
+                                                        className="st-mono"
+                                                        style={{ color: 'var(--st-faint)', fontSize: 10 }}
+                                                        title="Prompt enhanced by this local model"
+                                                    >
+                                                        prompt · {take.llm.provider}/{take.llm.model}
+                                                        {take.llm.latency_ms ? ` · ${take.llm.latency_ms} ms` : ''}
+                                                    </div>
+                                                )}
                                                 <button
                                                     type="button"
                                                     className="st-button"

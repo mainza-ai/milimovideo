@@ -117,6 +117,14 @@ export interface StudioTake {
     seed?: number | null;
     model?: string | null;
     num_frames?: number | null;
+    llm?: {
+        role?: string;
+        provider?: string | null;
+        model?: string | null;
+        latency_ms?: number | null;
+        tokens?: Record<string, number> | null;
+        failed?: boolean;
+    } | null;
     created_at?: string | null;
     selected: boolean;
     favorite?: boolean;
