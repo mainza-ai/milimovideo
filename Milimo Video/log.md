@@ -626,3 +626,12 @@ caches, reduce resolution by 25% (8px aligned) and video frames to an 8k+1 count
 update the shot's real params, broadcast the retry, and rerun once. Attempts are
 bounded by the durable ledger. Also fixed a double-decrement in the GPU wait
 counter. Added unit tests for detection and retry math. Verified: 55 pytest.
+
+## [2026-11-17] ops | request IDs, metrics panel, storyboard archive, async AI parse
+
+Every HTTP request now gets an X-Request-ID and a structured timing log. Setup
+shows the 7-day job error budget (status counts + recent failures) from
+`/metrics/jobs`. Storyboard commit archives the pre-commit scenes/shots on the
+project and exposes a download endpoint; the Script surface can download the
+backup. AI script parsing now runs off the event loop via `asyncio.to_thread`.
+Verified: 56 pytest, 36 vitest, tsc clean.

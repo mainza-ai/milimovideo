@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
     CheckCircle2, Cpu, HardDrive, Loader2, RefreshCw, ShieldCheck, TriangleAlert,
 } from 'lucide-react';
-import { useStudioHealth, useStudioModels } from '../data/useStudioData';
+import { useStudioHealth, useStudioMetrics, useStudioModels } from '../data/useStudioData';
 
 function formatBytes(bytes?: number | null): string {
     if (!bytes || bytes <= 0) return '—';
@@ -13,6 +13,7 @@ function formatBytes(bytes?: number | null): string {
 export function SetupSurface() {
     const { health, error } = useStudioHealth();
     const { models, pipelines, loading, refresh, setActive } = useStudioModels();
+    const metrics = useStudioMetrics(7);
     const [filter, setFilter] = useState<'all' | 'video' | 'image' | 'segmentation'>('all');
     const [kind, setKind] = useState<'base' | 'lora'>('base');
     const [busy, setBusy] = useState<string | null>(null);
@@ -97,6 +98,38 @@ export function SetupSurface() {
                         {activeCount} base/LoRA active. Activate a downloaded base below.
                     </p>
                 </div>
+            </div>
+
+            <div className="st-panel" style={{ marginBottom: 14 }}>
+                <h3 className="st-panel-title">Error budget · last {metrics?.window_days ?? 7} days</h3>
+                {!metrics ? (
+                    <span className="st-value" style={{ color: 'var(--st-muted)' }}>No metrics yet.</span>
+                ) : (
+                    <>
+                        <div className="st-button-row">
+                            <span className="st-chip">{metrics.total} jobs</span>
+                            {Object.entries(metrics.by_status).map(([status, count]) => (
+                                <span className="st-chip" key={status}>{status} {count}</span>
+                            ))}
+                            {(metrics.recent_failures || []).length > 0 && (
+                                <span className="st-chip" style={{ color: 'var(--st-danger)' }}>
+                                    {metrics.recent_failures.length} recent failure(s)
+                                </span>
+                            )}
+                        </div>
+                        {(metrics.recent_failures || []).length > 0 && (
+                            <div className="st-link-list" style={{ marginTop: 8 }}>
+                                {metrics.recent_failures.slice(0, 5).map((failure) => (
+                                    <div className="st-link-row" key={failure.job_id}>
+                                        <span className="st-mono">{failure.job_id.slice(0, 10)}</span>
+                                        <span className="st-chip">{failure.type}</span>
+                                        <span style={{ flex: 1, color: 'var(--st-danger)' }}>{failure.error || 'failed'}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
 
             <div className="st-panel">

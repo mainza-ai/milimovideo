@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
+import { apiUrl } from '../../config';
 import {
     useStudioEditor, type BoardArea, type BoardPosition, type LinkKind,
 } from '../state/editorStore';
@@ -1144,8 +1145,33 @@ export function BoardCanvas() {
                             >
                                 {scriptBusy ? 'Parsing…' : 'Parse & replace storyboard'}
                             </button>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                data-variant="ghost"
+                                onClick={async () => {
+                                    const response = await fetch(apiUrl(`/projects/${project.id}/storyboard/archive`));
+                                    const data = response.ok ? await response.json() : {};
+                                    if (!data.archive) {
+                                        addToast('No pre-parse archive yet', 'info');
+                                        return;
+                                    }
+                                    const url = URL.createObjectURL(new Blob(
+                                        [JSON.stringify(data.archive, null, 2)],
+                                        { type: 'application/json' },
+                                    ));
+                                    const anchor = document.createElement('a');
+                                    anchor.href = url;
+                                    anchor.download = `${project.id}-storyboard-archive.json`;
+                                    anchor.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                            >
+                                Download backup
+                            </button>
                             <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9 }}>
-                                Parsing is destructive; confirm before it replaces shots.
+                                Parsing archives the current storyboard before replacing shots.
                             </span>
                         </div>
                         <textarea

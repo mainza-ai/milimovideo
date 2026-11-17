@@ -159,6 +159,11 @@ def _request_token(request: Request) -> str:
 @app.middleware("http")
 async def add_cors_headers(request: Request, call_next):
     """Guarantee CORS headers on allowed responses, including errors."""
+    import time as time_module
+    import uuid
+
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex[:12]
+    started = time_module.perf_counter()
     origin = request.headers.get("origin", "")
     origin_allowed = not origin or origin in config.CORS_ORIGINS
 
@@ -191,6 +196,12 @@ async def add_cors_headers(request: Request, call_next):
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Expose-Headers"] = "Content-Range, Accept-Ranges, Content-Length"
+    response.headers["X-Request-ID"] = request_id
+    elapsed_ms = (time_module.perf_counter() - started) * 1000
+    logger.info(
+        "request %s %s %s -> %s %.1fms",
+        request_id, request.method, request.url.path, response.status_code, elapsed_ms,
+    )
     return response
 
 

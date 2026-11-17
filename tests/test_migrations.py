@@ -22,5 +22,5 @@ def test_current_schema_columns_are_present(app_client):
     project_columns = {column["name"] for column in inspector.get_columns("project")}
     assert {
         "revision", "board_layout", "board_revision", "view_state", "captions",
-        "captions_burn", "render_preset", "script_content",
+        "captions_burn", "render_preset", "script_content", "storyboard_archive",
     } <= project_columns

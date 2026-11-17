@@ -56,6 +56,30 @@ async def commit_storyboard(project_id: str, req: CommitStoryboardRequest, sessi
 
     existing_scenes = session.exec(select(Scene).where(Scene.project_id == project_id).order_by(Scene.index)).all()
     existing_shots = session.exec(select(Shot).where(Shot.project_id == project_id)).all()
+
+    # Archive the pre-commit storyboard. Parsing/commit removes unmatched shots;
+    # this snapshot is the recovery path even if the client confirmed.
+    archive_project = session.get(Project, project_id)
+    if archive_project:
+        archive_project.storyboard_archive = json.dumps({
+            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "script_content": archive_project.script_content,
+            "scenes": [{
+                "id": scene.id, "index": scene.index, "name": scene.name,
+                "script_content": scene.script_content,
+            } for scene in existing_scenes],
+            "shots": [{
+                "id": shot.id, "scene_id": shot.scene_id, "sequence_index": shot.sequence_index,
+                "index": shot.index, "prompt": shot.prompt, "action": shot.action,
+                "dialogue": shot.dialogue, "character": shot.character,
+                "shot_type": shot.shot_type, "num_frames": shot.num_frames,
+                "width": shot.width, "height": shot.height, "seed": shot.seed,
+                "video_url": shot.video_url, "thumbnail_url": shot.thumbnail_url,
+                "matched_elements": shot.matched_elements, "timeline": shot.timeline,
+            } for shot in existing_shots],
+        })
+        session.add(archive_project)
+        session.commit()
     
     existing_scenes_map = {s.index: s for s in existing_scenes}
     
@@ -170,6 +194,19 @@ async def commit_storyboard(project_id: str, req: CommitStoryboardRequest, sessi
     session.commit()
     return {"status": "success", "message": f"Merged {len(req.scenes)} scenes."}
 
+@router.get("/projects/{project_id}/storyboard/archive")
+def get_storyboard_archive(project_id: str, session: Session = Depends(get_session)):
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if not project.storyboard_archive:
+        return {"archive": None}
+    try:
+        return {"archive": json.loads(project.storyboard_archive)}
+    except json.JSONDecodeError:
+        return {"archive": None}
+
+
 @router.get("/projects/{project_id}/storyboard")
 async def get_storyboard(project_id: str, session: Session = Depends(get_session)):
     """Retrieve full hierarchy (Scenes -> Shots)."""
@@ -239,7 +276,9 @@ async def ai_parse(project_id: str, req: ScriptParseRequest):
         pipeline = await manager.load_pipeline("ti2vid")
         text_encoder = pipeline.stage_1_model_ledger.text_encoder()
         
-        parsed_scenes = ai_parse_script(
+        import asyncio
+        parsed_scenes = await asyncio.to_thread(
+            ai_parse_script,
             text=req.script_text,
             text_encoder=text_encoder,
             seed=42,

@@ -325,6 +325,37 @@ const EMPTY_REVIEW: ReviewPayload = {
     summary: { comments: 0, open: 0, approved: 0, changes_requested: 0 },
 };
 
+export interface JobMetrics {
+    window_days: number;
+    total: number;
+    by_type: Record<string, number>;
+    by_status: Record<string, number>;
+    recent_failures: Array<{ job_id: string; type: string; error: string | null }>;
+}
+
+export function useStudioMetrics(days = 7) {
+    const [metrics, setMetrics] = useState<JobMetrics | null>(null);
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const response = await fetch(apiUrl(`/metrics/jobs?days=${days}`));
+                const data = response.ok ? await response.json() : null;
+                setMetrics(
+                    data && !Array.isArray(data) && data.by_status && data.by_type
+                        ? data
+                        : null,
+                );
+            } catch {
+                setMetrics(null);
+            }
+        };
+        void load();
+        const interval = window.setInterval(load, 15000);
+        return () => window.clearInterval(interval);
+    }, [days]);
+    return metrics;
+}
+
 export interface ActiveJob {
     job_id: string;
     type: string;

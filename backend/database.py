@@ -32,6 +32,7 @@ class Project(SQLModel, table=True):
     captions: Optional[str] = None  # JSON list of {id,start_frame,end_frame,text}
     captions_burn: bool = True
     render_preset: Optional[str] = None
+    storyboard_archive: Optional[str] = None  # last pre-commit snapshot
 
     shots: List["Shot"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
     scenes: List["Scene"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
@@ -222,6 +223,7 @@ def _add_missing_columns() -> None:
             "captions": "TEXT",
             "captions_burn": "BOOLEAN NOT NULL DEFAULT 1",
             "render_preset": "TEXT",
+            "storyboard_archive": "TEXT",
         },
         "shot": {
             "sequence_index": "INTEGER",
