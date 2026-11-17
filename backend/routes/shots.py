@@ -34,6 +34,8 @@ async def update_shot_partial(shot_id: str, updates: dict, session: Session = De
         if hasattr(shot, k):
             if k == "timeline":
                 setattr(shot, k, json.dumps(TimelineItem.normalize(v)))
+            elif k == "keyframes":
+                setattr(shot, k, json.dumps(v) if isinstance(v, (list, dict)) else v)
             elif k == "matched_elements":
                 setattr(shot, k, json.dumps(v) if isinstance(v, (list, dict)) else v)
             else:

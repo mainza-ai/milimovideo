@@ -4,6 +4,44 @@ from typing import List, Dict, Any, Optional
 logger = logging.getLogger(__name__)
 
 
+def opacity_expression(keyframes: List[Dict[str, Any]], fps: float) -> Optional[str]:
+    """Piecewise-linear opacity curve in clip-local seconds.
+
+    Frames are local to the visible clip (0 = first visible frame), which is why
+    this is evaluated before the clip's PTS is shifted onto the timeline.
+    """
+    points: Dict[int, float] = {}
+    for raw in keyframes or []:
+        try:
+            frame = max(0, int(raw.get("frame") or 0))
+            opacity = max(0.0, min(1.0, float(raw.get("opacity", 1.0))))
+        except (TypeError, ValueError):
+            continue
+        points[frame] = opacity
+    if not points:
+        return None
+
+    ordered = sorted(points.items())
+    if len(ordered) == 1:
+        return f"{ordered[0][1]:.4f}"
+
+    fps = max(1.0, float(fps or 25))
+    expr = f"{ordered[-1][1]:.4f}"
+    for index in range(len(ordered) - 2, -1, -1):
+        f0, o0 = ordered[index]
+        f1, o1 = ordered[index + 1]
+        t0, t1 = f0 / fps, f1 / fps
+        if t1 <= t0:
+            continue
+        slope = (o1 - o0) / (t1 - t0)
+        segment = f"({o0:.4f}+({slope:.6f})*(T-{t0:.6f}))"
+        expr = f"if(lt(T,{t1:.6f}),{segment},{expr})"
+
+    f0, o0 = ordered[0]
+    t0 = f0 / fps
+    return f"if(lt(T,{t0:.6f}),{o0:.4f},{expr})"
+
+
 def build_complex_filtergraph(
     project_fps: int,
     project_width: int,
@@ -105,6 +143,16 @@ def build_complex_filtergraph(
                 )
             else:
                 fc += f",pad={project_width}:{project_height}:(ow-iw)/2:(oh-ih)/2:color=black"
+
+            opacity = opacity_expression(shot.get("keyframes") or [], project_fps)
+            if opacity:
+                if not overlay:
+                    fc += ",format=rgba"
+                fc += (
+                    ",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
+                    f"a='alpha(X,Y)*clip(({opacity}),0,1)'"
+                )
+
             fc += f",setpts=PTS+{start_s}/TB"
             label = f"[{track_label}_{idx}]"
             fc += label

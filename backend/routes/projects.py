@@ -35,6 +35,22 @@ def _parse_json_field(value, default):
         return default
 
 
+def _sanitize_keyframes(keyframes) -> list:
+    points = {}
+    for raw in list(keyframes or [])[:200]:
+        data = raw.model_dump() if hasattr(raw, "model_dump") else dict(raw or {})
+        try:
+            frame = max(0, int(data.get("frame") or 0))
+            opacity = max(0.0, min(1.0, float(data.get("opacity", 1.0))))
+        except (TypeError, ValueError):
+            continue
+        points[frame] = opacity  # last keyframe on a frame wins
+    return [
+        {"frame": frame, "opacity": opacity}
+        for frame, opacity in sorted(points.items())
+    ]
+
+
 def _sanitize_captions(captions) -> list:
     cleaned = []
     for cue in list(captions or [])[:500]:
@@ -85,6 +101,7 @@ def _shot_dict(shot: Shot) -> dict:
         "character": shot.character,
         "shot_type": shot.shot_type,
         "timeline": _parse_json_field(shot.timeline, []),
+        "keyframes": _parse_json_field(shot.keyframes, []),
         "matched_elements": _parse_json_field(shot.matched_elements, None),
         "enhanced_prompt_result": shot.enhanced_prompt_result,
         "last_job_id": shot.last_job_id,
@@ -332,6 +349,10 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
         if "matched_elements" in clean_data:
             matched = _parse_json_field(clean_data.get("matched_elements"), None)
             clean_data["matched_elements"] = json.dumps(matched) if matched is not None else None
+        if "keyframes" in clean_data:
+            clean_data["keyframes"] = json.dumps(
+                _sanitize_keyframes(clean_data.get("keyframes"))
+            )
 
         if shot_id and shot_id in existing_map:
             # UPDATE Existing Shot
@@ -683,6 +704,7 @@ async def _render_background(
                     "start_frame": start_frame,
                     "duration_frames": duration_frames,
                     "trim_in": shot.trim_in or 0,
+                    "keyframes": _parse_json_field(shot.keyframes, []),
                     "gain": shot.audio_gain if shot.audio_gain is not None else 1.0,
                     "muted": bool(shot.audio_muted),
                     "hidden": False,

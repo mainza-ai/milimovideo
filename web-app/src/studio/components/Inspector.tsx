@@ -1,6 +1,10 @@
 import { Loader2, Play, RotateCcw, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getAssetUrl } from '../../config';
+import { computeTimelineLayout } from '../../utils/timelineUtils';
+import {
+    opacityAtFrame, removeKeyframeAt, sanitizeKeyframes, upsertKeyframe,
+} from '../timeline/keyframes';
 import { useStudioEditor } from '../state/editorStore';
 import {
     useStudioCancel,
@@ -11,12 +15,21 @@ import {
     useStudioTakes,
 } from '../data/useStudioData';
 
-const TABS = ['shot', 'prompt', 'takes', 'audio', 'review', 'history'] as const;
+const TABS = ['shot', 'prompt', 'motion', 'takes', 'audio', 'review', 'history'] as const;
 
 export function Inspector() {
-    const { selectedShotId, updateShot, addToast } = useStudioSelection();
+    const { selectedShotId, updateShot, addToast, currentTime } = useStudioSelection();
     const project = useTimelineStore((state) => state.project);
     const shot = project.shots.find((item) => item.id === selectedShotId) || null;
+    const keyframes = sanitizeKeyframes(shot?.keyframes || []);
+    const clip = shot ? computeTimelineLayout(project).find((item) => item.id === shot.id) : null;
+    const fps = project.fps || 25;
+    const localFrame = shot
+        ? Math.max(0, Math.min(
+            Math.max(0, (shot.numFrames || 1) - 1),
+            clip ? Math.round((currentTime - clip.start) * fps) : 0,
+        ))
+        : 0;
     const elements = useStudioElements(project.id);
     const generate = useStudioGenerate();
     const cancel = useStudioCancel();
@@ -165,6 +178,83 @@ export function Inspector() {
                                         <div className="st-value" style={{ color: 'var(--st-muted)' }}>{shot.prompt}</div>
                                     </>
                                 )}
+                            </div>
+                        )}
+
+                        {inspectorTab === 'motion' && (
+                            <div className="st-inspector-section">
+                                <span className="st-label">Opacity keyframes · frame {localFrame}</span>
+                                <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                                    Piecewise-linear alpha, burned into the render. V2 fades over V1; V1 fades through black.
+                                </div>
+                                <div className="st-button-row" style={{ marginTop: 8 }}>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant="primary"
+                                        onClick={() => updateShot(shot.id, {
+                                            keyframes: upsertKeyframe(keyframes, {
+                                                frame: localFrame,
+                                                opacity: opacityAtFrame(keyframes, localFrame),
+                                            }),
+                                        })}
+                                    >
+                                        Add at {localFrame}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant="ghost"
+                                        disabled={keyframes.length === 0}
+                                        onClick={() => updateShot(shot.id, { keyframes: [] })}
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+                                    {keyframes.length === 0 && (
+                                        <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 10 }}>
+                                            No keyframes. The clip stays fully opaque.
+                                        </span>
+                                    )}
+                                    {keyframes.map((keyframe) => (
+                                        <div key={keyframe.frame} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <span className="st-mono" style={{ width: 44, fontSize: 10 }}>
+                                                f{keyframe.frame}
+                                            </span>
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={100}
+                                                step={1}
+                                                value={Math.round(keyframe.opacity * 100)}
+                                                aria-label={`Opacity at frame ${keyframe.frame}`}
+                                                style={{ flex: 1, accentColor: 'var(--st-accent)' }}
+                                                onChange={(event) => updateShot(shot.id, {
+                                                    keyframes: upsertKeyframe(keyframes, {
+                                                        frame: keyframe.frame,
+                                                        opacity: Number(event.target.value) / 100,
+                                                    }),
+                                                })}
+                                            />
+                                            <span className="st-mono" style={{ width: 34, fontSize: 10, textAlign: 'right' }}>
+                                                {Math.round(keyframe.opacity * 100)}%
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className="st-icon-button"
+                                                aria-label={`Remove keyframe at ${keyframe.frame}`}
+                                                onClick={() => updateShot(shot.id, {
+                                                    keyframes: removeKeyframeAt(keyframes, keyframe.frame),
+                                                })}
+                                            >
+                                                <X size={11} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
 

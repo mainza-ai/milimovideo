@@ -89,6 +89,7 @@ class Shot(SQLModel, table=True):
     selected_take_id: Optional[str] = None  # Job id of the selected immutable take
     audio_gain: float = 1.0
     audio_muted: bool = False
+    keyframes: Optional[str] = None  # JSON [{frame, opacity}]
 
     # Results
     video_url: Optional[str] = None
@@ -219,6 +220,7 @@ def _add_missing_columns() -> None:
             "selected_take_id": "TEXT",
             "audio_gain": "FLOAT NOT NULL DEFAULT 1.0",
             "audio_muted": "BOOLEAN NOT NULL DEFAULT 0",
+            "keyframes": "TEXT",
         },
         "job": {
             "resume_policy": "TEXT NOT NULL DEFAULT 'fail'",

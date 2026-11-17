@@ -39,7 +39,7 @@ interface EditorState {
     storyView: StoryView;
     selectedShotId: string | null;
     selectedSceneId: string | null;
-    inspectorTab: 'shot' | 'prompt' | 'takes' | 'audio' | 'review' | 'history';
+    inspectorTab: 'shot' | 'prompt' | 'motion' | 'takes' | 'audio' | 'review' | 'history';
     boardCamera: Camera;
     boardPositions: Record<string, BoardPosition>;
     boardPinned: Record<string, boolean>;

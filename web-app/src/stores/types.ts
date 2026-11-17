@@ -49,6 +49,7 @@ export interface Shot {
     selectedTakeId?: string;
     audioGain?: number;
     audioMuted?: boolean;
+    keyframes?: OpacityKeyframe[];
     videoUrl?: string | null; // Derived from jobID
     thumbnailUrl?: string; // Static Preview
     enhancedPromptResult?: string; // Result from backend
@@ -105,6 +106,11 @@ export interface ParsedScene {
     name: string;
     content: string;
     shots: ParsedShot[];
+}
+
+export interface OpacityKeyframe {
+    frame: number;
+    opacity: number;
 }
 
 export interface CaptionCue {

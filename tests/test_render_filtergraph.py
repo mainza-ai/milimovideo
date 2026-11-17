@@ -1,4 +1,4 @@
-from utils.render_utils import build_complex_filtergraph
+from utils.render_utils import build_complex_filtergraph, opacity_expression
 
 
 def _clip(path="/tmp/a.mp4", **overrides):
@@ -51,3 +51,23 @@ def test_muted_a1_track_is_skipped_and_track_state_mute_wins():
 def test_hidden_v1_leaves_no_video_chain():
     cmd = _cmd(v1=[_clip()], track_states={"0": {"hidden": True}})
     assert not any("[v1_0]" in part for part in cmd)
+
+
+def test_opacity_expression_holds_and_interpolates():
+    assert opacity_expression([], 25) is None
+    assert opacity_expression([{"frame": 5, "opacity": 0.4}], 25) == "0.4000"
+
+    expr = opacity_expression(
+        [{"frame": 0, "opacity": 0.0}, {"frame": 25, "opacity": 1.0}],
+        25,
+    )
+    assert expr.startswith("if(lt(T,0.000000),0.0000,")
+    assert "1.000000" in expr  # slope over one second
+
+
+def test_keyframes_add_alpha_expression_to_the_clip():
+    cmd = _cmd(v1=[_clip(keyframes=[{"frame": 0, "opacity": 0.2}, {"frame": 24, "opacity": 1.0}])])
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "geq=" in graph
+    assert "alpha(X,Y)" in graph
+    assert "format=rgba" in graph

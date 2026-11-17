@@ -70,6 +70,10 @@ def test_render_api_matches_computed_timeline(app_client, project):
             "timeline": [],
             "video_url": f"/projects/{pid}/generated/{name}.mp4",
             "status": "completed",
+            "keyframes": (
+                [{"frame": 0, "opacity": 0.2}, {"frame": 24, "opacity": 1.0}]
+                if name == "red" else []
+            ),
         })
     shots.append({
         "id": "music",

@@ -355,3 +355,14 @@ playhead; the render path already handled standalone A1 and now is covered by a
 real FFmpeg render test with an audio-only input. Generate excludes A1 clips from
 the shot queue so audio cannot be accidentally sent to a video pipeline.
 Verified: 39 pytest, 17 vitest, tsc clean, eslint 0 errors, vite build.
+
+## [2026-11-16] motion | opacity keyframes through the render
+
+Added `shot.keyframes` JSON (`frame`, `opacity`), sanitized server-side,
+serialized with the project, and mapped through the document store. The render
+builds a piecewise-linear expression and multiplies the clip alpha with `geq`
+before PTS shift, so keyframes stay clip-local; V2 fades over V1 and V1 fades
+through black. Inspector gained a Motion tab to add/remove keyframes at the
+playhead, scrub opacity, and clear the curve. Covered by expression/filtergraph
+tests and a real FFmpeg render with keyframes. Verified: 41 pytest, 20 vitest,
+tsc clean, eslint 0 errors, build. Live DB backed up and column added.

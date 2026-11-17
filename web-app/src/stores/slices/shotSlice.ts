@@ -148,6 +148,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 trimOut: s.trim_out || 0,
                 audioGain: s.audio_gain ?? 1,
                 audioMuted: s.audio_muted ?? false,
+                keyframes: Array.isArray(s.keyframes) ? s.keyframes : [],
                 timeline: (typeof s.timeline === "string"
                     ? (() => { try { return JSON.parse(s.timeline || "[]"); } catch { return []; } })()
                     : (s.timeline || [])
