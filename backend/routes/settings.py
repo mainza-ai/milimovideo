@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from services.llm import budget, discovery, eval as eval_engine, profiles, runtime
+from services.memory import budget as memory_budget, engines as memory_engines
 from services.llm.instances import instance_id, normalize_base_url
 from services.llm.models import (
     LLMDiscoverAttach,
@@ -125,6 +126,27 @@ def attach_llm_server(server: LLMDiscoverAttach):
     runtime.clear_catalog()
     logger.info("LLM provider attached: %s (%s)", payload["instance_id"], payload["base_url"])
     return snapshot
+
+
+@router.get("/llm/memory")
+def llm_memory():
+    """Resident text models reported by local engines."""
+    rows = memory_engines.collect(force=True)
+    snapshot = memory_budget.snapshot()
+    return {
+        "engines": [engine.as_dict() for engine in rows],
+        "total_gb": round(sum(max(0.0, engine.resident_gb) for engine in rows), 2),
+        "snapshot": snapshot.as_dict(),
+    }
+
+
+@router.post("/llm/providers/{provider_id}/unload")
+def unload_llm_provider(provider_id: str):
+    """Unload models on one engine where the adapter supports it."""
+    result = memory_engines.unload(provider_id=provider_id)
+    memory_engines.clear_cache()
+    logger.info("LLM provider unload %s: %s", provider_id, result)
+    return result
 
 
 @router.delete("/llm/providers/{provider_id}")

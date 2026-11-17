@@ -43,7 +43,10 @@ export default defineConfig({
         {
             command: 'npm run dev -- --host 127.0.0.1',
             url: 'http://127.0.0.1:5173/studio',
-            reuseExistingServer: true,
+            // Never reuse a dev server: it may point at a different API port
+            // (e.g. 8000) than the e2e backend (8010), which silently tests the
+            // wrong database. Fail loudly instead.
+            reuseExistingServer: false,
             timeout: 90_000,
             env: {
                 ...process.env,

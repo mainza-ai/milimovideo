@@ -5,9 +5,14 @@ import uuid
 import torch
 import json
 from datetime import datetime, timezone
-from job_utils import update_job_db, active_jobs, update_job_progress, update_shot_db, broadcast_progress
+from job_utils import (
+    update_job_db, active_jobs, update_job_progress, update_shot_db,
+    broadcast_progress, apply_downgrade,
+)
+from services.memory.models import MemoryDeferred
 from file_utils import get_base_dir, get_project_output_paths
 from events import event_manager
+import job_events
 from database import engine, Job, Shot
 from sqlmodel import Session
 import config
@@ -21,14 +26,32 @@ async def generate_image_task(job_id: str, params: dict):
     
     logger.info(f"Starting IMAGE generation for job {job_id}")
 
-    if not config.SKIP_VRAM_CHECK:
-        from services.model_loader import model_loader
-        can_load, reason = model_loader.can_load_model(config.VRAM_ESTIMATE_IMAGE_GB)
-        if not can_load:
-            message = f"Insufficient memory for image generation: {reason}"
-            logger.error(message)
-            update_job_db(job_id, "failed", error=message)
-            await event_manager.broadcast("error", {"job_id": job_id, "message": message})
+    from memory_manager import memory_manager
+
+    decision = memory_manager.admit_job(job_id, "image", params)
+    if not decision.ok:
+        if decision.retryable:
+            raise MemoryDeferred(decision.reason or "waiting for memory")
+        if decision.downgrade and params.get("auto_downgrade", True):
+            label = decision.downgrade.get("label") or "a smaller preset"
+            params = apply_downgrade(job_id, params, decision.downgrade)
+            await job_events.retrying(
+                job_id, attempt=1,
+                message=f"Memory: using {label} instead",
+                data={"downgrade": decision.downgrade},
+            )
+            decision = memory_manager.admit_job(job_id, "image", params)
+        if not decision.ok:
+            message = decision.reason or "Not enough memory to generate an image."
+            logger.error("Memory admission refused image job %s: %s", job_id, message)
+            shot_id = params.get("shot_id")
+            if shot_id:
+                update_shot_db(shot_id, status="failed")
+            await job_events.terminal(
+                job_id, "failed", stage="admission", error=message,
+                message=f"Image blocked: {message}",
+                data={"suggestions": decision.suggestions, "downgrade": decision.downgrade},
+            )
             return
 
     active_jobs[job_id] = {
@@ -37,10 +60,12 @@ async def generate_image_task(job_id: str, params: dict):
         "progress": 0,
         "eta_seconds": 5,
         "status_message": "Initializing...",
+        "stage": "starting",
         "project_id": params.get("project_id"),
-        "type": "image"
+        "shot_id": params.get("shot_id"),
+        "type": "image",
     }
-    update_job_db(job_id, "processing")
+    update_job_db(job_id, "processing", stage="starting", status_message="Starting…")
     
     try:
         prompt = params.get("prompt", "")
@@ -76,7 +101,7 @@ async def generate_image_task(job_id: str, params: dict):
                     )
                     if enhanced and enhanced != prompt:
                         logger.info(f"Enhanced image prompt: {enhanced[:100]}...")
-                        update_job_db(job_id, "processing", enhanced_prompt=enhanced)
+                        update_job_db(job_id, "processing", enhanced_prompt=enhanced, stage="enhancing")
                         prompt = enhanced
             except Exception as e:
                 logger.warning(f"Image prompt enhancement failed: {e}")
@@ -88,6 +113,7 @@ async def generate_image_task(job_id: str, params: dict):
                     pass
         
         # Flux 2 Logic
+        update_job_progress(job_id, 4, "Loading Flux 2…", stage="loading")
         from models.flux_wrapper import flux_inpainter
         
         
@@ -154,20 +180,13 @@ async def generate_image_task(job_id: str, params: dict):
              def flux_callback(step, total):
                  if job_id in active_jobs:
                      try:
-                         progress_pct = (step / total) * 100
-                         msg = f"Generating Image ({step}/{total})"
-                         active_jobs[job_id]["progress"] = int(progress_pct)
-                         active_jobs[job_id]["status_message"] = msg
+                         progress_pct = int((step / max(total, 1)) * 90) + 5
+                         update_job_progress(
+                             job_id, progress_pct, f"Generating image ({step}/{total})",
+                             stage="denoising", step=step, total=total,
+                         )
                          if active_jobs[job_id].get("cancelled", False):
                              raise RuntimeError(f"Job {job_id} cancelled by user.")
-                         
-                         # Allow pure cancellation check without clearing status
-                         if step >= 0:
-                            # Must run in asyncio thread
-                            asyncio.run_coroutine_threadsafe(
-                                broadcast_progress(job_id, active_jobs[job_id]["progress"], "processing", active_jobs[job_id]["status_message"]),
-                                loop
-                            )
                      except Exception as e:
                          if "cancelled" in str(e).lower():
                              raise  # Rethrow so outer block catches it
@@ -238,15 +257,7 @@ async def generate_image_task(job_id: str, params: dict):
             session.add(asset)
             session.commit()
         
-        # Update Job
-        update_job_db(
-            job_id, 
-            "completed", 
-            output_path=web_url, 
-            thumbnail_path=web_thumb,
-            actual_frames=1,
-            status_message="Flux Image Ready"
-        )
+        update_job_progress(job_id, 98, "Saving image…", stage="saving")
         
         # If this is a storyboard thumbnail, write back to the Shot record
         shot_id = params.get("shot_id")
@@ -254,23 +265,28 @@ async def generate_image_task(job_id: str, params: dict):
             update_shot_db(shot_id, thumbnail_url=web_url, status="pending")
             logger.info(f"Thumbnail saved to shot {shot_id}: {web_url}")
         
-        await event_manager.broadcast("complete", {
-            "job_id": job_id, 
-            "url": web_url,
-            "type": "thumbnail" if params.get("is_thumbnail") else "image",
-            "thumbnail_url": web_thumb,
-            "asset_id": asset_id,
-            "shot_id": shot_id,
-        })
+        await job_events.terminal(
+            job_id, "completed", stage="completed", message="Image ready",
+            output_path=web_url, thumbnail_path=web_thumb, actual_frames=1, progress=100,
+            data={
+                "type": "thumbnail" if params.get("is_thumbnail") else "image",
+                "asset_id": asset_id,
+                "shot_id": shot_id,
+            },
+        )
         
     except Exception as e:
         if "cancelled" in str(e).lower():
             logger.info(f"Job {job_id} cancelled.")
-            update_job_db(job_id, "cancelled")
-            await event_manager.broadcast("cancelled", {"job_id": job_id})
+            await job_events.terminal(
+                job_id, "cancelled", stage="cancelled", message="Cancelled"
+            )
         else:
             logger.error(f"Generation failed: {e}")
             import traceback
             traceback.print_exc()
             active_jobs[job_id]["status"] = "failed"
-            update_job_db(job_id, "failed", error=str(e))
+            await job_events.terminal(
+                job_id, "failed", stage=active_jobs.get(job_id, {}).get("stage", "failed"),
+                error=str(e), message=f"Image generation failed: {e}",
+            )

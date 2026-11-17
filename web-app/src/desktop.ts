@@ -26,6 +26,33 @@ export function isDesktop(): boolean {
     return tauri() !== null;
 }
 
+/** Native Notification Center on the desktop; false when unavailable. */
+export async function notifyDesktop(title: string, body: string): Promise<boolean> {
+    const api = tauri();
+    if (!api?.core) return false;
+    try {
+        await api.core.invoke('notify', { title, body });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+export async function setDesktopBadge(label: string | null, count: number): Promise<void> {
+    const api = tauri();
+    if (!api?.core) return;
+    await api.core.invoke('set_badge', {
+        label,
+        count: count > 0 ? count : null,
+    }).catch(() => undefined);
+}
+
+export async function setDesktopTitle(title: string): Promise<void> {
+    const api = tauri();
+    if (!api?.core) return;
+    await api.core.invoke('set_window_title', { title }).catch(() => undefined);
+}
+
 export async function startDesktopBackend(): Promise<string | null> {
     const api = tauri();
     if (!api?.core) return null;

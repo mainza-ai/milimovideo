@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
     Film, Image as ImageIcon, ListChecks, Loader2, PanelLeft, PanelRight, Play, RotateCcw,
     Sparkles, Square, Star, X,
@@ -17,17 +17,28 @@ import {
     useStudioSelection,
     useStudioTakes,
 } from '../data/useStudioData';
-import type { StudioElement } from '../data/useStudioData';
+import type { MemoryDowngrade, StudioElement } from '../data/useStudioData';
 import { PipelineLens } from '../components/PipelineLens';
 import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
 import { MediaThumb } from '../components/MediaThumb';
+import { stageLabel } from '../events/jobBridge';
 
 export function GenerateSurface() {
     const project = useStudioDocumentStore((state) => state.project);
     const { selectedShotId, updateShot } = useStudioSelection();
     const { elements } = useStudioElements(project.id);
-    const generate = useStudioGenerate();
+    const [downgradePrompt, setDowngradePrompt] = useState<{
+        shot: typeof project.shots[number];
+        downgrade: MemoryDowngrade;
+        reason: string;
+    } | null>(null);
+    const onDowngrade = useCallback((
+        target: typeof project.shots[number],
+        downgrade: MemoryDowngrade,
+        reason: string,
+    ) => setDowngradePrompt({ shot: target, downgrade, reason }), []);
+    const generate = useStudioGenerate({ onDowngrade });
     const openMediaPreview = useMediaPreview((state) => state.open);
     const cancel = useStudioCancel();
     const generateRailCollapsed = useStudioEditor((state) => state.generateRailCollapsed);
@@ -280,7 +291,14 @@ export function GenerateSurface() {
                         >
                             <PanelRight size={15} />
                         </button>
-                        <button type="button" className="st-button" data-variant="primary" disabled={shot.isGenerating} onClick={() => void generate(shot)}>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-variant="primary"
+                            data-testid="generate-shot"
+                            disabled={shot.isGenerating}
+                            onClick={() => void generate(shot)}
+                        >
                             {shot.isGenerating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
                             {shot.isGenerating ? 'Generating…' : 'Generate'}
                         </button>
@@ -318,6 +336,80 @@ export function GenerateSurface() {
                     </div>
                 </div>
 
+                {downgradePrompt && (
+                    <div className="st-panel" style={{ marginBottom: 12 }} data-testid="downgrade-prompt">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                            <strong style={{ fontSize: 12 }}>Not enough memory for this preset</strong>
+                            <button
+                                type="button"
+                                className="st-icon-button"
+                                aria-label="Dismiss memory preset"
+                                onClick={() => setDowngradePrompt(null)}
+                            >
+                                <X size={12} />
+                            </button>
+                        </div>
+                        <div className="st-value" style={{ marginTop: 4, color: 'var(--st-muted)', fontSize: 11 }}>
+                            {downgradePrompt.reason}
+                        </div>
+                        <div className="st-value" style={{ marginTop: 6, fontSize: 11 }}>
+                            Safe preset: <strong>{downgradePrompt.downgrade.label}</strong>
+                            {downgradePrompt.downgrade.estimate?.total_gb
+                                ? ` (~${downgradePrompt.downgrade.estimate.total_gb.toFixed(1)} GB)`
+                                : ''}
+                        </div>
+                        <div className="st-button-row" style={{ marginTop: 8 }}>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                data-variant="primary"
+                                onClick={() => {
+                                    const { shot: target, downgrade } = downgradePrompt;
+                                    setDowngradePrompt(null);
+                                    const next = { ...target, ...downgrade.params } as typeof target;
+                                    updateShot(target.id, {
+                                        numFrames: next.numFrames,
+                                        width: next.width,
+                                        height: next.height,
+                                        upscale: next.upscale,
+                                    });
+                                    void generate(next);
+                                }}
+                            >
+                                Apply &amp; generate
+                            </button>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                onClick={() => setDowngradePrompt(null)}
+                            >
+                                Keep current
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {shot.isGenerating && (
+                    <div className="st-panel" style={{ marginBottom: 12 }} data-testid="generate-progress">
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline' }}>
+                            <strong style={{ fontSize: 12 }}>
+                                {stageLabel(shot.stage) || 'Queued'}
+                                {shot.progress != null ? ` · ${shot.progress}%` : ''}
+                            </strong>
+                            <span className="st-mono" style={{ color: 'var(--st-muted)', fontSize: 10 }}>
+                                {shot.etaSeconds ? `${Math.round(shot.etaSeconds)}s left` : ''}
+                            </span>
+                        </div>
+                        <div className="st-job-progress-bar" style={{ marginTop: 6 }}>
+                            <span style={{ width: `${Math.max(0, Math.min(100, shot.progress ?? 0))}%` }} />
+                        </div>
+                        <div className="st-value" style={{ marginTop: 6, color: 'var(--st-muted)', fontSize: 11 }}>
+                            {shot.statusMessage || 'Working…'}
+                        </div>
+                    </div>
+                )}
                 <div className="st-take-grid">
                     <article className="st-take">
                         <div className="st-take-media">

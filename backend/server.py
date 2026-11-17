@@ -65,6 +65,9 @@ from database import init_db, engine, Job, QueuedJob
 from sqlmodel import Session, select
 from routes import router as api_router
 from events import event_manager
+from memory_manager import memory_manager
+from services.memory import budget as memory_budget
+from services.memory import sampler as memory_sampler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,6 +82,11 @@ async def lifespan(app: FastAPI):
     import job_utils
     import asyncio
     job_utils.global_loop = asyncio.get_running_loop()
+
+    # Cap this process so PyTorch fails before macOS thrashes, then start the
+    # idle/pressure monitor. Both are best-effort on non-MPS hosts.
+    memory_budget.set_mps_cap()
+    memory_manager.start_monitor()
     
     # Startup Cleanup: Fail any jobs that were 'processing' when server died
     try:
@@ -124,6 +132,7 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down...")
+    memory_manager.stop_monitor()
     
     # Signal threads to stop
     count = job_utils.cancel_all_jobs()
@@ -222,6 +231,7 @@ async def health():
         free_bytes = shutil.disk_usage(config.PROJECTS_DIR).free
     except OSError:
         free_bytes = None
+    memory = memory_manager.status()
     return {
         "status": "ok",
         "device": device,
@@ -229,7 +239,9 @@ async def health():
         "auth_required": bool(config.API_TOKEN),
         "gpu": is_gpu_busy(),
         "queue_paused": is_queue_paused(),
-        "slots": memory_manager.status(),
+        "slots": memory,
+        "memory": memory,
+        "sampler": memory_sampler.current(),
         "disk_free_bytes": free_bytes,
     }
 
@@ -345,7 +357,20 @@ app.mount("/generated", StaticFiles(directory=legacy_generated_dir), name="gener
 # Event Manager Endpoint
 @app.get("/events")
 async def events(request: Request):
-    return await event_manager.subscribe(request)
+    last_event_id = request.headers.get("last-event-id") or request.query_params.get("last_event_id")
+    return await event_manager.subscribe(request, last_event_id=last_event_id)
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host=config.API_HOST, port=config.API_PORT, reload=True)
+    # Reload is opt-in: the watcher walks the repo (including checkpoint
+    # directories) and burns a core while a generation is running.
+    reload_enabled = os.environ.get("MILIMO_RELOAD", "0") == "1"
+    uvicorn.run(
+        "server:app",
+        host=config.API_HOST,
+        port=config.API_PORT,
+        reload=reload_enabled,
+        reload_includes=["*.py"] if reload_enabled else None,
+        reload_excludes=[
+            "models/**", "checkpoints/**", "projects/**", "outputs/**", "**/*.safetensors",
+        ] if reload_enabled else None,
+    )

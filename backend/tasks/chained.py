@@ -6,13 +6,14 @@ import logging
 import subprocess
 import torch
 import config
-from job_utils import active_jobs, broadcast_log, broadcast_progress, update_job_db, update_shot_db
+from job_utils import active_jobs, broadcast_log, broadcast_progress, update_job_db, update_job_progress, update_shot_db
 from file_utils import get_project_output_paths
 from ltx_pipelines.utils.media_io import encode_video
 from ltx_pipelines.utils.constants import AUDIO_SAMPLE_RATE
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 from ltx_pipelines.utils.helpers import cleanup_memory
 from events import event_manager
+import job_events
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,13 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                      active_jobs[job_id]["eta_seconds"] = eta
                      
                      # 3. Status Message
-                     active_jobs[job_id]["status_message"] = f"Generating Chunk {chunk_idx+1}/{num_chunks} ({int(chunk_progress*100)}%)"
+                     active_jobs[job_id]["status_message"] = f"Chunk {chunk_idx+1}/{num_chunks} · {int(chunk_progress*100)}%"
+                     update_job_progress(
+                         job_id, global_progress,
+                         f"Chunk {chunk_idx+1}/{num_chunks} · {int(chunk_progress*100)}%",
+                         stage="denoising", step=step_idx, total=total_steps,
+                         eta_seconds=eta,
+                     )
 
                  if active_jobs.get(job_id, {}).get("cancelled", False):
                      raise RuntimeError(f"Job {job_id} cancelled by user.")
@@ -110,7 +117,11 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             await update_ui(f"Generating chunk {chunk_idx+1}/{num_chunks}...")
             # Calculate roughly global progress? 
             # Chunk progress is local. Global = (chunk_idx / num_chunks) * 100.
-            await broadcast_progress(job_id, int((chunk_idx / num_chunks) * 100))
+            update_job_progress(
+                job_id, int((chunk_idx / num_chunks) * 100),
+                f"Starting chunk {chunk_idx+1}/{num_chunks}",
+                stage="denoising",
+            )
             
             # 1. Prepare configuration via Manager
             # We pass the text encoder here so the manager can use it for prompt enhancement
@@ -239,12 +250,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
                 status_msg = f"Generating Chunk {chunk_idx+1}/{num_chunks}"
                 active_jobs[job_id]["status_message"] = status_msg
                 
-                # Broadcast the new target narrative to the frontend!
-                await broadcast_progress(
-                    job_id, 
-                    progress=int((chunk_idx / num_chunks) * 100), 
-                    message=status_msg,
-                    enhanced_prompt=chunk_prompt
+                update_job_progress(
+                    job_id, int((chunk_idx / num_chunks) * 100),
+                    status_msg, stage="denoising", enhanced_prompt=chunk_prompt,
                 )
             
             logger.info(f"Starting chunk {chunk_idx}: {chunk_prompt[:50]}...")
@@ -399,6 +407,7 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             )
 
         # Final stitching complete
+        update_job_progress(job_id, 94, "Stitching chunks…", stage="saving")
         logger.info(f"All chunks generated successfully. Stitching {len(files_to_stitch)} parts...")
         
         # Ensure output directories exist
@@ -496,16 +505,6 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             relative_output = final_output_path
             relative_thumb = thumb_path
         
-        # Update job record
-        update_job_db(
-            job_id, 
-            "completed", 
-            output_path=relative_output,
-            enhanced_prompt=chunk_prompt, # Using last chunk prompt as enhanced? Or we should aggregate?
-            actual_frames=actual_frames,
-            thumbnail_path=relative_thumb
-        )
-
         shot_id = params.get("shot_id") or params.get("id")
         if shot_id:
             update_shot_db(
@@ -519,13 +518,13 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             )
             logger.info(f"Updated Shot {shot_id} with chained video: {relative_output}")
 
-        await event_manager.broadcast("complete", {
-            "job_id": job_id, 
-            "url": relative_output,  # Use project-scoped URL
-            "type": "video",
-            "actual_frames": actual_frames,
-            "thumbnail_url": relative_thumb  # Use project-scoped URL
-        })
+        await job_events.terminal(
+            job_id, "completed", stage="completed", message="Done",
+            output_path=relative_output, thumbnail_path=relative_thumb,
+            actual_frames=actual_frames, progress=100,
+            enhanced_prompt=chunk_prompt,
+            data={"type": "video"},
+        )
         
     finally:
         # Cleanup split files and artifacts

@@ -1,4 +1,6 @@
 import os
+import asyncio
+import threading
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,68 +22,102 @@ logger = logging.getLogger("SAM3_Server")
 # Global Model Variables
 sam_model = None
 sam_processor = None
+_model_lock = threading.Lock()
+_model_error: str | None = None
+
+
+def _load_model() -> None:
+    """Load the SAM 3 image model once. Blocking; call from a worker thread.
+
+    SAM 3 is ~8 GB resident and only used for segmentation; loading it at
+    process start would charge the memory budget for an idle service. The first
+    request that needs it pays the load cost instead.
+    """
+    global sam_model, sam_processor, _model_error
+    with _model_lock:
+        if sam_model is not None:
+            return
+        try:
+            logger.info("Loading SAM 3 Model (lazy)...")
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.append(current_dir)
+
+            try:
+                from sam3 import build_sam3_image_model
+                from sam3.model.sam3_image_processor import Sam3Processor
+            except ImportError:
+                parent_dir = os.path.dirname(current_dir)
+                if parent_dir not in sys.path:
+                    sys.path.append(parent_dir)
+                from sam3 import build_sam3_image_model
+                from sam3.model.sam3_image_processor import Sam3Processor
+
+            device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+            logger.info(f"Using device: {device}")
+
+            project_root = os.path.abspath(os.path.join(current_dir, ".."))
+            local_checkpoint = os.path.join(project_root, "backend/models/sam3/sam3.pt")
+
+            if os.path.exists(local_checkpoint):
+                logger.info(f"Loading checkpoint from local: {local_checkpoint}")
+                model = build_sam3_image_model(
+                    checkpoint_path=local_checkpoint,
+                    device=device,
+                    enable_inst_interactivity=True,
+                    load_from_HF=False,
+                )
+            else:
+                logger.info("Local checkpoint not found. Downloading from HuggingFace...")
+                model = build_sam3_image_model(
+                    device=device,
+                    enable_inst_interactivity=True,
+                    load_from_HF=True,
+                )
+
+            model.eval()
+            sam_model = model
+            sam_processor = Sam3Processor(model, confidence_threshold=0.5)
+            _model_error = None
+            logger.info("SAM 3 Model loaded successfully.")
+        except Exception as exc:
+            _model_error = str(exc)[:300]
+            logger.error("Failed to load SAM 3 model: %s", exc)
+            import traceback
+            traceback.print_exc()
+            raise
+
+
+async def _ensure_model() -> None:
+    if sam_model is not None:
+        return
+    try:
+        await asyncio.to_thread(_load_model)
+    except Exception:
+        raise HTTPException(status_code=503, detail="SAM 3 model failed to load")
+
+
+def _unload_model() -> None:
+    global sam_model, sam_processor, _model_error
+    with _model_lock:
+        sam_model = None
+        sam_processor = None
+        _model_error = None
+        import gc
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global sam_model, sam_processor
-    try:
-        logger.info("Loading SAM 3 Model...")
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        if current_dir not in sys.path:
-            sys.path.append(current_dir)
-
-        try:
-            from sam3 import build_sam3_image_model
-            from sam3.model.sam3_image_processor import Sam3Processor
-        except ImportError:
-            parent_dir = os.path.dirname(current_dir)
-            if parent_dir not in sys.path:
-                sys.path.append(parent_dir)
-            from sam3 import build_sam3_image_model
-            from sam3.model.sam3_image_processor import Sam3Processor
-
-        # Determine device
-        device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
-        logger.info(f"Using device: {device}")
-
-        # Try local checkpoint first, fall back to HuggingFace download
-        project_root = os.path.abspath(os.path.join(current_dir, ".."))
-        local_checkpoint = os.path.join(project_root, "backend/models/sam3/sam3.pt")
-
-        if os.path.exists(local_checkpoint):
-            logger.info(f"Loading checkpoint from local: {local_checkpoint}")
-            sam_model = build_sam3_image_model(
-                checkpoint_path=local_checkpoint,
-                device=device,
-                enable_inst_interactivity=True,
-                load_from_HF=False,
-            )
-        else:
-            logger.info("Local checkpoint not found. Downloading from HuggingFace...")
-            sam_model = build_sam3_image_model(
-                device=device,
-                enable_inst_interactivity=True,
-                load_from_HF=True,
-            )
-
-        sam_model.eval()
-        logger.info("SAM 3 Model loaded successfully.")
-
-        # Initialize Sam3Processor for text/box prompts
-        sam_processor = Sam3Processor(sam_model, confidence_threshold=0.5)
-        logger.info("Sam3Processor initialized.")
-
-    except Exception as e:
-        logger.error(f"Failed to load SAM 3 model: {e}")
-        import traceback
-        traceback.print_exc()
-
+    # Lazy by design: no model is loaded until a segmentation request arrives.
+    logger.info("SAM 3 service ready (lazy model load)")
     yield
-
-    # Cleanup
-    sam_model = None
-    sam_processor = None
+    _unload_model()
 
 
 app = FastAPI(title="SAM 3 Microservice", lifespan=lifespan)
@@ -144,7 +180,24 @@ def health_check():
         "status": "running",
         "model_loaded": sam_model is not None,
         "processor_ready": sam_processor is not None,
+        "loading": _model_lock.locked(),
+        "lazy": True,
+        "error": _model_error,
     }
+
+
+@app.post("/load")
+async def load_model_endpoint():
+    """Preload the model (Setup can warm it); idempotent."""
+    await _ensure_model()
+    return {"status": "loaded", "model_loaded": True}
+
+
+@app.post("/unload")
+def unload_model_endpoint():
+    """Release the image model; the next request reloads it."""
+    _unload_model()
+    return {"status": "unloaded", "model_loaded": False}
 
 
 # ─── Point-Based Mask Prediction (Legacy) ──────────────────────────────────
@@ -157,8 +210,7 @@ async def predict_mask(
     multimask: bool = Form(False),
     boxes: str = Form(default=None),   # JSON: [cx, cy, w, h] normalized 0-1
 ):
-    if not sam_model:
-        raise HTTPException(status_code=503, detail="Model not loaded")
+    await _ensure_model()
 
     try:
         contents = await image.read()
@@ -243,8 +295,7 @@ async def detect_objects(
     Detect all instances of a concept described by text.
     Returns masks, bounding boxes, and confidence scores as JSON.
     """
-    if not sam_processor:
-        raise HTTPException(status_code=503, detail="Sam3Processor not initialized")
+    await _ensure_model()
 
     try:
         contents = await image.read()
@@ -307,8 +358,7 @@ async def segment_by_text(
     Segment all instances matching the text prompt.
     Returns a single merged binary mask PNG (for direct use with inpainting).
     """
-    if not sam_processor:
-        raise HTTPException(status_code=503, detail="Sam3Processor not initialized")
+    await _ensure_model()
 
     try:
         contents = await image.read()

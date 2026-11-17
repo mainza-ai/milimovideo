@@ -7,6 +7,8 @@ import {
 } from '../data/useStudioData';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { LLMSettingsPanel } from './LLMSettingsPanel';
+import { MemoryPanel } from '../components/MemoryPanel';
+import { NotificationSettingsPanel } from '../components/NotificationSettingsPanel';
 import { apiUrl } from '../../config';
 
 function formatBytes(bytes?: number | null): string {
@@ -191,6 +193,12 @@ export function SetupSurface() {
                     </p>
                 </div>
             </div>
+
+            <div style={{ marginBottom: 14 }}>
+                <MemoryPanel />
+            </div>
+
+            <NotificationSettingsPanel />
 
             <LLMSettingsPanel />
 

@@ -7,6 +7,7 @@ import uuid
 import config
 from database import Job
 from events import event_manager
+import job_events
 from job_utils import active_jobs, update_job_db, update_job_progress
 from file_utils import resolve_path
 
@@ -61,6 +62,7 @@ async def depth_task(job_id: str, params: dict) -> None:
         "status": "processing",
         "progress": 5,
         "status_message": "Loading depth model…",
+        "stage": "loading",
         "type": "depth",
         "project_id": params.get("project_id"),
         "cancelled": False,
@@ -79,7 +81,7 @@ async def depth_task(job_id: str, params: dict) -> None:
         if not image_path or not os.path.exists(image_path):
             raise RuntimeError("Depth source image is missing")
 
-        update_job_progress(job_id, 25, "Estimating depth…")
+        update_job_progress(job_id, 25, "Estimating depth…", stage="denoising")
         depth = await asyncio.to_thread(_run_depth, image_path, model.absolute_path)
 
         project_id = params.get("project_id")
@@ -90,15 +92,17 @@ async def depth_task(job_id: str, params: dict) -> None:
         depth.save(output_path)
 
         url = f"/projects/{project_id}/generated/{filename}"
-        update_job_progress(job_id, 100, "Depth complete")
-        update_job_db(job_id, "completed", output_path=url)
+        update_job_progress(job_id, 100, "Depth complete", stage="completed")
+        await job_events.terminal(
+            job_id, "completed", stage="completed", message="Depth complete",
+            output_path=url, progress=100, data={"url": url, "project_id": project_id},
+        )
         await event_manager.broadcast("depth_complete", {
-            "job_id": job_id,
-            "project_id": project_id,
-            "url": url,
+            "job_id": job_id, "project_id": project_id, "url": url,
         })
     except Exception as exc:
-        update_job_db(job_id, "failed", error=str(exc))
-        await event_manager.broadcast("depth_failed", {
-            "job_id": job_id, "error": str(exc),
-        })
+        await job_events.terminal(
+            job_id, "failed", stage="denoising", error=str(exc),
+            message=f"Depth failed: {exc}",
+        )
+        await event_manager.broadcast("depth_failed", {"job_id": job_id, "error": str(exc)})

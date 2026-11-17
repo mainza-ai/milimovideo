@@ -451,7 +451,10 @@ def check_vram(model_id: str):
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
 
     from services.model_loader import model_loader
-    can_load, reason = model_loader.can_load_model(model.vram_estimate_gb)
+    can_load, reason = model_loader.can_load_model(
+        model.vram_estimate_gb,
+        kind="video" if model.pipeline == "video" else "image",
+    )
     return {
         "model_id": model_id,
         "can_load": can_load,

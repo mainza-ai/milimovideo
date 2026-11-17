@@ -17,6 +17,7 @@ interface ProviderConfig {
     is_local: boolean;
     timeout_sec: number;
     keep_alive: string;
+    memory_gb?: number;
     api_key?: string | null;
     clear_key?: boolean;
     has_key: boolean;
@@ -157,6 +158,7 @@ function payloadFor(settings: LLMSettings): Record<string, unknown> {
             is_local: provider.is_local,
             timeout_sec: provider.timeout_sec,
             keep_alive: provider.keep_alive,
+            memory_gb: provider.memory_gb ?? 0,
             api_key: provider.api_key || null,
             clear_key: Boolean(provider.clear_key),
         };
@@ -244,6 +246,31 @@ export function LLMSettingsPanel() {
     const [profileBusy, setProfileBusy] = useState<string | null>(null);
     const [missing, setMissing] = useState<{ role: string; provider: string; model: string }[]>([]);
     const [checking, setChecking] = useState(false);
+    const [memory, setMemory] = useState<Record<string, { resident_gb: number; models: string[]; can_unload: boolean; source: string }>>({});
+
+    const loadMemory = useCallback(async () => {
+        try {
+            const response = await fetch(apiUrl('/settings/llm/memory'));
+            if (!response.ok) return;
+            const data = await response.json();
+            const rows = Array.isArray(data.engines) ? data.engines : [];
+            const next: Record<string, { resident_gb: number; models: string[]; can_unload: boolean; source: string }> = {};
+            for (const row of rows) {
+                if (!row?.provider_id) continue;
+                next[row.provider_id] = {
+                    resident_gb: Number(row.resident_gb || 0),
+                    models: Array.isArray(row.models) ? row.models : [],
+                    can_unload: Boolean(row.can_unload),
+                    source: String(row.source || 'unknown'),
+                };
+            }
+            setMemory(next);
+        } catch {
+            // Residency is advisory; settings still work without it.
+        }
+    }, []);
+
+    useEffect(() => { void loadMemory(); }, [loadMemory]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -263,6 +290,7 @@ export function LLMSettingsPanel() {
             setWarnings([]);
             setError(null);
             setConflict(false);
+            void loadMemory();
         } catch (exc) {
             setError(exc instanceof Error ? exc.message : 'Could not load LLM settings');
         } finally {
@@ -360,6 +388,25 @@ export function LLMSettingsPanel() {
             setCatalogProvider(providerId);
         } catch (exc) {
             addToast(exc instanceof Error ? exc.message : 'Model list failed', 'error');
+        } finally {
+            setBusyProvider(null);
+        }
+    };
+
+    const unloadProvider = async (providerId: string) => {
+        setBusyProvider(providerId);
+        try {
+            const response = await fetch(apiUrl(`/settings/llm/providers/${providerId}/unload`), { method: 'POST' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Unload failed');
+            const count = Array.isArray(data.unloaded) ? data.unloaded.length : 0;
+            addToast(
+                count > 0 ? `Unloaded ${count} model(s) on ${providerId}` : `${providerId} has nothing unloadable`,
+                count > 0 ? 'success' : 'info',
+            );
+            await loadMemory();
+        } catch (exc) {
+            addToast(exc instanceof Error ? exc.message : 'Unload failed', 'error');
         } finally {
             setBusyProvider(null);
         }
@@ -781,6 +828,7 @@ export function LLMSettingsPanel() {
                             const provider = draft.providers[id];
                             const result = verified[id];
                             const telemetry = provider.telemetry || {};
+                            const resident = memory[id];
                             return (
                                 <div key={id} className="st-panel" data-tone={provider.enabled ? undefined : 'muted'}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -792,6 +840,13 @@ export function LLMSettingsPanel() {
                                     <div className="st-value st-mono" style={{ fontSize: 10, color: 'var(--st-faint)', marginTop: 2 }}>
                                         {id} · {provider.wire} · {provider.type}
                                     </div>
+                                    {provider.is_local && resident && (
+                                        <div className="st-value" style={{ fontSize: 10, marginTop: 4, color: resident.resident_gb > 0 ? 'var(--st-text)' : 'var(--st-faint)' }}>
+                                            {resident.resident_gb > 0
+                                                ? `${resident.resident_gb.toFixed(1)} GB resident (${resident.source})${resident.models.length ? ` · ${resident.models.slice(0, 2).join(', ')}` : ''}`
+                                                : `not resident (${resident.source})`}
+                                        </div>
+                                    )}
                                     <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 11 }}>
                                         <input
                                             type="checkbox"
@@ -858,6 +913,34 @@ export function LLMSettingsPanel() {
                                                 onChange={(event) => patchProvider(id, { keep_alive: event.target.value })}
                                             />
                                         </label>
+                                        {provider.is_local && provider.type !== 'gemma' && (
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--st-muted)' }}>
+                                                resident GB
+                                                <input
+                                                    className="st-input"
+                                                    aria-label={`${provider.name} resident GB`}
+                                                    type="number"
+                                                    min={0}
+                                                    step={0.5}
+                                                    style={{ width: 72 }}
+                                                    value={provider.memory_gb ?? 0}
+                                                    title="Declared residency for engines that cannot report it. Counts against the budget."
+                                                    onChange={(event) => patchProvider(id, { memory_gb: Number(event.target.value) })}
+                                                />
+                                            </label>
+                                        )}
+                                        {provider.is_local && provider.type !== 'gemma' && (
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                data-variant="ghost"
+                                                aria-label={`Unload ${provider.name} models`}
+                                                onClick={() => void unloadProvider(id)}
+                                            >
+                                                Unload
+                                            </button>
+                                        )}
                                     </div>
                                     {!provider.is_local && (
                                         <label style={{ display: 'block', marginTop: 6, fontSize: 11, color: 'var(--st-muted)' }}>

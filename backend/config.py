@@ -53,6 +53,29 @@ SKIP_VRAM_CHECK = os.environ.get("MILIMO_SKIP_VRAM_CHECK", "0") == "1"
 VRAM_ESTIMATE_VIDEO_GB = 40.0
 VRAM_ESTIMATE_IMAGE_GB = 24.0
 
+# ── Memory budget / residency ─────────────────────────────────────
+# Measured budget: model weights + workspace + external engines, not file sizes.
+MEMORY_ENFORCE = os.environ.get("MILIMO_MEMORY_ENFORCE", "1") == "1"
+MEMORY_RESERVE_GB = float(os.environ.get("MILIMO_MEMORY_RESERVE_GB", "16"))
+MEMORY_SWAP_LIMIT_PERCENT = float(os.environ.get("MILIMO_MEMORY_SWAP_LIMIT_PERCENT", "85"))
+MPS_MEMORY_FRACTION = float(os.environ.get("MILIMO_MPS_MEMORY_FRACTION", "0.85"))
+# Idle eviction TTLs in seconds; 0 disables eviction for that slot.
+MEMORY_IDLE_TTL_SEC = {
+    "video": int(os.environ.get("MILIMO_MEMORY_TTL_VIDEO", "300")),
+    "image": int(os.environ.get("MILIMO_MEMORY_TTL_IMAGE", "300")),
+    "llm_http": int(os.environ.get("MILIMO_MEMORY_TTL_LLM", "120")),
+    "sam": int(os.environ.get("MILIMO_MEMORY_TTL_SAM", "600")),
+    "depth": int(os.environ.get("MILIMO_MEMORY_TTL_DEPTH", "300")),
+}
+MEMORY_KEEP_WARM = os.environ.get("MILIMO_MEMORY_KEEP_WARM", "0") == "1"
+# Conservative fallback for an engine that reports no resident bytes.
+MEMORY_UNKNOWN_ENGINE_GB = float(os.environ.get("MILIMO_MEMORY_UNKNOWN_ENGINE_GB", "24"))
+MEMORY_MONITOR_INTERVAL_SEC = float(os.environ.get("MILIMO_MEMORY_MONITOR_INTERVAL", "15"))
+
+# Optional terminal-job webhook for local automations (off by default).
+JOB_WEBHOOK_URL = os.environ.get("MILIMO_JOB_WEBHOOK", "").strip()
+JOB_WEBHOOK_TOKEN = os.environ.get("MILIMO_JOB_WEBHOOK_TOKEN", "").strip()
+
 # Upload safety
 MAX_UPLOAD_MB = int(os.environ.get("MILIMO_MAX_UPLOAD_MB", "2048"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024

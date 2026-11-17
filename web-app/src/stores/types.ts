@@ -60,6 +60,7 @@ export interface Shot {
     thumbnailUrl?: string; // Static Preview
     enhancedPromptResult?: string; // Result from backend
     statusMessage?: string; // Real-time status text
+    stage?: string; // queued | enhancing | loading | denoising | upscaling | encoding | saving
     currentPrompt?: string; // Live evolving prompt during generation
     etaSeconds?: number; // Estimated time remaining
 

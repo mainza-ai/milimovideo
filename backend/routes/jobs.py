@@ -4,6 +4,8 @@ from database import get_session, Job, Shot, Project
 from schemas import GenerateAdvancedRequest, GenerateImageRequest
 from tasks.video import generate_video_task
 from job_utils import active_jobs, update_job_db, update_shot_db
+from events import event_manager
+import job_events
 import asyncio
 import uuid
 import logging
@@ -18,21 +20,27 @@ router = APIRouter(tags=["jobs"])
 def get_status(job_id: str, session: Session = Depends(get_session)):
     # 1. Check Active Memory State (Fastest)
     if job_id in active_jobs:
-        return active_jobs[job_id]
-        
+        meta = dict(active_jobs[job_id])
+        meta.setdefault("progress", 0)
+        return meta
+
     # 2. Fallback to DB
     job = session.get(Job, job_id)
     if job:
         return {
             "status": job.status,
-            "video_url": job.output_path, # Legacy naming
+            "video_url": job.output_path,  # Legacy naming
             "error": job.error_message,
             "created_at": job.created_at,
             "completed_at": job.completed_at,
             "enhanced_prompt": job.enhanced_prompt,
             "status_message": job.status_message,
             "actual_frames": job.actual_frames,
-            "thumbnail_url": job.thumbnail_path
+            "thumbnail_url": job.thumbnail_path,
+            "progress": job.progress,
+            "stage": job.stage,
+            "started_at": job.started_at,
+            "memory": json.loads(job.memory_json) if job.memory_json else None,
         }
     
     raise HTTPException(status_code=404, detail="Job not found")
@@ -49,8 +57,15 @@ def get_project_active_jobs(project_id: str, session: Session = Depends(get_sess
             seen.add(j_id)
             project_jobs.append({
                 "job_id": j_id,
-                "type": meta.get("type", "unknown"),
+                "type": meta.get("type", meta.get("kind", "unknown")),
+                "kind": meta.get("type", meta.get("kind", "unknown")),
+                "shot_id": meta.get("shot_id"),
                 "status": meta.get("status"),
+                "stage": meta.get("stage"),
+                "step": meta.get("step"),
+                "total": meta.get("total"),
+                "eta_seconds": meta.get("eta_seconds"),
+                "started_at": meta.get("started_at"),
                 "progress": meta.get("progress", 0),
                 "status_message": meta.get("status_message", ""),
                 "position": 0,
@@ -76,13 +91,18 @@ def get_project_active_jobs(project_id: str, session: Session = Depends(get_sess
         width = int(params.get("width") or 768)
         height = int(params.get("height") or 512)
         workload = max(0.1, (frames / 121) * ((width * height) / (768 * 512)))
+        job_row = session.get(Job, queued.job_id)
         project_jobs.append({
             "job_id": queued.job_id,
             "type": queued.kind,
+            "kind": queued.kind,
+            "shot_id": job_row.shot_id if job_row else params.get("shot_id"),
             "status": queued.status,
-            "progress": 0,
-            "status_message": "Queued",
+            "stage": "queued",
+            "progress": job_row.progress if job_row else 0,
+            "status_message": job_row.status_message if job_row else "Queued",
             "position": position,
+            "started_at": job_row.started_at if job_row else None,
             "estimate_seconds": round(8 + 22 * workload, 1),
         })
     return project_jobs
@@ -94,16 +114,18 @@ def queue_state():
 
 
 @router.post("/jobs/queue/pause")
-def pause_queue():
+async def pause_queue():
     from job_utils import is_queue_paused, set_queue_paused
     set_queue_paused(True)
+    await event_manager.broadcast("queue.paused", {"paused": True})
     return {"paused": is_queue_paused()}
 
 
 @router.post("/jobs/queue/resume")
-def resume_queue():
+async def resume_queue():
     from job_utils import is_queue_paused, set_queue_paused
     set_queue_paused(False)
+    await event_manager.broadcast("queue.resumed", {"paused": False})
     return {"paused": is_queue_paused()}
 
 
@@ -116,17 +138,37 @@ async def cancel_job(job_id: str, session: Session = Depends(get_session)):
         active_jobs[job_id]["cancelled"] = True
         active_jobs[job_id]["status"] = "cancelling"
         active_jobs[job_id]["status_message"] = "Cancelling..."
-        # update_job_db(job_id, "cancelled") # Don't sync DB yet; let worker see flag first!
+        active_jobs[job_id]["stage"] = "cancelling"
+        await job_events.cancelling(job_id)
         return {"status": "cancelling"}
-    
-    # 2. Pending DB Cancel (if not yet picked up by worker)
+
+    # 2. Not running: cancel the Job and its durable queue row together.
     job = session.get(Job, job_id)
-    if job and job.status == "pending":
+    if job and job.status in ("pending", "queued"):
         job.status = "cancelled"
+        job.stage = "cancelled"
+        job.status_message = "Cancelled before start"
+        job.completed_at = datetime.now(timezone.utc)
         session.add(job)
+        from database import QueuedJob
+        queued = session.exec(
+            select(QueuedJob)
+            .where(QueuedJob.job_id == job_id)
+            .where(QueuedJob.status.in_(["queued", "running"]))
+        ).first()
+        if queued:
+            queued.status = "cancelled"
+            queued.completed_at = datetime.now(timezone.utc)
+            queued.error_message = "Cancelled before start"
+            session.add(queued)
         session.commit()
+        await job_events.terminal(
+            job_id, "cancelled", stage="cancelled", message="Cancelled before start"
+        )
         return {"status": "cancelled"}
-        
+
+    if job:
+        return {"status": job.status}
     return {"status": "not_found_or_already_done"}
 
 
@@ -143,12 +185,28 @@ def job_metrics(days: int = 7, session: Session = Depends(get_session)):
         {"job_id": j.id, "type": j.type, "error": j.error_message}
         for j in jobs if j.status == "failed"
     ][-20:]
+    peaks = []
+    for job in jobs:
+        if job.memory_json:
+            try:
+                trace = json.loads(job.memory_json)
+                if trace.get("peak_gb"):
+                    peaks.append(float(trace["peak_gb"]))
+            except Exception:
+                pass
+    from job_utils import queue_wait_stats
+    from memory_manager import memory_manager
+
     return {
         "window_days": days,
         "total": len(jobs),
         "by_type": dict(by_type),
         "by_status": dict(by_status),
         "recent_failures": failures,
+        "memory_peak_gb": round(max(peaks), 2) if peaks else None,
+        "memory": memory_manager.counters(),
+        "queue": queue_wait_stats(),
+        "events": event_manager.stats(),
     }
 
 

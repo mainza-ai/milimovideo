@@ -19,6 +19,8 @@ from typing import Any, AsyncIterator, Callable, Sequence
 
 from . import budget, providers
 from .models import LLMProviderConfig
+from services.memory import costs as memory_costs
+from services.memory import engines as memory_engines
 from .store import LLMSettingsError, llm_settings
 
 logger = logging.getLogger("llm.runtime")
@@ -166,15 +168,29 @@ def _context_guard(hop: dict[str, Any], messages: Sequence[providers.ChatMessage
         )
 
 
-def _mark_active(provider_id: str, is_local: bool) -> None:
+def _reserve_llm(provider_id: str, model: str, is_local: bool) -> None:
+    """Reserve budget before a local HTTP model runs.
+
+    Raises LLMSettingsError when the model cannot fit; the caller then falls
+    back or returns the original prompt. Cloud providers are skipped.
+    """
     if not is_local:
         return
     try:
         from memory_manager import memory_manager
 
-        memory_manager.mark_active("llm_http")
-    except Exception:
-        pass
+        settings = llm_settings.get()
+        provider = settings.providers.get(provider_id)
+        cost = float(getattr(provider, "memory_gb", 0.0) or 0.0) if provider else 0.0
+        if cost <= 0:
+            cost = memory_engines.resident_gb(settings, provider_id)
+        if cost <= 0:
+            cost = memory_costs.estimate_llm_gb(model)
+        memory_manager.note_llm(provider_id, model, cost)
+    except MemoryError as exc:
+        raise LLMSettingsError(f"{provider_id}/{model}: {exc}") from exc
+    except Exception as exc:
+        logger.debug("LLM memory reservation skipped for %s: %s", provider_id, exc)
 
 
 def _local_models_in_use() -> dict[str, set[str]]:
@@ -206,32 +222,12 @@ def release_local() -> list[str]:
     denoising. Unloads every model a role could have used, not just the
     provider default. Safe to call when nothing is loaded.
     """
-    released: list[str] = []
-    unreleased: list[str] = []
-    telemetry = llm_settings.telemetry()
-    model_map = _local_models_in_use()
-    for provider_id, provider in llm_settings.local_instances():
-        models = model_map.get(provider_id) or ({provider.default_model} if provider.default_model else set())
-        for model in sorted(model for model in models if model):
-            if providers.unload(
-                provider=provider_id,
-                wire=provider.wire,
-                base_url=provider.base_url,
-                model=model,
-            ):
-                if provider_id not in released:
-                    released.append(provider_id)
-            elif (telemetry.get(provider_id) or {}).get("calls") and provider_id not in unreleased:
-                # This engine owns its residency and has been used; it may still
-                # be warm. Keep the slot honest instead of claiming a release.
-                unreleased.append(provider_id)
+    result = memory_engines.unload()
+    released = list(dict.fromkeys(item.split(":", 1)[0] for item in result.get("unloaded", [])))
     try:
         from memory_manager import memory_manager
 
-        if unreleased:
-            logger.info("Local LLM residency is owned by: %s", ", ".join(unreleased))
-        else:
-            memory_manager.release("llm_http")
+        memory_manager.release("llm_http")
     except Exception:
         pass
     return released
@@ -239,16 +235,17 @@ def release_local() -> list[str]:
 
 def unload_local_models() -> None:
     """MemoryManager hook: drop local LLM residency before a heavy model loads."""
-    model_map = _local_models_in_use()
-    for provider_id, provider in llm_settings.local_instances():
-        models = model_map.get(provider_id) or ({provider.default_model} if provider.default_model else set())
-        for model in sorted(model for model in models if model):
-            providers.unload(
-                provider=provider_id,
-                wire=provider.wire,
-                base_url=provider.base_url,
-                model=model,
-            )
+    memory_engines.unload()
+
+    def release() -> None:
+        try:
+            from memory_manager import memory_manager
+
+            memory_manager.release("llm_http")
+        except Exception:
+            pass
+
+    release()
 
 
 def resolve(role: str) -> dict[str, Any]:
@@ -370,6 +367,7 @@ def complete(
                 )
                 result = LLMResult(text=raw, provider=provider_id, model=model, role=role, latency_ms=0)
             else:
+                _reserve_llm(provider_id, model, bool(hop.get("is_local")))
                 done = providers.complete(
                     provider=provider_id,
                     wire=hop["wire"],
@@ -394,7 +392,6 @@ def complete(
             if not result.text.strip():
                 raise providers.ProviderError(provider_id, "empty", "provider returned an empty response")
             llm_settings.record_success(provider_id, result.latency_ms, result.usage)
-            _mark_active(provider_id, bool(hop.get("is_local")))
             _usage_after(hop, messages, result.usage)
             return result
         except LLMCancelled:
@@ -455,6 +452,7 @@ async def acomplete(
                 )
                 result = LLMResult(text=raw, provider=provider_id, model=model, role=role, latency_ms=0)
             else:
+                _reserve_llm(provider_id, model, bool(hop.get("is_local")))
                 done = await providers.acomplete(
                     provider=provider_id,
                     wire=hop["wire"],
@@ -479,7 +477,6 @@ async def acomplete(
             if not result.text.strip():
                 raise providers.ProviderError(provider_id, "empty", "provider returned an empty response")
             llm_settings.record_success(provider_id, result.latency_ms, result.usage)
-            _mark_active(provider_id, bool(hop.get("is_local")))
             _usage_after(hop, messages, result.usage)
             return result
         except LLMCancelled:
@@ -546,6 +543,7 @@ async def astream(
             errors.append(f"{provider_id}: {getattr(exc, 'message', str(exc))}")
             continue
 
+        _reserve_llm(provider_id, model, bool(hop.get("is_local")))
         started = time.monotonic()
         generator = providers.astream(
             provider=provider_id,
@@ -572,6 +570,7 @@ async def astream(
                 pass
             logger.info("%s did not stream within %.0fs; using non-stream", provider_id, STREAM_FIRST_BYTE_SEC)
             try:
+                _reserve_llm(provider_id, model, bool(hop.get("is_local")))
                 done = await providers.acomplete(
                     provider=provider_id,
                     wire=hop["wire"],
@@ -591,7 +590,6 @@ async def astream(
                 continue
             latency = int((time.monotonic() - started) * 1000)
             llm_settings.record_success(provider_id, latency, done.usage)
-            _mark_active(provider_id, bool(hop.get("is_local")))
             _usage_after(hop, messages, done.usage)
             yield done.text
             return
@@ -625,7 +623,6 @@ async def astream(
         latency = int((time.monotonic() - started) * 1000)
         usage = {"completion_tokens": estimate_tokens(text)}
         llm_settings.record_success(provider_id, latency, usage)
-        _mark_active(provider_id, bool(hop.get("is_local")))
         _usage_after(hop, messages, usage)
         if cancelled:
             raise LLMCancelled("cancelled")
@@ -842,6 +839,17 @@ def warm_provider(provider_id: str) -> dict[str, Any]:
         raise LLMSettingsError(f"{provider_id}: set a default model before warming")
     if settings.air_gapped and not config.is_local:
         raise LLMSettingsError(f"{provider_id}: blocked by air-gap")
+    from memory_manager import memory_manager
+
+    cost = float(getattr(config, "memory_gb", 0.0) or 0.0) or memory_costs.estimate_llm_gb(
+        config.default_model
+    )
+    decision = memory_manager.snapshot()
+    if decision.enforce and cost > decision.available_gb:
+        raise LLMSettingsError(
+            f"{provider_id}: warming {config.default_model} needs ~{cost:.1f} GB but only "
+            f"{decision.available_gb:.1f} GB is available (swap {decision.swap_percent:.0f}%)."
+        )
     result = providers.warm(
         provider=provider_id,
         wire=config.wire,
@@ -850,6 +858,10 @@ def warm_provider(provider_id: str) -> dict[str, Any]:
         model=config.default_model,
         timeout_sec=config.timeout_sec,
         keep_alive=config.keep_alive,
+    )
+    memory_manager.note_llm(
+        provider_id, config.default_model,
+        float(getattr(config, "memory_gb", 0.0) or 0.0) or memory_costs.estimate_llm_gb(config.default_model),
     )
     llm_settings.record_load(provider_id, int(result.get("load_ms") or 0))
     return {"provider": provider_id, "model": config.default_model, **result}

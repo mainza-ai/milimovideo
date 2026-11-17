@@ -14,6 +14,8 @@ os.environ.setdefault("MILIMO_PROJECTS_DIR", str(TEST_ROOT / "projects"))
 os.environ.setdefault("MILIMO_HOST", "127.0.0.1")
 os.environ.setdefault("MILIMO_MAX_UPLOAD_MB", "1")
 os.environ.setdefault("MILIMO_DEBUG", "0")
+# Unit tests do not load real models; keep the budget deterministic.
+os.environ.setdefault("MILIMO_MEMORY_ENFORCE", "0")
 
 for path in (
     BACKEND,

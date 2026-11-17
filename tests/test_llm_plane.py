@@ -95,7 +95,7 @@ def test_remove_instance_refuses_when_in_use(app_client):
     assert "unassign" in response.json()["detail"]
 
 
-def test_v1_document_migrates_to_v2(app_client):
+def test_v1_document_migrates_to_current(app_client):
     from sqlmodel import Session
 
     from database import AppSetting, engine
@@ -125,7 +125,7 @@ def test_v1_document_migrates_to_v2(app_client):
     llm_settings._settings = None
 
     body = doc(app_client)
-    assert body["schema_version"] == 2
+    assert body["schema_version"] == 3
     assert body["providers"]["ollama"]["id"] == "ollama"
     assert body["budget"]["daily_usd"] == 0.0
     assert body["revision"] == 3
@@ -447,18 +447,16 @@ def test_classification_is_separator_aware_and_picks_sane_defaults():
     assert picked == "Llama-3.2-3B-Instruct-bf16"
 
 
-def test_release_unloads_every_role_model_not_just_the_default(app_client, monkeypatch):
-    body = doc(app_client)
-    body["providers"]["ollama"]["default_model"] = "default-model"
-    body["roles"]["script_parse"] = {"role": "script_parse", "provider": "ollama", "model": "role-model", "fallback": []}
-    assert put(app_client, body, body["revision"]).status_code == 200
+def test_release_uses_engine_adapters(app_client, monkeypatch):
+    from services.memory import engines as memory_engines
 
-    calls = []
+    calls = {}
 
     def fake_unload(**kwargs):
-        calls.append(kwargs["model"])
-        return True
+        calls.update(kwargs)
+        return {"unloaded": ["ollama:llama3.2:3b"], "skipped": [], "errors": []}
 
-    monkeypatch.setattr(providers, "unload", fake_unload)
-    runtime.release_local()
-    assert set(calls) == {"default-model", "role-model"}
+    monkeypatch.setattr(memory_engines, "unload", fake_unload)
+    released = runtime.release_local()
+    assert released == ["ollama"]
+    assert calls == {}

@@ -11,7 +11,9 @@ import uuid
 
 import config
 from events import event_manager
+import job_events
 from job_utils import update_job_db, update_job_progress, active_jobs
+from services.memory.models import MemoryDeferred
 
 
 async def ai_parse_task(job_id: str, params: dict) -> None:
@@ -22,8 +24,10 @@ async def ai_parse_task(job_id: str, params: dict) -> None:
         "status": "processing",
         "progress": 5,
         "status_message": "Loading parser model…",
+        "stage": "starting",
         "type": "ai_parse",
         "project_id": project_id,
+        "shot_id": params.get("shot_id"),
         "cancelled": False,
     })
 
@@ -41,11 +45,17 @@ async def ai_parse_task(job_id: str, params: dict) -> None:
 
             text_encoder = None
             if role_uses_gemma("script_parse"):
+                from memory_manager import memory_manager
                 from model_engine import manager
-                update_job_progress(job_id, 15, "Loading text encoder…")
+                decision = memory_manager.admit_job(job_id, "video", {})
+                if not decision.ok:
+                    if decision.retryable:
+                        raise MemoryDeferred(decision.reason or "waiting for memory")
+                    raise RuntimeError(decision.reason or "not enough memory for the LTX text encoder")
+                update_job_progress(job_id, 15, "Loading text encoder…", stage="loading")
                 pipeline = await manager.load_pipeline("ti2vid")
                 text_encoder = pipeline.stage_1_model_ledger.text_encoder()
-            update_job_progress(job_id, 35, "Parsing script…")
+            update_job_progress(job_id, 35, "Parsing script…", stage="parsing")
             parsed_scenes = await asyncio.to_thread(
                 ai_parse_script,
                 text=script_text,
@@ -60,8 +70,10 @@ async def ai_parse_task(job_id: str, params: dict) -> None:
             except Exception:
                 pass
             mode = "ai"
+        except MemoryDeferred:
+            raise
         except Exception as exc:
-            update_job_progress(job_id, 35, "AI parse unavailable; using local parser…")
+            update_job_progress(job_id, 35, "AI parse unavailable; using local parser…", stage="parsing")
             parsed_scenes = await asyncio.to_thread(
                 script_parser.parse_script,
                 script_text,
@@ -78,16 +90,19 @@ async def ai_parse_task(job_id: str, params: dict) -> None:
             json.dump({"scenes": parsed_scenes, "mode": mode}, handle)
 
         url = f"/projects/{project_id}/workspace/{filename}"
-        update_job_progress(job_id, 100, "Parse complete")
-        update_job_db(job_id, "completed", output_path=url)
+        update_job_progress(job_id, 100, "Parse complete", stage="completed")
+        await job_events.terminal(
+            job_id, "completed", stage="completed", message="Parse complete",
+            output_path=url, progress=100, data={"url": url, "mode": mode, "project_id": project_id},
+        )
         await event_manager.broadcast("ai_parse_complete", {
-            "job_id": job_id,
-            "project_id": project_id,
-            "url": url,
-            "mode": mode,
+            "job_id": job_id, "project_id": project_id, "url": url, "mode": mode,
         })
+    except MemoryDeferred:
+        raise
     except Exception as exc:
-        update_job_db(job_id, "failed", error=str(exc))
-        await event_manager.broadcast("ai_parse_failed", {
-            "job_id": job_id, "error": str(exc),
-        })
+        await job_events.terminal(
+            job_id, "failed", stage="parsing", error=str(exc),
+            message=f"AI parse failed: {exc}",
+        )
+        await event_manager.broadcast("ai_parse_failed", {"job_id": job_id, "error": str(exc)})

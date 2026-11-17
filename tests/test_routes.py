@@ -31,7 +31,9 @@ async def test_durable_queue_ledger_records_failure(app_client):
 
     queue_id = await enqueue_gpu_job("job_ledger_test", "unknown", {})
     status = None
-    for _ in range(50):
+    # The row may wait up to MAX_TURN_WAIT_SEC behind a higher-priority queue
+    # entry before it is dispatched and fails.
+    for _ in range(400):
         await asyncio.sleep(0.02)
         with Session(engine) as session:
             queued = session.get(QueuedJob, queue_id)

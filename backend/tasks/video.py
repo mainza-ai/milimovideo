@@ -7,10 +7,15 @@ import numpy as np
 from PIL import Image
 
 import config
-from job_utils import update_job_db, active_jobs, update_job_progress, update_shot_db, broadcast_progress, resolve_element_image_path
+from job_utils import (
+    update_job_db, active_jobs, update_job_progress, update_shot_db,
+    broadcast_progress, resolve_element_image_path, apply_downgrade,
+)
+from services.memory.models import MemoryDeferred
 from file_utils import get_base_dir, get_project_output_paths, resolve_path
 from tasks.chained import generate_chained_video_task
 from events import event_manager
+import job_events
 from database import Job
 from sqlmodel import Session
 from database import engine
@@ -93,7 +98,7 @@ def _preenhance_http(job_id: str, params: dict, is_cancelled) -> bool:
     image_path = _resolve_llm_image(params)
     route = describe_route(role)
     label = f"{route['provider']}/{route['model']}" if route else "local LLM"
-    update_job_progress(job_id, 3, f"Enhancing prompt via {label}…")
+    update_job_progress(job_id, 3, f"Enhancing prompt via {label}…", stage="enhancing")
     try:
         enhanced, is_ref = enhance_prompt(
             prompt,
@@ -117,7 +122,7 @@ def _preenhance_http(job_id: str, params: dict, is_cancelled) -> bool:
             item for item in (params.get("timeline") or [])
             if not (isinstance(item, dict) and item.get("type") == "image")
         ]
-        update_job_progress(job_id, 4, "Reference sheet detected. Using it for prompt enhancement only.")
+        update_job_progress(job_id, 4, "Reference sheet detected. Using it for prompt enhancement only.", stage="enhancing")
     update_job_db(job_id, "processing", enhanced_prompt=params.get("prompt"))
     return True
 
@@ -289,7 +294,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         if enhanced and enhanced != prompt:
                             prompt = enhanced
                             update_job_db(job_id, "processing", enhanced_prompt=prompt)
-                            update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=prompt)
+                            update_job_progress(job_id, 5, "Prompt Enhanced", stage="enhancing", enhanced_prompt=prompt)
                             logger.info(f"Enhanced single-frame prompt: {prompt[:100]}...")
                 except Exception as e:
                     logger.warning(f"Single-frame prompt enhancement failed: {e}")
@@ -300,7 +305,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             def _run_flux():
                  def flux_callback(step, total):
                      progress = int((step / total) * 100)
-                     update_job_progress(job_id, progress, f"Generating Image ({step}/{total})")
+                     update_job_progress(
+                         job_id, progress, f"Generating image ({step}/{total})",
+                         stage="denoising", step=step, total=total,
+                     )
 
                  img = flux_inpainter.generate_image(
                      prompt=prompt,
@@ -333,14 +341,6 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             try:
                 web_url, web_thumb = await loop.run_in_executor(None, _run_flux)
                 
-                update_job_db(
-                    job_id, 
-                    "completed", 
-                    output_path=web_url, 
-                    thumbnail_path=web_thumb,
-                    actual_frames=1,
-                    status_message="Flux Image Ready"
-                )
                 
                 # Create Asset Record for Gallery
                 try:
@@ -396,19 +396,19 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 except Exception as e_asset:
                     logger.error(f"Failed to create Asset record: {e_asset}")
 
-                await event_manager.broadcast("complete", {
-                    "job_id": job_id, 
-                    "url": web_url,
-                    "type": "image",
-                    "thumbnail_url": web_thumb,
-                    "asset_id": new_asset.id if 'new_asset' in locals() else None 
-                })
+                await job_events.terminal(
+                    job_id, "completed", stage="completed", message="Flux image ready",
+                    output_path=web_url, thumbnail_path=web_thumb, actual_frames=1,
+                    data={"type": "image", "asset_id": new_asset.id if 'new_asset' in locals() else None},
+                )
                 return
-                
+
             except Exception as e:
                 logger.error(f"Flux Generation failed: {e}")
-                update_job_db(job_id, "failed", error=str(e))
-                await event_manager.broadcast("error", {"job_id": job_id, "message": str(e)})
+                await job_events.terminal(
+                    job_id, "failed", stage="denoising", error=str(e),
+                    message=f"Flux generation failed: {e}",
+                )
                 return
 
         # Use MPS-specific tiling
@@ -418,15 +418,27 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         else:
             tiling_config = TilingConfig.default()
         
+        phase = {"index": -1, "total": None}
+
         def cancellation_check(step_idx, total_steps, *args):
             import time
             # Yield GIL to allow main thread to handle HTTP requests (like cancel)
             time.sleep(0.01)
-            
-            gen_percent = (step_idx + 1) / total_steps
-            global_percent = 10 + int(gen_percent * 80)
-            update_job_progress(job_id, global_percent, f"Generating ({step_idx + 1}/{total_steps})")
-                
+
+            if phase["total"] != total_steps:
+                phase["index"] += 1
+                phase["total"] = total_steps
+            stage_name = "denoising" if phase["index"] == 0 else "upscaling"
+            if phase["index"] == 0:
+                global_percent = 10 + int(((step_idx + 1) / total_steps) * 60)
+            else:
+                global_percent = min(90, 70 + int(((step_idx + 1) / total_steps) * (20 / max(1, 3 - phase["index"]))))
+            label = "Denoising" if stage_name == "denoising" else "Upscaling"
+            update_job_progress(
+                job_id, global_percent, f"{label} {step_idx + 1}/{total_steps}",
+                stage=stage_name, step=step_idx + 1, total=total_steps,
+            )
+
             if active_jobs.get(job_id, {}).get("cancelled", False):
                 raise RuntimeError(f"Job {job_id} cancelled by user.")
         
@@ -436,7 +448,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             if pipeline_type == "ti2vid":
                 run_prompt = prompt
                 if enhance_prompt and not params.get("_llm_preenhanced"):
-                    update_job_progress(job_id, 5, "Enhancing Prompt...")
+                    update_job_progress(job_id, 5, "Enhancing prompt…", stage="enhancing")
                     logger.info("Enhancing prompt with the resolved LLM role plan...")
                     try:
                         from llm import enhance_prompt as llm_enhance, prepare_text_encoder
@@ -469,11 +481,11 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         logger.info(f"DEBUG: Prompt AFTER VLM Enhancement: {run_prompt}")
                         if is_ref:
                             logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V.")
-                            update_job_progress(job_id, 5, "Reference sheet detected. Using for prompt enhancement only.")
+                            update_job_progress(job_id, 5, "Reference sheet detected. Using it for prompt enhancement only.", stage="enhancing")
                             input_images = []
                             inspiration_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=run_prompt)
-                        update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=run_prompt)
+                        update_job_progress(job_id, 5, "Prompt enhanced", stage="enhancing", enhanced_prompt=run_prompt)
                         
                         if text_encoder is not None:
                             del text_encoder
@@ -500,7 +512,7 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     if not input_images:
                          logger.warning("No valid input images remaining after validation. Proceeding with T2V (No Visual Conditioning).")
                 
-                update_job_progress(job_id, 10, "Starting Generation...")
+                update_job_progress(job_id, 10, "Starting generation…", stage="denoising")
                 
                 import inspect
                 logger.info(f"DEBUG: Pipeline Object: {pipeline}")
@@ -545,10 +557,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         )
                         if is_ref:
                             logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V (ic_lora).")
-                            update_job_progress(job_id, 5, "Reference sheet detected. Using for prompt enhancement only.")
+                            update_job_progress(job_id, 5, "Reference sheet detected. Using it for prompt enhancement only.", stage="enhancing")
                             input_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=ic_prompt)
-                        update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=ic_prompt)
+                        update_job_progress(job_id, 5, "Prompt enhanced", stage="enhancing", enhanced_prompt=ic_prompt)
                         if text_encoder is not None:
                             del text_encoder
                             cleanup_memory()
@@ -590,10 +602,10 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                         )
                         if is_ref:
                             logger.info("Image detected as Reference Sheet. Dropping image conditioning to force T2V (keyframe).")
-                            update_job_progress(job_id, 5, "Reference sheet detected. Using for prompt enhancement only.")
+                            update_job_progress(job_id, 5, "Reference sheet detected. Using it for prompt enhancement only.", stage="enhancing")
                             input_images = []
                         update_job_db(job_id, "processing", enhanced_prompt=kf_prompt)
-                        update_job_progress(job_id, 5, "Prompt Enhanced", enhanced_prompt=kf_prompt)
+                        update_job_progress(job_id, 5, "Prompt enhanced", stage="enhancing", enhanced_prompt=kf_prompt)
                         if text_encoder is not None:
                             del text_encoder
                             cleanup_memory()
@@ -642,9 +654,12 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         if active_jobs.get(job_id, {}).get("cancelled"):
             raise RuntimeError(f"Job {job_id} cancelled by user.")
             
-        update_job_progress(job_id, 90, "Finalizing & Saving...")
+        update_job_progress(job_id, 90, "Encoding video…", stage="encoding")
         
         video, audio = pipeline_result
+        # The decoded tensor is the largest single object after denoising; drop
+        # the executor tuple so the encoder sees only one reference.
+        pipeline_result = None
         if video is None:
             raise ValueError(f"Pipeline returned no video output for job {job_id}")
         
@@ -663,19 +678,25 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
             video_chunks_number = get_video_chunks_number(num_frames, tiling_config)
             
             try:
-                encode_video(
+                await asyncio.to_thread(
+                    encode_video,
                     video,
                     int(params.get("fps", 25)),
                     audio,
                     AUDIO_SAMPLE_RATE if audio is not None else None,
                     output_path,
-                    video_chunks_number
+                    video_chunks_number,
                 )
             finally:
+                # Release the decoded frames/audio before flushing the cache;
+                # otherwise the buffers stay alive through the encode.
+                video = None
+                audio = None
                 import gc
                 gc.collect()
                 if torch.backends.mps.is_available():
                     torch.mps.empty_cache()
+            update_job_progress(job_id, 96, "Saving video…", stage="saving")
             logger.info(f"Video saved to {output_path}")
 
             # Verification and Thumbnail
@@ -734,8 +755,6 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                 
                 update_shot_db(shot_id, **shot_updates)
                 logger.info(f"Updated Shot {shot_id} with video: {rel_path}")
-            update_job_progress(job_id, 100, "Done")
-            
             shot_id = params.get("id")
             if shot_id:
                 try:
@@ -755,13 +774,12 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
                     status="completed"
                 )
             
-            await event_manager.broadcast("complete", {
-                "job_id": job_id, 
-                "url": output_url, 
-                "type": "video",
-                "thumbnail_url": thumbnail_web_path,
-                "actual_frames": actual_frames
-            })
+            await job_events.terminal(
+                job_id, "completed", stage="completed", message="Done",
+                output_path=output_url, thumbnail_path=thumbnail_web_path,
+                actual_frames=actual_frames, progress=100,
+                data={"type": "video"},
+            )
 
 
 async def generate_video_task(job_id: str, params: dict):
@@ -782,28 +800,53 @@ async def generate_video_task(job_id: str, params: dict):
         "progress": 0,
         "eta_seconds": None,
         "status_message": "Initializing...",
+        "stage": "starting",
         "project_id": params.get("project_id"),
-        "type": "video"
+        "shot_id": params.get("shot_id") or params.get("id"),
+        "type": "video",
     }
-    update_job_db(job_id, "processing")
-    
-    # Needs to import manager here to avoid circular dependencies if possible,
-    # but Manager is singleton.
-    from model_engine import manager
-    from services.model_loader import model_loader
+    update_job_db(job_id, "processing", stage="starting", status_message="Starting…")
 
-    if not config.SKIP_VRAM_CHECK:
-        estimate = (
-            config.VRAM_ESTIMATE_IMAGE_GB
-            if params.get("num_frames") == 1
-            else config.VRAM_ESTIMATE_VIDEO_GB
-        )
-        can_load, reason = model_loader.can_load_model(estimate)
-        if not can_load:
-            message = f"Insufficient memory to start generation: {reason}"
-            logger.error(message)
-            update_job_db(job_id, "failed", error=message)
-            await event_manager.broadcast("error", {"job_id": job_id, "message": message})
+    from model_engine import manager
+    from memory_manager import memory_manager
+
+    kind = "image" if params.get("num_frames") == 1 else "video"
+    decision = memory_manager.admit_job(job_id, kind, params)
+    if not decision.ok:
+        if decision.retryable:
+            raise MemoryDeferred(decision.reason or "waiting for memory")
+        if decision.downgrade and params.get("auto_downgrade", True):
+            before = decision.estimate.total_gb if decision.estimate else 0.0
+            label = decision.downgrade.get("label") or "a smaller preset"
+            params = apply_downgrade(job_id, params, decision.downgrade)
+            shot_id = params.get("shot_id") or params.get("id")
+            if shot_id:
+                update_shot_db(
+                    shot_id,
+                    width=params.get("width"),
+                    height=params.get("height"),
+                    num_frames=params.get("num_frames"),
+                    upscale=params.get("upscale"),
+                )
+            await job_events.retrying(
+                job_id, attempt=1,
+                message=f"Memory: using {label} instead (was ~{before:.1f} GB)",
+                data={"downgrade": decision.downgrade},
+            )
+            decision = memory_manager.admit_job(job_id, kind, params)
+        if not decision.ok:
+            message = decision.reason or "Not enough memory to start generation."
+            logger.error("Memory admission refused job %s: %s", job_id, message)
+            shot_id = params.get("shot_id") or params.get("id")
+            if shot_id:
+                update_shot_db(shot_id, status="failed")
+            await job_events.terminal(
+                job_id, "failed", stage="admission", error=message,
+                message=f"Generation blocked: {message}",
+                data={"suggestions": decision.suggestions,
+                      "estimate": decision.estimate.as_dict() if decision.estimate else None,
+                      "downgrade": decision.downgrade},
+            )
             return
 
     try:
@@ -868,8 +911,10 @@ async def generate_video_task(job_id: str, params: dict):
         except Exception as exc:
             logger.warning(f"Pre-pipeline prompt enhancement failed: {exc}")
 
-        # Load Pipeline
+        # Load Pipeline (this can take minutes on MPS)
+        update_job_progress(job_id, 2, f"Loading {pipeline_type} pipeline…", stage="loading")
         pipeline = await manager.load_pipeline(pipeline_type)
+        update_job_progress(job_id, 8, "Pipeline ready", stage="conditioning")
         
         # Dispatch
         # Check if chained/storyboard generation is needed?
@@ -901,11 +946,9 @@ async def generate_video_task(job_id: str, params: dict):
     except Exception as e:
         if "cancelled" in str(e).lower():
              logger.info(f"Job {job_id} cancelled.")
-             update_job_db(job_id, "cancelled")
-             # generate_video_task runs on the event loop; await the broadcast
-             # directly. The old run_coroutine_threadsafe(loop) referenced an
-             # undefined name and silently dropped the event.
-             await event_manager.broadcast("cancelled", {"job_id": job_id})
+             await job_events.terminal(
+                 job_id, "cancelled", stage="cancelled", message="Cancelled"
+             )
         else:
             logger.error(f"Job failed: {e}")
             import traceback
@@ -920,8 +963,10 @@ async def generate_video_task(job_id: str, params: dict):
                 except Exception:
                     pass
             
-            update_job_db(job_id, "failed", error=str(e))
-            await event_manager.broadcast("error", {"job_id": job_id, "message": str(e)})
+            await job_events.terminal(
+                job_id, "failed", stage=active_jobs.get(job_id, {}).get("stage", "failed"),
+                error=str(e), message=f"Generation failed: {e}",
+            )
     finally:
         if job_id in active_jobs:
             del active_jobs[job_id]

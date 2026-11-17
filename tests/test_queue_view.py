@@ -26,6 +26,13 @@ def test_active_jobs_includes_queued_position_and_estimate(app_client, project):
     assert queued["estimate_seconds"] > 0
     assert queued["status"] == "queued"
 
+    # Leave no undispatchable row behind: it would outrank later tests' jobs.
+    with Session(engine) as session:
+        row = session.get(QueuedJob, queued["job_id"])
+        if row:
+            session.delete(row)
+            session.commit()
+
 
 @pytest.mark.asyncio
 async def test_spawn_background_tracks_and_releases_tasks():

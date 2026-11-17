@@ -1754,6 +1754,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/settings/llm/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Llm Memory
+         * @description Resident text models reported by local engines.
+         */
+        get: operations["llm_memory_settings_llm_memory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/settings/llm/models": {
         parameters: {
             query?: never;
@@ -1820,6 +1840,26 @@ export interface paths {
         post?: never;
         /** Clear Llm Provider Key */
         delete: operations["clear_llm_provider_key_settings_llm_providers__provider_id__key_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/llm/providers/{provider_id}/unload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unload Llm Provider
+         * @description Unload models on one engine where the adapter supports it.
+         */
+        post: operations["unload_llm_provider_settings_llm_providers__provider_id__unload_post"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2119,6 +2159,74 @@ export interface paths {
         get: operations["get_status_status__job_id__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Memory Status */
+        get: operations["memory_status_system_memory_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/memory/keep-warm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Memory Keep Warm */
+        post: operations["memory_keep_warm_system_memory_keep_warm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/memory/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Memory Preflight */
+        post: operations["memory_preflight_system_memory_preflight_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/memory/unload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Memory Unload */
+        post: operations["memory_unload_system_memory_unload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2727,6 +2835,16 @@ export interface components {
             /** Text Mask */
             text_mask?: string | null;
         };
+        /** KeepWarmRequest */
+        KeepWarmRequest: {
+            /**
+             * Keep Warm
+             * @default true
+             */
+            keep_warm: boolean;
+            /** Slot */
+            slot: string;
+        };
         /** LLMBudgetConfig */
         LLMBudgetConfig: {
             /**
@@ -2851,6 +2969,11 @@ export interface components {
             last_fault?: string | null;
             /** Last Success At */
             last_success_at?: string | null;
+            /**
+             * Memory Gb
+             * @default 0
+             */
+            memory_gb: number;
             /** Name */
             name: string;
             /**
@@ -2937,7 +3060,7 @@ export interface components {
             };
             /**
              * Schema Version
-             * @default 2
+             * @default 3
              */
             schema_version: number;
             /**
@@ -3059,6 +3182,18 @@ export interface components {
             label: string;
             /** Target */
             target?: string | null;
+        };
+        /** PreflightRequest */
+        PreflightRequest: {
+            /**
+             * Kind
+             * @default video
+             */
+            kind: string;
+            /** Params */
+            params?: {
+                [key: string]: unknown;
+            };
         };
         /** ProjectState */
         ProjectState: {
@@ -3708,6 +3843,18 @@ export interface components {
             session_id: string;
             /** Video Path */
             video_path?: string | null;
+        };
+        /** UnloadRequest */
+        UnloadRequest: {
+            /**
+             * All
+             * @default false
+             */
+            all: boolean;
+            /** Provider Id */
+            provider_id?: string | null;
+            /** Slot */
+            slot?: string | null;
         };
         /**
          * UpdateSceneRequest
@@ -6919,6 +7066,26 @@ export interface operations {
             };
         };
     };
+    llm_memory_settings_llm_memory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     list_llm_models_settings_llm_models_get: {
         parameters: {
             query?: {
@@ -7016,6 +7183,37 @@ export interface operations {
         };
     };
     clear_llm_provider_key_settings_llm_providers__provider_id__key_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unload_llm_provider_settings_llm_providers__provider_id__unload_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -7542,6 +7740,125 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    memory_status_system_memory_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    memory_keep_warm_system_memory_keep_warm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeepWarmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    memory_preflight_system_memory_preflight_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreflightRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    memory_unload_system_memory_unload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnloadRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

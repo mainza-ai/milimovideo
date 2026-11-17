@@ -940,6 +940,24 @@
         "title": "InpaintRequest",
         "type": "object"
       },
+      "KeepWarmRequest": {
+        "properties": {
+          "keep_warm": {
+            "default": true,
+            "title": "Keep Warm",
+            "type": "boolean"
+          },
+          "slot": {
+            "title": "Slot",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slot"
+        ],
+        "title": "KeepWarmRequest",
+        "type": "object"
+      },
       "LLMBudgetConfig": {
         "properties": {
           "daily_usd": {
@@ -1148,6 +1166,11 @@
             ],
             "title": "Last Success At"
           },
+          "memory_gb": {
+            "default": 0.0,
+            "title": "Memory Gb",
+            "type": "number"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -1319,7 +1342,7 @@
             "type": "object"
           },
           "schema_version": {
-            "default": 2,
+            "default": 3,
             "title": "Schema Version",
             "type": "integer"
           },
@@ -1627,6 +1650,22 @@
           "label"
         ],
         "title": "PlanStep",
+        "type": "object"
+      },
+      "PreflightRequest": {
+        "properties": {
+          "kind": {
+            "default": "video",
+            "title": "Kind",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "title": "PreflightRequest",
         "type": "object"
       },
       "ProjectState": {
@@ -3050,6 +3089,39 @@
           "frames"
         ],
         "title": "TrackingSaveRequest",
+        "type": "object"
+      },
+      "UnloadRequest": {
+        "properties": {
+          "all": {
+            "default": false,
+            "title": "All",
+            "type": "boolean"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          },
+          "slot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot"
+          }
+        },
+        "title": "UnloadRequest",
         "type": "object"
       },
       "UpdateSceneRequest": {
@@ -7364,6 +7436,26 @@
         ]
       }
     },
+    "/settings/llm/memory": {
+      "get": {
+        "description": "Resident text models reported by local engines.",
+        "operationId": "llm_memory_settings_llm_memory_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Llm Memory",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/settings/llm/models": {
       "get": {
         "description": "Model catalog with context, vision, and chat flags.",
@@ -7553,6 +7645,47 @@
           }
         },
         "summary": "Clear Llm Provider Key",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/settings/llm/providers/{provider_id}/unload": {
+      "post": {
+        "description": "Unload models on one engine where the adapter supports it.",
+        "operationId": "unload_llm_provider_settings_llm_providers__provider_id__unload_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "title": "Provider Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unload Llm Provider",
         "tags": [
           "settings"
         ]
@@ -8253,6 +8386,142 @@
         "summary": "Get Status",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/system/memory": {
+      "get": {
+        "operationId": "memory_status_system_memory_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Memory Status",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/system/memory/keep-warm": {
+      "post": {
+        "operationId": "memory_keep_warm_system_memory_keep_warm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeepWarmRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Memory Keep Warm",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/system/memory/preflight": {
+      "post": {
+        "operationId": "memory_preflight_system_memory_preflight_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreflightRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Memory Preflight",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/system/memory/unload": {
+      "post": {
+        "operationId": "memory_unload_system_memory_unload_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnloadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Memory Unload",
+        "tags": [
+          "system"
         ]
       }
     },

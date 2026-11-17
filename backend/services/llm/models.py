@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 PROVIDER_TYPES = {
     "gemma", "ollama", "lmstudio", "openai_compatible", "openai", "anthropic",
@@ -32,6 +32,8 @@ class LLMProviderConfig(BaseModel):
     is_local: bool = True
     timeout_sec: int = 120
     keep_alive: str = "0"
+    # Declared residency for engines that cannot report it (Strata/generic).
+    memory_gb: float = 0.0
 
     # Input only; never serialized in a public snapshot.
     api_key: Optional[str] = None

@@ -125,6 +125,21 @@ class InpaintingManager:
         """
         from job_utils import active_jobs, update_job_progress
         from events import event_manager
+        import job_events
+        from memory_manager import memory_manager
+
+        decision = memory_manager.admit_job(job_id, "image", {})
+        if not decision.ok:
+            from services.memory.models import MemoryDeferred
+
+            if decision.retryable:
+                raise MemoryDeferred(decision.reason or "waiting for memory")
+            await job_events.terminal(
+                job_id, "failed", stage="admission", error=decision.reason,
+                message=f"Inpaint blocked: {decision.reason}",
+                data={"downgrade": decision.downgrade},
+            )
+            return
 
         try:
             logger.info(f"Starting Inpaint Job {job_id} with prompt: {prompt}")
@@ -132,7 +147,9 @@ class InpaintingManager:
             # Mark as processing
             if job_id in active_jobs:
                 active_jobs[job_id]["status"] = "processing"
-                active_jobs[job_id]["status_message"] = "In-Painting..."
+                active_jobs[job_id]["status_message"] = "Loading Flux…"
+                active_jobs[job_id]["stage"] = "loading"
+            update_job_progress(job_id, 5, "Loading Flux…", stage="loading")
 
             if not os.path.exists(image_path):
                  raise FileNotFoundError(f"Source image not found: {image_path}")
@@ -145,8 +162,13 @@ class InpaintingManager:
             # Step callback for progress updates
             def step_callback(step, total):
                 if total > 0:
-                    pct = int((step / total) * 100)
-                    update_job_progress(job_id, pct, f"In-Painting ({step}/{total})")
+                    pct = 10 + int((step / total) * 80)
+                    update_job_progress(
+                        job_id, pct, f"In-painting ({step}/{total})",
+                        stage="inpainting", step=step, total=total,
+                    )
+                if active_jobs.get(job_id, {}).get("cancelled"):
+                    raise RuntimeError(f"Job {job_id} cancelled by user.")
 
             # Flux is blocking; never run it on the event loop.
             import asyncio
@@ -218,25 +240,11 @@ class InpaintingManager:
             except Exception as e_asset:
                 logger.error(f"Failed to create Asset record for inpaint: {e_asset}")
 
-            # Emit SSE completion event
-            await event_manager.broadcast("complete", {
-                "job_id": job_id,
-                "thumbnail_url": relative_url,
-                "type": "inpaint",
-                "asset_id": asset_id
-            })
-
-            # Update DB Job record so /status/{job_id} works after active_jobs cleanup
-            try:
-                from job_utils import update_job_db
-                update_job_db(
-                    job_id, "completed",
-                    output_path=relative_url,
-                    thumbnail_path=relative_url,
-                    status_message="Complete"
-                )
-            except Exception as e_db:
-                logger.error(f"Failed to update Job DB for inpaint completion: {e_db}")
+            await job_events.terminal(
+                job_id, "completed", stage="completed", message="Inpaint complete",
+                output_path=relative_url, thumbnail_path=relative_url, actual_frames=1, progress=100,
+                data={"type": "inpaint", "asset_id": asset_id},
+            )
 
             # Cleanup active_jobs
             if job_id in active_jobs:
@@ -249,21 +257,15 @@ class InpaintingManager:
         except Exception as e:
             logger.error(f"Inpainting failed: {e}")
             
-            # Emit SSE error event
-            try:
-                await event_manager.broadcast("error", {
-                    "job_id": job_id,
-                    "message": str(e)
-                })
-            except Exception:
-                pass
-            
-            # Update DB Job record with failure
-            try:
-                from job_utils import update_job_db
-                update_job_db(job_id, "failed", error=str(e))
-            except Exception:
-                pass
+            if "cancelled" in str(e).lower():
+                await job_events.terminal(
+                    job_id, "cancelled", stage="cancelled", message="Cancelled"
+                )
+            else:
+                await job_events.terminal(
+                    job_id, "failed", stage="inpainting", error=str(e),
+                    message=f"Inpaint failed: {e}",
+                )
 
             # Cleanup active_jobs
             if job_id in active_jobs:

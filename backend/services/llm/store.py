@@ -87,6 +87,8 @@ def validate_settings(settings: LLMSettings) -> None:
             raise LLMSettingsError(f"provider {provider_id}: unknown wire {provider.wire!r}")
         if provider.timeout_sec <= 0:
             raise LLMSettingsError(f"provider {provider_id}: timeout_sec must be positive")
+        if provider.memory_gb is not None and provider.memory_gb < 0:
+            raise LLMSettingsError(f"provider {provider_id}: memory_gb must be >= 0")
         if provider.id and provider.id != provider_id:
             raise LLMSettingsError(f"provider {provider_id}: id mismatch ({provider.id!r})")
         if provider.type == "gemma" and not provider.is_local:

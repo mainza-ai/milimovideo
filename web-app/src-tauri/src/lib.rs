@@ -9,6 +9,54 @@ fn read_text_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn set_badge(window: tauri::Window, label: Option<String>, count: Option<i64>) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        window
+            .set_badge_label(label)
+            .map_err(|error| error.to_string())?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = label;
+    }
+    window
+        .set_badge_count(count)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn set_window_title(window: tauri::Window, title: String) -> Result<(), String> {
+    window.set_title(&title).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn notify(title: String, body: String) -> Result<(), String> {
+    // macOS: use Notification Center through osascript. Arguments are passed
+    // through argv, so a title/body cannot inject AppleScript.
+    #[cfg(target_os = "macos")]
+    {
+        let script = "on run argv\ndisplay notification (item 2 of argv) with title (item 1 of argv)\nend run";
+        let status = std::process::Command::new("osascript")
+            .arg("-e")
+            .arg(script)
+            .arg(&title)
+            .arg(&body)
+            .status()
+            .map_err(|error| error.to_string())?;
+        if !status.success() {
+            return Err(format!("osascript exited with {status}"));
+        }
+        return Ok(());
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (title, body);
+        Err("desktop notifications are not implemented on this platform".into())
+    }
+}
+
+#[tauri::command]
 fn start_backend(app: tauri::AppHandle) -> Result<String, String> {
     use std::path::PathBuf;
     use std::process::{Command, Stdio};
@@ -79,7 +127,14 @@ fn start_backend(app: tauri::AppHandle) -> Result<String, String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![save_text_file, read_text_file, start_backend])
+        .invoke_handler(tauri::generate_handler![
+            save_text_file,
+            read_text_file,
+            start_backend,
+            notify,
+            set_window_title,
+            set_badge,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Milimo Video");
 }

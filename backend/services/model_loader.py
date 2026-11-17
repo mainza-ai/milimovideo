@@ -62,7 +62,7 @@ class ModelLoaderService:
 
     # ── VRAM Guard ────────────────────────────────────────────────
 
-    def can_load_model(self, vram_estimate_gb: float) -> tuple[bool, str]:
+    def can_load_model(self, vram_estimate_gb: float, kind: str = "video") -> tuple[bool, str]:
         """
         Check if there's enough memory to load a model.
         
@@ -85,20 +85,16 @@ class ModelLoaderService:
             )
 
         elif torch.backends.mps.is_available():
-            # MPS uses unified memory — use psutil if available
-            try:
-                import psutil
-                available_gb = psutil.virtual_memory().available / 1e9
-                # MPS needs more headroom due to unified memory sharing
-                if available_gb >= vram_estimate_gb * 1.2:
-                    return True, f"MPS: {available_gb:.1f} GB system RAM available"
-                return False, (
-                    f"Insufficient system memory for MPS: {available_gb:.1f} GB available, "
-                    f"need {vram_estimate_gb:.1f} GB (+ 20% safety for unified memory)"
+            from services.memory import budget
+
+            decision = budget.admit(kind, {"estimate_gb": vram_estimate_gb})
+            if decision.ok:
+                snap = decision.snapshot
+                return True, (
+                    f"MPS: {snap.available_gb:.1f} GB budget available, "
+                    f"need {decision.estimate.total_gb:.1f} GB"
                 )
-            except ImportError:
-                logger.warning("psutil not installed — skipping VRAM pre-check for MPS")
-                return True, "psutil not available — cannot check MPS memory"
+            return False, decision.reason or "insufficient memory"
 
         # CPU is slow but valid for small models/tests; do not hard-block it.
         return True, "CPU device available (generation will be slow)"
@@ -300,18 +296,27 @@ class ModelLoaderService:
         if not model:
             raise ValueError(f"Model '{model_id}' not found")
 
-        # VRAM pre-check
-        can_load, reason = self.can_load_model(model.vram_estimate_gb)
+        # VRAM pre-check (kind-aware: video/image conflicts are reclaimable)
+        slot_kind = "video" if model.pipeline == "video" else "image"
+        can_load, reason = self.can_load_model(model.vram_estimate_gb, kind=slot_kind)
         if not can_load:
             raise MemoryError(reason)
 
-        slot = "video" if model.pipeline == "video" else "image"
+        if memory_manager.has_active_job():
+            raise MemoryError(
+                "A generation job is running. Wait for it to finish or cancel it before "
+                "activating a different model."
+            )
 
+        slot = "video" if model.pipeline == "video" else "image"
+        from services.memory import costs
+
+        cost = costs.VIDEO_BASE_GB if slot == "video" else costs.IMAGE_BASE_GB
         # Clear existing LoRAs for this slot
         self.clear_loras(slot)
 
-        # Prepare memory (unloads conflicts)
-        memory_manager.prepare_for(slot)
+        # Budget + prepare memory (unloads idle conflicts)
+        memory_manager.prepare_for(slot, model_id=model_id, cost_gb=cost)
 
         # Load the appropriate pipeline
         if model.family in ("ltx2", "ltx23"):
@@ -346,15 +351,11 @@ class ModelLoaderService:
         # Clear LoRAs first
         self.clear_loras(slot)
 
-        # Unload
-        memory_manager.release(slot)
-        if slot == "video":
-            memory_manager._unload_ltx()
-        elif slot == "image":
-            memory_manager._unload_flux()
-
-        # Flush memory
-        memory_manager._flush_memory()
+        if memory_manager.has_active_job():
+            raise MemoryError(
+                "A generation job is running. Wait for it to finish before unloading its model."
+            )
+        memory_manager.unload_slot(slot)
 
         # Mark as downloaded
         model_registry.update_model_status(model_id, ModelStatus.DOWNLOADED)

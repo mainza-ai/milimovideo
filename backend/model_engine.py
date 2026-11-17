@@ -84,7 +84,12 @@ class ModelManager:
             
             # Unload conflicting models (e.g., Flux) before loading LTX
             from memory_manager import memory_manager
-            memory_manager.prepare_for("video")
+            from services.memory import costs
+            memory_manager.prepare_for(
+                "video",
+                model_id=pipeline_type,
+                cost_gb=costs.VIDEO_BASE_GB,
+            )
             
             paths = self.get_model_paths()
             
@@ -106,48 +111,55 @@ class ModelManager:
             is_mps = (device == "mps")
             fp8 = False if is_mps else True 
             
-            if pipeline_type == "ti2vid":
-                self._pipeline = TI2VidTwoStagesPipeline(
-                    checkpoint_path=paths["checkpoint_path"],
-                    distilled_lora=distilled_lora_objs,
-                    spatial_upsampler_path=paths["spatial_upsampler_path"],
-                    temporal_upsampler_path=paths["temporal_upsampler_path"],
-                    gemma_root=paths["gemma_root"],
-                    loras=loras,
-                    device=device,
-                    fp8transformer=fp8
-                )
-            elif pipeline_type == "ic_lora":
-                # ICLoraPipeline takes 'loras' as the specific IC-LoRA
-                self._pipeline = ICLoraPipeline(
-                    checkpoint_path=paths["checkpoint_path"],
-                    spatial_upsampler_path=paths["spatial_upsampler_path"],
-                    gemma_root=paths["gemma_root"],
-                    loras=loras, # These will be the IC-LoRAs
-                    device=device,
-                    fp8transformer=fp8
-                )
-            elif pipeline_type == "keyframe":
-                self._pipeline = KeyframeInterpolationPipeline(
-                    checkpoint_path=paths["checkpoint_path"],
-                    distilled_lora=distilled_lora_objs,
-                    spatial_upsampler_path=paths["spatial_upsampler_path"],
-                    gemma_root=paths["gemma_root"],
-                    loras=loras,
-                    device=device,
-                    fp8transformer=fp8
-                )
-            else:
-                raise ValueError(f"Unknown pipeline type: {pipeline_type}")
+            try:
+                if pipeline_type == "ti2vid":
+                    self._pipeline = TI2VidTwoStagesPipeline(
+                        checkpoint_path=paths["checkpoint_path"],
+                        distilled_lora=distilled_lora_objs,
+                        spatial_upsampler_path=paths["spatial_upsampler_path"],
+                        temporal_upsampler_path=paths["temporal_upsampler_path"],
+                        gemma_root=paths["gemma_root"],
+                        loras=loras,
+                        device=device,
+                        fp8transformer=fp8
+                    )
+                elif pipeline_type == "ic_lora":
+                    # ICLoraPipeline takes 'loras' as the specific IC-LoRA
+                    self._pipeline = ICLoraPipeline(
+                        checkpoint_path=paths["checkpoint_path"],
+                        spatial_upsampler_path=paths["spatial_upsampler_path"],
+                        gemma_root=paths["gemma_root"],
+                        loras=loras, # These will be the IC-LoRAs
+                        device=device,
+                        fp8transformer=fp8
+                    )
+                elif pipeline_type == "keyframe":
+                    self._pipeline = KeyframeInterpolationPipeline(
+                        checkpoint_path=paths["checkpoint_path"],
+                        distilled_lora=distilled_lora_objs,
+                        spatial_upsampler_path=paths["spatial_upsampler_path"],
+                        gemma_root=paths["gemma_root"],
+                        loras=loras,
+                        device=device,
+                        fp8transformer=fp8
+                    )
+                else:
+                    raise ValueError(f"Unknown pipeline type: {pipeline_type}")
 
-            self._pipeline_type = pipeline_type
+                self._pipeline_type = pipeline_type
             
-            # MPS VAE Fix: Force Float32 to prevent black output
-            if device == "mps" and hasattr(self._pipeline, "vae"):
-                logger.info("MPS detected: Converting VAE to float32 to prevent black output...")
-                self._pipeline.vae = self._pipeline.vae.to(dtype=torch.float32)
+                # MPS VAE Fix: Force Float32 to prevent black output
+                if device == "mps" and hasattr(self._pipeline, "vae"):
+                    logger.info("MPS detected: Converting VAE to float32 to prevent black output...")
+                    self._pipeline.vae = self._pipeline.vae.to(dtype=torch.float32)
 
-            logger.info(f"LTX-2 Pipeline {pipeline_type} loaded successfully.")
+                logger.info(f"LTX-2 Pipeline {pipeline_type} loaded successfully.")
+            except Exception:
+                self._pipeline = None
+                self._pipeline_type = None
+                memory_manager.release("video")
+                raise
+
             return self._pipeline
 
 # Singleton instance

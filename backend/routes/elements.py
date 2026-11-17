@@ -4,6 +4,7 @@ from typing import List, Optional
 import os
 import asyncio
 import logging
+import json
 import config
 
 # Lazy imports to avoid circular deps with managers if they import models
@@ -117,14 +118,31 @@ async def visualize_element(element_id: str, req: ElementVisualizeRequest, backg
     
     # Create Job
     job_id = f"job_{uuid.uuid4().hex[:8]}"
-    
+    from database import Element
+    with Session(engine) as session:
+        element = session.get(Element, element_id)
+        project_id = element.project_id if element else None
+        job = Job(
+            id=job_id,
+            project_id=project_id,
+            type="element",
+            status="queued",
+            prompt=req.prompt_override or (element.description if element else None),
+            params_json=json.dumps({"element_id": element_id}),
+            created_at=datetime.now(timezone.utc),
+            status_message="Queued",
+        )
+        session.add(job)
+        session.commit()
+
     # Register in Active Memory (for immediate polling)
     active_jobs[job_id] = {
-        "status": "pending",
+        "status": "queued",
         "progress": 0,
         "status_message": "Queued...",
-        "type": "element_visual",
-        "project_id": "unknown",
+        "stage": "queued",
+        "type": "element",
+        "project_id": project_id,
         "cancelled": False
     }
 
@@ -135,6 +153,7 @@ async def visualize_element(element_id: str, req: ElementVisualizeRequest, backg
         "element",
         {
             "element_id": element_id,
+            "project_id": project_id,
             "prompt_override": req.prompt_override,
             "guidance": req.guidance_scale,
             "enable_ae": req.enable_ae,

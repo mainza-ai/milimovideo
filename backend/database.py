@@ -180,6 +180,10 @@ class Job(SQLModel, table=True):
     status_message: Optional[str] = None
     actual_frames: Optional[int] = None
     thumbnail_path: Optional[str] = None
+    # Progress/residency observability.
+    stage: Optional[str] = None
+    started_at: Optional[datetime] = None
+    memory_json: Optional[str] = None
     # Recovery/idempotency metadata for the unified scheduler.
     resume_policy: str = Field(default="fail")  # fail | resume
     request_id: Optional[str] = Field(default=None, index=True)
@@ -263,6 +267,9 @@ def _add_missing_columns() -> None:
             "resume_policy": "TEXT NOT NULL DEFAULT 'fail'",
             "request_id": "TEXT",
             "shot_id": "TEXT",
+            "stage": "TEXT",
+            "started_at": "DATETIME",
+            "memory_json": "TEXT",
         },
     }
     with engine.begin() as conn:

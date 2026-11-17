@@ -10,6 +10,15 @@ export const HealthSchema = z.object({
     slots: z.object({ active_slots: z.array(z.string()) }).passthrough(),
     disk_free_bytes: z.number().nullable(),
     auth_required: z.boolean(),
+    memory: z.object({
+        total_gb: z.number(),
+        ceiling_gb: z.number(),
+        used_gb: z.number(),
+        available_gb: z.number(),
+        swap_percent: z.number(),
+        pressure: z.string(),
+    }).passthrough().optional(),
+    sampler: z.object({ job_id: z.string().nullable(), stage: z.string() }).passthrough().optional(),
 });
 
 export const PlanStepSchema = z.object({

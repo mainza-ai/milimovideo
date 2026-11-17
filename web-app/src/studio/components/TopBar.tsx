@@ -10,6 +10,7 @@ import { isDesktop, startDesktopBackend } from '../../desktop';
 import { useStudioData, useStudioReview } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
 import { useStudioDocumentStore } from '../state/documentStore';
+import { ActivityCenter } from './ActivityCenter';
 
 const SURFACES: Array<{ id: StudioSurface; label: string }> = [
     { id: 'story', label: 'Story' },
@@ -213,6 +214,7 @@ export function TopBar() {
             </nav>
 
             <div className="st-topbar-right">
+                <ActivityCenter />
                 {needsYou > 0 && (
                     <button
                         type="button"

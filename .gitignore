@@ -99,6 +99,9 @@ web-app/playwright-report/
 .coverage
 htmlcov/
 
+# Local model benchmarks (generated)
+benchmarks/
+
 # Tauri
 web-app/src-tauri/target/
 web-app/src-tauri/gen/schemas/
