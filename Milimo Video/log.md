@@ -405,3 +405,13 @@ stuck on whatever the persisted store held. On boot, if the persisted project no
 longer exists on this machine, the most recent server project is loaded (never
 created implicitly). The Playwright smoke opens the project menu and sees the
 server list. Verified: 23 vitest, 1 Playwright, tsc clean, eslint 0 errors.
+
+## [2026-11-16] e2e | real-backend CRUD round trip
+
+Added the missing Add shot action and a second Playwright test that runs a real
+backend on an isolated temp DB/projects dir: create project via API, open
+`/studio`, add a shot, edit the prompt, save, clear localStorage, and reload with
+the shot still present. Each run uses a unique DB path so Playwright's startup
+order cannot delete a live database. CI now installs the frontend/browser in the
+backend job and runs both E2E tests; `MILIMO_E2E_PYTHON` overrides the interpreter.
+Verified: 2 Playwright, 41 pytest, 23 vitest, tsc clean, eslint 0 errors.

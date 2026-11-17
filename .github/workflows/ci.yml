@@ -26,6 +26,20 @@ jobs:
         run: python -m pytest
       - name: Lint (non-blocking while legacy code is frozen)
         run: ruff check backend --output-format=github || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web-app/package-lock.json
+      - name: Install frontend for E2E
+        working-directory: web-app
+        run: npm ci
+      - name: Install Playwright browser
+        working-directory: web-app
+        run: npx playwright install --with-deps chromium
+      - name: Playwright smoke (stubbed shell + real backend CRUD)
+        working-directory: web-app
+        run: npm run test:e2e
 
   frontend:
     runs-on: ubuntu-latest
@@ -44,5 +58,3 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e

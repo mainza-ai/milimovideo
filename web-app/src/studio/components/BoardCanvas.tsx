@@ -53,10 +53,13 @@ function linkGeometry(source: { x: number; y: number; width: number; height: num
 
 export function BoardCanvas() {
     const project = useTimelineStore((state) => state.project);
-    const { selectedShotId, selectShot, setCurrentTime } = useTimelineStore(useShallow((state) => ({
+    const {
+        selectedShotId, selectShot, setCurrentTime, addShot,
+    } = useTimelineStore(useShallow((state) => ({
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,
+        addShot: state.addShot,
     })));
     const {
         storyView, setStoryView, boardCamera, setCamera, boardPositions,
@@ -439,6 +442,16 @@ export function BoardCanvas() {
                     onChange={(event) => setBoardQuery(event.target.value)}
                     aria-label="Filter shots"
                 />
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="primary"
+                    onClick={() => addShot({ prompt: 'New shot' })}
+                    title="Add a shot to the story"
+                >
+                    <Plus size={13} /> Add shot
+                </button>
                 <button type="button" className="st-button" data-size="sm" onClick={arrange} title="Arrange cards">
                     <Grid3X3 size={13} /> Arrange
                 </button>
