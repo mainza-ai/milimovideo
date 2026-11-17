@@ -794,3 +794,14 @@ Open review comments and change-request approvals now appear as small task cards
 beside their shot card. Clicking one selects the shot and opens Review. Tasks
 respect collapsed areas and use the live review contract. Verified: 44 vitest,
 tsc clean, eslint 0 errors.
+
+## [2026-11-17] docs | operating manual, user guide, and final status
+
+Rewrote AGENTS.md for the current architecture: `Milimo Video/` wiki layout,
+legacy-vs-studio split, store boundaries, Alembic/typed contracts, durable queue,
+render truth, studio capabilities, verification matrix, and explicit known gaps.
+Replaced the user guide with a Studio-first manual covering launch, every surface,
+keyboard map, generation/takes/inpaint, editing/tracking/blocking/3D, review/share,
+agent plans, search, deliver, shorts, setup, privacy, troubleshooting, and limits.
+Updated plan/frontend/audit tables to the measured state. AGENTS.md and the user
+guide are now tracked.

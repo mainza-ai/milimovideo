@@ -99,7 +99,7 @@ problem; correctness is.
 | GEN-04 cancellation | **Fixed** | direct `cancelled` broadcast; chained cancel raises, partial stitch blocked |
 | GEN-05 chained audio trim | **Fixed** | trims start, matching video |
 | GEN-06 seed randomization | **Fixed** | seed locked; `randomize_seed=true` on Regen |
-| GEN-07 AI parse blocks loop | **Partial** | parsing runs via `asyncio.to_thread`; model still loads in-request (queueing the parser remains open) |
+| GEN-07 AI parse blocks loop | **Fixed** | AI parse is a durable queued job; model load/parse run off-request; result JSON is polled and committed |
 | JOB-01 no durable queue | **Fixed** | `QueuedJob` ledger + startup resume + one retry |
 | JOB-06 duplicate routes | **Fixed** | removed duplicate handlers; route uniqueness test |
 | MOD-01 activation no-op | **Fixed** | routed through `activate_base_model`/`deactivate_base_model` |
@@ -115,6 +115,8 @@ problem; correctness is.
 | Captions | **Fixed (v1)** | cues persist, SRT/VTT import, optional burn; render writes ASS |
 | API contracts | **Fixed (v1)** | typed ProjectState/ShotState; generated OpenAPI TS + Zod checks; CI drift check |
 | Observability | **Fixed (v1)** | X-Request-ID + timing logs; metrics endpoint + Setup error-budget panel |
+| Performance | **Fixed (v1)** | 500-card board culling/pan ~58fps; 200-clip timeline culling/scroll ~275fps; headless specs committed |
+| Accessibility | **Fixed (v1)** | axe WCAG A/AA zero serious/critical; skip link; keyboard timeline editing |
 | NLE-01 timing | **Fixed** | render computes V1 starts from sequence order |
 | NLE-02 V2 black | **Fixed** | transparent pad + RGBA + alpha overlay |
 | NLE-03 track state | **Fixed** | `track_states` sent from ExportModal and applied |

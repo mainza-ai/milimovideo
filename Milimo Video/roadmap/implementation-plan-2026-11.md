@@ -50,26 +50,27 @@ single-engineer guidance.
 | P2 scheduler | **Done for GPU work** (durable `QueuedJob` ledger, one retry, global semaphore, idempotency, startup resume) | `job_utils`, `QueuedJob`, `Job.shot_id`, startup recovery |
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, setup check |
 | P3 OOM retry | **Done** | one retry at 75% resolution / 8k+1 frames, cache clear, shot params updated, unit tests |
-| P4 UX trust | **Partial** (P4-01,02,03,05,06,07) | takes/favorites, seed lock, save conflict, reconnect, review, plan approval, undo, axe critical-clean; 60fps perf and mask/tracking overlays open |
-| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI) | 58 backend, 43 frontend, 6 Playwright; new modules >80% coverage; total 37%; lint 0 errors |
-| Front-end F0/F1 | **Mostly done** (shell, tokens, Query, job/agent stores, board culling/marquee/resize/align/areas/links/undo, editable list/script, project switcher, Setup) | vitest + axe + Playwright; document store still adapter, no visual regression |
-| Front-end F2 | **Mostly done** (trim/slip/roll/blade/ripple/rate, compare/guides, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard) | pure-op tests, real render, Playwright; mask/tracking/depth overlays and 200-clip FPS measurement open |
-| Front-end F3/F4 | **Mostly done** (composer/mentions/advanced params, preview frame, batch queue+matrix, inpaint, favorites, plan/recipes, review compare/comments/share, ranked search, deliver presets) | contract tests + Playwright CRUD/export/reviewer-agent; LoRA stack strength and shorts polish open |
-| Front-end F5 | **Partial** | shorts candidates+range export, pipeline lens, blocking lens, lazy 3D previz, Yjs board spike; Tauri packaging open |
+| P4 UX trust | **Done** (P4-01–P4-07) | takes/favorites, seed lock, save conflict, reconnect, review, plan approval, undo, zero serious/critical axe, 500-card/200-clip perf specs, tracking overlay |
+| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI) | 59 backend, 44 frontend, 9 Playwright (incl. axe/perf/visual); new modules >80%; total 37%; lint 0 errors |
+| Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 9 Playwright incl. visual; document store still adapter |
+| Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip 274fps perf; depth overlay has no source |
+| Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview/batch/inpaint/favorites, queue position, plan/recipes, review compare/comments/share, ranked search, LoRA strength, deliver presets) | contract tests + Playwright CRUD/export/reviewer-agent; deeper shorts polish open |
+| Front-end F5 | **Mostly done** | shorts candidates+range export, pipeline lens, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native save/build; sidecar bundling and depth/lens polish open |
 
-**Still open:** visual regression baselines, full document-store migration (the
-legacy store is authoritative behind a typed adapter), 60fps measurements at
-500 board cards / 200 timeline clips, mask/tracking/depth stage overlays, Tauri 2
-packaging, and the remaining F5 lens/packaging depth. Alembic, OpenAPI types,
-OOM retry, and the durable ledger are adopted.
+**Still open:** full document-store migration (legacy store remains authoritative
+behind a typed adapter), depth stage overlay (no depth source exists), Tauri
+sidecar/backend bundling, and deeper F5 shorts/lens polish. Measured perf is
+58 fps for 500-card pan and 275 fps for 200-clip scroll (headless, frame-limit
+off). Alembic, OpenAPI types, OOM retry, tracking, visual regression, and the
+durable ledger are adopted.
 
 **Verification commands**
 
 ```bash
-./milimov/bin/python -m pytest        # 58 passed
+./milimov/bin/python -m pytest        # 59 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
 cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # clean
-cd web-app && npm run test:e2e        # 6 Playwright tests
+cd web-app && npm run test:e2e        # 9 Playwright tests
 curl http://127.0.0.1:8000/health     # device/queue/slots/disk
 ```
 
