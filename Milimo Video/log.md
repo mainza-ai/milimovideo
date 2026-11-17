@@ -737,3 +737,12 @@ editor layout. Added store tests. Verified: 44 vitest, tsc clean.
 Setup reads the active LoRA stack for the video slot and exposes a per-LoRA
 strength slider that PATCHes the live stack (0–200%) after pointer-up. Activation
 refreshes the stack. Verified: 44 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] gen | queued AI script parsing
+
+AI parsing no longer loads the text encoder inside the HTTP request. A new
+`/storyboard/ai-parse-jobs` endpoint creates a Job and dispatches through the
+durable GPU queue; the task loads the model, parses off-thread, writes a JSON
+result into the project workspace, and broadcasts completion. The Script view can
+queue it, poll, and commit the result. Added an endpoint test with enqueue
+stubbed. Verified: 59 pytest, tsc clean.

@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore } from '../../stores/timelineStore';
-import { apiUrl } from '../../config';
+import { apiUrl, getAssetUrl } from '../../config';
 import {
     useStudioEditor, type BoardArea, type BoardPosition, type LinkKind,
 } from '../state/editorStore';
@@ -1266,6 +1266,52 @@ export function BoardCanvas() {
                                 }}
                             >
                                 {scriptBusy ? 'Parsing…' : 'Parse & replace storyboard'}
+                            </button>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                disabled={scriptBusy || !scriptDraft.trim()}
+                                onClick={async () => {
+                                    if (!window.confirm(
+                                        'Queue AI parsing and replace the storyboard when it finishes? The current storyboard is archived first.',
+                                    )) return;
+                                    setScriptBusy(true);
+                                    try {
+                                        const queued = await fetch(apiUrl(`/projects/${project.id}/storyboard/ai-parse-jobs`), {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ script_text: scriptDraft }),
+                                        }).then((res) => res.json()).catch(() => ({}));
+                                        if (!queued.job_id) throw new Error(queued.detail || 'Could not queue AI parse');
+                                        for (let attempt = 0; attempt < 300; attempt += 1) {
+                                            await new Promise((resolve) => setTimeout(resolve, 2000));
+                                            const status = await fetch(apiUrl(`/status/${queued.job_id}`))
+                                                .then((res) => res.json())
+                                                .catch(() => ({}));
+                                            if (status.status === 'completed' && status.video_url) {
+                                                const result = await fetch(getAssetUrl(status.video_url) || status.video_url)
+                                                    .then((res) => res.json());
+                                                if (Array.isArray(result.scenes) && result.scenes.length > 0) {
+                                                    await commitStoryboard(result.scenes, scriptDraft);
+                                                } else {
+                                                    addToast('AI parse returned no scenes', 'info');
+                                                }
+                                                return;
+                                            }
+                                            if (status.status === 'failed' || status.status === 'cancelled') {
+                                                throw new Error(status.error || 'AI parse failed');
+                                            }
+                                        }
+                                        throw new Error('AI parse timed out');
+                                    } catch (exc) {
+                                        addToast(exc instanceof Error ? exc.message : 'AI parse failed', 'error');
+                                    } finally {
+                                        setScriptBusy(false);
+                                    }
+                                }}
+                            >
+                                {scriptBusy ? 'Working…' : 'AI parse (queued)'}
                             </button>
                             <button
                                 type="button"

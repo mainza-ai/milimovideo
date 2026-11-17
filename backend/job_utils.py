@@ -61,6 +61,11 @@ async def queue_inpaint_task(job_id: str, image_path: str, mask_path: str, promp
     )
 
 
+async def queue_ai_parse_task(job_id: str, params: dict):
+    from tasks.ai_parse import ai_parse_task
+    await gpu_job_wrapper(ai_parse_task(job_id, params))
+
+
 async def queue_element_visual_task(job_id: str, element_id: str, prompt_override=None,
                                     guidance: float = 2.0, enable_ae: bool = False):
     from managers.element_manager import element_manager
@@ -177,6 +182,8 @@ async def run_queued_job(queue_id: str) -> None:
                 params.get("guidance", 2.0),
                 params.get("enable_ae", False),
             )
+        elif kind == "ai_parse":
+            await queue_ai_parse_task(job_id, params)
         else:
             raise ValueError(f"Unknown queued job kind: {kind}")
         status = "completed"

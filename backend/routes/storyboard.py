@@ -259,6 +259,33 @@ async def reorder_scenes(project_id: str, req: ReorderScenesRequest, session: Se
 # ── AI-Powered Endpoints ────────────────────────────────────────────
 
 
+@router.post("/projects/{project_id}/storyboard/ai-parse-jobs")
+async def ai_parse_job(project_id: str, req: ScriptParseRequest, session: Session = Depends(get_session)):
+    """Queue AI parsing instead of loading the model inside this request."""
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    job_id = f"job_parse_{uuid.uuid4().hex[:8]}"
+    params = {
+        "project_id": project_id,
+        "script_text": req.script_text,
+    }
+    job = Job(
+        id=job_id,
+        project_id=project_id,
+        type="ai_parse",
+        status="pending",
+        created_at=datetime.now(timezone.utc),
+        prompt="AI script parse",
+        params_json=json.dumps(params),
+    )
+    session.add(job)
+    session.commit()
+    from job_utils import enqueue_gpu_job
+    await enqueue_gpu_job(job_id, "ai_parse", params)
+    return {"job_id": job_id, "status": "queued"}
+
+
 @router.post("/projects/{project_id}/storyboard/ai-parse")
 async def ai_parse(project_id: str, req: ScriptParseRequest):
     """AI-powered script parsing using Gemma 3.
