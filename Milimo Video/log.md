@@ -482,3 +482,11 @@ word/shot counts, save-on-blur + explicit save, and a confirmed
 parse-and-replace action that uses the existing local parser and storyboard
 commit. Parsing warns that unmatched shots are removed. Verified: 42 pytest,
 29 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f2 | take compare and stage guides
+
+Edit surface now compares the selected take against the previous take with
+side-by-side and a draggable wipe, both synced to the same clip-local frame and
+playback state. Added toggleable grid, safe-area, and rule-of-thirds guides over
+the stage. Compare buttons disable until a second take exists. Verified: 29
+vitest, tsc clean, eslint 0 errors.

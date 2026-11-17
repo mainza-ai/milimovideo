@@ -1192,6 +1192,87 @@
     object-fit: contain;
 }
 
+.st-stage-primary {
+    position: absolute;
+    inset: 0;
+}
+
+.st-stage-compare-side,
+.st-stage-compare-wipe {
+    position: absolute;
+    inset: 0;
+    background: #000;
+}
+
+.st-stage-compare-side {
+    left: 50%;
+    border-left: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.st-stage-compare-wipe {
+    background: transparent;
+}
+
+.st-compare-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.65);
+    color: var(--st-text);
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.st-guide {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.st-guide-grid {
+    background:
+        linear-gradient(90deg, transparent calc(50% - 0.5px), rgba(255, 255, 255, 0.3) 50%, transparent calc(50% + 0.5px)),
+        linear-gradient(transparent calc(50% - 0.5px), rgba(255, 255, 255, 0.3) 50%, transparent calc(50% + 0.5px));
+}
+
+.st-guide-safe::after {
+    content: "";
+    position: absolute;
+    inset: 6% 8%;
+    border: 1px dashed rgba(255, 255, 255, 0.45);
+}
+
+.st-guide-thirds {
+    background:
+        linear-gradient(90deg, transparent 33.2%, rgba(255, 255, 255, 0.24) 33.3%, transparent 33.4%, transparent 66.5%, rgba(255, 255, 255, 0.24) 66.6%, transparent 66.7%),
+        linear-gradient(transparent 33.2%, rgba(255, 255, 255, 0.24) 33.3%, transparent 33.4%, transparent 66.5%, rgba(255, 255, 255, 0.24) 66.6%, transparent 66.7%);
+}
+
+.st-wipe-control {
+    position: absolute;
+    left: 50%;
+    bottom: 10px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(320px, 70%);
+    padding: 5px 9px;
+    border: 1px solid var(--st-border-strong);
+    border-radius: 999px;
+    background: rgba(5, 6, 7, 0.82);
+    color: var(--st-secondary);
+    font-size: 9px;
+}
+
+.st-wipe-control input {
+    flex: 1;
+    accent-color: var(--st-accent);
+}
+
 .st-stage-empty {
     height: 100%;
     display: flex;
@@ -1208,7 +1289,9 @@
     top: 10px;
     left: 10px;
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
+    max-width: calc(100% - 20px);
 }
 
 .st-transport {
