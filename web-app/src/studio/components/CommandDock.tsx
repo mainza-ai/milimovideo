@@ -57,6 +57,7 @@ export function CommandDock() {
     const {
         commandOpen, setCommandOpen, commandMode, setCommandMode,
         setBoardQuery, setSurface, commandDraft, setCommandDraft,
+        recipes, saveRecipe, deleteRecipe,
     } = useStudioEditor();
     const [value, setValue] = useState('');
     const [plan, setPlan] = useState<Plan | null>(null);
@@ -205,6 +206,30 @@ export function CommandDock() {
                 <span className="st-context-chip" style={{ marginLeft: 'auto' }}>plan is local · nothing runs before approval</span>
             </div>
 
+            {recipes.length > 0 && (
+                <div className="st-context-row">
+                    <span className="st-context-chip">Recipes</span>
+                    <select
+                        className="st-select"
+                        style={{ width: 220, height: 26, padding: '2px 6px' }}
+                        value=""
+                        aria-label="Load a saved recipe"
+                        onChange={(event) => {
+                            const recipe = recipes.find((item) => item.id === event.target.value);
+                            if (!recipe) return;
+                            setCommandMode(recipe.mode);
+                            setValue(recipe.text.replace(/\{\{selection\}\}/g, shot?.prompt || ''));
+                            setPlan(null);
+                        }}
+                    >
+                        <option value="">Load recipe…</option>
+                        {recipes.map((recipe) => (
+                            <option key={recipe.id} value={recipe.id}>{recipe.name}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
             {plan && (
                 <div className="st-plan-preview">
                     <h4>Plan preview · {plan.mode}</h4>
@@ -261,6 +286,37 @@ export function CommandDock() {
                         <button type="button" className="st-button" data-variant="ghost" onClick={() => setPlan(null)}>
                             <X size={12} /> Cancel
                         </button>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-variant="ghost"
+                            onClick={() => {
+                                const name = window.prompt('Recipe name', plan.mode === 'generate' ? 'New take' : 'Edit');
+                                if (!name?.trim()) return;
+                                saveRecipe({
+                                    name: name.trim(),
+                                    mode: plan.mode as 'ask' | 'direct' | 'generate' | 'find',
+                                    text: value || plan.summary,
+                                });
+                                addToast(`Saved recipe “${name.trim()}”`, 'success');
+                            }}
+                        >
+                            <Sparkles size={12} /> Save recipe
+                        </button>
+                        {recipes.length > 0 && (
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-variant="ghost"
+                                onClick={() => {
+                                    const name = window.prompt('Recipe to delete');
+                                    const recipe = recipes.find((item) => item.name === name);
+                                    if (recipe) deleteRecipe(recipe.id);
+                                }}
+                            >
+                                Delete recipe
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

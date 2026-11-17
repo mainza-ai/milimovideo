@@ -66,6 +66,17 @@ describe('studio editor board semantics', () => {
         expect(useStudioEditor.getState().boardPositions['undo-shot'].x).toBe(240);
     });
 
+    it('saves, replaces and deletes recipes', () => {
+        useStudioEditor.setState({ recipes: [] });
+        useStudioEditor.getState().saveRecipe({ name: 'Rain pass', mode: 'direct', text: 'add rain' });
+        useStudioEditor.getState().saveRecipe({ name: 'Rain pass', mode: 'direct', text: 'add heavy rain' });
+        expect(useStudioEditor.getState().recipes).toHaveLength(1);
+        expect(useStudioEditor.getState().recipes[0].text).toBe('add heavy rain');
+
+        useStudioEditor.getState().deleteRecipe(useStudioEditor.getState().recipes[0].id);
+        expect(useStudioEditor.getState().recipes).toEqual([]);
+    });
+
     it('dedupes typed links and rejects self links', () => {
         const state = useStudioEditor.getState();
         state.addLink('a', 'b', 'thread');

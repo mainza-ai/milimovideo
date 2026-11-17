@@ -568,3 +568,10 @@ selected as a new immutable take. Generate gained a batch matrix with per-shot
 status/progress and generate/cancel actions. Inpaint jobs now carry `shot_id`
 and appear in both shot and project take history. Fixed a test id collision.
 Verified: 49 pytest, 32 vitest, tsc clean, build passes.
+
+## [2026-11-17] f4 | saveable plan recipes
+
+Command dock can save a plan as a named recipe with its mode and text, load it
+against the current selection (supporting a `{{selection}}` placeholder), and
+delete recipes. Recipes persist in the editor store. Added store tests. Verified:
+33 vitest, tsc clean, eslint 0 errors.

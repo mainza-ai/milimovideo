@@ -35,6 +35,14 @@ export interface BoardLink {
 
 export type BoardMode = 'select' | 'area' | 'link';
 
+export interface PlanRecipe {
+    id: string;
+    name: string;
+    mode: 'ask' | 'direct' | 'generate' | 'find';
+    text: string;
+    created: number;
+}
+
 export interface BoardSnapshot {
     boardPositions: Record<string, BoardPosition>;
     boardPinned: Record<string, boolean>;
@@ -69,6 +77,7 @@ interface EditorState {
     commandOpen: boolean;
     commandMode: 'ask' | 'direct' | 'generate' | 'find';
     commandDraft: string;
+    recipes: PlanRecipe[];
     focusMode: 'none' | 'canvas' | 'stage';
     setSurface: (surface: StudioSurface) => void;
     setStoryView: (view: StoryView) => void;
@@ -108,6 +117,8 @@ interface EditorState {
     setCommandOpen: (open: boolean) => void;
     setCommandMode: (mode: EditorState['commandMode']) => void;
     setCommandDraft: (draft: string) => void;
+    saveRecipe: (recipe: Omit<PlanRecipe, 'id' | 'created'>) => void;
+    deleteRecipe: (recipeId: string) => void;
     setFocusMode: (mode: EditorState['focusMode']) => void;
     resetBoard: () => void;
 }
@@ -159,6 +170,7 @@ export const useStudioEditor = create<EditorState>()(
             commandOpen: true,
             commandMode: 'direct',
             commandDraft: '',
+            recipes: [],
             focusMode: 'none',
             setSurface: (activeSurface) => set({ activeSurface }),
             setStoryView: (storyView) => set({ storyView }),
@@ -277,6 +289,15 @@ export const useStudioEditor = create<EditorState>()(
             setCommandOpen: (commandOpen) => set({ commandOpen }),
             setCommandMode: (commandMode) => set({ commandMode }),
             setCommandDraft: (commandDraft) => set({ commandDraft }),
+            saveRecipe: (recipe) => set((state) => ({
+                recipes: [
+                    ...state.recipes.filter((item) => item.name !== recipe.name),
+                    { ...recipe, id: makeId('recipe'), created: Date.now() },
+                ].slice(-30),
+            })),
+            deleteRecipe: (recipeId) => set((state) => ({
+                recipes: state.recipes.filter((item) => item.id !== recipeId),
+            })),
             setFocusMode: (focusMode) => set({ focusMode }),
             resetBoard: () => set({
                 boardPositions: {},
@@ -311,6 +332,7 @@ export const useStudioEditor = create<EditorState>()(
                 inspectorWidth: state.inspectorWidth,
                 commandOpen: state.commandOpen,
                 commandMode: state.commandMode,
+                recipes: state.recipes,
             }),
         },
     ),
