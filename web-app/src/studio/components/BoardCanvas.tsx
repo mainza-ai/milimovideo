@@ -9,6 +9,7 @@ import {
     useStudioEditor, type BoardArea, type BoardPosition, type LinkKind,
 } from '../state/editorStore';
 import { ShotCard } from './ShotCard';
+import { cullCards } from '../board/culling';
 
 const CARD_W = 300;
 const CARD_H = 238;
@@ -335,24 +336,13 @@ export function BoardCanvas() {
     // Viewport culling: 500 cards stay cheap because only the visible slice is
     // mounted. The minimap still uses the full layout.
     const visibleShots = useMemo(() => {
-        const pad = 260 / Math.max(0.2, boardCamera.zoom);
-        const left = -boardCamera.x / boardCamera.zoom - pad;
-        const top = -boardCamera.y / boardCamera.zoom - pad;
-        const right = left + size.width / boardCamera.zoom + pad * 2;
-        const bottom = top + size.height / boardCamera.zoom + pad * 2;
-        return shots
-            .map((shot, index) => ({
-                shot,
-                index,
-                position: boardPositions[shot.id] || fallbackPosition(index),
-            }))
-            .filter(({ position }) => (
-                position.x + position.width >= left
-                && position.x <= right
-                && position.y + position.height >= top
-                && position.y <= bottom
-            ));
-    }, [boardCamera, boardPositions, shots, size.height, size.width]);
+        const cards = shots.map((shot, index) => ({
+            shot,
+            index,
+            position: boardPositions[shot.id] || fallbackPosition(index),
+        }));
+        return cullCards(cards, boardCamera, size);
+    }, [boardCamera, boardPositions, shots, size]);
 
     const lod = boardCamera.zoom < 0.55 ? 'summary' : boardCamera.zoom < 0.95 ? 'compact' : 'detail';
     const minimap = useMemo(() => {

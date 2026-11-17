@@ -366,3 +366,10 @@ through black. Inspector gained a Motion tab to add/remove keyframes at the
 playhead, scrub opacity, and clear the curve. Covered by expression/filtergraph
 tests and a real FFmpeg render with keyframes. Verified: 41 pytest, 20 vitest,
 tsc clean, eslint 0 errors, build. Live DB backed up and column added.
+
+## [2026-11-16] board | extracted and tested culling
+
+Moved viewport culling into a pure `cullCards` helper and covered it with a
+500-card test (a small slice mounts at detail zoom, all stay when far out,
+overscan keeps edge cards). This replaces the inline predicate; behavior is
+unchanged. Verified: 41 pytest, 23 vitest, tsc clean, eslint 0 errors, build.
