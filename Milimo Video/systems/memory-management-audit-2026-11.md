@@ -145,6 +145,7 @@ flowchart TD
 | **M-24** | No "quiet mode" for background jobs (thumbnails, element visuals) that defers heavy work while the user is editing. |
 | **M-25** | No supervisor health check: a crashed worker is not restarted and the orphaned job is not failed until a restart. |
 | **M-27** | Generation logs are missing from `server.log` and the shell shows only uvicorn/tqdm output; there is no per-stage log or memory trace to postmortem a crash. |
+| **M-29** | **The reloader burns a core.** `server.py` runs uvicorn with `reload=True` against the repo root, so the parent scans the 40 GB model directories continuously (`os_scandir` at ~90% CPU). This is constant, not incident-specific, and makes crash triage misleading. | `sample` of the reloader; process tree |
 | **M-28** | **Recovery can re-run the OOM job.** `resume_queued_jobs` re-queues every `running` QueuedJob with fewer than two attempts, and `generate_video_task` only checks for `cancelled` — not the Job status. Restarting after a memory kill can immediately launch the same 121-frame job again. | `job_utils.resume_queued_jobs`; task start check |
 
 ## Engine residency adapters (what is actually available)
@@ -242,7 +243,7 @@ blocks eviction; `release` decrements; idle timers only fire at zero.
 | M0-05 | Guard activation/deactivation with the GPU job lease | Activating Flux during a video job is refused |
 | M0-06 | Move `encode_video`/save off the event loop; keep `/health` and SSE alive | Health responds during finalize |
 | M0-07 | `torch.mps.set_per_process_memory_fraction` safety cap + swap guard | PyTorch fails before macOS thrashes |
-| M0-08 | Supervisor: no reload spinner; on worker death mark active jobs failed and restart | Crash leaves no orphan `processing` job |
+| M0-08 | Supervisor: no reload in normal runs (or watch only source dirs); on worker death mark active jobs failed and restart | Parent does not burn a core; crash leaves no orphan `processing` job |
 | M0-09 | Upscale warning/estimate; default off for long jobs under budget pressure | UI shows the cost before the job starts |
 | M0-10 | Budget-aware OOM retry: release external engines, re-estimate, reduce upscale, emit `job.retrying`; refuse if still too large | Retry cannot OOM twice; the retry is visible |
 | M0-11 | Per-stage job logging + memory sample in the job record | A crash has a readable postmortem |
