@@ -4,6 +4,7 @@ import type { Shot } from '../../stores/timelineStore';
 import { apiUrl } from '../../config';
 import { PlanResponseSchema } from '../../api/contracts';
 import { useStudioEditor } from '../state/editorStore';
+import { useStudioAgent } from '../state/agentStore';
 import {
     useStudioElements,
     useStudioGenerate,
@@ -63,6 +64,7 @@ export function CommandDock() {
     const [plan, setPlan] = useState<Plan | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const recordPlan = useStudioAgent((state) => state.recordPlan);
 
     const shot = project.shots.find((item) => item.id === selectedShotId) || null;
     const mode = MODES.find((item) => item.id === commandMode) || MODES[1];
@@ -105,7 +107,14 @@ export function CommandDock() {
             if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
             const parsed = PlanResponseSchema.safeParse(data);
             if (!parsed.success) throw new Error('Plan response failed contract validation');
-            setPlan(parsed.data as Plan);
+            const record = parsed.data as Plan;
+            setPlan(record);
+            recordPlan({
+                mode: record.mode,
+                summary: record.summary,
+                text,
+                shotId: record.shot_id || shot?.id || null,
+            });
         } catch (exc) {
             const message = exc instanceof Error ? exc.message : 'Planning failed';
             setError(message);

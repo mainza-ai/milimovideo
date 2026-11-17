@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, type Project, type Shot } from '../../stores/timelineStore';
 import { apiUrl, getAssetUrl } from '../../config';
 import { HealthSchema, ReviewPayloadSchema } from '../../api/contracts';
+import { useStudioJobs } from '../state/jobStore';
 import {
     useStudioEditor,
     type BoardArea,
@@ -208,34 +210,22 @@ export function useStudioSelection() {
 }
 
 export function useStudioHealth() {
-    const [health, setHealth] = useState<StudioHealth | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const query = useQuery({
+        queryKey: ['studio', 'health'],
+        queryFn: async (): Promise<StudioHealth> => {
+            const response = await fetch(apiUrl('/health'));
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const parsed = HealthSchema.safeParse(await response.json());
+            if (!parsed.success) throw new Error('Health response failed contract validation');
+            return parsed.data;
+        },
+        refetchInterval: 10000,
+    });
 
-    useEffect(() => {
-        let alive = true;
-        const load = async () => {
-            try {
-                const response = await fetch(apiUrl('/health'));
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const parsed = HealthSchema.safeParse(await response.json());
-                if (!parsed.success) throw new Error('Health response failed contract validation');
-                if (alive) {
-                    setHealth(parsed.data);
-                    setError(null);
-                }
-            } catch (exc) {
-                if (alive) setError(exc instanceof Error ? exc.message : String(exc));
-            }
-        };
-        void load();
-        const interval = window.setInterval(load, 10000);
-        return () => {
-            alive = false;
-            window.clearInterval(interval);
-        };
-    }, []);
-
-    return { health, error };
+    return {
+        health: query.data ?? null,
+        error: query.error ? (query.error instanceof Error ? query.error.message : String(query.error)) : null,
+    };
 }
 
 export function useStudioElements(projectId: string) {
@@ -334,7 +324,8 @@ export interface JobMetrics {
 }
 
 export function useStudioMetrics(days = 7) {
-    const [metrics, setMetrics] = useState<JobMetrics | null>(null);
+    const metrics = useStudioJobs((state) => state.metrics);
+    const setMetrics = useStudioJobs((state) => state.setMetrics);
     useEffect(() => {
         const load = async () => {
             try {
@@ -352,7 +343,7 @@ export function useStudioMetrics(days = 7) {
         void load();
         const interval = window.setInterval(load, 15000);
         return () => window.clearInterval(interval);
-    }, [days]);
+    }, [days, setMetrics]);
     return metrics;
 }
 
@@ -365,7 +356,8 @@ export interface ActiveJob {
 }
 
 export function useStudioActiveJobs(projectId: string) {
-    const [jobs, setJobs] = useState<ActiveJob[]>([]);
+    const jobs = useStudioJobs((state) => state.activeJobs);
+    const setJobs = useStudioJobs((state) => state.setActiveJobs);
     const refresh = useCallback(async () => {
         try {
             const response = await fetch(apiUrl(`/projects/${projectId}/active_jobs`));
@@ -374,7 +366,7 @@ export function useStudioActiveJobs(projectId: string) {
         } catch {
             setJobs([]);
         }
-    }, [projectId]);
+    }, [projectId, setJobs]);
     useEffect(() => {
         void refresh();
         const interval = window.setInterval(refresh, 2500);

@@ -641,3 +641,11 @@ Verified: 56 pytest, 36 vitest, tsc clean.
 Timeline clips outside the horizontal viewport (plus overscan) are no longer
 mounted. Added a pure culling helper with a 200-clip unit test; the table view
 still lists every clip. Verified: 38 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f0 | state skeleton: jobs, agent, document boundary, Query
+
+Added TanStack Query around the studio shell and moved health polling onto
+`useQuery` with contract validation. Introduced isolated job state (active jobs +
+error budget), agent plan history, and a typed document-store adapter over the
+legacy store so the eventual document migration is one file. Command plans now
+record into the agent store. Verified: 39 vitest, tsc clean, eslint 0 errors.

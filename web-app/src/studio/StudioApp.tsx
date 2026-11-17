@@ -16,6 +16,8 @@ import { useStudioEditor, type StudioSurface } from './state/editorStore';
 import { useStudioProject, useStudioBoardSync, useStudioProjectBootstrap } from './data/useStudioData';
 import { useTimelineStore } from '../stores/timelineStore';
 import { SharedReviewPage } from './SharedReviewPage';
+import { studioQueryClient } from './state/queryClient';
+import { QueryClientProvider } from '@tanstack/react-query';
 
 const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver', 'setup'];
 
@@ -26,7 +28,11 @@ export function StudioApp() {
     if (shareMatch) {
         return <SharedReviewPage token={decodeURIComponent(shareMatch[1])} />;
     }
-    return <StudioShell />;
+    return (
+        <QueryClientProvider client={studioQueryClient}>
+            <StudioShell />
+        </QueryClientProvider>
+    );
 }
 
 function StudioShell() {
