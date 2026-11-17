@@ -89,9 +89,9 @@ problem; correctness is.
 | DATA-02 conditioning key drift | **Fixed** | canonical `TimelineItem`, camelCase normalization, list on read |
 | DATA-03 split shot | **Fixed** | datetime import, timeline serialization, sequence/scene index shift |
 | DATA-04 push trimOut | **Fixed** | `trimOut: 0`, persisted patch + save |
-| DATA-05 no migrations | **Partial** | idempotent schema repair/backfill; Alembic still required |
+| DATA-05 no migrations | **Fixed** | Alembic baseline + startup upgrade; legacy DBs repaired/stamped; migration tests |
 | DATA-06 save omissions | **Fixed** | height/fps/shotType/index/sequence_index/revision persisted |
-| DATA-07 destructive storyboard merge | **Open** | no archive/confirmation yet |
+| DATA-07 destructive storyboard merge | **Fixed (v1)** | pre-commit archive persisted/exposed; Script UI requires confirmation and can download backup |
 | DATA-09 pending job recovery | **Fixed** | durable `QueuedJob` ledger; queued resumes, running retried once, undispatched pending fails |
 | GEN-01 prompt `replacement` bug | **Fixed** | scoped replacement, no duplicate `. Setting:` |
 | GEN-02 export audio | **Fixed** | V1/V2 embedded audio mixed; preview still muted by default |
@@ -99,7 +99,7 @@ problem; correctness is.
 | GEN-04 cancellation | **Fixed** | direct `cancelled` broadcast; chained cancel raises, partial stitch blocked |
 | GEN-05 chained audio trim | **Fixed** | trims start, matching video |
 | GEN-06 seed randomization | **Fixed** | seed locked; `randomize_seed=true` on Regen |
-| GEN-07 AI parse blocks loop | **Open** | still loads 19B in request |
+| GEN-07 AI parse blocks loop | **Partial** | parsing runs via `asyncio.to_thread`; model still loads in-request (queueing the parser remains open) |
 | JOB-01 no durable queue | **Fixed** | `QueuedJob` ledger + startup resume + one retry |
 | JOB-06 duplicate routes | **Fixed** | removed duplicate handlers; route uniqueness test |
 | MOD-01 activation no-op | **Fixed** | routed through `activate_base_model`/`deactivate_base_model` |
@@ -112,7 +112,9 @@ problem; correctness is.
 | OPS-06 debug artifacts | **Fixed** | gated behind `MILIMO_DEBUG` |
 | Take/version history | **Fixed (v1)** | immutable takes from completed jobs; `GET /shots/{id}/takes` + select-take repoints the shot |
 | Review notes | **Fixed (v1)** | frame comments + per-shot approvals persisted in `review_item`; latest approval gates the shot |
-| Captions | **Fixed (v1)** | project caption cues persist; render writes ASS and burns it in after compositing |
+| Captions | **Fixed (v1)** | cues persist, SRT/VTT import, optional burn; render writes ASS |
+| API contracts | **Fixed (v1)** | typed ProjectState/ShotState; generated OpenAPI TS + Zod checks; CI drift check |
+| Observability | **Fixed (v1)** | X-Request-ID + timing logs; metrics endpoint + Setup error-budget panel |
 | NLE-01 timing | **Fixed** | render computes V1 starts from sequence order |
 | NLE-02 V2 black | **Fixed** | transparent pad + RGBA + alpha overlay |
 | NLE-03 track state | **Fixed** | `track_states` sent from ExportModal and applied |

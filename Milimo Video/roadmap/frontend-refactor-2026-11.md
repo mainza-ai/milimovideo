@@ -44,16 +44,17 @@ at `/`.
 
 | Stage | Status | What exists |
 |---|---|---|
-| **F0 Foundation** | **Started** | `studio.css` tokens, shell, mode rail, top bar, inspector, command dock, status strip, `editorStore` (persisted camera/layout), API base/token, `/studio` lazy route, component mount test, Setup surface with real device/slot/pipeline/model/disk state and explicit activation, project switcher/create with stale-project boot recovery, Playwright headless smoke over shell/board/review/setup |
-| **F1 Story** | **Partial** | Story spine with master-reference filter, board canvas (pan/zoom/drag/LOD/minimap), areas with inline rename/resize, typed links (thread/blocking/reference), list view, script view, selection sync, viewport-culled cards for large boards, board layout persisted with revision/CAS + separate view save |
-| **F2 Edit** | **Partial** | Stage monitor, legacy playback clock, V1/V2/A1 clips, playhead, seeking, zoom; tested frame-accurate trim (in/out), slip, roll, blade at playhead, and ripple delete through pure ops; per-clip audio gain/mute persists and reaches the render filtergraph; uploaded audio can be placed on A1 at the playhead and is mixed by the render; caption cues persist in C1, edit in-place, and burn in through generated ASS; opacity keyframes (frame + %) persist and render as piecewise-linear alpha via `geq` |
-| **F3 Generate** | **Partial** | Shot workspace, prompt/params, generate/cancel, immutable take history with select-take; ingredient composer, batch/queue UI, preview-first, inpaint flow and batch matrix open |
-| **F4 Review** | **Partial** | Version stack reads the same take history; `POST /projects/{id}/plan` returns deterministic plan cards (diff, estimate, warnings) applied through the undoable store; frame-accurate comments with resolve/delete and per-shot approvals persist via `/projects/{id}/review`; `@Agent` comments route into the plan dock for approval; plan patches are one undo step via top-bar/⌘Z undo-redo; a live “needs you” pill counts unresolved comments and change requests; capability share links open a read-only reviewer page that can comment/approve but not edit (disabled when the API token gate is on); Review shows a merged activity feed of comments, decisions, and generated takes |
-| **F4 Library/Deliver** | **Partial** | Library assets/references/complete-take lineage with select; Deliver presets 16:9/9:16/1:1/4:5, render history, caption cue count; semantic search and share links open |
-| **F5 Shorts/lenses** | **Not started** | — |
+| **F0 Foundation** | **Mostly done** | Tokens, shell, resizable inspector, command dock, status strip, editor/job/agent stores + Query, generated API types + Zod contracts, accessible skip link/keyboard/axe, Kubona attribution, project switcher, Setup, full Playwright flow. Open: full document-store migration, visual regression baselines |
+| **F1 Story** | **Mostly done** | Spine/filter, board pan/zoom/marquee/multi-select/resize/align/distribute/LOD/minimap, collapsible areas that carry cards, typed links, editable list + links + bulk delete, persisted script, board undo/pin, viewport culling, revision/CAS save. Open: element/note/task cards, live 60fps measurement |
+| **F2 Edit** | **Mostly done** | Stage + take compare/wipe + guides; clock isolated to playhead/timecode; trim/slip/roll/blade/ripple/rate/slide; V1/V2/A1; audio gain/mute/fades/solo + waveforms + A1 placement; caption C1 + SRT/VTT import + burn toggle; opacity/scale/pan/volume keyframes; render range/presets; table view + keyboard edit. Open: mask/tracking/depth overlays, effects tab, 200-clip FPS measurement |
+| **F3 Generate** | **Mostly done** | Shot workspace, ingredient composer/@mentions, advanced params, preview-frame attachment, batch queue + matrix, active queue position/estimate/cancel, immutable takes + favorites, frame inpaint applied as a take. Open: deeper batch preview controls |
+| **F4 Review** | **Mostly done** | Plan cards/approval/undo, recipes, frame comments/approvals/activity, live needs-you pill, reviewer share links, review take compare, ranked local search, library takes, deliver 16:9/9:16/1:1/4:5, LoRA activation. Open: LoRA stack strength/queue polish, full reviewer→new-take compare E2E |
+| **F4 Library/Deliver** | **Mostly done** | Assets/references/takes/search tabs, ranked local search, take lineage + select/favorite, presets, render history, caption burn toggle |
+| **F5 Shorts/lenses** | **Partial** | Shorts candidates + scored ranges + vertical/square/portrait range export; pipeline recipe/validation lens; blocking lens; lazy three.js previz with camera path/snapshot; opt-in Yjs board sync spike. Open: Tauri packaging, deeper lens/packaging polish |
 
-**Next:** share/“needs you” review links, then move document state off the
-legacy store. Do not cut over `/` until F2 review/render parity.
+**Next:** close the remaining measurements (axe serious, 500-card/200-clip FPS),
+migrate the document store off the legacy store, add visual baselines, and decide
+whether Tauri packaging belongs in scope. Keep `/` until those gates are green.
 
 ## Why This Refactor
 

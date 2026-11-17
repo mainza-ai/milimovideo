@@ -708,3 +708,12 @@ report. New modules land above 80% (planner 89%, review 89%, share 86%,
 render_utils 95%, captions 90%, alembic baseline exercised); total repo coverage
 remains 37% because the legacy GPU/model modules are not unit-testable without
 weights. Ignored local coverage artifacts.
+
+## [2026-11-17] status | remaining-plan closure pass
+
+Updated the execution, frontend, and audit tables after the full implementation
+pass: Alembic/OpenAPI types/OOM retry/request IDs/pixel tests/storyboard archive
+are adopted; F0–F4 are mostly done, F5 is partial (shorts, pipeline lens, blocking
+lens, lazy 3D previz, Yjs spike). Explicit remaining gaps are recorded instead of
+being smoothed over: document-store migration, visual baselines, 60fps
+measurements, mask/tracking/depth overlays, Tauri packaging, and parser queueing.

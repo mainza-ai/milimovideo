@@ -45,30 +45,31 @@ single-engineer guidance.
 | Area | Status | Evidence |
 |---|---|---|
 | P0 security/correctness | **Done** (P0-01–P0-11; P0-12 LICENSE/NOTICE) | `pytest`, live health, upload/media/CORS tests |
-| P1 timeline truth | **Mostly done** (P1-01,03,04,05,07–10) | round-trip test, split test, revision test, tsc |
-| P2 render fidelity | **Done for P2-01–P2-07; P2-12–P2-14** | unit filtergraph + real FFmpeg render test: 4.0s, video+audio |
+| P1 timeline truth | **Done** (P1-01–P1-10) | Alembic baseline + stamped migrations, typed ProjectState/ShotState, generated OpenAPI TS, round-trip/split/revision tests |
+| P2 render fidelity | **Done** (P2-01–P2-08, P2-12–P2-14) | filtergraph units + real renders: V1 timing, V2 alpha, A1, captions, keyframes, speed, range; pixel assertions |
 | P2 scheduler | **Done for GPU work** (durable `QueuedJob` ledger, one retry, global semaphore, idempotency, startup resume) | `job_utils`, `QueuedJob`, `Job.shot_id`, startup recovery |
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, setup check |
-| P3 OOM retry | **Not started** | P3-03 deferred |
-| P4 UX trust | **Partial** (P4-01,02,03,05,06) | take history/select, seed lock, save state/conflict, SSE reconnect, frame review, plan approval, undo |
-| P5 tests/CI | **Partial** (pytest + vitest + CI + pre-commit + health + full Playwright flow) | 41 backend tests, 23 frontend tests, 3 Playwright tests (shell, CRUD, export), lint 0 errors, build passes |
-| Front-end F0/F1 | **Mostly done** (shell, tokens, editor store, board canvas + culling/areas/links, list/script, Setup, lazy `/studio`) | vitest + Playwright smoke; tsc/lint/build pass |
-| Front-end F2 | **Mostly done** (trim/slip/roll/blade/ripple, audio gain/mute + A1 placement, captions + ASS burn-in, opacity keyframes) | pure-op tests, filtergraph tests, real FFmpeg render with V1/V2/A1/captions/keyframes |
-| Front-end F3/F4 | **Partial** (takes, generate/cancel, plan approval, comments/approvals/activity, share links, library takes, deliver presets) | backend contract tests + Playwright CRUD/export; composer, batch, preview, recipes, semantic search open |
-| Front-end F5 | **Deferred** until F2/F4 gates | shorts/lenses/packaging |
+| P3 OOM retry | **Done** | one retry at 75% resolution / 8k+1 frames, cache clear, shot params updated, unit tests |
+| P4 UX trust | **Partial** (P4-01,02,03,05,06,07) | takes/favorites, seed lock, save conflict, reconnect, review, plan approval, undo, axe critical-clean; 60fps perf and mask/tracking overlays open |
+| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI) | 58 backend, 43 frontend, 6 Playwright; new modules >80% coverage; total 37%; lint 0 errors |
+| Front-end F0/F1 | **Mostly done** (shell, tokens, Query, job/agent stores, board culling/marquee/resize/align/areas/links/undo, editable list/script, project switcher, Setup) | vitest + axe + Playwright; document store still adapter, no visual regression |
+| Front-end F2 | **Mostly done** (trim/slip/roll/blade/ripple/rate, compare/guides, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard) | pure-op tests, real render, Playwright; mask/tracking/depth overlays and 200-clip FPS measurement open |
+| Front-end F3/F4 | **Mostly done** (composer/mentions/advanced params, preview frame, batch queue+matrix, inpaint, favorites, plan/recipes, review compare/comments/share, ranked search, deliver presets) | contract tests + Playwright CRUD/export/reviewer-agent; LoRA stack strength and shorts polish open |
+| Front-end F5 | **Partial** | shorts candidates+range export, pipeline lens, blocking lens, lazy 3D previz, Yjs board spike; Tauri packaging open |
 
-**Not adopted:** Alembic (P1-02) — a small idempotent schema repair/backfill runs
-in `init_db()`; a real Alembic baseline is still required before the next schema
-change. OpenAPI-generated TS types (P1-06) remain open. The durable GPU ledger
-(`QueuedJob`, P2-09/G3) is implemented with startup resume and one retry.
+**Still open:** visual regression baselines, full document-store migration (the
+legacy store is authoritative behind a typed adapter), 60fps measurements at
+500 board cards / 200 timeline clips, mask/tracking/depth stage overlays, Tauri 2
+packaging, and the remaining F5 lens/packaging depth. Alembic, OpenAPI types,
+OOM retry, and the durable ledger are adopted.
 
 **Verification commands**
 
 ```bash
-./milimov/bin/python -m pytest        # 41 passed
+./milimov/bin/python -m pytest        # 58 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
 cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # clean
-cd web-app && npm run test:e2e        # 3 Playwright tests
+cd web-app && npm run test:e2e        # 6 Playwright tests
 curl http://127.0.0.1:8000/health     # device/queue/slots/disk
 ```
 
