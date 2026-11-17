@@ -21,6 +21,7 @@ import { studioQueryClient } from './state/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
 import { CommandPalette, ShortcutSheet } from './components/CommandPalette';
+import { MediaPreview } from './components/MediaPreview';
 import { enabledStudioSurfaces, isStudioSurfaceEnabled } from './features';
 
 const SURFACES: StudioSurface[] = enabledStudioSurfaces();
@@ -175,6 +176,7 @@ function StudioShell() {
                 {inspectorOpen && <Inspector />}
             </div>
             <StatusStrip />
+            <MediaPreview />
             <CommandPalette
                 open={paletteOpen}
                 onClose={() => setPaletteOpen(false)}

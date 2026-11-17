@@ -5,6 +5,7 @@ import {
 import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { useStudioEditor } from '../state/editorStore';
+import { useMediaPreview } from '../state/mediaPreviewStore';
 import {
     useAssetUrl,
     useStudioReview,
@@ -15,6 +16,7 @@ import {
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 export function ReviewSurface() {
+    const openMediaPreview = useMediaPreview((state) => state.open);
     const project = useStudioDocumentStore((state) => state.project);
     const { selectedShotId, selectShot, setCurrentTime } = useStudioSelection();
     const { setInspectorTab, setCommandDraft, setCommandMode } = useStudioEditor();
@@ -121,7 +123,20 @@ export function ReviewSurface() {
                         <div style={{ aspectRatio: '16 / 9', background: '#000', position: 'relative' }}>
                             {mediaUrl ? (
                                 isImage ? (
-                                    <img src={mediaUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    <button
+                                        type="button"
+                                        className="st-media-open"
+                                        style={{ height: '100%' }}
+                                        aria-label="Open review image full size"
+                                        onClick={() => openMediaPreview({
+                                            url: mediaUrl,
+                                            title: shot?.action || shot?.prompt || 'Review frame',
+                                            subtitle: shot ? `${shot.numFrames}f · seed ${shot.seed}` : undefined,
+                                            kind: 'image',
+                                        })}
+                                    >
+                                        <img src={mediaUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                                    </button>
                                 ) : (
                                     <video
                                         ref={videoRef}
@@ -398,8 +413,21 @@ export function ReviewSurface() {
                                         <div className="st-mono">{take.job_id.slice(0, 12)} · seed {take.seed ?? '—'}</div>
                                     </div>
                                 </button>
-                                {!take.selected && (
-                                    <div style={{ padding: '0 8px 8px' }}>
+                                <div style={{ padding: '0 8px 8px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant="ghost"
+                                        onClick={() => openMediaPreview({
+                                            url: getAssetUrl(take.url || take.thumbnail_url) || take.url || take.thumbnail_url || '',
+                                            title: take.job_id.slice(0, 12),
+                                            subtitle: `${take.model || take.type} · seed ${take.seed ?? '—'}`,
+                                        })}
+                                    >
+                                        Preview
+                                    </button>
+                                    {!take.selected && (
                                         <button
                                             type="button"
                                             className="st-button"
@@ -411,8 +439,8 @@ export function ReviewSurface() {
                                         >
                                             <Columns2 size={11} /> Compare
                                         </button>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         ))}
                     </div>

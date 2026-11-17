@@ -105,9 +105,13 @@ def upload_file(
 
     image_extensions = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"}
     audio_extensions = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
+    caption_extensions = {".srt", ".vtt"}
+    text_extensions = {".json", ".txt", ".md"}
     asset_type = (
         "image" if extension in image_extensions
         else "audio" if extension in audio_extensions
+        else "caption" if extension in caption_extensions
+        else "text" if extension in text_extensions
         else "video"
     )
     new_asset = Asset(

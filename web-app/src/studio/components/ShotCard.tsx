@@ -1,4 +1,4 @@
-import { Clapperboard, Copy, GripVertical, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
+import { Clapperboard, Copy, Eye, GripVertical, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
 import type { Shot } from '../state/documentStore';
 import { useAssetUrl } from '../data/useStudioData';
 import type { BoardPosition } from '../state/editorStore';
@@ -15,13 +15,14 @@ interface Props {
     onResize: (event: React.PointerEvent, shotId: string) => void;
     onGenerate: (shotId: string) => void;
     onEdit: (shotId: string) => void;
+    onPreview: (shotId: string) => void;
     onDuplicate: (shotId: string) => void;
     onContextMenu: (event: React.MouseEvent, shotId: string) => void;
 }
 
 export function ShotCard({
     shot, index, position, selected, pinned, linkSource, onSelect, onDragStart, onResize,
-    onGenerate, onEdit, onDuplicate, onContextMenu,
+    onGenerate, onEdit, onPreview, onDuplicate, onContextMenu,
 }: Props) {
     const videoUrl = useAssetUrl(shot.videoUrl);
     const thumbnailUrl = useAssetUrl(shot.thumbnailUrl);
@@ -47,7 +48,9 @@ export function ShotCard({
                 type="button"
                 className="st-shot-card-select"
                 onClick={(event) => onSelect(event)}
+                onDoubleClick={() => onPreview(shot.id)}
                 aria-label={`Shot ${index + 1}: ${shot.action || shot.prompt || 'Untitled'}`}
+                title="Click to select · double-click to preview"
             />
             <div
                 className="st-shot-card-media"
@@ -72,6 +75,9 @@ export function ShotCard({
                 >
                     <button type="button" aria-label={`Generate ${shot.action || shot.prompt || 'shot'}`} title="Generate" onClick={() => onGenerate(shot.id)}>
                         <Sparkles size={12} />
+                    </button>
+                    <button type="button" aria-label={`Preview ${shot.action || shot.prompt || 'shot'}`} title="Preview media" onClick={() => onPreview(shot.id)}>
+                        <Eye size={12} />
                     </button>
                     <button type="button" aria-label={`Open ${shot.action || shot.prompt || 'shot'} in Edit`} title="Open in Edit" onClick={() => onEdit(shot.id)}>
                         <Clapperboard size={12} />

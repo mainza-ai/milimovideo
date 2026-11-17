@@ -1,10 +1,11 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Columns2, Loader2, Maximize, Pause, Play, SkipBack, SkipForward, SquareSplitHorizontal,
+    Columns2, Eye, Loader2, Maximize, Pause, Play, SkipBack, SkipForward, SquareSplitHorizontal,
     Volume2, Wand2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStudioDocumentStore } from '../state/documentStore';
+import { useMediaPreview } from '../state/mediaPreviewStore';
 import { apiUrl, getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 import { PlaybackEngine } from '../components/PlaybackEngine';
@@ -16,6 +17,7 @@ const Previz3D = lazy(() => import('../components/Previz3D'));
 import { formatDuration, useAssetUrl, useStudioTakes } from '../data/useStudioData';
 
 export function EditSurface() {
+    const openMediaPreview = useMediaPreview((state) => state.open);
     const project = useStudioDocumentStore((state) => state.project);
     const { isPlaying, setIsPlaying, setCurrentTime, selectedShotId } = useStudioDocumentStore(useShallow((state) => ({
         isPlaying: state.isPlaying,
@@ -276,7 +278,17 @@ export function EditSurface() {
                     className={`st-stage-frame ${compareMode !== 'off' ? 'st-stage-compare' : ''}`}
                 >
                     {mediaUrl ? (
-                        <div className="st-stage-primary">
+                        <div
+                            className="st-stage-primary"
+                            onDoubleClick={() => openMediaPreview({
+                                url: mediaUrl,
+                                title: active?.shot.action || active?.shot.prompt || 'Current clip',
+                                subtitle: active ? `${active.shot.numFrames}f · seed ${active.shot.seed}` : undefined,
+                                kind: isImage ? 'image' : 'video',
+                            })}
+                            title="Double-click to open full size"
+                            style={{ cursor: 'zoom-in' }}
+                        >
                             {isImage ? (
                                 <img src={mediaUrl} alt="" />
                             ) : (
@@ -457,6 +469,22 @@ export function EditSurface() {
                 </button>
                 <button type="button" className="st-button" data-variant="primary" onClick={() => setIsPlaying(!isPlaying)} aria-label={isPlaying ? 'Pause' : 'Play'}>
                     {isPlaying ? <Pause size={15} /> : <Play size={15} />}
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant="ghost"
+                    disabled={!mediaUrl}
+                    onClick={() => mediaUrl && openMediaPreview({
+                        url: mediaUrl,
+                        title: active?.shot.action || active?.shot.prompt || 'Current clip',
+                        subtitle: active ? `V${active.track === 1 ? 2 : 1} · ${active.shot.numFrames}f · seed ${active.shot.seed}` : undefined,
+                        kind: isImage ? 'image' : 'video',
+                    })}
+                    title="Open the current media full size"
+                >
+                    <Eye size={12} /> Preview
                 </button>
                 <button
                     type="button"

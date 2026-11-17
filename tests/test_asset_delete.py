@@ -85,3 +85,19 @@ def test_last_frame_extraction_writes_a_jpeg(app_client, project):
     body = response.json()
     assert body["url"].endswith("job_last_frame_last.jpg")
     assert Path(body["path"]).exists()
+
+
+def test_uploaded_caption_files_keep_a_text_type(app_client, project):
+    pid = project["id"]
+    response = app_client.post(
+        "/upload",
+        files={"file": ("captions.srt", b"1\n00:00:00,000 --> 00:00:01,000\nHello\n", "application/x-subrip")},
+        data={"project_id": pid, "type": "general"},
+    )
+    assert response.status_code == 200, response.text
+    asset = response.json()
+    assert asset["type"] == "caption"
+
+    listed = app_client.get("/uploads").json()
+    entry = next(item for item in listed if item["id"] == asset["asset_id"])
+    assert entry["type"] == "caption"

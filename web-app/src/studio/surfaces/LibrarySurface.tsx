@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-    CheckCircle2, Film, Image as ImageIcon, Library, Pencil, Plus, RefreshCw, Search,
+    CheckCircle2, FileText, Film, Image as ImageIcon, Library, Pencil, Plus, RefreshCw, Search,
     Trash2, Upload, Video, X,
 } from 'lucide-react';
 import { rankSearch, type SearchRecord } from '../search/localSearch';
 import { useStudioEditor } from '../state/editorStore';
+import { useMediaPreview } from '../state/mediaPreviewStore';
 import { useStudioDocumentStore, type Shot } from '../state/documentStore';
 import type { StudioAsset, StudioElement, StudioProjectTake } from '../data/useStudioData';
 
@@ -25,6 +26,15 @@ import {
     type ElementDraft,
 } from '../data/useStudioData';
 
+function assetKind(asset: StudioAsset): 'image' | 'video' | 'audio' | 'text' {
+    const name = `${asset.filename || ''} ${asset.url || ''}`.toLowerCase();
+    if (/\.(png|jpe?g|webp|gif|bmp|tiff)(\?|\s|$)/.test(name)) return 'image';
+    if (/\.(mp4|mov|m4v|webm|mkv|avi)(\?|\s|$)/.test(name)) return 'video';
+    if (/\.(mp3|wav|m4a|aac|ogg|flac)(\?|\s|$)/.test(name)) return 'audio';
+    if (/\.(srt|vtt|json|txt|md)(\?|\s|$)/.test(name)) return 'text';
+    return asset.type === 'video' || asset.type === 'image' || asset.type === 'audio' ? asset.type : 'text';
+}
+
 const EMPTY_DRAFT: ElementDraft = {
     name: '',
     type: 'character',
@@ -35,6 +45,7 @@ const EMPTY_DRAFT: ElementDraft = {
 
 export function LibrarySurface() {
     const project = useStudioProject();
+    const openMediaPreview = useMediaPreview((state) => state.open);
     const { elements, refresh: refreshElements } = useStudioElements(project.id);
     const elementMutations = useStudioElementMutations(project.id);
     const [editingElement, setEditingElement] = useState<StudioElement | null>(null);
@@ -224,15 +235,27 @@ export function LibrarySurface() {
                     <div className="st-grid">
                         {filteredAssets.map((asset) => (
                             <article className="st-take" key={asset.id}>
-                                <div className="st-take-media">
-                                    {asset.type === 'video' ? (
+                                <button
+                                    type="button"
+                                    className="st-take-media st-media-open"
+                                    aria-label={`Preview ${asset.filename}`}
+                                    onClick={() => openMediaPreview({
+                                        url: getAssetUrl(asset.url) || asset.url,
+                                        title: asset.filename,
+                                        subtitle: `${assetKind(asset)} · ${new Date(asset.created_at * 1000).toLocaleDateString()}`,
+                                        kind: assetKind(asset),
+                                    })}
+                                >
+                                    {assetKind(asset) === 'video' ? (
                                         <video src={getAssetUrl(asset.url)} muted playsInline preload="metadata" />
-                                    ) : asset.type === 'image' ? (
+                                    ) : assetKind(asset) === 'image' ? (
                                         <img src={getAssetUrl(asset.url)} alt="" loading="lazy" />
+                                    ) : assetKind(asset) === 'audio' ? (
+                                        <div className="st-stage-empty"><Video size={14} /><span>audio</span></div>
                                     ) : (
-                                        <div className="st-stage-empty"><Video size={14} /><span>{asset.type}</span></div>
+                                        <div className="st-stage-empty"><FileText size={14} /><span>{assetKind(asset)}</span></div>
                                     )}
-                                </div>
+                                </button>
                                 <div className="st-take-body">
                                     <strong style={{ color: 'var(--st-text)' }}>{asset.filename}</strong>
                                     <div>{asset.type} · {new Date(asset.created_at * 1000).toLocaleDateString()}</div>
@@ -272,11 +295,32 @@ export function LibrarySurface() {
                                     className="st-link-row"
                                     style={{ cursor: 'pointer', background: 'transparent', textAlign: 'left', width: '100%' }}
                                     onClick={() => {
-                                        const shotId = item.type === 'shot'
-                                            ? item.shot.id
-                                            : item.type === 'take'
-                                                ? item.take.shot_id
-                                                : null;
+                                        if (item.type === 'asset') {
+                                            openMediaPreview({
+                                                url: getAssetUrl(item.asset.url) || item.asset.url,
+                                                title: item.asset.filename,
+                                                subtitle: item.asset.type,
+                                                kind: assetKind(item.asset),
+                                            });
+                                            return;
+                                        }
+                                        if (item.type === 'reference' && item.element.image_path) {
+                                            openMediaPreview({
+                                                url: getAssetUrl(item.element.image_path) || item.element.image_path,
+                                                title: item.element.name,
+                                                subtitle: `${item.element.type} · @${item.element.trigger_word.replace(/^@/, '')}`,
+                                            });
+                                            return;
+                                        }
+                                        if (item.type === 'take') {
+                                            openMediaPreview({
+                                                url: getAssetUrl(item.take.url || item.take.thumbnail_url) || item.take.url || item.take.thumbnail_url || '',
+                                                title: item.take.shot_label || item.take.job_id.slice(0, 12),
+                                                subtitle: `${item.take.model || item.take.type} · seed ${item.take.seed ?? '—'}`,
+                                            });
+                                            return;
+                                        }
+                                        const shotId = item.type === 'shot' ? item.shot.id : null;
                                         if (shotId) {
                                             useStudioDocumentStore.getState().selectShot(shotId);
                                             useStudioEditor.getState().setSurface('story');
@@ -303,13 +347,22 @@ export function LibrarySurface() {
                             const shot = project.shots.find((item) => item.id === take.shot_id);
                             return (
                                 <article className="st-take" key={take.job_id} style={{ borderColor: take.selected ? 'var(--st-accent)' : undefined }}>
-                                    <div className="st-take-media">
+                                    <button
+                                        type="button"
+                                        className="st-take-media st-media-open"
+                                        aria-label={`Preview take ${take.job_id.slice(0, 12)}`}
+                                        onClick={() => openMediaPreview({
+                                            url: getAssetUrl(take.url || take.thumbnail_url) || take.url || take.thumbnail_url || '',
+                                            title: take.shot_label || take.job_id.slice(0, 12),
+                                            subtitle: `${take.model || take.type} · seed ${take.seed ?? '—'}`,
+                                        })}
+                                    >
                                         {take.thumbnail_url || take.url ? (
                                             <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
                                         ) : (
                                             <div className="st-stage-empty"><Film size={14} /></div>
                                         )}
-                                    </div>
+                                    </button>
                                     <div className="st-take-body">
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
                                             <strong style={{ color: 'var(--st-text)' }}>

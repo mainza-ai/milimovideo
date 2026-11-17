@@ -162,6 +162,9 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Library/Deliver: direct uploads, assets, master-reference CRUD (trigger,
   image, description), takes, ranked local search, presets, pad/crop reframing,
   caption toggle/preview, persisted encoding controls, render history/cancel.
+- Media viewer: one global image/video/audio/text preview used by Library, Story,
+  Generate, Edit, Inspector, and Review; legacy localhost URLs are rewritten to
+  the current API origin with bearer-token support.
 - Shorts: transcript/SRT/VTT candidates, scores, editable in/out range,
   9:16/1:1/4:5 export, direct export from uploaded sources, cancel.
 - Setup: device/slots/queue/disk, queue pause/resume, pipeline readiness,
@@ -178,7 +181,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 82 backend tests, 53 Vitest tests, and 15 Playwright tests, plus
+baseline is 83 backend tests, 56 Vitest tests, and 16 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -243,10 +246,10 @@ Run from the repo root unless noted:
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 53 Vitest tests
+npm test                                       # 56 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 15 Playwright tests
+npm run test:e2e                               # 16 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```

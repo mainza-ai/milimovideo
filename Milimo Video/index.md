@@ -42,6 +42,9 @@ navigate, then drills into pages.
   chrome/density audit: measured 1024px nav collision, board-toolbar overflow,
   clipped rail labels, hidden Inspector tabs, typography/control-size evidence,
   missing UX functionality, and the completed F6 stabilization pass.
+- [systems/studio-media-audit-2026-11](systems/studio-media-audit-2026-11.md) —
+  2026-11 media-open audit: passive media, missing preview paths, legacy localhost
+  URLs, caption misclassification, and the global image/video/audio/text viewer.
 
 ## Models
 - [models/ltx-2](models/ltx-2.md) — LTX-2 19B dual-stream transformer: the three

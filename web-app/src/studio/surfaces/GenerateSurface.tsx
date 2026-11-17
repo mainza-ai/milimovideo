@@ -20,12 +20,14 @@ import {
 import type { StudioElement } from '../data/useStudioData';
 import { PipelineLens } from '../components/PipelineLens';
 import { useStudioEditor } from '../state/editorStore';
+import { useMediaPreview } from '../state/mediaPreviewStore';
 
 export function GenerateSurface() {
     const project = useStudioDocumentStore((state) => state.project);
     const { selectedShotId, updateShot } = useStudioSelection();
     const { elements } = useStudioElements(project.id);
     const generate = useStudioGenerate();
+    const openMediaPreview = useMediaPreview((state) => state.open);
     const cancel = useStudioCancel();
     const generateRailCollapsed = useStudioEditor((state) => state.generateRailCollapsed);
     const setGenerateRailCollapsed = useStudioEditor((state) => state.setGenerateRailCollapsed);
@@ -319,7 +321,21 @@ export function GenerateSurface() {
                     <article className="st-take">
                         <div className="st-take-media">
                             {mediaUrl ? (
-                                isImage ? <img src={mediaUrl} alt="" /> : <video src={mediaUrl} muted playsInline controls />
+                                isImage ? (
+                                    <button
+                                        type="button"
+                                        className="st-media-open"
+                                        aria-label="Preview selected take"
+                                        onClick={() => openMediaPreview({
+                                            url: mediaUrl,
+                                            title: shot.action || shot.prompt || 'Selected take',
+                                            subtitle: `${shot.numFrames}f · seed ${shot.seed}`,
+                                            kind: 'image',
+                                        })}
+                                    >
+                                        <img src={mediaUrl} alt="" />
+                                    </button>
+                                ) : <video src={mediaUrl} muted playsInline controls />
                             ) : (
                                 <div className="st-stage-empty"><ImageIcon size={18} /><span>No take yet</span></div>
                             )}
@@ -334,13 +350,23 @@ export function GenerateSurface() {
                     </article>
                     {takes.filter((take) => !take.selected).map((take) => (
                         <article className="st-take" key={take.job_id}>
-                            <div className="st-take-media">
+                            <button
+                                type="button"
+                                className="st-take-media st-media-open"
+                                aria-label={`Preview take ${take.job_id.slice(0, 12)}`}
+                                disabled={!take.thumbnail_url && !take.url}
+                                onClick={() => openMediaPreview({
+                                    url: getAssetUrl(take.url || take.thumbnail_url) || take.url || take.thumbnail_url || '',
+                                    title: shot.action || shot.prompt || take.job_id.slice(0, 12),
+                                    subtitle: `${take.model || take.type} · seed ${take.seed ?? '—'}`,
+                                })}
+                            >
                                 {take.thumbnail_url || take.url ? (
                                     <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
                                 ) : (
                                     <div className="st-stage-empty"><Film size={16} /></div>
                                 )}
-                            </div>
+                            </button>
                             <div className="st-take-body">
                                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                                     <strong style={{ color: 'var(--st-text)' }}>{take.model || take.type}</strong>
@@ -393,11 +419,24 @@ export function GenerateSurface() {
                             </button>
                         </div>
                         {preview.url ? (
-                            <img
-                                src={preview.url}
-                                alt="Preview frame"
-                                style={{ width: '100%', maxHeight: 260, objectFit: 'contain', marginTop: 8, background: '#000', borderRadius: 6 }}
-                            />
+                            <button
+                                type="button"
+                                className="st-media-open"
+                                style={{ marginTop: 8 }}
+                                aria-label="Open preview frame full size"
+                                onClick={() => openMediaPreview({
+                                    url: preview.url || '',
+                                    title: shot.action || shot.prompt || 'Preview frame',
+                                    subtitle: 'Generated still',
+                                    kind: 'image',
+                                })}
+                            >
+                                <img
+                                    src={preview.url}
+                                    alt="Preview frame"
+                                    style={{ width: '100%', maxHeight: 260, objectFit: 'contain', background: '#000', borderRadius: 6 }}
+                                />
+                            </button>
                         ) : (
                             <div className="st-empty" style={{ minHeight: 90 }}>
                                 <Loader2 size={16} className="animate-spin" />

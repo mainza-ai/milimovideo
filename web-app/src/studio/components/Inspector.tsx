@@ -7,6 +7,7 @@ import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { MotionPanel } from './MotionPanel';
 import { useStudioEditor } from '../state/editorStore';
+import { useMediaPreview } from '../state/mediaPreviewStore';
 import {
     useStudioCancel,
     useStudioElements,
@@ -29,6 +30,7 @@ export function Inspector() {
     const cancel = useStudioCancel();
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioTakes(shot?.id);
     const selectTake = useStudioSelectTake();
+    const openMediaPreview = useMediaPreview((state) => state.open);
     const favoriteTake = useStudioFavoriteTake();
     const {
         inspectorTab, setInspectorTab, setInspectorOpen, inspectorOpen,
@@ -294,13 +296,23 @@ export function Inspector() {
                                 <div className="st-take-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))' }}>
                                     {takes.map((take) => (
                                         <article className="st-take" key={take.job_id} style={{ borderColor: take.selected ? 'var(--st-accent)' : undefined }}>
-                                            <div className="st-take-media">
+                                            <button
+                                                type="button"
+                                                className="st-take-media st-media-open"
+                                                aria-label={`Preview take ${take.job_id.slice(0, 12)}`}
+                                                disabled={!take.thumbnail_url && !take.url}
+                                                onClick={() => openMediaPreview({
+                                                    url: getAssetUrl(take.url || take.thumbnail_url) || take.url || take.thumbnail_url || '',
+                                                    title: shot.action || shot.prompt || take.job_id.slice(0, 12),
+                                                    subtitle: `${take.model || take.type} · seed ${take.seed ?? '—'}`,
+                                                })}
+                                            >
                                                 {take.thumbnail_url || take.url ? (
                                                     <img src={getAssetUrl(take.thumbnail_url || take.url)} alt="" loading="lazy" />
                                                 ) : (
                                                     <div className="st-stage-empty"><RotateCcw size={14} /></div>
                                                 )}
-                                            </div>
+                                            </button>
                                             <div className="st-take-body">
                                                 <div className="st-mono" style={{ color: 'var(--st-secondary)' }}>{take.job_id.slice(0, 10)}</div>
                                                 <div>{take.model || take.type} · seed {take.seed ?? '—'}</div>

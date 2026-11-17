@@ -239,6 +239,8 @@ and selected as a new take. This uses the same GPU queue.
 - **Track** opens object tracking/masks over the live stage.
 - **Depth** estimates a local depth map for the current frame and overlays it
   with an opacity control. Download Depth Anything V2 Small in Setup first.
+- **Preview** in the transport opens the current clip full size; double-clicking
+  the stage does the same.
 
 ### Timeline
 
@@ -322,12 +324,13 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 
 ## 9. Library and search
 
-- **Assets** — upload directly with **Upload media**; images, video, audio, and caption files are supported.
+- **Assets** — upload directly with **Upload media**; images, video, audio, and caption files are supported. Click any media card to open the global preview (video/audio controls, image full size, caption/text view, download).
 - **Master references** — Characters, Locations, Objects, and Styles with trigger
-  words. **New reference** creates one with a name, type, trigger word, image, and
+  words. Click a reference image to preview it. **New reference** creates one with a name, type, trigger word, image, and
   description; **Edit** updates it and **Delete** removes it. Trigger words are
   normalized to a single leading `@` and can be mentioned in prompts.
-- **Takes** — every completed take with shot lineage, seed/model, and select action.
+- **Takes** — every completed take with shot lineage, seed/model, select action,
+  and click-to-preview media.
 - **Search** — local ranked token/prefix search across shots, assets, references,
   and takes. No embedding service; results show the score.
 

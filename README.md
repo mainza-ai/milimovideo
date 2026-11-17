@@ -52,6 +52,8 @@ a backend supervisor.
 - Review supports frame comments, approvals, activity, compare, a needs-you tray,
   and capability share links.
 - Library covers uploads, master references, takes, and ranked local search.
+- Any image, video, audio, or caption file opens in a global preview with native
+  playback, full-size image display, download, and text/caption rendering.
 - Deliver writes the computed cut with V1/V2 compositing, embedded audio + A1 mix,
   trims, speed, fades, keyframes, captions, render range, and persisted encoding
   settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
@@ -253,13 +255,13 @@ masking/tracking toggles. New work belongs in Studio.
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                          # 53 tests
+npm test                                          # 56 tests
 npm run build
 npm run check:bundle                              # JS budget
-npm run test:e2e                                  # 15 Playwright tests
+npm run test:e2e                                  # 16 Playwright tests
 ```
 
-The last verified run was 82 backend tests, 53 Vitest tests, and 15 Playwright
+The last verified run was 83 backend tests, 56 Vitest tests, and 16 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 responsive layout/overflow, perf, and visual checks.
 

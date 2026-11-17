@@ -1118,3 +1118,14 @@ Verification: 0 clipped rail labels, 0 toolbar overflow, 0 Inspector tab overflo
 0 text nodes <10px, 0 buttons <28px at 2048/1440/1280/1024/900/768; 53 Vitest, 15
 Playwright (responsive layout spec included), axe green, tsc/ESLint clean, build +
 bundle budget pass. Visual baseline refreshed.
+
+## [2026-11-17] fix | Studio media opening and preview
+
+Deep-audited every media surface. Added a global `MediaPreview` (image/video/audio/
+text) and wired Library assets/takes/references/search, Story cards (action,
+double-click, context menu), board references, Generate takes/preview stills,
+Inspector takes, Review rows/image, and Edit stage/pane. Fixed legacy absolute
+localhost media URLs to route through the current API origin with tokens, classified
+caption/text uploads correctly, and disabled pointer events on hidden card actions.
+Added `media-preview.spec.ts` and caption-type coverage. Verified: 83 pytest, 56
+Vitest, 16 Playwright, axe/tsc/ESLint/build/bundle clean.

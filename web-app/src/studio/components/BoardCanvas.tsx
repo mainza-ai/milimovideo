@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ChevronDown, ChevronRight, Clapperboard, Copy, Grid3X3, Link2, List, Maximize2, Map,
+    ChevronDown, ChevronRight, Clapperboard, Copy, Eye, Grid3X3, Link2, List, Maximize2, Map,
     Minus, MoreHorizontal, MousePointer2, Plus, Redo2, RotateCcw, Search, Sparkles,
     SquareDashed, StickyNote, Trash2, Pin, Undo2, X,
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import { ShotCard } from './ShotCard';
 import { cullCards } from '../board/culling';
 import { startBoardCollab, type BoardCollab } from '../collab/boardSync';
 import { useStudioElements, useStudioGenerate, useStudioReview } from '../data/useStudioData';
+import { useMediaPreview } from '../state/mediaPreviewStore';
 
 const CARD_W = 300;
 const CARD_H = 238;
@@ -111,6 +112,7 @@ export function BoardCanvas() {
     const { elements } = useStudioElements(project.id);
     const { review } = useStudioReview(project.id);
     const generate = useStudioGenerate();
+    const openMediaPreview = useMediaPreview((state) => state.open);
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
     const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
@@ -179,6 +181,22 @@ export function BoardCanvas() {
     const generateShot = (shotId: string) => {
         const shot = project.shots.find((item) => item.id === shotId);
         if (shot) void generate(shot);
+    };
+
+    const previewShot = (shotId: string) => {
+        const shot = project.shots.find((item) => item.id === shotId);
+        if (!shot) return;
+        const media = shot.videoUrl || shot.thumbnailUrl;
+        if (!media) {
+            openShotInEdit(shotId);
+            return;
+        }
+        openMediaPreview({
+            url: getAssetUrl(media) || media,
+            title: shot.action || shot.prompt || 'Untitled shot',
+            subtitle: `${shot.numFrames}f · ${shot.width}×${shot.height} · seed ${shot.seed}`,
+            kind: shot.videoUrl ? 'video' : 'image',
+        });
     };
 
     useEffect(() => {
@@ -1222,6 +1240,16 @@ export function BoardCanvas() {
                                         };
                                         (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
                                     }}
+                                    onDoubleClick={() => {
+                                        if (element.image_path) {
+                                            openMediaPreview({
+                                                url: getAssetUrl(element.image_path) || element.image_path,
+                                                title: element.name,
+                                                subtitle: `${element.type} · @${element.trigger_word.replace(/^@/, '')}`,
+                                            });
+                                        }
+                                    }}
+                                    title={element.image_path ? 'Double-click to preview' : element.description}
                                 >
                                     <div className="st-reference-media">
                                         {element.image_path ? (
@@ -1290,6 +1318,7 @@ export function BoardCanvas() {
                                         onResize={startCardResize}
                                         onGenerate={generateShot}
                                         onEdit={openShotInEdit}
+                                        onPreview={previewShot}
                                         onDuplicate={duplicateShot}
                                         onContextMenu={(event, shotId) => {
                                             event.preventDefault();
@@ -1666,6 +1695,9 @@ export function BoardCanvas() {
                         onPointerDown={(event) => event.stopPropagation()}
                     >
                         <div className="st-context-menu-title">{shot.action || shot.prompt || 'Untitled shot'}</div>
+                        <button type="button" role="menuitem" className="st-project-menu-item" onClick={() => { previewShot(shot.id); setContextMenu(null); }}>
+                            <Eye size={13} /> Preview media
+                        </button>
                         <button type="button" role="menuitem" className="st-project-menu-item" onClick={() => { generateShot(shot.id); setContextMenu(null); }}>
                             <Sparkles size={13} /> Generate
                         </button>

@@ -50,7 +50,8 @@ integrity scan/repair; Tauri native open/save.
 
 F6 chrome stabilization is also complete: responsive surface switcher, grouped
 toolbars, Inspector primary tabs + More, readable type/control sizes, card actions,
-context menus, bulk selection, command palette, shortcut sheet, and density modes.
+context menus, bulk selection, command palette, shortcut sheet, density modes, and
+a global media viewer for images, video, audio, captions, and text.
 
 Known scoped gaps: no transitions/LUT/titles/A2, lexical rather than embedding
 search, no shorts/lens template packs, and no bundled Python sidecar runtime. Legacy

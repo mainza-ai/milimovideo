@@ -43,10 +43,24 @@ export const apiFetch = (path: string, init: RequestInit = {}): Promise<Response
  */
 export const getAssetUrl = (path: string | undefined | null): string | undefined => {
     if (!path) return undefined;
-    if (path.startsWith('http')) return path;
+
+    let relative = path;
+    if (/^https?:\/\//i.test(path)) {
+        try {
+            const parsed = new URL(path);
+            // Legacy rows stored absolute localhost URLs. Route those through the
+            // current API origin so LAN/Tauri clients and bearer tokens work.
+            const local = ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)
+                || parsed.origin === API_BASE_URL;
+            if (!local) return path;
+            relative = `${parsed.pathname}${parsed.search}`;
+        } catch {
+            return path;
+        }
+    }
 
     // Ensure path starts with / if not present
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    const cleanPath = relative.startsWith('/') ? relative : `/${relative}`;
     const url = `${API_BASE_URL}${cleanPath}`;
     if (!API_TOKEN) return url;
     return `${url}${url.includes('?') ? '&' : '?'}token=${encodeURIComponent(API_TOKEN)}`;
