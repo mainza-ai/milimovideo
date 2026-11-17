@@ -66,17 +66,21 @@ Milimo Video/          Layer 2 — LLM-owned wiki (systems, models, pipelines,
 assets/                Images and media used by docs.
 backend/               FastAPI backend (port 8000).
   routes/              projects, shots, jobs, models, elements, storyboard,
-                       review, share, planner.
-  tasks/               video, image, chained, ai_parse.
+                       review, share, planner, depth.
+  tasks/               video, image, chained, depth, ai_parse.
   utils/               render_utils, captions, paths.
-  alembic/             Alembic baseline and future migrations.
+  alembic/             baseline + render settings + seed lock migrations.
   verify_setup.py      Fail-fast environment/model check.
-web-app/               React 18 + Vite frontend (port 5173).
-  src/                 Legacy NLE at `/`; studio shell at `/studio`.
-  src/studio/          New studio app, stores, surfaces, lenses, shorts, collab.
-  src-tauri/           Tauri 2 desktop shell (native save, dialog plugin).
-  e2e/                 Playwright: shell, CRUD, export, review, perf, axe, visual.
+  ruff.toml            Correctness-only lint baseline (critical rules).
+web-app/               React 19.2 + Vite frontend (port 5173).
+  src/                 Legacy NLE at `/`; Studio shell at `/studio`.
+  src/studio/          Studio app, stores, surfaces, lenses, shorts, collab.
+  src-tauri/           Tauri 2 shell: native open/save, backend supervisor.
+  e2e/                 Playwright: shell, CRUD, export, references, review,
+                       perf, axe, visual.
+  scripts/             API generation and bundle-budget checks.
   openapi.json         Exported FastAPI schema; generated TS in src/api/.
+  .env.example         API/studio rollback flags.
 sam3/                  Optional SAM 3 microservice (port 8001).
 tests/                 Backend pytest suite.
 run_backend.sh         Verify + start backend.
@@ -84,12 +88,12 @@ run_frontend.sh        Start Vite.
 run_sam.sh             Start SAM 3.
 ```
 
-`docs/`, `dev_diary/`, and `README.md` are sources: read them, never edit them
-unless the human explicitly asks. The LLM owns `Milimo Video/`.
+`docs/`, `dev_diary/`, and `README.md` are sources: edit them only on explicit
+request. The LLM owns `Milimo Video/` and keeps it current.
 
 ---
 
-## Current Architecture (2026-11)
+## Current Architecture (2026-11-17)
 
 ### Two frontends, one project model
 
@@ -108,8 +112,8 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 
 ### State layout
 
-- `editorStore` — persisted UI/board/editor state (not project geometry/camera;
-  those are server-owned).
+- `editorStore` — persisted UI/board/editor state; board camera and semantic
+  layout are saved separately from the document through the board/view routes.
 - `documentStore` — studio-owned project/shots/save/undo store (reuses slices).
 - `jobStore` — active/queued jobs and error budget.
 - `agentStore` — plan history; recipes live in the editor store.
@@ -119,9 +123,11 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 ### Backend contracts
 
 - Pydantic boundaries: typed `ProjectState`, `ShotState`, `SceneState`,
-  `TimelineItem`, `BoardLayoutPayload`, review/share/plan payloads.
-- Alembic baseline (`0001_baseline`) with startup upgrade; legacy DBs are repaired
-  and stamped. Do not add schema columns without a migration.
+  `TimelineItem`, `RenderSettings`, `BoardLayoutPayload`, review/share/plan/depth
+  payloads.
+- Alembic baseline (`0001_baseline`) plus `0002_render_settings` and
+  `0003_seed_lock`, with startup upgrade; legacy DBs are repaired and stamped. Do
+  not add schema columns without a migration and migration test.
 - Generated OpenAPI client types: `npm run gen:api`; CI checks drift.
 - Durable GPU queue: `QueuedJob` ledger + one global semaphore + one OOM retry
   + pause/resume dispatch.
@@ -135,8 +141,8 @@ The export is the computed cut: magnetic V1 from `sequence_index`, free V2/A1,
 track mute/hidden, embedded audio + A1 mix (`amix duration=longest`), gain/mute,
 fades, solo, speed (`setpts`/`atempo`), trim, opacity/scale/pan/volume keyframes,
 caption ASS burn-in, render range, persisted CRF/encoder-speed/audio-bitrate,
-optional loudness normalization, and presets. Verify with real FFmpeg renders,
-not just filtergraph strings.
+optional loudness normalization, and presets. Exports can be cancelled from
+Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 
 ### Studio capabilities
 
@@ -149,28 +155,42 @@ not just filtergraph strings.
   lens, lazy 3D previz.
 - Generate: ingredients/@mentions, advanced params, persistent seed lock,
   preview frame with start/end conditioning, batch queue and matrix, queue
-  position/estimate/cancel, immutable takes/favorites, inpaint, editable pipeline
-  lens with apply-to-shot.
+  position/estimate/cancel/pause, immutable takes/favorites, inpaint, editable
+  pipeline lens with recipe import/export and apply-to-shot.
 - Review/agent: frame comments/approvals, activity, needs-you pill, share links,
   deterministic plan previews, undoable apply, recipes, `@Agent` handoff.
 - Library/Deliver: direct uploads, assets, master-reference CRUD (trigger,
   image, description), takes, ranked local search, presets, pad/crop reframing,
-  caption toggle/preview, render history.
+  caption toggle/preview, persisted encoding controls, render history/cancel.
 - Shorts: transcript/SRT/VTT candidates, scores, editable in/out range,
-  9:16/1:1/4:5 export, direct export from uploaded sources.
+  9:16/1:1/4:5 export, direct export from uploaded sources, cancel.
 - Setup: device/slots/queue/disk, queue pause/resume, pipeline readiness,
-  base/LoRA activation, LoRA strength, resumable/cancellable downloads, depth model, integrity
-  scan/repair, error budget.
+  base/LoRA activation, LoRA strength, resumable/cancellable downloads, depth
+  model, integrity scan/repair, error budget.
 - Desktop: Tauri 2 shell with native open/save dialogs and a backend supervisor
-  that locates/starts `run_backend.sh`; bundled Python sidecar remains a follow-up.
+  that prefers a `milimo-backend` sidecar and otherwise starts `run_backend.sh`.
+  Bundled Python/Torch runtime remains a follow-up.
 - Collaboration: opt-in Yjs board sync spike over BroadcastChannel (same machine).
 
-### Known gaps (do not claim these are done)
+### Plan status and known gaps
 
-- No bundled Python sidecar binary (the native shell can launch one, but none is
-  built).
+Scoped P0–P5 / F0–F5 are complete. The current green baseline is 82 backend
+tests, 52 Vitest tests, and 12 Playwright tests, plus ruff/tsc/ESLint, Vite build,
+bundle budget, `cargo check`, and `verify_setup`.
+
+Do not claim these are done:
+
+- No bundled Python/Torch sidecar binary (the native shell can launch one, but none
+  is built).
 - Legacy `/` cutover is gated on the documented two-clean-release window.
+- Scoped-v1 gaps: no transitions/LUT/titles/A2 track, lexical rather than
+  embedding search, and no shorts/lens template packs.
+- Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
+
+The authoritative status is
+`Milimo Video/roadmap/implementation-plan-2026-11.md` under **Still open /
+deferred**.
 
 ---
 
@@ -214,15 +234,18 @@ Run from the repo root unless noted:
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # backend contracts/renders/queue
+./milimov/bin/python -m pytest                 # 82 backend tests
+./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # env/model/ffmpeg/disk
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # Vitest
+npm test                                       # 52 Vitest tests
 npm run build
-npm run check:bundle
-npm run test:e2e                               # Playwright (starts backend+Vite)
+npm run check:bundle                           # JS budget
+npm run test:e2e                               # 12 Playwright tests
+npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
+cd src-tauri && cargo check                    # desktop changes only
 ```
 
 Heavy changes also need a live check:
@@ -239,6 +262,7 @@ Rules of evidence:
 - A contract change needs a round-trip test and regenerated OpenAPI types.
 - A UI change needs Vitest or Playwright; keyboard/axe changes need the axe gate.
 - A perf claim needs the Playwright perf spec or an explicit measurement.
+- A desktop change needs `cargo check`; a schema change needs a migration test.
 - Do not mark work complete from intent, a green typecheck alone, or a mocked call.
 
 ---

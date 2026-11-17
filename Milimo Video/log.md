@@ -1076,3 +1076,12 @@ frontend-state, sse-eventing, studio-shell, engineering-audit remediation/produc
 gaps, getting-started, script-to-video, masking-tracking, and chained-generation.
 Corrected stale claims about React 18, seven routers, 505-frame chaining, the
 save endpoint, and a float32 transformer. No product code changed.
+
+## [2026-11-17] cleanup | workspace and AGENTS refresh
+
+Removed generated caches, test artifacts, and stale logs; left model weights,
+databases, backups, projects, and user data intact. Updated AGENTS.md for React
+19.2, the current routers/tasks/migrations, Studio state and rollback flags,
+deliver/shorts/desktop capabilities, the explicit remaining/deferred gaps, and the
+current verification matrix including ruff, bundle budget, OpenAPI drift, and
+`cargo check`.
