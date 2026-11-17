@@ -153,6 +153,29 @@ export function useStudioProject(): Project {
     return useTimelineStore((state) => state.project);
 }
 
+/**
+ * If the persisted project no longer exists on this machine, open the most
+ * recent server project instead of silently editing a phantom local document.
+ * Never creates projects implicitly.
+ */
+export function useStudioProjectBootstrap() {
+    const projectId = useTimelineStore((state) => state.project.id);
+    const loadProject = useTimelineStore((state) => state.loadProject);
+
+    useEffect(() => {
+        let alive = true;
+        fetch(apiUrl('/projects'))
+            .then((response) => response.ok ? response.json() : [])
+            .then((projects) => {
+                if (!alive || !Array.isArray(projects) || projects.length === 0) return;
+                if (projects.some((item) => item.id === projectId)) return;
+                void loadProject(projects[0].id);
+            })
+            .catch(() => undefined);
+        return () => { alive = false; };
+    }, [loadProject, projectId]);
+}
+
 export function useStudioData() {
     const project = useStudioProject();
     const { health, error } = useStudioHealth();

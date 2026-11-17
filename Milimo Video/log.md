@@ -397,3 +397,11 @@ Review now shows latest activity across comments, decisions, and generated takes
 with author/frame/model context, derived from the existing review and take
 contracts. This closes the named F4 activity-feed gap. Verified: 23 vitest,
 tsc clean, eslint 0 errors.
+
+## [2026-11-16] shell | project switcher and boot hydration
+
+The studio can now switch or create projects from the top bar instead of being
+stuck on whatever the persisted store held. On boot, if the persisted project no
+longer exists on this machine, the most recent server project is loaded (never
+created implicitly). The Playwright smoke opens the project menu and sees the
+server list. Verified: 23 vitest, 1 Playwright, tsc clean, eslint 0 errors.

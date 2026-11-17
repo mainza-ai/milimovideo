@@ -13,7 +13,7 @@ import { LibrarySurface } from './surfaces/LibrarySurface';
 import { DeliverSurface } from './surfaces/DeliverSurface';
 import { SetupSurface } from './surfaces/SetupSurface';
 import { useStudioEditor, type StudioSurface } from './state/editorStore';
-import { useStudioProject, useStudioBoardSync } from './data/useStudioData';
+import { useStudioProject, useStudioBoardSync, useStudioProjectBootstrap } from './data/useStudioData';
 import { useTimelineStore } from '../stores/timelineStore';
 import { SharedReviewPage } from './SharedReviewPage';
 
@@ -32,6 +32,7 @@ export function StudioApp() {
 function StudioShell() {
     const { activeSurface, setSurface, inspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode } = useStudioEditor();
     const project = useStudioProject();
+    useStudioProjectBootstrap();
     useStudioBoardSync(project.id);
     const isPlaying = useTimelineStore((state) => state.isPlaying);
     const setIsPlaying = useTimelineStore((state) => state.setIsPlaying);

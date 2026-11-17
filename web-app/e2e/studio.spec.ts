@@ -14,6 +14,9 @@ test.beforeEach(async ({ page }) => {
         disk_free_bytes: 1,
         auth_required: false,
     })));
+    await page.route('**/projects', (route) => route.fulfill(json([
+        { id: 'project-test', name: 'Audit Test', shots: [], scenes: [] },
+    ])));
     await page.route('**/projects/*/board', (route) => route.fulfill(json({
         layout: { nodes: [], areas: [], links: [] },
         revision: 0,
@@ -39,6 +42,9 @@ test('studio shell, board, review and setup render', async ({ page }) => {
     await expect(page.getByText('Milimo', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Area' })).toBeVisible();
     await expect(page.getByText(/Master references/)).toBeVisible();
+
+    await page.getByRole('button', { name: 'Switch project' }).click();
+    await expect(page.getByText('Audit Test')).toBeVisible();
 
     await page.getByRole('button', { name: 'Review', exact: true }).first().click();
     await expect(page.getByText(/Comment at frame/)).toBeVisible();

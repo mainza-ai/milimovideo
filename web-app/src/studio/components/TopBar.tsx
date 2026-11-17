@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import {
-    CheckCircle2, CloudOff, HardDrive, MessageSquare, MonitorPlay, Redo2, Save, Share2, TriangleAlert, Undo2,
+    CheckCircle2, ChevronDown, CloudOff, FolderOpen, HardDrive, MessageSquare, MonitorPlay,
+    Plus, Redo2, Save, Share2, TriangleAlert, Undo2,
 } from 'lucide-react';
 import { useStore } from 'zustand';
 import { apiUrl } from '../../config';
@@ -23,6 +25,10 @@ export function TopBar() {
     const { activeSurface, setSurface, inspectorOpen, setInspectorOpen } = useStudioEditor();
     const { saveStatus, saveError, saveProject } = useTimelineStore();
     const addToast = useTimelineStore((state) => state.addToast);
+    const loadProject = useTimelineStore((state) => state.loadProject);
+    const createNewProject = useTimelineStore((state) => state.createNewProject);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
     // zundo's temporal store is attached to the document store.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const temporalStore = (useTimelineStore as any).temporal;
@@ -54,6 +60,27 @@ export function TopBar() {
         }
     };
 
+    const toggleProjects = async () => {
+        const next = !menuOpen;
+        setMenuOpen(next);
+        if (!next) return;
+        try {
+            const response = await fetch(apiUrl('/projects'));
+            const data = response.ok ? await response.json() : [];
+            setProjects(Array.isArray(data) ? data : []);
+        } catch {
+            setProjects([]);
+        }
+    };
+
+    const newProject = async () => {
+        const name = window.prompt('New project name', 'Untitled Project');
+        if (!name?.trim()) return;
+        await createNewProject(name.trim());
+        setMenuOpen(false);
+        addToast(`Created ${name.trim()}`, 'success');
+    };
+
     return (
         <header className="st-topbar">
             <div className="st-brand">
@@ -63,12 +90,55 @@ export function TopBar() {
                     {health ? <MonitorPlay size={11} /> : <CloudOff size={11} />}
                     {health ? health.device.toUpperCase() : 'OFFLINE'}
                 </span>
-                <input
-                    className="st-project-name"
-                    value={project.name}
-                    aria-label="Project name"
-                    onChange={(event) => useTimelineStore.getState().setProject({ ...project, name: event.target.value })}
-                />
+                <div className="st-project-switcher">
+                    <input
+                        className="st-project-name"
+                        value={project.name}
+                        aria-label="Project name"
+                        onChange={(event) => useTimelineStore.getState().setProject({ ...project, name: event.target.value })}
+                    />
+                    <button
+                        type="button"
+                        className="st-icon-button"
+                        onClick={() => void toggleProjects()}
+                        aria-label="Switch project"
+                        aria-expanded={menuOpen}
+                        title="Projects"
+                    >
+                        <ChevronDown size={14} />
+                    </button>
+                    {menuOpen && (
+                        <div className="st-project-menu" role="menu">
+                            <div className="st-project-menu-head">
+                                <span>Projects</span>
+                                <button type="button" className="st-button" data-size="sm" onClick={() => void newProject()}>
+                                    <Plus size={11} /> New
+                                </button>
+                            </div>
+                            <div className="st-project-menu-list">
+                                {projects.length === 0 && (
+                                    <div className="st-project-menu-empty">No projects on this machine yet.</div>
+                                )}
+                                {projects.map((item) => (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        className="st-project-menu-item"
+                                        data-active={item.id === project.id}
+                                        onClick={async () => {
+                                            await loadProject(item.id);
+                                            setMenuOpen(false);
+                                        }}
+                                    >
+                                        <FolderOpen size={12} />
+                                        <span>{item.name}</span>
+                                        <span className="st-mono">{item.id.slice(0, 8)}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <nav className="st-surface-tabs" aria-label="Studio surfaces">
