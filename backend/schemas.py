@@ -271,6 +271,10 @@ class SelectTakeRequest(BaseModel):
     job_id: str
 
 
+class FavoriteTakeRequest(BaseModel):
+    job_id: Optional[str] = None
+
+
 class ShareCommentRequest(BaseModel):
     shot_id: Optional[str] = None
     frame: int = 0

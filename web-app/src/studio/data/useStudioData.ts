@@ -115,6 +115,7 @@ export interface StudioTake {
     num_frames?: number | null;
     created_at?: string | null;
     selected: boolean;
+    favorite?: boolean;
 }
 
 export interface ReviewComment {
@@ -324,6 +325,33 @@ const EMPTY_REVIEW: ReviewPayload = {
     summary: { comments: 0, open: 0, approved: 0, changes_requested: 0 },
 };
 
+export interface ActiveJob {
+    job_id: string;
+    type: string;
+    status: string;
+    progress: number;
+    status_message: string;
+}
+
+export function useStudioActiveJobs(projectId: string) {
+    const [jobs, setJobs] = useState<ActiveJob[]>([]);
+    const refresh = useCallback(async () => {
+        try {
+            const response = await fetch(apiUrl(`/projects/${projectId}/active_jobs`));
+            const data = response.ok ? await response.json() : [];
+            setJobs(Array.isArray(data) ? data : []);
+        } catch {
+            setJobs([]);
+        }
+    }, [projectId]);
+    useEffect(() => {
+        void refresh();
+        const interval = window.setInterval(refresh, 2500);
+        return () => window.clearInterval(interval);
+    }, [refresh]);
+    return { jobs, refresh };
+}
+
 export function useStudioReview(projectId: string) {
     const addToast = useTimelineStore((state) => state.addToast);
     const [review, setReview] = useState<ReviewPayload>(EMPTY_REVIEW);
@@ -440,6 +468,25 @@ export function useStudioProjectTakes(projectId: string) {
     }, [projectId]);
     useEffect(() => { void refresh(); }, [refresh]);
     return { takes, loading, refresh };
+}
+
+export function useStudioFavoriteTake() {
+    const { addToast, updateShot } = useStudioSelection();
+    return useCallback(async (shot: Shot, take: StudioTake | null) => {
+        const response = await fetch(apiUrl(`/shots/${shot.id}/favorite-take`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ job_id: take?.job_id ?? null }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Could not update favorite take', 'error');
+            return false;
+        }
+        updateShot(shot.id, { favoriteTakeId: take?.job_id });
+        addToast(take ? 'Take marked as favorite' : 'Favorite cleared', 'success');
+        return true;
+    }, [addToast, updateShot]);
 }
 
 export function useStudioRenders(projectId: string) {

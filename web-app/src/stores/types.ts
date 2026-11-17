@@ -47,6 +47,7 @@ export interface Shot {
     // Result
     lastJobId?: string;
     selectedTakeId?: string;
+    favoriteTakeId?: string;
     audioGain?: number;
     audioMuted?: boolean;
     keyframes?: OpacityKeyframe[];

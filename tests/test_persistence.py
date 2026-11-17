@@ -122,6 +122,14 @@ def test_take_history_and_selection(app_client, project):
     selected = app_client.get("/shots/take-shot/takes").json()["takes"]
     assert any(take["job_id"] == "job_take_a" and take["selected"] for take in selected)
 
+    favorite = app_client.post("/shots/take-shot/favorite-take", json={"job_id": "job_take_b"})
+    assert favorite.status_code == 200, favorite.text
+    takes = app_client.get("/shots/take-shot/takes").json()["takes"]
+    assert any(take["job_id"] == "job_take_b" and take["favorite"] for take in takes)
+    cleared = app_client.post("/shots/take-shot/favorite-take", json={"job_id": None})
+    assert cleared.status_code == 200
+    assert not any(take["favorite"] for take in app_client.get("/shots/take-shot/takes").json()["takes"])
+
 
 def test_project_takes_lists_completed_outputs(app_client, project):
     from datetime import datetime

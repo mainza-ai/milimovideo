@@ -1670,6 +1670,12 @@
 .st-shot-rail { border-right: 1px solid var(--st-border); }
 .st-shot-params { border-left: 1px solid var(--st-border); padding: 12px; }
 
+.st-shot-params .st-chip[data-active="true"] {
+    color: var(--st-bg);
+    background: var(--st-accent);
+    border-color: transparent;
+}
+
 .st-shot-stage {
     min-width: 0;
     min-height: 0;
@@ -1678,6 +1684,22 @@
     background:
         radial-gradient(circle at 50% 0%, rgba(6, 178, 235, 0.05), transparent 50%),
         var(--st-bg);
+}
+
+.st-advanced {
+    margin-top: 10px;
+}
+
+.st-advanced summary {
+    cursor: pointer;
+    color: var(--st-muted);
+    font-size: 10px;
+    font-weight: 600;
+    user-select: none;
+}
+
+.st-advanced summary:hover {
+    color: var(--st-text);
 }
 
 .st-take-grid {

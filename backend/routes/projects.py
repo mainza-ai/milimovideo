@@ -116,6 +116,7 @@ def _shot_dict(shot: Shot) -> dict:
         "enhanced_prompt_result": shot.enhanced_prompt_result,
         "last_job_id": shot.last_job_id,
         "selected_take_id": shot.selected_take_id,
+        "favorite_take_id": shot.favorite_take_id,
         "audio_gain": shot.audio_gain,
         "audio_muted": shot.audio_muted,
         "speed": shot.speed,
@@ -503,6 +504,7 @@ def list_project_takes(
             "num_frames": params.get("num_frames") if isinstance(params, dict) else None,
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "selected": bool(shot and (shot.selected_take_id or shot.last_job_id) == job.id),
+            "favorite": bool(shot and shot.favorite_take_id == job.id),
         })
     return {"takes": takes, "count": len(takes)}
 

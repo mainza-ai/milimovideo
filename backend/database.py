@@ -89,6 +89,7 @@ class Shot(SQLModel, table=True):
     status: str = "pending" # pending, generating, completed, failed
     last_job_id: Optional[str] = None
     selected_take_id: Optional[str] = None  # Job id of the selected immutable take
+    favorite_take_id: Optional[str] = None  # Job id of the preferred take
     audio_gain: float = 1.0
     audio_muted: bool = False
     keyframes: Optional[str] = None  # JSON [{frame, opacity}]
@@ -225,6 +226,7 @@ def _add_missing_columns() -> None:
         "shot": {
             "sequence_index": "INTEGER",
             "selected_take_id": "TEXT",
+            "favorite_take_id": "TEXT",
             "audio_gain": "FLOAT NOT NULL DEFAULT 1.0",
             "audio_muted": "BOOLEAN NOT NULL DEFAULT 0",
             "keyframes": "TEXT",

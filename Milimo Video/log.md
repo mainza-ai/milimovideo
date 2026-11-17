@@ -549,3 +549,13 @@ through a store subscription; only a tiny playhead and timecode subscribe per
 frame. Inspector motion-frame readouts moved into a MotionPanel child. This
 removes the previous whole-surface re-render storm at playback. Verified:
 32 vitest, tsc clean, eslint 0 errors, build passes.
+
+## [2026-11-17] f3 | ingredient composer, preview, batch queue, favorites
+
+Generate surface now toggles real master references into a shot, inserts @trigger
+mentions, exposes advanced params (negative/seed/frames/resolution/CFG/pipeline/
+enhance/upscale), queues all pending shots through the batch endpoint, and shows
+live active jobs with cancel. Preview-first generates a still, polls the job, and
+attaches it as frame-0 conditioning before video spend. Takes can be favorited
+(`favorite_take_id`) and compare prefers the favorite. Verified: 51 pytest,
+32 vitest, tsc clean, eslint 0 errors.

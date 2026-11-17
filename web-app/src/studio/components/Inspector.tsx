@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Loader2, Play, RotateCcw, Sparkles, Volume2, VolumeX, X } from 'lucide-react';
+import { Loader2, Play, RotateCcw, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getAssetUrl } from '../../config';
 import { MotionPanel } from './MotionPanel';
@@ -7,6 +7,7 @@ import { useStudioEditor } from '../state/editorStore';
 import {
     useStudioCancel,
     useStudioElements,
+    useStudioFavoriteTake,
     useStudioGenerate,
     useStudioSelectTake,
     useStudioSelection,
@@ -24,6 +25,7 @@ export function Inspector() {
     const cancel = useStudioCancel();
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioTakes(shot?.id);
     const selectTake = useStudioSelectTake();
+    const favoriteTake = useStudioFavoriteTake();
     const {
         inspectorTab, setInspectorTab, setInspectorOpen, inspectorOpen,
         inspectorWidth, setInspectorWidth,
@@ -242,6 +244,19 @@ export function Inspector() {
                                                     }}
                                                 >
                                                     {take.selected ? 'Selected' : 'Select'}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="st-button"
+                                                    data-size="sm"
+                                                    data-variant={take.favorite ? 'primary' : 'ghost'}
+                                                    style={{ marginTop: 6 }}
+                                                    aria-label={take.favorite ? 'Clear favorite take' : 'Favorite take'}
+                                                    onClick={async () => {
+                                                        if (await favoriteTake(shot, take.favorite ? null : take)) await refreshTakes();
+                                                    }}
+                                                >
+                                                    <Star size={11} /> {take.favorite ? 'Favorite' : 'Favorite'}
                                                 </button>
                                             </div>
                                         </article>

@@ -6,7 +6,7 @@ import logging
 import json
 from datetime import datetime
 from sqlmodel import select
-from schemas import TimelineItem, SelectTakeRequest
+from schemas import TimelineItem, SelectTakeRequest, FavoriteTakeRequest
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +93,7 @@ def list_takes(shot_id: str, session: Session = Depends(get_session)):
             "num_frames": params.get("num_frames"),
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "selected": job.id == selected_id,
+            "favorite": job.id == shot.favorite_take_id,
         })
     return {"shot_id": shot_id, "takes": takes}
 
@@ -126,3 +127,31 @@ def select_take(
     session.commit()
     session.refresh(shot)
     return {"status": "selected", "shot_id": shot.id, "job_id": job.id, "url": shot.video_url}
+
+
+@router.post("/shots/{shot_id}/favorite-take")
+def favorite_take(
+    shot_id: str,
+    req: FavoriteTakeRequest,
+    session: Session = Depends(get_session),
+):
+    shot = session.get(Shot, shot_id)
+    if not shot:
+        raise HTTPException(status_code=404, detail="Shot not found")
+
+    if req.job_id:
+        job = session.get(Job, req.job_id)
+        if not job or job.shot_id != shot_id or job.status != "completed" or not job.output_path:
+            raise HTTPException(status_code=400, detail="Take is not a completed output for this shot")
+        shot.favorite_take_id = job.id
+    else:
+        shot.favorite_take_id = None
+
+    project = session.get(Project, shot.project_id)
+    if project:
+        project.updated_at = datetime.utcnow()
+        project.revision = (project.revision or 0) + 1
+        session.add(project)
+    session.add(shot)
+    session.commit()
+    return {"status": "saved", "shot_id": shot.id, "favorite_take_id": shot.favorite_take_id}

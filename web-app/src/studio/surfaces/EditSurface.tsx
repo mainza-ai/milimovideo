@@ -46,7 +46,9 @@ export function EditSurface() {
     const mediaUrl = useAssetUrl(active?.shot.videoUrl);
     const isImage = !!mediaUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
     const { takes } = useStudioTakes(active?.shot.id);
-    const compareTake = takes.find((take) => !take.selected && take.url) || null;
+    const compareTake = takes.find((take) => take.favorite && !take.selected && take.url)
+        || takes.find((take) => !take.selected && take.url)
+        || null;
     const compareUrl = useAssetUrl(compareTake?.url);
     const compareIsImage = !!compareUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
     const fps = project.fps || 25;

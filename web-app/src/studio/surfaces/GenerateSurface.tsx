@@ -1,16 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Film, Image as ImageIcon, Loader2, Play, RotateCcw, Sparkles, Square } from 'lucide-react';
+import {
+    Film, Image as ImageIcon, ListChecks, Loader2, Play, RotateCcw, Sparkles, Square, Star, X,
+} from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
-import { getAssetUrl } from '../../config';
+import { apiUrl, getAssetUrl } from '../../config';
 import {
     useAssetUrl,
+    useStudioActiveJobs,
     useStudioCancel,
     useStudioElements,
+    useStudioFavoriteTake,
     useStudioGenerate,
     useStudioSelectTake,
     useStudioSelection,
     useStudioTakes,
 } from '../data/useStudioData';
+import type { StudioElement } from '../data/useStudioData';
 
 export function GenerateSurface() {
     const project = useTimelineStore((state) => state.project);
@@ -19,6 +24,9 @@ export function GenerateSurface() {
     const generate = useStudioGenerate();
     const cancel = useStudioCancel();
     const [promptDraft, setPromptDraft] = useState<string | null>(null);
+    const [batchBusy, setBatchBusy] = useState(false);
+    const [preview, setPreview] = useState<{ url: string | null; status: string } | null>(null);
+    const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(project.id);
 
     const videoShots = project.shots.filter((item) => item.trackIndex !== 2);
     const selectedVideoShot = videoShots.find((item) => item.id === selectedShotId);
@@ -26,6 +34,7 @@ export function GenerateSurface() {
     useEffect(() => { setPromptDraft(null); }, [shot?.id]);
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioTakes(shot?.id);
     const selectTake = useStudioSelectTake();
+    const favoriteTake = useStudioFavoriteTake();
     const mediaUrl = useAssetUrl(shot?.videoUrl || shot?.thumbnailUrl);
     const isImage = !!mediaUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
 
@@ -43,6 +52,115 @@ export function GenerateSurface() {
     const matched = (shot.matchedElements || [])
         .map((match) => elements.find((element) => element.id === match.element_id) || null)
         .filter(Boolean);
+
+    const toggleIngredient = (element: StudioElement) => {
+        const current = shot.matchedElements || [];
+        const exists = current.some((match) => match.element_id === element.id);
+        const next = exists
+            ? current.filter((match) => match.element_id !== element.id)
+            : [...current, {
+                element_id: element.id,
+                element_name: element.name,
+                element_type: element.type as 'character' | 'location' | 'object',
+                trigger_word: element.trigger_word,
+                confidence: 1,
+                match_source: 'manual',
+            }];
+        updateShot(shot.id, { matchedElements: next });
+    };
+
+    const insertMention = (element: StudioElement) => {
+        const trigger = `@${element.trigger_word.replace(/^@/, '')}`;
+        const current = promptDraft ?? shot.prompt ?? '';
+        if (current.includes(trigger)) return;
+        const next = `${current.trim()} ${trigger}`.trim();
+        setPromptDraft(next);
+        updateShot(shot.id, { prompt: next });
+    };
+
+    const previewFrame = async () => {
+        setPreview({ url: null, status: 'queued' });
+        try {
+            const response = await fetch(apiUrl('/generate/image'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    project_id: project.id,
+                    prompt: promptDraft ?? shot.prompt,
+                    negative_prompt: shot.negativePrompt,
+                    width: shot.width,
+                    height: shot.height,
+                    seed: shot.seed,
+                    reference_images: matched
+                        .map((element) => element?.image_path)
+                        .filter((path): path is string => !!path),
+                }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+            const jobId = data.job_id as string;
+            for (let attempt = 0; attempt < 90; attempt += 1) {
+                await new Promise((resolve) => setTimeout(resolve, 2000));
+                const status = await fetch(apiUrl(`/status/${jobId}`)).then((res) => res.json()).catch(() => ({}));
+                if (status.status === 'completed' && status.video_url) {
+                    const path = status.video_url as string;
+                    updateShot(shot.id, {
+                        timeline: [{
+                            id: `preview_${jobId}`,
+                            type: 'image',
+                            path,
+                            frameIndex: 0,
+                            strength: 1,
+                        }, ...shot.timeline],
+                    });
+                    setPreview({ url: getAssetUrl(path) || null, status: 'completed' });
+                    useTimelineStore.getState().addToast('Preview frame attached at frame 0', 'success');
+                    return;
+                }
+                if (status.status === 'failed' || status.status === 'cancelled') {
+                    throw new Error(status.error || 'Preview generation failed');
+                }
+                setPreview({ url: null, status: status.status_message || 'generating' });
+            }
+            throw new Error('Preview timed out');
+        } catch (exc) {
+            setPreview(null);
+            useTimelineStore.getState().addToast(
+                exc instanceof Error ? exc.message : 'Preview failed',
+                'error',
+            );
+        }
+    };
+
+    const queueReadyShots = async () => {
+        const shotIds = videoShots
+            .filter((item) => item.status !== 'completed' && (item.prompt || item.action))
+            .map((item) => item.id);
+        if (shotIds.length === 0) {
+            useTimelineStore.getState().addToast('No pending shots to queue', 'info');
+            return;
+        }
+        setBatchBusy(true);
+        try {
+            const response = await fetch(apiUrl(`/projects/${project.id}/storyboard/batch-generate`), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shot_ids: shotIds }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+            const queued = (data.results || []).filter((item: { status: string }) => item.status === 'queued').length;
+            useTimelineStore.getState().addToast(`Queued ${queued} shot(s)`, 'success');
+            await refreshJobs();
+        } catch (exc) {
+            useTimelineStore.getState().addToast(
+                exc instanceof Error ? exc.message : 'Batch queue failed',
+                'error',
+            );
+        } finally {
+            setBatchBusy(false);
+        }
+    };
 
     return (
         <div className="st-shot-workspace">
@@ -93,6 +211,20 @@ export function GenerateSurface() {
                                 <Square size={12} /> Cancel
                             </button>
                         )}
+                        <button
+                            type="button"
+                            className="st-button"
+                            disabled={preview?.status === 'queued' || preview?.status === 'generating'}
+                            onClick={() => void previewFrame()}
+                            title="Generate a still at frame 0 before spending video time"
+                        >
+                            {preview?.status ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />}
+                            Preview frame
+                        </button>
+                        <button type="button" className="st-button" disabled={batchBusy} onClick={() => void queueReadyShots()}>
+                            {batchBusy ? <Loader2 size={12} className="animate-spin" /> : <ListChecks size={12} />}
+                            Queue pending
+                        </button>
                     </div>
                 </div>
 
@@ -139,6 +271,18 @@ export function GenerateSurface() {
                                 >
                                     Select take
                                 </button>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    data-variant={take.favorite ? 'primary' : 'ghost'}
+                                    style={{ marginTop: 6 }}
+                                    onClick={async () => {
+                                        if (await favoriteTake(shot, take.favorite ? null : take)) await refreshTakes();
+                                    }}
+                                >
+                                    <Star size={11} /> {take.favorite ? 'Favorited' : 'Favorite'}
+                                </button>
                             </div>
                         </article>
                     ))}
@@ -152,6 +296,32 @@ export function GenerateSurface() {
                         </article>
                     )}
                 </div>
+
+                {preview && (
+                    <div className="st-panel" style={{ marginTop: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <h3 className="st-panel-title" style={{ margin: 0 }}>Preview frame · {preview.status}</h3>
+                            <button type="button" className="st-icon-button" aria-label="Close preview" onClick={() => setPreview(null)}>
+                                <X size={12} />
+                            </button>
+                        </div>
+                        {preview.url ? (
+                            <img
+                                src={preview.url}
+                                alt="Preview frame"
+                                style={{ width: '100%', maxHeight: 260, objectFit: 'contain', marginTop: 8, background: '#000', borderRadius: 6 }}
+                            />
+                        ) : (
+                            <div className="st-empty" style={{ minHeight: 90 }}>
+                                <Loader2 size={16} className="animate-spin" />
+                                <span>{preview.status}</span>
+                            </div>
+                        )}
+                        <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                            Attached as conditioning at frame 0. Video generation still requires approval.
+                        </p>
+                    </div>
+                )}
 
                 <div className="st-panel" style={{ marginTop: 16 }}>
                     <h3 className="st-panel-title">Prompt</h3>
@@ -177,15 +347,47 @@ export function GenerateSurface() {
 
             <aside className="st-shot-params">
                 <div className="st-inspector-section">
-                    <span className="st-label">Ingredients</span>
+                    <span className="st-label">Ingredients · {matched.length}</span>
                     <div className="st-chip-row">
-                        {matched.length === 0 && <span className="st-value" style={{ color: 'var(--st-muted)' }}>No master references matched.</span>}
-                        {matched.map((element) => (
-                            <span className="st-chip" key={element!.id} title={element!.description}>
-                                @{element!.trigger_word.replace(/^@/, '')} · {element!.name}
+                        {elements.length === 0 && (
+                            <span className="st-value" style={{ color: 'var(--st-muted)' }}>
+                                No master references in this project.
                             </span>
-                        ))}
+                        )}
+                        {elements.map((element) => {
+                            const active = matched.some((item) => item?.id === element.id);
+                            return (
+                                <button
+                                    key={element.id}
+                                    type="button"
+                                    className="st-chip"
+                                    data-active={active}
+                                    style={{ cursor: 'pointer' }}
+                                    title={`${element.description}${active ? ' · click to remove' : ' · click to add'}`}
+                                    onClick={() => toggleIngredient(element)}
+                                >
+                                    {active ? '✓ ' : '+ '}@{element.trigger_word.replace(/^@/, '')} · {element.name}
+                                </button>
+                            );
+                        })}
                     </div>
+                    {matched.length > 0 && (
+                        <div className="st-button-row" style={{ marginTop: 6 }}>
+                            {matched.map((element) => (
+                                <button
+                                    key={`mention-${element!.id}`}
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    data-variant="ghost"
+                                    onClick={() => insertMention(element!)}
+                                    title="Insert the trigger word into the prompt"
+                                >
+                                    Insert @{element!.trigger_word.replace(/^@/, '')}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 <div className="st-inspector-section">
                     <span className="st-label">Generation</span>
@@ -196,22 +398,101 @@ export function GenerateSurface() {
                         <dt>Resolution</dt><dd>{shot.width}×{shot.height}</dd>
                         <dt>Status</dt><dd>{shot.status || 'pending'}</dd>
                     </div>
+                    <details className="st-advanced">
+                        <summary>Advanced parameters</summary>
+                        <div className="st-inspector-section" style={{ marginTop: 10, borderBottom: 0 }}>
+                            <label className="st-label" htmlFor="gen-negative">Negative prompt</label>
+                            <textarea
+                                id="gen-negative"
+                                className="st-textarea"
+                                style={{ minHeight: 54 }}
+                                value={shot.negativePrompt}
+                                onChange={(event) => updateShot(shot.id, { negativePrompt: event.target.value })}
+                            />
+                            <div className="st-row" style={{ marginTop: 8 }}>
+                                <label>
+                                    <span className="st-label">Seed</span>
+                                    <input className="st-input" type="number" value={shot.seed} onChange={(event) => updateShot(shot.id, { seed: Number(event.target.value) })} />
+                                </label>
+                                <label>
+                                    <span className="st-label">Frames</span>
+                                    <input className="st-input" type="number" value={shot.numFrames} onChange={(event) => updateShot(shot.id, { numFrames: Number(event.target.value) })} />
+                                </label>
+                            </div>
+                            <div className="st-row" style={{ marginTop: 8 }}>
+                                <label>
+                                    <span className="st-label">Width</span>
+                                    <input className="st-input" type="number" value={shot.width} onChange={(event) => updateShot(shot.id, { width: Number(event.target.value) })} />
+                                </label>
+                                <label>
+                                    <span className="st-label">Height</span>
+                                    <input className="st-input" type="number" value={shot.height} onChange={(event) => updateShot(shot.id, { height: Number(event.target.value) })} />
+                                </label>
+                            </div>
+                            <div className="st-row" style={{ marginTop: 8 }}>
+                                <label>
+                                    <span className="st-label">CFG</span>
+                                    <input className="st-input" type="number" step={0.1} value={shot.cfgScale} onChange={(event) => updateShot(shot.id, { cfgScale: Number(event.target.value) })} />
+                                </label>
+                                <label>
+                                    <span className="st-label">Pipeline</span>
+                                    <select className="st-select" value={shot.pipelineOverride || 'auto'} onChange={(event) => updateShot(shot.id, { pipelineOverride: event.target.value as typeof shot.pipelineOverride })}>
+                                        <option value="auto">auto</option>
+                                        <option value="ti2vid">ti2vid</option>
+                                        <option value="ic_lora">ic_lora</option>
+                                        <option value="keyframe">keyframe</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div className="st-button-row" style={{ marginTop: 8 }}>
+                                <label className="st-chip">
+                                    <input type="checkbox" checked={shot.enhancePrompt} onChange={(event) => updateShot(shot.id, { enhancePrompt: event.target.checked })} />
+                                    enhance
+                                </label>
+                                <label className="st-chip">
+                                    <input type="checkbox" checked={shot.upscale} onChange={(event) => updateShot(shot.id, { upscale: event.target.checked })} />
+                                    upscale
+                                </label>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+                <div className="st-inspector-section">
+                    <span className="st-label">Active queue · {activeJobs.length}</span>
+                    {activeJobs.length === 0 ? (
+                        <span className="st-value" style={{ color: 'var(--st-muted)', fontSize: 10 }}>No active jobs.</span>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                            {activeJobs.map((job) => (
+                                <div key={job.job_id} className="st-link-row">
+                                    <span className="st-mono">{job.job_id.slice(0, 10)}</span>
+                                    <span style={{ flex: 1 }}>{job.status_message || job.status} · {job.progress}%</span>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant="danger"
+                                        onClick={async () => {
+                                            await fetch(apiUrl(`/jobs/${job.job_id}/cancel`), { method: 'POST' });
+                                            await refreshJobs();
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 <div className="st-inspector-section">
                     <span className="st-label">Reference media</span>
                     <div className="st-button-row">
-                        <button type="button" className="st-button" data-size="sm" onClick={() => useTimelineStore.getState().addToast('Drag media from the Library onto a shot in F1', 'info')}>
-                            <ImageIcon size={12} /> Add reference
-                        </button>
                         <button type="button" className="st-button" data-size="sm" onClick={() => window.location.assign('/')}>
                             <Play size={12} /> Legacy edit tools
                         </button>
                     </div>
-                </div>
-                <div className="st-inspector-section">
-                    <span className="st-label">Honest status</span>
-                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 10, lineHeight: 1.55 }}>
-                        This surface uses the existing generation endpoints. Take history, approval, and cost preview arrive in F3/F4.
+                    <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 6 }}>
+                        Preview-first generates a still you can inspect before video. Batch queue uses the durable GPU queue.
                     </p>
                 </div>
             </aside>

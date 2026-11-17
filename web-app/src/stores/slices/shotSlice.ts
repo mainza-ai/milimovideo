@@ -73,6 +73,7 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 else if (k === 'enhancePrompt') snakeUpdates['enhance_prompt'] = v;
                 else if (k === 'lastJobId') snakeUpdates['last_job_id'] = v;
                 else if (k === 'selectedTakeId') snakeUpdates['selected_take_id'] = v;
+                else if (k === 'favoriteTakeId') snakeUpdates['favorite_take_id'] = v;
                 else if (k === 'videoUrl') snakeUpdates['video_url'] = v;
                 else if (k === 'thumbnailUrl') snakeUpdates['thumbnail_url'] = v;
                 else if (k === 'pipelineOverride') snakeUpdates['pipeline_override'] = v;
@@ -166,6 +167,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                     strength: t.strength ?? 1.0
                 })),
                 lastJobId: s.last_job_id,
+                selectedTakeId: s.selected_take_id,
+                favoriteTakeId: s.favorite_take_id,
                 videoUrl: s.video_url ? getAssetUrl(s.video_url) : undefined,
                 thumbnailUrl: getAssetUrl(s.thumbnail_url),
                 enhancedPromptResult: s.enhanced_prompt_result
