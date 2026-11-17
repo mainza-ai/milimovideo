@@ -7,11 +7,13 @@ describe('API contracts', () => {
             status: 'ok',
             device: 'mps',
             gpu: { busy: false, queued: 0 },
+            queue_paused: true,
             slots: { active_slots: [], conflicts: { video: ['image'] } },
             disk_free_bytes: 123,
             auth_required: false,
         });
         expect(parsed.success).toBe(true);
+        if (parsed.success) expect(parsed.data.queue_paused).toBe(true);
     });
 
     it('rejects a plan missing its mode', () => {

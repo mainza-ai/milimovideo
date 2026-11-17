@@ -214,7 +214,7 @@ async def add_cors_headers(request: Request, call_next):
 async def health():
     import shutil
     import torch
-    from job_utils import is_gpu_busy
+    from job_utils import is_gpu_busy, is_queue_paused
     from memory_manager import memory_manager
 
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
@@ -228,6 +228,7 @@ async def health():
         "api_host": config.API_HOST,
         "auth_required": bool(config.API_TOKEN),
         "gpu": is_gpu_busy(),
+        "queue_paused": is_queue_paused(),
         "slots": memory_manager.status(),
         "disk_free_bytes": free_bytes,
     }

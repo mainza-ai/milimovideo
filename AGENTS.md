@@ -123,7 +123,8 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 - Alembic baseline (`0001_baseline`) with startup upgrade; legacy DBs are repaired
   and stamped. Do not add schema columns without a migration.
 - Generated OpenAPI client types: `npm run gen:api`; CI checks drift.
-- Durable GPU queue: `QueuedJob` ledger + one global semaphore + one OOM retry.
+- Durable GPU queue: `QueuedJob` ledger + one global semaphore + one OOM retry
+  + pause/resume dispatch.
 - Observability: `X-Request-ID`, timing logs, `/health`, `/metrics/jobs`.
 - Local security: loopback default, CORS allowlist, optional bearer token, safe
   media Range serving, upload allowlist/size cap.
@@ -157,8 +158,8 @@ not just filtergraph strings.
   caption toggle/preview, render history.
 - Shorts: transcript/SRT/VTT candidates, scores, editable in/out range,
   9:16/1:1/4:5 export, direct export from uploaded sources.
-- Setup: device/slots/queue/disk, pipeline readiness, base/LoRA activation,
-  LoRA strength, model downloads, depth model, error budget.
+- Setup: device/slots/queue/disk, queue pause/resume, pipeline readiness,
+  base/LoRA activation, LoRA strength, model downloads, depth model, error budget.
 - Desktop: Tauri 2 shell with native open/save dialogs and a backend supervisor
   that locates/starts `run_backend.sh`; bundled Python sidecar remains a follow-up.
 - Collaboration: opt-in Yjs board sync spike over BroadcastChannel (same machine).

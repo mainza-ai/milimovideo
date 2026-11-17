@@ -1027,3 +1027,11 @@ The flag persists through save/reload, appears in Generate advanced parameters
 and the Inspector, and gates the New take action so deterministic re-runs are the
 default. Verified: 76 pytest, 52 vitest, ruff clean, tsc clean, build + bundle
 check pass.
+
+## [2026-11-17] queue | pause and resume dispatch
+
+Added `GET /jobs/queue`, `POST /jobs/queue/pause`, and `/resume`. Paused dispatch
+leaves queued jobs untouched, lets the current job finish, and resumes within
+250ms. Health reports `queue_paused`; Setup exposes Pause/Resume. Added endpoint,
+health-contract, and dispatch-gate tests. Verified: 78 pytest, 52 vitest, ruff
+clean, tsc clean, build + bundle check pass.

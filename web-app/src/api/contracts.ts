@@ -6,6 +6,7 @@ export const HealthSchema = z.object({
     status: z.string(),
     device: z.string(),
     gpu: z.object({ busy: z.boolean(), queued: z.number() }),
+    queue_paused: z.boolean().optional(),
     slots: z.object({ active_slots: z.array(z.string()) }).passthrough(),
     disk_free_bytes: z.number().nullable(),
     auth_required: z.boolean(),

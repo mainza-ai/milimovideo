@@ -3237,6 +3237,63 @@
         "summary": "Health"
       }
     },
+    "/jobs/queue": {
+      "get": {
+        "operationId": "queue_state_jobs_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Queue State",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/jobs/queue/pause": {
+      "post": {
+        "operationId": "pause_queue_jobs_queue_pause_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Pause Queue",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/jobs/queue/resume": {
+      "post": {
+        "operationId": "resume_queue_jobs_queue_resume_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Resume Queue",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
     "/jobs/{job_id}/cancel": {
       "post": {
         "description": "Cancel a running or pending job.",

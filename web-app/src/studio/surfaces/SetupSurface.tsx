@@ -41,10 +41,25 @@ export function SetupSurface() {
             setDownloading(null);
         }
     };
+    const toggleQueue = async (paused: boolean) => {
+        setQueueBusy(true);
+        try {
+            const response = await fetch(apiUrl(`/jobs/queue/${paused ? 'pause' : 'resume'}`), { method: 'POST' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || 'Queue update failed');
+            addToast(paused ? 'GPU queue paused after the current job' : 'GPU queue resumed', 'info');
+        } catch (exc) {
+            addToast(exc instanceof Error ? exc.message : 'Queue update failed', 'error');
+        } finally {
+            setQueueBusy(false);
+        }
+    };
+
     const [filter, setFilter] = useState<'all' | 'video' | 'image' | 'segmentation' | 'depth'>('all');
     const [kind, setKind] = useState<'base' | 'lora'>('base');
     const [busy, setBusy] = useState<string | null>(null);
     const [downloading, setDownloading] = useState<string | null>(null);
+    const [queueBusy, setQueueBusy] = useState(false);
 
     const visible = useMemo(() => {
         const matching = models.filter((model) => (
@@ -91,9 +106,22 @@ export function SetupSurface() {
                         <dt>GPU</dt><dd>{health?.gpu?.busy ? 'busy' : 'free'}</dd>
                         <dt>Queue</dt><dd>{health?.gpu?.queued ?? 0}</dd>
                         <dt>Auth</dt><dd>{health?.auth_required ? 'token required' : 'loopback only'}</dd>
+                        <dt>Dispatch</dt><dd>{health?.queue_paused ? 'paused' : 'running'}</dd>
                     </dl>
+                    <div className="st-button-row" style={{ marginTop: 8 }}>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            disabled={queueBusy}
+                            onClick={() => void toggleQueue(!(health?.queue_paused ?? false))}
+                        >
+                            {health?.queue_paused ? 'Resume queue' : 'Pause queue'}
+                        </button>
+                    </div>
                     <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 10 }}>
                         Only one heavy model runs at a time; conflicting pipelines wait in the durable queue.
+                        Pausing stops new dispatch after the current job finishes.
                     </p>
                 </div>
                 <div className="st-panel">

@@ -362,7 +362,9 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 
 ## 12. Setup and models
 
-- Device, active slots, GPU busy/queued, auth mode, free disk.
+- Device, active slots, GPU busy/queued, auth mode, free disk, dispatch state.
+- **Pause queue** stops new GPU dispatch after the current job; **Resume queue**
+  releases waiting durable jobs.
 - Pipeline readiness with missing counts.
 - Base model table: real status, size, VRAM estimate, Activate/Unload or Download.
 - LoRA table: real downloaded/active state, activation, and strength.

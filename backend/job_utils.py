@@ -16,7 +16,20 @@ logger = logging.getLogger(__name__)
 # Additional jobs wait in a FIFO queue via the semaphore.
 _gpu_semaphore = None
 _gpu_queue_count = 0  # Track how many jobs are waiting
+_queue_paused = False
 _background_tasks: set[asyncio.Task] = set()
+
+
+def set_queue_paused(paused: bool) -> bool:
+    """Pause/resume dispatch of queued GPU jobs without killing running work."""
+    global _queue_paused
+    _queue_paused = bool(paused)
+    logger.info("GPU queue %s", "paused" if _queue_paused else "resumed")
+    return _queue_paused
+
+
+def is_queue_paused() -> bool:
+    return _queue_paused
 
 
 def _spawn_background(coro, loop=None) -> asyncio.Task:
@@ -161,6 +174,9 @@ def _clear_accelerator_cache() -> None:
 async def run_queued_job(queue_id: str) -> None:
     from database import QueuedJob
     from sqlmodel import select
+
+    while is_queue_paused():
+        await asyncio.sleep(0.25)
 
     with Session(engine) as session:
         queued = session.get(QueuedJob, queue_id)

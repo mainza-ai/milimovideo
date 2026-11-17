@@ -17,6 +17,7 @@ export interface StudioHealth {
     status: string;
     device: string;
     gpu: { busy: boolean; queued: number };
+    queue_paused?: boolean;
     slots: { active_slots: string[] };
     disk_free_bytes: number | null;
     auth_required: boolean;

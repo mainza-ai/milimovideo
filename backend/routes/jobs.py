@@ -87,6 +87,26 @@ def get_project_active_jobs(project_id: str, session: Session = Depends(get_sess
         })
     return project_jobs
 
+@router.get("/jobs/queue")
+def queue_state():
+    from job_utils import is_gpu_busy, is_queue_paused
+    return {"paused": is_queue_paused(), **is_gpu_busy()}
+
+
+@router.post("/jobs/queue/pause")
+def pause_queue():
+    from job_utils import is_queue_paused, set_queue_paused
+    set_queue_paused(True)
+    return {"paused": is_queue_paused()}
+
+
+@router.post("/jobs/queue/resume")
+def resume_queue():
+    from job_utils import is_queue_paused, set_queue_paused
+    set_queue_paused(False)
+    return {"paused": is_queue_paused()}
+
+
 @router.post("/jobs/{job_id}/cancel")
 async def cancel_job(job_id: str, session: Session = Depends(get_session)):
     """Cancel a running or pending job."""
