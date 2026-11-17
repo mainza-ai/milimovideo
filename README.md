@@ -92,6 +92,16 @@ a backend supervisor.
 - Jobs run through the durable GPU ledger with one OOM retry and a single heavy
   model slot.
 
+### Inside the studio
+
+![Milimo Studio story board](assets/milimo_video_v2_1.png)
+
+*Story — scene spine, shot cards, master references, and the Plan dock.*
+
+![Milimo Studio edit timeline](assets/milimo_video_v2_2.png)
+
+*Edit — program monitor, V1/V2/A1 timeline, clip tools, and shot parameters.*
+
 ![Milimo Elements](assets/milimo_video_elements.png)
 
 ![Milimo Timeline](assets/milimo_video_timeline.png)
