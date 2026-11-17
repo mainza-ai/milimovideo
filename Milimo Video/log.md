@@ -813,3 +813,10 @@ the output frame, so shorts/vertical variants are true reframes rather than
 letterboxes. Deliver exposes Pad/Crop; Shorts always crops. Added filtergraph and
 real FFmpeg tests asserting a 180×320 output from a 320×180 source. Verified:
 60 pytest, 44 vitest, tsc clean.
+
+## [2026-11-17] f5 | previz depth snapshot
+
+3D previz can render a depth pass of the blocking scene (MeshDepthMaterial to an
+offscreen render target, readPixels, vertical flip, PNG download). This gives a
+real depth artifact from the current stage placement; the editor still has no
+video-depth overlay source. Verified: 44 vitest, tsc clean, eslint 0 errors.

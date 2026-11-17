@@ -17,6 +17,8 @@ function toWorld(x: number, y: number): [number, number] {
 export default function Previz3D({ shot, project, onClose }: Props) {
     const hostRef = useRef<HTMLDivElement>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+    const sceneRef = useRef<THREE.Scene | null>(null);
+    const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
@@ -41,6 +43,8 @@ export default function Previz3D({ shot, project, onClose }: Props) {
         const camera = new THREE.PerspectiveCamera(50, host.clientWidth / host.clientHeight, 0.1, 200);
         camera.position.set(10, 12, 14);
         camera.lookAt(0, 0, 0);
+        sceneRef.current = scene;
+        cameraRef.current = camera;
 
         const controls = new OrbitControls(camera, renderer.domElement);
         controls.target.set(0, 0.5, 0);
@@ -159,8 +163,52 @@ export default function Previz3D({ shot, project, onClose }: Props) {
                 }
             });
             rendererRef.current = null;
+            sceneRef.current = null;
+            cameraRef.current = null;
         };
     }, [project.shots, shot]);
+
+    const saveDepth = () => {
+        const renderer = rendererRef.current;
+        const scene = sceneRef.current;
+        const camera = cameraRef.current;
+        if (!renderer || !scene || !camera) return;
+        const width = Math.max(320, Math.round(renderer.domElement.clientWidth || 960));
+        const height = Math.max(180, Math.round(renderer.domElement.clientHeight || 540));
+        const target = new THREE.WebGLRenderTarget(width, height);
+        const pixels = new Uint8Array(width * height * 4);
+        const previousOverride = scene.overrideMaterial;
+        scene.overrideMaterial = new THREE.MeshDepthMaterial();
+        renderer.setRenderTarget(target);
+        renderer.render(scene, camera);
+        renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
+        renderer.setRenderTarget(null);
+        scene.overrideMaterial = previousOverride;
+        target.dispose();
+
+        const source = document.createElement('canvas');
+        source.width = width;
+        source.height = height;
+        const sourceContext = source.getContext('2d');
+        if (!sourceContext) return;
+        const image = sourceContext.createImageData(width, height);
+        for (let y = 0; y < height; y += 1) {
+            const flipped = height - 1 - y;
+            for (let x = 0; x < width; x += 1) {
+                const from = (flipped * width + x) * 4;
+                const to = (y * width + x) * 4;
+                image.data[to] = pixels[from];
+                image.data[to + 1] = pixels[from + 1];
+                image.data[to + 2] = pixels[from + 2];
+                image.data[to + 3] = 255;
+            }
+        }
+        sourceContext.putImageData(image, 0, 0);
+        const anchor = document.createElement('a');
+        anchor.href = source.toDataURL('image/png');
+        anchor.download = `depth-${shot.id}.png`;
+        anchor.click();
+    };
 
     return (
         <div className="st-lens-backdrop" role="dialog" aria-modal="true" aria-label="3D previz">
@@ -187,6 +235,9 @@ export default function Previz3D({ shot, project, onClose }: Props) {
                             }}
                         >
                             <Download size={12} /> Snapshot
+                        </button>
+                        <button type="button" className="st-button" data-size="sm" onClick={saveDepth}>
+                            <Download size={12} /> Depth PNG
                         </button>
                         <button type="button" className="st-icon-button" aria-label="Close 3D previz" onClick={onClose}>
                             <X size={14} />
