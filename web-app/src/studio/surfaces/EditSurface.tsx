@@ -10,6 +10,7 @@ import { computeTimelineLayout } from '../../utils/timelineUtils';
 import { PlaybackEngine } from '../../components/Player/PlaybackEngine';
 import { StudioTimeline } from '../components/StudioTimeline';
 import { BlockingLens } from '../components/BlockingLens';
+import { TrackingPanel } from '../../components/Editor/TrackingPanel';
 
 const Previz3D = lazy(() => import('../components/Previz3D'));
 import { formatDuration, useAssetUrl, useStudioTakes } from '../data/useStudioData';
@@ -24,12 +25,15 @@ export function EditSurface() {
     })));
     const videoRef = useRef<HTMLVideoElement>(null);
     const compareVideoRef = useRef<HTMLVideoElement>(null);
+    const stageRef = useRef<HTMLDivElement>(null);
+    const [stageSize, setStageSize] = useState({ width: 960, height: 540 });
     const [compareMode, setCompareMode] = useState<'off' | 'side' | 'wipe'>('off');
     const [wipe, setWipe] = useState(50);
     const [guides, setGuides] = useState({ grid: false, safe: false, thirds: false });
     const [inpaintOpen, setInpaintOpen] = useState(false);
     const [blockingOpen, setBlockingOpen] = useState(false);
     const [previzOpen, setPrevizOpen] = useState(false);
+    const [trackingOpen, setTrackingOpen] = useState(false);
     const [maskPrompt, setMaskPrompt] = useState('');
     const [inpaintPrompt, setInpaintPrompt] = useState('');
     const [inpaintStatus, setInpaintStatus] = useState<string | null>(null);
@@ -44,6 +48,17 @@ export function EditSurface() {
         () => Math.max(0, ...layout.map((clip) => clip.end)),
         [layout],
     );
+
+    useEffect(() => {
+        const host = stageRef.current;
+        if (!host) return;
+        const observer = new ResizeObserver(() => {
+            setStageSize({ width: host.clientWidth, height: host.clientHeight });
+        });
+        observer.observe(host);
+        setStageSize({ width: host.clientWidth, height: host.clientHeight });
+        return () => observer.disconnect();
+    }, []);
 
     const resolveActive = (time: number) => {
         const selected = selectedShotId ? layout.find((clip) => clip.id === selectedShotId) : null;
@@ -193,7 +208,10 @@ export function EditSurface() {
         <div className="st-edit">
             <PlaybackEngine />
             <div className="st-stage">
-                <div className={`st-stage-frame ${compareMode !== 'off' ? 'st-stage-compare' : ''}`}>
+                <div
+                    ref={stageRef}
+                    className={`st-stage-frame ${compareMode !== 'off' ? 'st-stage-compare' : ''}`}
+                >
                     {mediaUrl ? (
                         <div className="st-stage-primary">
                             {isImage ? (
@@ -261,6 +279,22 @@ export function EditSurface() {
                             </button>
                         ))}
                     </div>
+
+                    {trackingOpen && active?.shot.videoUrl && !isImage && (
+                        <TrackingPanel
+                            videoPath={(() => {
+                                try {
+                                    return new URL(active.shot.videoUrl, window.location.origin).pathname;
+                                } catch {
+                                    return active.shot.videoUrl;
+                                }
+                            })()}
+                            videoRef={videoRef}
+                            containerWidth={stageSize.width}
+                            containerHeight={stageSize.height}
+                            onClose={() => setTrackingOpen(false)}
+                        />
+                    )}
                 </div>
 
                 {inpaintOpen && (
@@ -393,6 +427,17 @@ export function EditSurface() {
                     onClick={() => setPrevizOpen(true)}
                 >
                     3D
+                </button>
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={trackingOpen ? 'primary' : 'ghost'}
+                    disabled={!active || isImage}
+                    onClick={() => setTrackingOpen(true)}
+                    title="Track and mask objects in this shot"
+                >
+                    Track
                 </button>
                 <span className="st-status-pill"><Volume2 size={11} /> embedded audio mixed</span>
                 <button type="button" className="st-icon-button" aria-label="Fullscreen (F2)">

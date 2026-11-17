@@ -14,7 +14,7 @@ import {
     useStudioTakes,
 } from '../data/useStudioData';
 
-const TABS = ['shot', 'prompt', 'motion', 'takes', 'audio', 'review', 'history'] as const;
+const TABS = ['shot', 'prompt', 'motion', 'takes', 'audio', 'effects', 'review', 'history'] as const;
 
 export function Inspector() {
     const { selectedShotId, updateShot, addToast } = useStudioSelection();
@@ -287,6 +287,46 @@ export function Inspector() {
                                 </div>
                                 <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 10 }}>
                                     Takes are completed jobs; selecting one repoints the shot without deleting the others.
+                                </p>
+                            </div>
+                        )}
+
+                        {inspectorTab === 'effects' && (
+                            <div className="st-inspector-section">
+                                <span className="st-label">Clip effects</span>
+                                <div className="st-meta-grid">
+                                    <dt>Speed</dt><dd>{shot.speed ?? 1}×</dd>
+                                    <dt>Opacity keys</dt><dd>{shot.keyframes?.length ?? 0}</dd>
+                                    <dt>Fade in/out</dt><dd>{(shot.audioFadeIn ?? 0).toFixed(1)}s / {(shot.audioFadeOut ?? 0).toFixed(1)}s</dd>
+                                    <dt>Gain</dt><dd>{Math.round((shot.audioGain ?? 1) * 100)}%{shot.audioMuted ? ' · muted' : ''}</dd>
+                                    <dt>Transition</dt><dd>{shot.keyframes?.some((key) => (key.scale ?? 1) !== 1) ? 'transform' : 'none'}</dd>
+                                </div>
+                                <div className="st-button-row" style={{ marginTop: 10 }}>
+                                    <button type="button" className="st-button" data-size="sm" onClick={() => setInspectorTab('motion')}>
+                                        Edit keyframes
+                                    </button>
+                                    <button type="button" className="st-button" data-size="sm" onClick={() => setInspectorTab('audio')}>
+                                        Edit audio
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant="ghost"
+                                        onClick={() => updateShot(shot.id, {
+                                            speed: 1,
+                                            audioGain: 1,
+                                            audioMuted: false,
+                                            audioFadeIn: 0,
+                                            audioFadeOut: 0,
+                                            keyframes: [],
+                                        })}
+                                    >
+                                        Reset effects
+                                    </button>
+                                </div>
+                                <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 9, marginTop: 8 }}>
+                                    Effects are baked by the render: speed, fades, gain, and keyframe alpha/transform. No external effect service.
                                 </p>
                             </div>
                         )}

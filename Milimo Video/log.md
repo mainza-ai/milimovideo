@@ -717,3 +717,11 @@ are adopted; F0–F4 are mostly done, F5 is partial (shorts, pipeline lens, bloc
 lens, lazy 3D previz, Yjs spike). Explicit remaining gaps are recorded instead of
 being smoothed over: document-store migration, visual baselines, 60fps
 measurements, mask/tracking/depth overlays, Tauri packaging, and parser queueing.
+
+## [2026-11-17] f2 | tracking overlay and effects tab
+
+Edit can now launch the existing object-tracking engine directly over the studio
+stage with the live video ref and measured stage size, so masks overlay the cut
+instead of handing off to the legacy editor. Inspector gained an Effects tab
+summarizing speed, keyframes, fades, gain/mute, with edit shortcuts and a safe
+reset. Verified: 43 vitest, tsc clean, eslint 0 errors.

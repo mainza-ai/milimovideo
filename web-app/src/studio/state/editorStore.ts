@@ -56,7 +56,7 @@ interface EditorState {
     selectedShotId: string | null;
     selectedShotIds: string[];
     selectedSceneId: string | null;
-    inspectorTab: 'shot' | 'prompt' | 'motion' | 'takes' | 'audio' | 'review' | 'history';
+    inspectorTab: 'shot' | 'prompt' | 'motion' | 'takes' | 'audio' | 'effects' | 'review' | 'history';
     boardCamera: Camera;
     boardPast: BoardSnapshot[];
     boardFuture: BoardSnapshot[];
