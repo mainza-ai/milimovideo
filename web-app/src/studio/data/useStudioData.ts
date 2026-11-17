@@ -230,15 +230,74 @@ export function useStudioHealth() {
 
 export function useStudioElements(projectId: string) {
     const [elements, setElements] = useState<StudioElement[]>([]);
-    useEffect(() => {
-        let alive = true;
-        fetch(apiUrl(`/projects/${projectId}/elements`))
-            .then((response) => response.ok ? response.json() : [])
-            .then((data) => { if (alive) setElements(Array.isArray(data) ? data : []); })
-            .catch(() => { if (alive) setElements([]); });
-        return () => { alive = false; };
+    const [loading, setLoading] = useState(true);
+    const refresh = useCallback(async () => {
+        try {
+            const response = await fetch(apiUrl(`/projects/${projectId}/elements`));
+            const data = response.ok ? await response.json() : [];
+            setElements(Array.isArray(data) ? data : []);
+        } catch {
+            setElements([]);
+        } finally {
+            setLoading(false);
+        }
     }, [projectId]);
-    return elements;
+    useEffect(() => { void refresh(); }, [refresh]);
+    return { elements, loading, refresh };
+}
+
+export interface ElementDraft {
+    name: string;
+    type: string;
+    description: string;
+    trigger_word: string;
+    image_path?: string | null;
+}
+
+export function useStudioElementMutations(projectId: string) {
+    const addToast = useStudioDocumentStore((state) => state.addToast);
+    const create = useCallback(async (draft: ElementDraft) => {
+        const response = await fetch(apiUrl(`/projects/${projectId}/elements`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(draft),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Could not create reference', 'error');
+            return null;
+        }
+        addToast(`Created ${draft.name}`, 'success');
+        return data as StudioElement;
+    }, [addToast, projectId]);
+
+    const update = useCallback(async (elementId: string, draft: ElementDraft) => {
+        const response = await fetch(apiUrl(`/elements/${elementId}`), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(draft),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            addToast(data.detail || 'Could not update reference', 'error');
+            return null;
+        }
+        addToast(`Updated ${draft.name}`, 'success');
+        return data as StudioElement;
+    }, [addToast]);
+
+    const remove = useCallback(async (element: StudioElement) => {
+        const response = await fetch(apiUrl(`/elements/${element.id}`), { method: 'DELETE' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) {
+            addToast(data.detail || 'Could not delete reference', 'error');
+            return false;
+        }
+        addToast(`Deleted ${element.name}`, 'success');
+        return true;
+    }, [addToast]);
+
+    return { create, update, remove };
 }
 
 export function useStudioUploadAsset(projectId: string) {

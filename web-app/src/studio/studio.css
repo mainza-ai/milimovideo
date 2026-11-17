@@ -267,6 +267,22 @@
 .st-status-pill[data-tone="warn"] { color: var(--st-warning); border-color: rgba(245, 184, 75, 0.25); }
 .st-status-pill[data-tone="bad"] { color: var(--st-danger); border-color: rgba(255, 93, 108, 0.25); }
 
+.st-form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 10px;
+}
+
+.st-field {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--st-muted);
+}
+
 .st-icon-button {
     width: 30px;
     height: 30px;

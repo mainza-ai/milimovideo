@@ -21,7 +21,7 @@ export function Inspector() {
     const { selectedShotId, updateShot, addToast } = useStudioSelection();
     const project = useStudioDocumentStore((state) => state.project);
     const shot = project.shots.find((item) => item.id === selectedShotId) || null;
-    const elements = useStudioElements(project.id);
+    const { elements } = useStudioElements(project.id);
     const generate = useStudioGenerate();
     const cancel = useStudioCancel();
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioTakes(shot?.id);

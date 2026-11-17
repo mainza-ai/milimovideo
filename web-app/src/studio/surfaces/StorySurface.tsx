@@ -17,7 +17,7 @@ export function StorySurface() {
         selectedSceneId: state.selectedSceneId,
         selectScene: state.selectScene,
     })));
-    const elements = useStudioElements(project.id);
+    const { elements } = useStudioElements(project.id);
     const [query, setQuery] = useState('');
     const [elementFilter, setElementFilter] = useState<string | null>(null);
 

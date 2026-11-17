@@ -21,7 +21,7 @@ import { PipelineLens } from '../components/PipelineLens';
 export function GenerateSurface() {
     const project = useStudioDocumentStore((state) => state.project);
     const { selectedShotId, updateShot } = useStudioSelection();
-    const elements = useStudioElements(project.id);
+    const { elements } = useStudioElements(project.id);
     const generate = useStudioGenerate();
     const cancel = useStudioCancel();
     const [promptDraft, setPromptDraft] = useState<string | null>(null);

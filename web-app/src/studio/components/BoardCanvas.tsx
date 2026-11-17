@@ -107,7 +107,7 @@ export function BoardCanvas() {
         referencePositions, showReferenceCards, setReferencePosition, setShowReferenceCards,
         setInspectorTab, setSurface,
     } = useStudioEditor();
-    const elements = useStudioElements(project.id);
+    const { elements } = useStudioElements(project.id);
     const { review } = useStudioReview(project.id);
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });

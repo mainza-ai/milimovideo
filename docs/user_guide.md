@@ -313,7 +313,10 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 ## 9. Library and search
 
 - **Assets** — upload directly with **Upload media**; images, video, audio, and caption files are supported.
-- **Master references** — Characters, Locations, Objects with trigger words.
+- **Master references** — Characters, Locations, Objects, and Styles with trigger
+  words. **New reference** creates one with a name, type, trigger word, image, and
+  description; **Edit** updates it and **Delete** removes it. Trigger words are
+  normalized to a single leading `@` and can be mentioned in prompts.
 - **Takes** — every completed take with shot lineage, seed/model, and select action.
 - **Search** — local ranked token/prefix search across shots, assets, references,
   and takes. No embedding service; results show the score.

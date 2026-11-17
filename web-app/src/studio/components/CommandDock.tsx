@@ -53,7 +53,7 @@ function renderValue(value: unknown): string {
 
 export function CommandDock() {
     const project = useStudioProject();
-    const elements = useStudioElements(project.id);
+    const { elements } = useStudioElements(project.id);
     const { selectedShotId, addToast, updateShot } = useStudioSelection();
     const generate = useStudioGenerate();
     const {

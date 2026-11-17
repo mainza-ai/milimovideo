@@ -909,3 +909,12 @@ uploaded long video instead of only the project cut. The source is probed for
 duration, rendered through the same filtergraph/range/crop path, and validated by
 a real FFmpeg test (2s source, 1s vertical export). Shorts has a source selector
 over uploaded video assets. Verified: 44 vitest, tsc clean.
+
+## [2026-11-17] library | master-reference CRUD in studio
+
+Studio Library now creates, edits, and deletes master references instead of
+pointing at the legacy Elements view. The editor covers name, type, trigger word,
+description, and an uploaded reference image. Backend trigger words are normalized
+to one leading `@`. Added element CRUD contract tests and a Playwright create/edit/
+delete path. Verified: 67 pytest, 44 vitest, 12 Playwright, tsc clean, build pass,
+`verify_setup` 0 failures.

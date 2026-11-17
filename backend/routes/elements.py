@@ -43,6 +43,14 @@ def _parse_points(raw: str) -> list[list[float]]:
         points.append([x, y])
     return points
 
+def _normalize_trigger(value: Optional[str]) -> Optional[str]:
+    """Store trigger words with a single leading @ so prompts match reliably."""
+    if value is None:
+        return None
+    cleaned = value.strip().lstrip("@")
+    return f"@{cleaned}" if cleaned else None
+
+
 @router.post("/projects/{project_id}/elements")
 async def create_element(project_id: str, element: ElementCreate):
     return element_manager.create_element(
@@ -50,7 +58,7 @@ async def create_element(project_id: str, element: ElementCreate):
         element.name, 
         element.type, 
         element.description, 
-        element.trigger_word,
+        _normalize_trigger(element.trigger_word),
         element.image_path
     )
 
@@ -69,6 +77,8 @@ async def update_element(element_id: str, update: ElementUpdate):
     updates = update.model_dump(exclude_unset=True)
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
+    if "trigger_word" in updates:
+        updates["trigger_word"] = _normalize_trigger(updates["trigger_word"])
     result = element_manager.update_element(element_id, updates)
     if not result:
         raise HTTPException(status_code=404, detail=f"Element {element_id} not found")

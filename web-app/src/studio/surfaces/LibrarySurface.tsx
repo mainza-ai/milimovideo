@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
-    CheckCircle2, Film, Image as ImageIcon, Library, RefreshCw, Search, Upload, Video,
+    CheckCircle2, Film, Image as ImageIcon, Library, Pencil, Plus, RefreshCw, Search,
+    Trash2, Upload, Video, X,
 } from 'lucide-react';
 import { rankSearch, type SearchRecord } from '../search/localSearch';
 import { useStudioEditor } from '../state/editorStore';
@@ -12,19 +13,34 @@ type SearchItem =
     | { type: 'asset'; id: string; asset: StudioAsset }
     | { type: 'reference'; id: string; element: StudioElement }
     | { type: 'take'; id: string; take: StudioProjectTake };
-import { getAssetUrl } from '../../config';
+import { apiUrl, getAssetUrl } from '../../config';
 import {
     useStudioAssets,
+    useStudioElementMutations,
     useStudioElements,
     useStudioProject,
     useStudioProjectTakes,
     useStudioSelectTake,
     useStudioUploadAsset,
+    type ElementDraft,
 } from '../data/useStudioData';
+
+const EMPTY_DRAFT: ElementDraft = {
+    name: '',
+    type: 'character',
+    description: '',
+    trigger_word: '',
+    image_path: null,
+};
 
 export function LibrarySurface() {
     const project = useStudioProject();
-    const elements = useStudioElements(project.id);
+    const { elements, refresh: refreshElements } = useStudioElements(project.id);
+    const elementMutations = useStudioElementMutations(project.id);
+    const [editingElement, setEditingElement] = useState<StudioElement | null>(null);
+    const [draft, setDraft] = useState<ElementDraft | null>(null);
+    const [savingElement, setSavingElement] = useState(false);
+    const [elementImageBusy, setElementImageBusy] = useState(false);
     const { assets, loading, refresh } = useStudioAssets();
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioProjectTakes(project.id);
     const selectTake = useStudioSelectTake();
@@ -33,6 +49,58 @@ export function LibrarySurface() {
     const [uploading, setUploading] = useState(false);
     const [tab, setTab] = useState<'assets' | 'references' | 'takes' | 'search'>('assets');
     const [query, setQuery] = useState('');
+
+    const openElementEditor = (element?: StudioElement) => {
+        setEditingElement(element ?? null);
+        setDraft(element ? {
+            name: element.name,
+            type: element.type,
+            description: element.description,
+            trigger_word: element.trigger_word,
+            image_path: element.image_path ?? null,
+        } : { ...EMPTY_DRAFT });
+    };
+
+    const saveElement = async () => {
+        if (!draft || !draft.name.trim() || !draft.trigger_word.trim()) return;
+        setSavingElement(true);
+        try {
+            const saved = editingElement
+                ? await elementMutations.update(editingElement.id, draft)
+                : await elementMutations.create(draft);
+            if (saved) {
+                await refreshElements();
+                setDraft(null);
+                setEditingElement(null);
+            }
+        } finally {
+            setSavingElement(false);
+        }
+    };
+
+    const deleteElement = async (element: StudioElement) => {
+        if (!window.confirm(`Delete the reference "${element.name}"?`)) return;
+        if (await elementMutations.remove(element)) await refreshElements();
+    };
+
+    const uploadElementImage = async (file: File) => {
+        setElementImageBusy(true);
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            form.append('project_id', project.id);
+            form.append('type', 'element');
+            const response = await fetch(apiUrl('/upload'), { method: 'POST', body: form });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                useStudioDocumentStore.getState().addToast(data.detail || 'Upload failed', 'error');
+                return;
+            }
+            setDraft((current) => current ? { ...current, image_path: data.url } : current);
+        } finally {
+            setElementImageBusy(false);
+        }
+    };
 
     const filteredAssets = useMemo(() => {
         const q = query.trim().toLowerCase();
@@ -273,23 +341,171 @@ export function LibrarySurface() {
                         })}
                     </div>
                 )
-            ) : filteredElements.length === 0 ? (
-                <div className="st-empty"><strong>No master references</strong><span>Create Characters, Locations, and Objects in the legacy Elements view.</span></div>
             ) : (
-                <div className="st-grid">
-                    {filteredElements.map((element) => (
-                        <article className="st-take" key={element.id}>
-                            <div className="st-take-media">
-                                {element.image_path ? <img src={getAssetUrl(element.image_path)} alt="" loading="lazy" /> : <div className="st-stage-empty"><ImageIcon size={14} /><span>{element.type}</span></div>}
+                <>
+                    <div className="st-button-row" style={{ marginBottom: 12 }}>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="primary"
+                            onClick={() => openElementEditor()}
+                        >
+                            <Plus size={12} /> New reference
+                        </button>
+                        <span className="st-value" style={{ color: 'var(--st-muted)' }}>
+                            Master references are project-wide; @mention them in prompts.
+                        </span>
+                    </div>
+
+                    {draft && (
+                        <div className="st-panel" style={{ marginBottom: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <h3 className="st-panel-title" style={{ margin: 0 }}>
+                                    {editingElement ? `Edit ${editingElement.name}` : 'New master reference'}
+                                </h3>
+                                <button
+                                    type="button"
+                                    className="st-icon-button"
+                                    aria-label="Close reference editor"
+                                    onClick={() => { setDraft(null); setEditingElement(null); }}
+                                >
+                                    <X size={12} />
+                                </button>
                             </div>
-                            <div className="st-take-body">
-                                <strong style={{ color: 'var(--st-text)' }}>{element.name}</strong>
-                                <div>@{element.trigger_word.replace(/^@/, '')} · {element.type}</div>
-                                <div style={{ marginTop: 4, color: 'var(--st-faint)' }}>{element.description}</div>
+                            <div className="st-form-grid" style={{ marginTop: 10 }}>
+                                <label className="st-field">
+                                    <span>Name</span>
+                                    <input
+                                        className="st-input"
+                                        value={draft.name}
+                                        onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+                                        placeholder="Mara"
+                                    />
+                                </label>
+                                <label className="st-field">
+                                    <span>Type</span>
+                                    <select
+                                        className="st-select"
+                                        value={draft.type}
+                                        onChange={(event) => setDraft({ ...draft, type: event.target.value })}
+                                    >
+                                        <option value="character">Character</option>
+                                        <option value="location">Location</option>
+                                        <option value="object">Object</option>
+                                        <option value="style">Style</option>
+                                    </select>
+                                </label>
+                                <label className="st-field">
+                                    <span>Trigger word</span>
+                                    <input
+                                        className="st-input"
+                                        value={draft.trigger_word}
+                                        onChange={(event) => setDraft({ ...draft, trigger_word: event.target.value })}
+                                        placeholder="mara"
+                                    />
+                                </label>
+                                <label className="st-field">
+                                    <span>Reference image</span>
+                                    <input
+                                        type="file"
+                                        className="st-input"
+                                        accept="image/*"
+                                        aria-label="Reference image"
+                                        disabled={elementImageBusy}
+                                        onChange={(event) => {
+                                            const file = event.target.files?.[0];
+                                            event.target.value = '';
+                                            if (file) void uploadElementImage(file);
+                                        }}
+                                    />
+                                </label>
                             </div>
-                        </article>
-                    ))}
-                </div>
+                            <label className="st-field" style={{ marginTop: 8 }}>
+                                <span>Description</span>
+                                <textarea
+                                    className="st-textarea"
+                                    style={{ minHeight: 64 }}
+                                    aria-label="Reference description"
+                                    value={draft.description}
+                                    onChange={(event) => setDraft({ ...draft, description: event.target.value })}
+                                    placeholder="Wardrobe, silhouette, and continuity notes…"
+                                />
+                            </label>
+                            {draft.image_path && (
+                                <img
+                                    src={getAssetUrl(draft.image_path)}
+                                    alt="Reference preview"
+                                    style={{ marginTop: 8, maxHeight: 120, borderRadius: 6, objectFit: 'cover' }}
+                                />
+                            )}
+                            <div className="st-button-row" style={{ marginTop: 10 }}>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    data-variant="primary"
+                                    disabled={savingElement || elementImageBusy || !draft.name.trim() || !draft.trigger_word.trim()}
+                                    onClick={() => void saveElement()}
+                                >
+                                    {savingElement ? 'Saving…' : editingElement ? 'Save reference' : 'Create reference'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    onClick={() => { setDraft(null); setEditingElement(null); }}
+                                >
+                                    Cancel
+                                </button>
+                                {elementImageBusy && (
+                                    <span className="st-value" style={{ color: 'var(--st-muted)' }}>Uploading image…</span>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {filteredElements.length === 0 ? (
+                        <div className="st-empty">
+                            <strong>No master references</strong>
+                            <span>Create a character, location, or object to reuse it across shots.</span>
+                        </div>
+                    ) : (
+                        <div className="st-grid">
+                            {filteredElements.map((element) => (
+                                <article className="st-take" key={element.id}>
+                                    <div className="st-take-media">
+                                        {element.image_path ? <img src={getAssetUrl(element.image_path)} alt="" loading="lazy" /> : <div className="st-stage-empty"><ImageIcon size={14} /><span>{element.type}</span></div>}
+                                    </div>
+                                    <div className="st-take-body">
+                                        <strong style={{ color: 'var(--st-text)' }}>{element.name}</strong>
+                                        <div>@{element.trigger_word.replace(/^@/, '')} · {element.type}</div>
+                                        <div style={{ marginTop: 4, color: 'var(--st-faint)' }}>{element.description}</div>
+                                        <div className="st-button-row" style={{ marginTop: 8 }}>
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                aria-label={`Edit ${element.name}`}
+                                                onClick={() => openElementEditor(element)}
+                                            >
+                                                <Pencil size={11} /> Edit
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="st-button"
+                                                data-size="sm"
+                                                data-variant="ghost"
+                                                aria-label={`Delete ${element.name}`}
+                                                onClick={() => void deleteElement(element)}
+                                            >
+                                                <Trash2 size={11} /> Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

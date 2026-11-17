@@ -148,8 +148,9 @@ not just filtergraph strings.
   editable pipeline lens with apply-to-shot.
 - Review/agent: frame comments/approvals, activity, needs-you pill, share links,
   deterministic plan previews, undoable apply, recipes, `@Agent` handoff.
-- Library/Deliver: direct uploads, assets/references/takes, ranked local search,
-  presets, pad/crop reframing, caption toggle/preview, render history.
+- Library/Deliver: direct uploads, assets, master-reference CRUD (trigger,
+  image, description), takes, ranked local search, presets, pad/crop reframing,
+  caption toggle/preview, render history.
 - Shorts: transcript/SRT/VTT candidates, scores, 9:16/1:1/4:5 range export.
 - Setup: device/slots/queue/disk, pipeline readiness, base/LoRA activation,
   LoRA strength, model downloads, depth model, error budget.
