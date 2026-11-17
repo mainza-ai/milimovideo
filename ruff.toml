@@ -13,4 +13,5 @@ select = [
     "F811", # redefinitions that shadow real bindings
     "B023", # closures must bind loop variables they capture
     "F841", # unused locals often hide incomplete wiring
+    "RUF006", # keep references to fire-and-forget asyncio tasks
 ]

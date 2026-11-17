@@ -131,6 +131,13 @@ class ModelDownloader:
         self._queue: list[QueuedDownload] = []
         self._queue_lock = asyncio.Lock()
         self._processing = False
+        self._background_tasks: set[asyncio.Task] = set()
+
+    def _spawn(self, coro) -> None:
+        """Create a task and keep a strong reference until it completes."""
+        task = asyncio.create_task(coro)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     def _priority_for_model(self, model) -> int:
         """Determine download priority based on model type."""
@@ -179,7 +186,7 @@ class ModelDownloader:
 
         # Start processing if not already running
         if not self._processing:
-            asyncio.ensure_future(self._process_queue())
+            self._spawn(self._process_queue())
 
         position = next(
             (i for i, q in enumerate(self._queue) if q.model_id == model_id), -1
@@ -350,7 +357,7 @@ class ModelDownloader:
             """Sync callback → async SSE broadcast."""
             try:
                 loop.call_soon_threadsafe(
-                    lambda: asyncio.ensure_future(self._broadcast_progress(download_state))
+                    lambda: self._spawn(self._broadcast_progress(download_state))
                 )
             except RuntimeError:
                 pass
@@ -389,7 +396,7 @@ class ModelDownloader:
         def sync_broadcast(download_state: DownloadState):
             try:
                 loop.call_soon_threadsafe(
-                    lambda: asyncio.ensure_future(self._broadcast_progress(download_state))
+                    lambda: self._spawn(self._broadcast_progress(download_state))
                 )
             except RuntimeError:
                 pass

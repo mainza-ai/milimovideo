@@ -985,3 +985,11 @@ Enabled F841. Removed dead chained/render locals, dropped an unused Flux generat
 Fixed a real wiring gap: `/uploads` computed a fallback thumbnail URL but never
 assigned it, so generated videos without `thumbnail_path` showed no image. Added
 coverage. Verified: 73 pytest, ruff clean, compileall.
+
+## [2026-11-17] correctness | retain fire-and-forget tasks
+
+Enabled RUF006 and kept strong references for the startup resume task, GPU queue
+dispatch, and downloader progress broadcasts. Fire-and-forget `create_task` calls
+can be garbage-collected before completion; they now live in tracked sets and are
+discarded on done. Added a queue task-lifetime test. Verified: 74 pytest,
+compileall, ruff clean.

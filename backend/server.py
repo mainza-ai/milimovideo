@@ -1,5 +1,6 @@
 import sys
 import os
+import asyncio
 import logging
 import logging.handlers
 import mimetypes
@@ -50,6 +51,7 @@ logging.basicConfig(
     handlers=[file_handler, console_handler]
 )
 logger = logging.getLogger(__name__)
+BACKGROUND_TASKS: set[asyncio.Task] = set()
 
 # Ensure directories exist
 os.makedirs(config.PROJECTS_DIR, exist_ok=True)
@@ -110,8 +112,11 @@ async def lifespan(app: FastAPI):
                     f"Recovered startup state: {len(processing)} interrupted, "
                     f"{len(pending)} pending/queued evaluated"
                 )
-        # Resume durable GPU dispatch records after the zombie pass.
-        asyncio.create_task(job_utils.resume_queued_jobs())
+        # Resume durable GPU dispatch records after the zombie pass. Keep a
+        # strong reference so the task cannot be garbage-collected mid-flight.
+        resume_task = asyncio.create_task(job_utils.resume_queued_jobs())
+        BACKGROUND_TASKS.add(resume_task)
+        resume_task.add_done_callback(BACKGROUND_TASKS.discard)
     except Exception as e:
         logger.error(f"Startup cleanup failed: {e}")
     

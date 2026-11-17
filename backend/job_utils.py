@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 # Additional jobs wait in a FIFO queue via the semaphore.
 _gpu_semaphore = None
 _gpu_queue_count = 0  # Track how many jobs are waiting
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _spawn_background(coro, loop=None) -> asyncio.Task:
+    """Create a task and keep it alive until it reaches a terminal state."""
+    task = loop.create_task(coro) if loop else asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
 
 def get_gpu_semaphore():
     global _gpu_semaphore
@@ -107,7 +116,7 @@ async def enqueue_gpu_job(job_id: str, kind: str, params: dict, **extra) -> str:
         session.refresh(queued)
         queue_id = queued.id
 
-    asyncio.create_task(run_queued_job(queue_id))
+    _spawn_background(run_queued_job(queue_id))
     return queue_id
 
 
@@ -286,7 +295,7 @@ async def resume_queued_jobs() -> None:
         ids = [q.id for q in pending]
 
     for queue_id in ids:
-        asyncio.create_task(run_queued_job(queue_id))
+        _spawn_background(run_queued_job(queue_id))
 
 def is_gpu_busy() -> dict:
     """Returns GPU busy status for the frontend."""
@@ -328,7 +337,10 @@ def update_job_progress(job_id: str, progress: int, message: str = None, **kwarg
     try:
         # First try getting the running loop (works if called from async function)
         loop = asyncio.get_running_loop()
-        loop.create_task(broadcast_progress(job_id, progress, "processing", message, **kwargs))
+        _spawn_background(
+            broadcast_progress(job_id, progress, "processing", message, **kwargs),
+            loop=loop,
+        )
     except RuntimeError:
         # We are likely in a thread (ThreadPoolExecutor)
         # Use the captured global loop
