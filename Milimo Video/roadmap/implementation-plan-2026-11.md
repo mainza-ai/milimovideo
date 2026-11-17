@@ -58,6 +58,7 @@ single-engineer guidance.
 | Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview with start/end conditioning/batch/inpaint/favorites, queue position, pause/resume, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets, encoding controls, and in-flight render cancel) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; shorts/lens packaging remains scoped v1 |
 | Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native open/save/build + sidecar-binary resolution |
 | Front-end F6 | **Done — 2026-11-17** | responsive surface switcher, grouped toolbars, Inspector primary tabs + More, readable type/control sizes, card actions/bulk/context menu, command palette/shortcuts, density, responsive layout tests |
+| Job notification plane | **Planned — P0** | audit + plan in [[../systems/job-notifications-audit-2026-11]]; Studio has no SSE consumer or toast layer, backend lacks queued/started/retry events, and the main Generate flow has no state reconciliation |
 | LLM configuration plane | **Done — L0–L3, 2026-11-17** | persisted `app_setting` document with revision CAS, six providers, six roles with fallback, discovery/verify/model catalog, sealed keys, air-gap + cloud opt-in, Studio AI & LLM panel, legacy popover compatibility; L4 governance deferred. See [[../systems/llm-settings-audit-2026-11]] |
 
 **Still open / deferred:**
@@ -372,6 +373,24 @@ parsing, discovery seeding, warm/timeout/streaming, context preflight, eval +
 recommended plan, pre-pipeline enhancement, LLM/VRAM release, vision payloads,
 and cloud budget/eval-gate/profiles are in and verified against Ollama, oMLX, and
 Strata. Remaining caveats live in [[../systems/llm-local-first-next-2026-11]].
+
+## Job Notification Plane (Planned — P0)
+
+Audit, reproduction evidence, gap register N-01…N-28, and the event catalog:
+[[../systems/job-notifications-audit-2026-11]].
+
+| Phase | Scope | Gate |
+|---|---|---|
+| **N0** | Studio toast layer, shared one-connection SSE bus, job→shot reconciliation, inline stage/progress, cancel/failure wake-up | Clicking Generate shows queued → stage → progress → terminal without reload; cancel clears ≤5 s |
+| **N1** | Typed event envelope (`seq/ts/shot_id/kind/stage`), `job.queued`/`started`/`stage`/`retrying`, one terminal emitter, persisted progress, pending-cancel cleanup, `shot_id` in `/active_jobs` | Fake pipeline emits every stage in order; exactly one terminal per job; pending cancel leaves no queue placeholder |
+| **N2** | Activity center, status-strip stage, title/favicon progress, opt-in OS notifications, preferences | Any surface shows the current job and stage; background tab shows progress |
+| **N3** | AI parse, depth, inpaint, renders/shorts, downloads, element visuals consume the same bus | No blocking status loops; every long operation has inline progress + terminal toast |
+| **N4** | `Last-Event-ID` replay, reconnect/visibility resync, stale-spinner watchdog, event metrics, contract/Playwright/axe tests | Reload mid-job restores state; disconnect replay is lossless; CI green |
+| **N5** | Sound, recent history/retry, stage timings, tray progress, local webhook | Optional polish |
+
+**Immediate priority:** N0-01…N0-03 (toast layer, SSE bridge, Generate
+reconciliation), then N1-02/N1-04/N1-06 (queued/started/terminal and pending
+cancel). Do not add OS notifications before the in-app path is reliable.
 
 ## Quality Gates
 

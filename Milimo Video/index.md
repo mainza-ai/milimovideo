@@ -49,6 +49,9 @@ navigate, then drills into pages.
   LLM configuration audit **and implementation record**: Kubona reference patterns,
   the old Gemma/Ollama gaps, the shipped L0–L3 plane (persisted providers/roles,
   discovery, verify, sealed keys, air-gap, Studio panel), and the deferred L4 work.
+- [systems/job-notifications-audit-2026-11](systems/job-notifications-audit-2026-11.md) —
+  generation notification audit: the missing Studio toast layer and SSE consumer,
+  live reproduction, gap register N-01…N-28, event catalog, and the N0–N5 plan.
 - [systems/llm-local-first-next-2026-11](systems/llm-local-first-next-2026-11.md) —
   local-first LLM audit **and implementation record**: live measurements from
   Ollama/oMLX/Strata, findings F1–F11, phases L5–L9 (instances, capability truth,

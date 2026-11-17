@@ -1250,3 +1250,26 @@ Wiki: data models add `appsetting`/`0005`, cloud-engines records the implemented
 guardrails, the v2 LLM-slot recommendation points at per-role eval, and the
 local-first page gains a file/route map. See
 [[systems/llm-local-first-next-2026-11]].
+
+## [2026-11-17] audit | generation notifications
+
+Reproduced the reported failure: clicking Generate in Studio yields only a button
+spinner. Root causes: Studio toasts are added to the document store but only the
+legacy shell mounts a toast container (104 silent `addToast` call sites); Studio
+never subscribes to `/events` (the global provider feeds only the legacy timeline
+store); and `useStudioGenerate` has no progress/terminal reconciliation.
+
+Live evidence: a Playwright probe showed `{"generating":1,"queuedToast":0,
+"completed":0,"anyStatusRole":0}` and no batch toast after 1.2 s while SSE was
+connected. An SSE listener saw a running job's denoise progress but no `queued`
+or `started` events for a newly submitted job. Cancelling that pending job
+returned `cancelled` with no event, `completed_at: null`, and the `QueuedJob`
+row still counted in the queue.
+
+Filed [[systems/job-notifications-audit-2026-11]] with the event-flow map, gap
+register N-01…N-28 (toast layer, SSE bridge, queued/started/stage events,
+terminal-once, persisted progress, pending cancel, payload consistency, replay,
+accessibility, downloads/renders/parse/depth/inpaint), the proposed job event
+envelope and catalog, and phases N0–N5 with gates. Updated
+[[systems/sse-eventing]] to stop claiming Studio consumes events, the
+implementation plan status, AGENTS known gaps, and the index.

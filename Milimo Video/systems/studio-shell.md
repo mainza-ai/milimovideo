@@ -385,13 +385,16 @@ Replace the 7-slice God store with four stores and server-state hooks:
 |---|---|---|
 | `documentStore` | Project graph: sequences, scenes, shots, elements, takes, timeline placements | Server + local cache; undoable |
 | `editorStore` | Active surface, selection, panel sizes, board camera, timeline zoom, compare mode, focus | Local + per-project view endpoint; not undoable |
-| `jobStore` | Server-derived jobs/progress; no local truth | TanStack Query + SSE |
+| `jobStore` | Server-derived jobs/progress; no local truth | `/active_jobs` poll only (Generate); **SSE is not wired into Studio** — see [[job-notifications-audit-2026-11]] |
 | `agentStore` | Chat messages, plan, approvals, streaming trace | Local session + optional transcript file |
 
 Rules:
 
 - Server state is **not** copied into Zustand. Use TanStack Query for
-  projects/assets/jobs/models; use SSE to invalidate/patch query data.
+  projects/assets/jobs/models. The planned notification plane introduces a single
+  SSE bus that patches the document/job state and invalidates queries; today only
+  the legacy timeline store consumes SSE, so generation status is invisible in
+  Studio ([[job-notifications-audit-2026-11]]).
 - Document edits use **Immer patches** or command objects; undo is patch-based,
   not whole-project snapshots.
 - Board layout has its own undo stack and revision; it never pollutes document
@@ -454,7 +457,9 @@ virtualized lists, no per-frame layout recompute.
 - Full keyboard model: `Cmd+K` palette, `Space` play, `J/K/L`, `I/O`, `B` board,
   `E` edit, `G` generate, `R` review, `?` shortcuts, `Esc` focus.
 - Focus management for panels/modals; visible focus rings; skip link.
-- ARIA live for job progress/completion; no color-only status.
+- ARIA live for job progress/completion is **planned, not implemented** (no toast
+  layer or live region is mounted in Studio); see
+  [[job-notifications-audit-2026-11]]. No color-only status.
 - Reduced motion; disable edge animations and camera glides.
 - Contrast tokens; test both dark and high-contrast.
 - Captions/transcripts for all generated audio; export SRT/VTT.

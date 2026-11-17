@@ -217,6 +217,12 @@ Do not claim these are done:
   `MILIMO_LLM_RATE_CARD`, vision detection is heuristic, and the legacy `/`
   popover edits only `prompt_video`. See
   `Milimo Video/systems/llm-local-first-next-2026-11.md`.
+- Job notifications: Studio has no SSE consumer and no mounted toast layer, so
+  generation progress/completion/failure are invisible; the main Generate flow has
+  no state reconciliation and the backend lacks queued/started/retry events and
+  pending-cancel notification. Every new long-running operation must emit a stage
+  and a terminal event. See
+  `Milimo Video/systems/job-notifications-audit-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
 
