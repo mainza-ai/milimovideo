@@ -1,4 +1,5 @@
 import { useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Loader2, Play, RotateCcw, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
 import { useTimelineStore } from '../../stores/timelineStore';
 import { getAssetUrl } from '../../config';
@@ -29,7 +30,14 @@ export function Inspector() {
     const {
         inspectorTab, setInspectorTab, setInspectorOpen, inspectorOpen,
         inspectorWidth, setInspectorWidth,
-    } = useStudioEditor();
+    } = useStudioEditor(useShallow((state) => ({
+        inspectorTab: state.inspectorTab,
+        setInspectorTab: state.setInspectorTab,
+        setInspectorOpen: state.setInspectorOpen,
+        inspectorOpen: state.inspectorOpen,
+        inspectorWidth: state.inspectorWidth,
+        setInspectorWidth: state.setInspectorWidth,
+    })));
     const resizeState = useRef<{ startX: number; startWidth: number } | null>(null);
 
     const matchedElements = !shot?.matchedElements?.length

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { ArrowUp, Check, CornerDownLeft, Loader2, Sparkles, TriangleAlert, X } from 'lucide-react';
 import type { Shot } from '../../stores/timelineStore';
 import { apiUrl } from '../../config';
@@ -59,7 +60,19 @@ export function CommandDock() {
         commandOpen, setCommandOpen, commandMode, setCommandMode,
         setBoardQuery, setSurface, commandDraft, setCommandDraft,
         recipes, saveRecipe, deleteRecipe,
-    } = useStudioEditor();
+    } = useStudioEditor(useShallow((state) => ({
+        commandOpen: state.commandOpen,
+        setCommandOpen: state.setCommandOpen,
+        commandMode: state.commandMode,
+        setCommandMode: state.setCommandMode,
+        setBoardQuery: state.setBoardQuery,
+        setSurface: state.setSurface,
+        commandDraft: state.commandDraft,
+        setCommandDraft: state.setCommandDraft,
+        recipes: state.recipes,
+        saveRecipe: state.saveRecipe,
+        deleteRecipe: state.deleteRecipe,
+    })));
     const [value, setValue] = useState('');
     const [plan, setPlan] = useState<Plan | null>(null);
     const [loading, setLoading] = useState(false);

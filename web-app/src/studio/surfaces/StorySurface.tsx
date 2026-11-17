@@ -13,7 +13,10 @@ export function StorySurface() {
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,
     })));
-    const { selectedSceneId, selectScene } = useStudioEditor();
+    const { selectedSceneId, selectScene } = useStudioEditor(useShallow((state) => ({
+        selectedSceneId: state.selectedSceneId,
+        selectScene: state.selectScene,
+    })));
     const elements = useStudioElements(project.id);
     const [query, setQuery] = useState('');
     const [elementFilter, setElementFilter] = useState<string | null>(null);

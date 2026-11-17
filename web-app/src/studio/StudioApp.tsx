@@ -19,6 +19,7 @@ import { useTimelineStore } from '../stores/timelineStore';
 import { SharedReviewPage } from './SharedReviewPage';
 import { studioQueryClient } from './state/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { useShallow } from 'zustand/react/shallow';
 
 const SURFACES: StudioSurface[] = ['story', 'generate', 'edit', 'review', 'library', 'deliver', 'shorts', 'setup'];
 
@@ -37,7 +38,17 @@ export function StudioApp() {
 }
 
 function StudioShell() {
-    const { activeSurface, setSurface, inspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode } = useStudioEditor();
+    const {
+        activeSurface, setSurface, inspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode,
+    } = useStudioEditor(useShallow((state) => ({
+        activeSurface: state.activeSurface,
+        setSurface: state.setSurface,
+        inspectorOpen: state.inspectorOpen,
+        focusMode: state.focusMode,
+        commandOpen: state.commandOpen,
+        setCommandOpen: state.setCommandOpen,
+        setFocusMode: state.setFocusMode,
+    })));
     const project = useStudioProject();
     useStudioProjectBootstrap();
     useStudioBoardSync(project.id);

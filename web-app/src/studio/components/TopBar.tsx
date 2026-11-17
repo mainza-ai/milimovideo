@@ -4,6 +4,7 @@ import {
     Plus, Redo2, Save, Share2, TriangleAlert, Undo2,
 } from 'lucide-react';
 import { useStore } from 'zustand';
+import { useShallow } from 'zustand/react/shallow';
 import { apiUrl } from '../../config';
 import { useStudioData, useStudioReview } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
@@ -23,7 +24,14 @@ export function TopBar() {
     const { project, health, error } = useStudioData();
     const { review } = useStudioReview(project.id);
     const needsYou = review.summary.open + review.summary.changes_requested;
-    const { activeSurface, setSurface, inspectorOpen, setInspectorOpen } = useStudioEditor();
+    const { activeSurface, setSurface, inspectorOpen, setInspectorOpen } = useStudioEditor(
+        useShallow((state) => ({
+            activeSurface: state.activeSurface,
+            setSurface: state.setSurface,
+            inspectorOpen: state.inspectorOpen,
+            setInspectorOpen: state.setInspectorOpen,
+        })),
+    );
     const { saveStatus, saveError, saveProject } = useTimelineStore();
     const addToast = useTimelineStore((state) => state.addToast);
     const loadProject = useTimelineStore((state) => state.loadProject);

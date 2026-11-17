@@ -755,3 +755,12 @@ command with the dialog plugin. Storyboard backups and pipeline recipes now use 
 native Save dialog in Tauri and a download in the browser. `cargo check` and
 `tauri build --debug --no-bundle` both succeed, producing a desktop binary.
 The heavy sidecar/backend packaging remains a follow-up.
+
+## [2026-11-17] perf | measured 500-card and 200-clip interaction
+
+Added Playwright perf checks against a real 500-shot board and 200-clip timeline.
+Only 11 cards and 27 clips mount; headless (frame-limit disabled) measured
+57.8 fps pan and 274.9 fps timeline scroll. Also narrowed editor-store
+subscriptions in TopBar/Inspector/CommandDock/StorySurface/StudioApp and removed
+board geometry/camera from localStorage persistence (the server board/view
+endpoints own those), eliminating redundant serialization during pans.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ChevronDown, ChevronRight, Grid3X3, Link2, List, Maximize2, Map, Minus, MousePointer2,
     Plus, Redo2, RotateCcw, Search, SquareDashed, StickyNote, Trash2, Pin, Undo2, X,
@@ -29,6 +29,27 @@ function fallbackPosition(index: number): BoardPosition {
         height: CARD_H,
     };
 }
+
+interface MinimapNode {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
+
+const MinimapNodes = memo(function MinimapNodes({ nodes }: { nodes: MinimapNode[] }) {
+    return (
+        <>
+            {nodes.map((node, index) => (
+                <div
+                    key={index}
+                    className="st-board-minimap-node"
+                    style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
+                />
+            ))}
+        </>
+    );
+});
 
 function linkGeometry(source: { x: number; y: number; width: number; height: number }, target: typeof source) {
     const forward = target.x >= source.x;
@@ -592,7 +613,7 @@ export function BoardCanvas() {
     }, [boardAreas, boardPositions, project.shots]);
 
     const lod = boardCamera.zoom < 0.55 ? 'summary' : boardCamera.zoom < 0.95 ? 'compact' : 'detail';
-    const minimap = useMemo(() => {
+    const minimapBase = useMemo(() => {
         const positions = Object.values(boardPositions);
         if (positions.length === 0) return null;
         const minX = Math.min(...positions.map((p) => p.x));
@@ -612,14 +633,18 @@ export function BoardCanvas() {
                 w: Math.max(2, position.width * scale),
                 h: Math.max(2, position.height * scale),
             })),
-            view: {
-                x: (-boardCamera.x / boardCamera.zoom - minX) * scale + 5,
-                y: (-boardCamera.y / boardCamera.zoom - minY) * scale + 5,
-                w: (size.width / boardCamera.zoom) * scale,
-                h: (size.height / boardCamera.zoom) * scale,
-            },
         };
-    }, [boardCamera, boardPositions, size.height, size.width]);
+    }, [boardPositions]);
+
+    const minimapView = useMemo(() => {
+        if (!minimapBase) return null;
+        return {
+            x: (-boardCamera.x / boardCamera.zoom - minimapBase.minX) * minimapBase.scale + 5,
+            y: (-boardCamera.y / boardCamera.zoom - minimapBase.minY) * minimapBase.scale + 5,
+            w: (size.width / boardCamera.zoom) * minimapBase.scale,
+            h: (size.height / boardCamera.zoom) * minimapBase.scale,
+        };
+    }, [boardCamera, minimapBase, size.height, size.width]);
 
     return (
         <div className="st-board-wrap">
@@ -1075,19 +1100,18 @@ export function BoardCanvas() {
                         </button>
                     </div>
 
-                    {boardMinimapOpen && minimap && (
+                    {boardMinimapOpen && minimapBase && minimapView && (
                         <div className="st-board-minimap" role="img" aria-label="Board minimap">
                             <div className="st-board-minimap-world">
-                                {minimap.nodes.map((node, index) => (
-                                    <div
-                                        key={index}
-                                        className="st-board-minimap-node"
-                                        style={{ left: node.x, top: node.y, width: node.w, height: node.h }}
-                                    />
-                                ))}
+                                <MinimapNodes nodes={minimapBase.nodes} />
                                 <div
                                     className="st-board-minimap-view"
-                                    style={{ left: minimap.view.x, top: minimap.view.y, width: minimap.view.w, height: minimap.view.h }}
+                                    style={{
+                                        left: minimapView.x,
+                                        top: minimapView.y,
+                                        width: minimapView.w,
+                                        height: minimapView.h,
+                                    }}
                                 />
                             </div>
                         </div>

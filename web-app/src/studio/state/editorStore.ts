@@ -344,17 +344,25 @@ export const useStudioEditor = create<EditorState>()(
         }),
         {
             name: 'milimo-studio-editor',
+            version: 2,
+            migrate: (persisted: unknown) => {
+                const next = { ...(persisted as Record<string, unknown>) };
+                delete next.boardPositions;
+                delete next.boardPinned;
+                delete next.boardAreas;
+                delete next.boardLinks;
+                delete next.boardCamera;
+                return next;
+            },
             partialize: (state) => ({
                 activeSurface: state.activeSurface,
                 storyView: state.storyView,
                 selectedShotId: state.selectedShotId,
                 selectedShotIds: state.selectedShotIds,
                 inspectorTab: state.inspectorTab,
-                boardCamera: state.boardCamera,
-                boardPositions: state.boardPositions,
-                boardPinned: state.boardPinned,
-                boardAreas: state.boardAreas,
-                boardLinks: state.boardLinks,
+                // Board geometry/camera are persisted by the server board/view
+                // endpoints. Keeping them in localStorage too serialized 500
+                // cards on every pan frame.
                 boardNotes: state.boardNotes,
                 boardQuery: state.boardQuery,
                 collabEnabled: state.collabEnabled,
