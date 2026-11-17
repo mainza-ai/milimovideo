@@ -29,7 +29,7 @@ that motivated the work; each one now has a fix and a test.
 
 | Phase | Status | What landed |
 |---|---|---|
-| **L5** | Done | Provider **instances** (`ollama`, `openai_compatible@host:port`) with schema v2 migration; shape-based discovery with 401/403 `needs_key`; capability catalog (context, vision, chat, embedding-only) incl. Ollama `/api/show`, oMLX `max_model_len`, Strata `meta`; attach-by-URL idempotence; remove-with-usage guard; role/capability gating |
+| **L5** | Done | Provider **instances** (`ollama`, `openai_compatible@host:port`) with schema v2 migration (the document is now v3, adding declared `memory_gb`); shape-based discovery with 401/403 `needs_key`; capability catalog (context, vision, chat, embedding-only) incl. Ollama `/api/show`, oMLX `max_model_len`, Strata `meta`; attach-by-URL idempotence; remove-with-usage guard; role/capability gating |
 | **L6** | Done | Wrapper-safe `parse_enhancement`; discovery-seeded defaults with a sensible model picker and explicit unassigned roles; warm endpoint + per-provider timeout/keep_alive; streaming negotiation with first-byte timeout and non-stream fallback; context preflight; load/latency/tok-s telemetry; health check |
 | **L7** | Done | Fixture pack (shot/image/script), `POST /settings/llm/eval`, persisted `last_eval` with staleness, recommended-plan apply, panel eval table |
 | **L8** | Done | HTTP enhancement runs **before** the pipeline loads; `llm_http` memory slot + unload of every role model; take provenance in the Inspector; cancel checks at call boundaries; image input over Ollama/OpenAI/Anthropic wires; `verify_setup` engine/role readiness incl. missing models |

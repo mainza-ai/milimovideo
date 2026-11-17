@@ -325,6 +325,92 @@ tray progress, local webhook for automations.
 - Do not use OS notifications without explicit permission.
 - Do not expose raw backend strings as the stage vocabulary.
 
+## Implementation status (2026-11-17)
+
+N0, N1, N2, N3, and the core of N4 landed. N5 remains optional.
+
+| Task | Status | Evidence |
+|---|---|---|
+| N0-01 toast layer | **Done** | `StudioToastLayer` mounted in `StudioApp`, aria-live, tone, dismiss, max 5 |
+| N0-02 shared SSE bus | **Done** | one `SSEProvider`; typed `job.*` handlers + legacy mapping + system handlers |
+| N0-03 job→shot reconciliation | **Done** | `jobBridge.ts` updates shot stage/progress/ETA/take; `/active_jobs` resync |
+| N0-04 cancel/failure wake-up | **Done** | terminal events clear state; `useStudioCancel` 5 s `/status` watchdog |
+| N0-05 inline generate status | **Done** | Generate surface bar with stage label, percent, ETA, message |
+| N1-01 typed envelope | **Done** | `{ts,event,job_id,shot_id,project_id,kind,stage,progress,step,total,eta_seconds,message}` |
+| N1-02 queued/started | **Done** | `enqueue_gpu_job` emits position + estimate; `run_queued_job` emits started |
+| N1-03 stage events | **Done** | enhancing, loading, conditioning, denoising, upscaling, inpainting, encoding, saving |
+| N1-04 one terminal emitter | **Done** | `job_events.terminal` writes the DB once and emits once; duplicates ignored |
+| N1-05 persist progress | **Done** | throttled ≥1 s, stage change forces a write; `/status` returns stage/memory |
+| N1-06 pending cancel | **Done** | cancels `Job` + `QueuedJob`, emits `job.cancelled` |
+| N1-07 recovery/OOM events | **Done** | `job.retrying`, `job.failed` on recovery, `job.queued` on re-dispatch |
+| N1-08 shot_id in active rows | **Done** | `/active_jobs` includes shot/kind/stage/step/eta/started_at |
+| N1-09 memory waits/events | **Done** | `job.waiting`, `memory.pressure`, `memory.evicted`, `queue.paused/resumed` |
+| N2-01 activity center | **Done** | TopBar popover: active rows with bar/ETA/cancel, recent history, unread badge |
+| N2-02 status strip | **Done** | current stage + percent + ETA, falls back to queue count |
+| N2-03 title progress | **Done** | document title shows `% · stage · Milimo` while busy |
+| N2-04 OS notification | **Done** | browser Notification on hidden tabs when granted; the Tauri shell adds a `notify` command using macOS Notification Center via `osascript`, so desktop builds do not depend on the browser permission |
+| N2-05 preferences | **Done** | persisted `milimo-studio-notifications` (toasts/os/sound) with a Setup panel; per-project mute is not included |
+| N3-01 AI parse | **Done** | stage + terminal events; no blocking poll loop in Studio |
+| N3-02 depth/inpaint | **Done** | stage + terminal events |
+| N3-03 renders/shorts | **Done** | `render_*` toasts + Deliver refresh |
+| N3-04 downloads | **Done** | `download_*` refresh models; polling only while a download is active |
+| N3-05 element visual | **Done** | element jobs now have a `Job` row and emit stage/terminal |
+| N4-01 replay | **Done** | `seq` ids + `Last-Event-ID`/`last_event_id` replay, 120 s window |
+| N4-02 resync | **Done** | reconnect dispatches `milimo:resync`; active-job and takes/assets/renders hooks listen |
+| N4-03 stale spinner watchdog | **Done** | reconcile against `/status` on mount/resync; cancel watchdog |
+| N4-04 metrics | **Partial** | `clients`, `sequence`, `replay_buffer`, memory peak exposed; delivery lag/histogram not aggregated |
+| N4-05 tests | **Done** | `tests/test_job_events.py` (16), `jobBridge.test.tsx` (6), `JobProgressUi.test.tsx` (6), `generatePreflight.test.ts` (3), `bootstrap.test.ts` (2) |
+
+### Live probe (2026-11-17)
+
+Connected an SSE client to `/events` and drove real jobs:
+
+```
+job.queued   {"stage": "queued",  "message": "Queued (#1)"}
+job.started  {"stage": "starting","message": "Starting video job…"}
+job.stage    {"stage": "loading", "progress": 2, "message": "Loading ti2vid pipeline…"}
+job.stage    {"stage": "conditioning", "progress": 8, "message": "Pipeline ready"}
+job.stage    {"stage": "denoising", "progress": 10, "message": "Starting generation…"}
+```
+
+Queued-then-cancelled probe:
+
+```
+job.queued    {"stage": "queued",    "message": "Queued (#1)"}
+job.waiting   {"stage": "waiting",   "message": "GPU queue is paused; waiting for resume"}
+job.cancelled {"stage": "cancelled", "message": "Cancelled before start"}
+```
+
+`/status/{job_id}` returned `cancelled`/`cancelled`, and `/active_jobs` no longer
+listed it. A cancelled 121f denoise converged to `cancelled` at progress 11 with
+no OOM.
+
+### N5 polish (implemented)
+
+- Sound cue (WebAudio, off by default) and opt-in desktop notifications.
+- Recent-job history has a per-row **Retry** that re-queues the job's shot.
+- ETA is derived per stage from the observed step rate when the task does not
+  provide one.
+- Optional terminal webhook: `MILIMO_JOB_WEBHOOK` (+ `MILIMO_JOB_WEBHOOK_TOKEN`),
+  posted in a daemon thread after the terminal event, local-first and off by
+  default.
+- Desktop window title tracks `% · stage` through a `set_window_title` Tauri
+  command; the browser tab title is always updated.
+- Per-project notification mute is persisted alongside toasts/OS/sound.
+- The macOS dock badge shows the current progress percent (and the active job count)
+  through a Tauri `set_badge` command, cleared when the queue is idle.
+
+### Known limits
+
+- The legacy `/` editor still receives mapped `progress/complete/error/cancelled`
+  events; it does not render Studio toasts.
+- Desktop notifications on macOS call `osascript`; other platforms return an
+  error and fall back to the in-app surface. Sound uses WebAudio and is off by
+  default.
+- A cancelled job keeps its loaded pipeline until the 300 s idle TTL unless
+  `Release all` is used.
+- Non-stream LLM cancellation is still timeout-bounded (not a socket abort).
+
 ## Open questions
 
 - Should progress be per-denoise-step or time-throttled at 1 s? (Current step

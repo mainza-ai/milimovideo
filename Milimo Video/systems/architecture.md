@@ -99,23 +99,30 @@ documents. Switching routes does not share unsaved edits.
 ## Module Map (current)
 
 **Backend** (`backend/`): `server.py` (FastAPI entry, media Range, `/events`,
-`/health`), `config.py`, `database.py` (SQLModel + Alembic init), `events.py`
-(SSE), `job_utils.py` (queue ledger, semaphore, retry, pause, cancellation),
-`schemas.py` (Pydantic boundaries), `model_engine.py` / `memory_manager.py`,
-`llm.py` (facade), `models/flux_wrapper.py`, `managers/` (element/inpainting/
-tracking), `services/` (script/ai storyboard, matcher, model registry/downloader,
-`llm/` settings+providers+runtime+discovery), `tasks/` (video, chained, image,
-depth, ai_parse), `routes/` (12 routers), `alembic/` (baseline, render settings,
-seed lock, asset thumbnail, app settings), `utils/` (render filtergraph, captions,
-paths).
+`/health`, opt-in reload), `config.py`, `database.py` (SQLModel + Alembic init),
+`events.py` (SSE with `seq`/replay), `job_events.py` (typed `job.*` envelope and
+the single terminal emitter), `job_utils.py` (durable ledger, GPU semaphore,
+priority + same-slot ordering, bounded memory waits, retry, pause, cancellation),
+`schemas.py` (Pydantic boundaries), `model_engine.py` / `memory_manager.py`
+(residency, leases, admission), `services/memory/` (`models`, `costs`, `engines`,
+`budget`, `sampler`), `llm.py` (facade), `models/flux_wrapper.py`, `managers/`
+(element/inpainting/tracking), `services/` (script/ai storyboard, matcher, model
+registry/downloader, `llm/` settings+providers+runtime+discovery), `tasks/`
+(video, chained, image, depth, ai_parse), `routes/` (13 routers incl. `memory.py`),
+`alembic/` (baseline, render settings, seed lock, asset thumbnail, app settings,
+job progress), `benchmark_models.py` (M5 lane baselines), `utils/` (render
+filtergraph, captions, paths).
 
 **Frontend** (`web-app/src/`): `main.tsx` → `App.tsx` (Studio lazy route + legacy),
 `src/studio/StudioApp.tsx`, `state/documentStore.ts` (studio document + undo),
-`state/editorStore.ts`, `state/jobStore.ts`, `state/agentStore.ts`,
-`data/useStudioData.ts` (hooks/contracts), `surfaces/`, `components/` (board,
-timeline, inspector, command dock, lenses), `src/config.ts` (API/asset resolver),
-`src/api/` (generated schema + zod contracts), `src/stores/` (legacy store/slices),
-`src-tauri/` (desktop shell).
+`state/editorStore.ts`, `state/jobStore.ts` (active/history/unread),
+`state/agentStore.ts`, `data/useStudioData.ts` (hooks/contracts, bootstrap,
+preflight), `events/jobBridge.ts` (job→shot/toast reconciler),
+`notifications/preferences.ts` (toasts/OS/sound/project mute), `surfaces/`,
+`components/` (board, timeline, inspector, command dock, lenses, toasts, activity,
+memory), `src/config.ts` (API/asset resolver), `src/api/` (generated schema + zod
+contracts), `src/stores/` (legacy store/slices), `src-tauri/` (desktop shell with
+title/badge/notify commands).
 
 **Import edges:** `tasks/video.py` is the generation funnel; `tasks/image.py` →
 `flux_wrapper.py` → `memory_manager.py`; `routes/storyboard.py` →
@@ -130,7 +137,13 @@ SQLite or the model layer directly.
   starting Uvicorn.
 - `./run_frontend.sh` starts Vite; `npm run tauri dev` hosts Studio in Tauri.
 - `./run_sam.sh` starts the optional SAM 3 service.
-- One GPU job at a time; queue pause stops new dispatch after the current job.
+- One GPU job at a time; dispatch is priority-aware (interactive > bulk > parse)
+  with same-slot grouping; queue pause stops new dispatch after the current job.
+- Memory admission runs before every heavy load. A transient refusal becomes a
+  bounded “waiting for memory” retry; a permanent one offers/applies a smaller
+  preset before any allocation.
+- Uvicorn reload is opt-in (`MILIMO_RELOAD=1`); normal runs do not watch the repo.
+- The SAM 3 image model is lazy (loads on first segmentation request).
 - Frontend production build is served by the backend or Tauri; API base defaults to
   the current origin outside Vite dev.
 
@@ -152,6 +165,14 @@ SQLite or the model layer directly.
 - Do not add schema columns without an Alembic revision.
 - The studio and legacy editors have separate document stores; test the route you
   changed.
+- A job must emit stages and exactly one terminal event through `job_events`; do
+  not add ad-hoc `event_manager.broadcast` calls for job state.
+- Any new heavy model must call `memory_manager.admit_job` / `prepare_for` and be
+  included in the cost registry, or it bypasses the budget.
+- The physical-free and free-swap checks are separate from the MPS ceiling; swap
+  occupancy alone is historical, not live pressure.
+- `useStudioProjectBootstrap` treats id `default` as a local sentinel and opens the
+  newest real server project; do not persist `default` as a real choice.
 
 ## Related
 
@@ -159,5 +180,6 @@ SQLite or the model layer directly.
 - [[studio-shell.md]] — implemented Studio architecture
 - [[frontend-state.md]] — stores in detail
 - [[nle-timeline.md]] — timeline and render truth
-- [[sse-eventing.md]] — events and recovery
+- [[sse-eventing.md]] — typed events, replay, and recovery
+- [[../concepts/memory-slots.md]] — slots and the measured budget
 - [[../roadmap/implementation-plan-2026-11.md]] — status and remaining work

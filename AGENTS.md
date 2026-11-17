@@ -133,13 +133,24 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
   `TimelineItem`, `RenderSettings`, `BoardLayoutPayload`, review/share/plan/depth
   payloads.
 - Alembic baseline (`0001_baseline`) plus `0002_render_settings`,
-  `0003_seed_lock`, `0004_asset_thumbnail`, and `0005_app_settings`, with startup
+  `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`, and
+  `0006_job_progress` (`Job.stage`, `started_at`, `memory_json`), with startup
   upgrade; legacy DBs are repaired and stamped. Do not add schema columns without
   a migration and migration test.
 - Generated OpenAPI client types: `npm run gen:api`; CI checks drift.
-- Durable GPU queue: `QueuedJob` ledger + one global semaphore + one OOM retry
-  + pause/resume dispatch.
-- Observability: `X-Request-ID`, timing logs, `/health`, `/metrics/jobs`.
+- Durable GPU queue: `QueuedJob` ledger + one global semaphore + one budget-aware
+  OOM retry + pause/resume dispatch.
+- Memory budget: `services/memory` measures total/reserve/MPS ceiling/physical
+  free/swap free/in-process slots/external engines; admission runs before every
+  heavy load, leases block eviction, idle TTL unloads, and the sampler records
+  peak per stage. `/health`, `/system/memory`, `/system/memory/preflight`,
+  `/system/memory/unload`, and `/system/memory/keep-warm`.
+- Job events: typed `job.*` envelope (`ts/event/job_id/shot_id/project_id/kind/
+  stage/progress/step/total/eta_seconds/message`) with `seq` ids,
+  `Last-Event-ID` replay, and a single terminal emitter. `job_events.terminal`
+  writes the DB once and emits once.
+- Observability: `X-Request-ID`, timing logs, `/health`, `/metrics/jobs` (now with
+  memory peak and event stats).
 - Local security: loopback default, CORS allowlist, optional bearer token, safe
   media Range serving, upload allowlist/size cap.
 
@@ -203,7 +214,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 125 backend tests, 61 Vitest tests, and 21 Playwright tests, plus
+baseline is 175 backend tests, 79 Vitest tests, and 21 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -219,17 +230,22 @@ Do not claim these are done:
   `MILIMO_LLM_RATE_CARD`, vision detection is heuristic, and the legacy `/`
   popover edits only `prompt_video`. See
   `Milimo Video/systems/llm-local-first-next-2026-11.md`.
-- Job notifications: Studio has no SSE consumer and no mounted toast layer, so
-  generation progress/completion/failure are invisible; the main Generate flow has
-  no state reconciliation and the backend lacks queued/started/retry events and
-  pending-cancel notification. Every new long-running operation must emit a stage
-  and a terminal event. See
+- Job notification caveats: the legacy `/` editor still consumes mapped
+  `progress/complete/error/cancelled` events and renders no Studio toasts; macOS
+  desktop notifications use `osascript` (other desktop platforms fall back to the
+  in-app surface); window-title and macOS dock-badge progress are implemented, as
+  is per-project mute. Every new
+  long-running operation must emit a stage and a terminal event through
+  `job_events` — do not add ad-hoc `event_manager.broadcast` calls for job state. See
   `Milimo Video/systems/job-notifications-audit-2026-11.md`.
-- Memory management: the guard uses static 40/24 GB estimates, cannot see external
-  LLM engines (Strata 33 GB + oMLX 6.5 GB were invisible), never evicts idle models,
-  and activation/deactivation can unload a pipeline mid-job. A 121-frame upscale job
-  exhausted swap on a 128 GB machine. Any change that loads a model must go through
-  the budget/residency plan in
+- Memory caveats: the cost registry is hand-tuned (measured estimate, not a
+  per-model profile); Strata has no unload endpoint and is budgeted from its
+  `memory_gb` override; a cancelled job keeps its pipeline until the idle TTL;
+  only the MPS decode path is tiled; memory waits are bounded at 20 retries; M5
+  checkpoint swaps need model artifacts and a baseline tool lives in
+  `backend/benchmark_models.py`.
+  Any change that loads a model must call `memory_manager.admit_job` /
+  `prepare_for` and include external engines in the budget. See
   `Milimo Video/systems/memory-management-audit-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.

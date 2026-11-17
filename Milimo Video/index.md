@@ -11,8 +11,8 @@ navigate, then drills into pages.
 
 ## Systems
 - [systems/architecture](systems/architecture.md) — the split architecture: React
-  frontend, FastAPI backend, SAM 3 microservice, how they talk (REST, SSE), plus
-  the module map (key files and import edges).
+  frontend, FastAPI backend, SAM 3 microservice, how they talk (REST, typed SSE),
+  the memory/job-event plane, plus the module map (key files and import edges).
 - [systems/nle-timeline](systems/nle-timeline.md) — the magnetic timeline: V1/V2/A1
   tracks, Zustand store, PlaybackEngine, snapEngine.
 - [systems/data-models](systems/data-models.md) — SQLite/SQLModel entities
@@ -24,9 +24,9 @@ navigate, then drills into pages.
 - [systems/storyboard-engine](systems/storyboard-engine.md) — screenplay to
   shot list: regex vs Gemma AI parsing, ElementMatcher 8-signal scoring,
   concept-art thumbnails, generation dispatch.
-- [systems/sse-eventing](systems/sse-eventing.md) — real-time eventing:
-  EventManager, `/events`, SSEProvider reconnect discipline, jobPoller recovery,
-  event payload shapes.
+- [systems/sse-eventing](systems/sse-eventing.md) — real-time eventing: typed
+  `job.*` envelope, `seq`/Last-Event-ID replay, single terminal emitter, Studio
+  toasts/activity, legacy mapping, recovery and cancellation.
 - [systems/prompt-enhancement](systems/prompt-enhancement.md) — the `llm.py`
   dispatcher: Gemma built-in vs Ollama, keep_alive unload discipline,
   vision-model badges, VLM structured extraction.
@@ -51,11 +51,18 @@ navigate, then drills into pages.
   discovery, verify, sealed keys, air-gap, Studio panel), and the deferred L4 work.
 - [systems/memory-management-audit-2026-11](systems/memory-management-audit-2026-11.md) —
   memory/OOM audit: the 128 GB incident, measured model and external-engine costs
-  (Strata 33 GB, oMLX 6.5 GB), static-estimate failure, gap register M-01…M-25,
-  engine adapters, budget/lease/eviction design, and phases M0–M5.
+  (Strata 33 GB, oMLX 6.5 GB), static-estimate failure, gap register M-01…M-29,
+  engine adapters, budget/lease/eviction design, phases M0–M5, **and the full
+  implementation record** (priority/same-slot queue, memory waits, downgrade
+  ladder, metrics, tiled/buffer release, SAM lazy load, benchmark tool) with live
+  refusal/cancel/downgrade evidence.
 - [systems/job-notifications-audit-2026-11](systems/job-notifications-audit-2026-11.md) —
   generation notification audit: the missing Studio toast layer and SSE consumer,
-  live reproduction, gap register N-01…N-28, event catalog, and the N0–N5 plan.
+  live reproduction, gap register N-01…N-28, event catalog, the N0–N5 plan, **and
+  the full implementation record**: typed events, replay, single terminal, toasts,
+  activity center, inline progress, resync/watchdog, metrics, history retry, ETA,
+  desktop notifications, dock badge, webhook, and per-project mute, with live
+  probes.
 - [systems/llm-local-first-next-2026-11](systems/llm-local-first-next-2026-11.md) —
   local-first LLM audit **and implementation record**: live measurements from
   Ollama/oMLX/Strata, findings F1–F11, phases L5–L9 (instances, capability truth,
@@ -81,8 +88,9 @@ navigate, then drills into pages.
   mask acquisition paths, the noisy-known blend, job persistence, save paths.
 
 ## Concepts
-- [concepts/memory-slots](concepts/memory-slots.md) — the MemoryManager's
-  mutual-exclusion slots: one heavy GPU model at a time, Ollama keep_alive discipline.
+- [concepts/memory-slots](concepts/memory-slots.md) — the measured budget and
+  residency slots: admission, leases, TTL eviction, engine adapters, pressure/swap
+  policy, and what each heavy model really costs.
 - [concepts/mps-first](concepts/mps-first.md) — Apple Silicon as a first-class
   citizen: the VAE-decode, dtype, and memory fixes that keep MPS from shipping
   black frames.

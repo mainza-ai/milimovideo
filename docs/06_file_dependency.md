@@ -15,9 +15,12 @@ graph TD
     subgraph "Core Infrastructure"
         database[database.py]
         events[events.py]
+        job_events[job_events.py]
         schemas[schemas.py]
         job_utils[job_utils.py]
         file_utils[file_utils.py]
+        mem_budget["services/memory/*"]
+        benchmark[benchmark_models.py]
     end
 
     subgraph "API Routes"
@@ -28,6 +31,7 @@ graph TD
         r_elements[routes/elements.py]
         r_storyboard[routes/storyboard.py]
         r_settings[routes/settings.py]
+        r_memory[routes/memory.py]
     end
 
     subgraph "Task Engine"
@@ -60,8 +64,14 @@ graph TD
     t_video --> llm
     t_image --> llm
     server --> events
+    server --> job_events
     server --> routes_init
     server --> job_utils
+    server --> memory_mgr
+    job_utils --> job_events
+    job_events --> events
+    memory_mgr --> mem_budget
+    benchmark --> mem_budget
 
     %% Routes aggregation
     routes_init --> r_projects
@@ -69,6 +79,7 @@ graph TD
     routes_init --> r_assets
     routes_init --> r_elements
     routes_init --> r_storyboard
+    routes_init --> r_memory
 
     %% Route dependencies
     r_projects --> database

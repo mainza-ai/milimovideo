@@ -1,7 +1,7 @@
 ---
 type: models
 created: 2026-10-09
-updated: 2026-10-09
+updated: 2026-11-17
 tags: sam-3 segmentation tracking microservice
 sources:
   - README.md
@@ -35,13 +35,17 @@ Text-prompted segmentation, click-to-segment, and bidirectional video object tra
 - Tracking UI (`TrackingPanel.tsx`) lifecycle: start → prompt → propagate → navigate
   results → save/load; mutually exclusive with edit mode.
 - Checkpoint `backend/models/sam3/sam3.pt` (~3.4GB) auto-downloads from HuggingFace
-  on first start if missing.
+  on the first segmentation request if missing. The image model is **lazy**: the
+  service starts at ~0 GB and loads under a lock on demand (`POST /load` warms it,
+  `POST /unload` releases it). The memory budget counts 0.5 GB idle, 8 GB loaded.
 
 ## API
 
 | Endpoint | Request | Response |
 |---|---|---|
-| `GET /health` | — | `{status, model_loaded, processor_ready}` |
+| `GET /health` | — | `{status, model_loaded, processor_ready, loading, lazy, error}` |
+| `POST /load` | — | warm the image model (idempotent) |
+| `POST /unload` | — | release the image model + flush caches |
 | `POST /predict/mask` | image + points/labels (+boxes) | binary PNG mask |
 | `POST /detect` | image + text + confidence | `{objects: [{mask, bbox, score, label}]}` |
 | `POST /segment/text` | image + text + confidence | merged binary PNG mask (for inpainting) |
@@ -61,12 +65,14 @@ Text-prompted segmentation, click-to-segment, and bidirectional video object tra
 
 ## Internals & Gotchas (from the SAM 3 bible)
 
-- **Startup order** (`start_sam_server.py`, bound to `0.0.0.0:8001`): import
-  `build_sam3_image_model` + `Sam3Processor` → device auto-detect (CUDA → MPS →
-  CPU) → load `sam3.pt` (auto-download from `facebook/sam3` if missing) →
+- **Startup order** (`start_sam_server.py`, bound to `0.0.0.0:8001`): the lifespan
+  starts immediately with no model. The first image request calls `_ensure_model()`
+  → import `build_sam3_image_model` + `Sam3Processor` → device auto-detect (CUDA →
+  MPS → CPU) → load `sam3.pt` (auto-download from `facebook/sam3` if missing) →
   `enable_inst_interactivity=True` for click prediction → `Sam3Processor` (default
-  confidence 0.5) → `.eval()`. The video predictor lazy-loads on the first
-  `/track/*` call to save VRAM. Start `./run_sam.sh` **before** the backend.
+  confidence 0.5) → `.eval()`. `/load` can warm it; `/unload` releases it. The
+  video predictor lazy-loads on the first `/track/*` call. Start `./run_sam.sh`
+  **before** the backend when using segmentation.
 - **Predictor internals**: `Sam3Processor` is stateful — `set_image()` →
   `set_text_prompt()` → masks/boxes/scores. Point labels: `1` = foreground,
   `0` = background. `multimask_output=True` returns ranked candidates; input is

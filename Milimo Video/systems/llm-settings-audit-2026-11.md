@@ -368,7 +368,7 @@ kept as written so the gap that motivated the work stays legible.
 
 | Phase | Status | What landed |
 |---|---|---|
-| **L0** | Done | `app_setting` table + Alembic `0005_app_settings`; typed `LLMSettings`/`LLMProviderConfig`/`LLMRoleAssignment`; `revision` CAS (`PUT ?expected_revision=`); redacted `GET`; field-level air-gap `PATCH`; tests for persistence, conflict, redaction, env seeding, validation |
+| **L0** | Done | `app_setting` table + Alembic `0005_app_settings`; typed `LLMSettings`/`LLMProviderConfig`/`LLMRoleAssignment` (current document v3 with `memory_gb`); `revision` CAS (`PUT ?expected_revision=`); redacted `GET`; field-level air-gap `PATCH`; tests for persistence, conflict, redaction, env seeding, validation |
 | **L1** | Done | `services/llm/`: `store.py`, `providers.py`, `runtime.py`, `discovery.py`, `secretbox.py`, `defaults.py`, `prompts.py`; Gemma/Ollama/LM Studio/OpenAI-compatible plus opt-in OpenAI/Anthropic; async and sync transports; loopback discovery; verify/model catalog; URL validation; AES-GCM sealing with `MILIMO_SECRET_KEY` |
 | **L2** | Done | Six roles (`prompt_video`, `prompt_image`, `script_parse`, `agent_plan`, `review_critic`, `continuity`), ordered fallback, per-role sampling, no `config.LLM_PROVIDER` branches remain in tasks, AI parse runs on Ollama without loading LTX, job params record role/provider/model/latency |
 | **L3** | Done | Studio Setup → **AI & LLM** panel: active provider/model, provider cards with enable/URL/model/key posture, list models, verify, discovery + attach, role matrix with fallbacks, air-gap and cloud state, revision/save/revert/conflict, saved-config test prompt; legacy popover now saves through `PUT` and links to Studio |

@@ -39,16 +39,16 @@ models introduced between revisions.
 | `shot` | project_id, scene_id, index, sequence_index, track_index (0=V1, 1=V2, 2=A1), start_frame, trim_in/out, prompt/negative/action/dialogue/character, seed + seed_locked, width/height/num_frames/fps, cfg_scale, enhance_prompt, upscale, pipeline_override, auto_continue, status, timeline (JSON), keyframes (JSON), blocking (JSON), matched_elements (JSON), selected_take_id, favorite_take_id, audio_gain/muted/fade_in/fade_out, speed, video_url, thumbnail_url, last_job_id | N→1 project/scene; 1→N jobs |
 | `element` | project_id, name, trigger_word (`@Hero`), type (character\|location\|object\|style), description, image_path | N→1 project; trigger words feed IP-Adapter |
 | `asset` | project_id (nullable), type, path, url, filename, thumbnail_url, width/height, duration, meta_json | N→1 project |
-| `queuedjob` | id, job_id, kind (video\|image\|inpaint\|element\|ai_parse\|depth), params_json, status (queued\|running\|completed\|failed), attempts, resume_policy, timestamps, error_message | scheduler ledger; one row per dispatch |
-| `job` | project_id, shot_id, type, status (pending\|processing\|completed\|failed\|cancelled), progress, output_path, thumbnail_path, error_message, prompt, params_json, enhanced_prompt, status_message, actual_frames, request_id, resume_policy | user-facing job state |
+| `queuedjob` | id, job_id, kind (video\|image\|inpaint\|element\|ai_parse\|depth), params_json (incl. `_memory_waits`/`_memory_not_before`), status (queued\|running\|completed\|failed\|cancelled), attempts, resume_policy, timestamps, error_message | scheduler ledger; one row per dispatch |
+| `job` | project_id, shot_id, type, status (pending\|processing\|completed\|failed\|cancelled), progress, stage, started_at, completed_at, memory_json, output_path, thumbnail_path, error_message, prompt, params_json, enhanced_prompt, status_message, actual_frames, request_id, resume_policy | user-facing job state + per-stage memory trace |
 | `sharelink` | token, project_id, created_at, revoked | capability links for review |
 | `reviewitem` | project_id, shot_id, kind (comment\|approval), frame, body, status, author, created_at | frame comments and approvals |
-| `appsetting` | key (PK), value_json, updated_at | versioned JSON documents: `llm` (`LLMSettings` v2) and `llm_spend` (daily cloud ledger) |
+| `appsetting` | key (PK), value_json, updated_at | versioned JSON documents: `llm` (`LLMSettings` v3) and `llm_spend` (daily cloud ledger) |
 
-**LLM settings document** (`app_setting.key = "llm"`): `schema_version` 2 and a
+**LLM settings document** (`app_setting.key = "llm"`): `schema_version` 3 and a
 `revision` CAS token; `providers` keyed by instance id (`ollama`,
 `openai_compatible@host:port`) with type, wire, base URL, model, timeout,
-keep-alive, and secret status; `roles` for the six filmmaking jobs with
+keep-alive, declared `memory_gb`, and secret status; `roles` for the six filmmaking jobs with
 provider/model/fallback/sampling (empty provider = explicitly unassigned);
 `budget` (`daily_usd`, `eval_gate`); and server-written `last_eval`. Credentials
 are sealed with AES-256-GCM when `MILIMO_SECRET_KEY` is set and never returned by
@@ -65,7 +65,8 @@ audio bitrate, loudness normalize, optional source_path), `ElementCreate`/
 
 **TypeScript types** (`web-app/src/stores/types.ts` and
 `web-app/src/studio/data/useStudioData.ts`) mirror the backend: `Shot` (incl.
-`seedLocked`, `matchedElements`, `keyframes`, `blocking`, `timeline`), `Project`
+`seedLocked`, `matchedElements`, `keyframes`, `blocking`, `timeline`, `stage`),
+`Project`
 (incl. `renderPreset`, `renderCrf`, `renderSpeed`, `renderAudioBitrate`,
 `renderAudioNormalize`), `StudioElement`, `StudioAsset`, takes, review, render, and
 agent types. Generated OpenAPI types live in `web-app/src/api/schema.d.ts`; zod
@@ -80,6 +81,7 @@ contracts cover health/plans/review/share.
 | `0003_seed_lock` | `shot.seed_locked` |
 | `0004_asset_thumbnail` | `asset.thumbnail_url` for uploaded-video posters |
 | `0005_app_settings` | `app_setting` table for the revisioned LLM settings document and spend ledger |
+| `0006_job_progress` | `job.stage`, `job.started_at`, `job.memory_json` for stage progress and per-job memory traces |
 
 **On-disk storage** (under `backend/`): `projects/{id}/generated/`,
 `projects/{id}/thumbnails/`, `projects/{id}/assets/{general,references,elements}/`,
@@ -114,6 +116,12 @@ contracts cover health/plans/review/share.
   carries explicit settings.
 - `seed_locked` defaults true. Explicit randomize is a user action, not an implicit
   side effect.
+- `Job.stage`/`started_at` are written by the throttled progress path and the
+  terminal emitter; `/status` returns them so a reload sees the latest stage.
+- `Job.memory_json` stores the sampler trace (`peak_gb`, `peak_stage`, per-stage
+  peaks, swap peak); `/metrics/jobs` aggregates the peak.
+- The LLM document is v3; v1/v2 are migrated on read. `memory_gb` is a declared
+  residency override for engines that cannot report it.
 - `QueuedJob` is the scheduler truth; `Job` is the user-facing status. Terminal
   states are written once and broadcast once.
 - The DB is local and single-writer; no Postgres path is implemented.

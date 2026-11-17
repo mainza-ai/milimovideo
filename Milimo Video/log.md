@@ -1295,3 +1295,158 @@ leases, admission/downgrade, model-aware batching, observability, and phases
 M0–M5. Updated [[concepts/memory-slots]], the implementation plan, architecture,
 AGENTS engineering law/known gaps, the LLM residency notes, the notification event
 catalog (`job.waiting`), and the index.
+
+## [2026-11-17] implement | memory budget and job notification plane (M0/M1/M3/M4, N0–N4)
+
+Shipped both audits end to end.
+
+Memory: new `backend/services/memory/{models,costs,engines,budget,sampler}.py`.
+`memory_manager` now admits by measured bytes, leases slots, refuses conflicts
+that are in use, evicts idle slots on TTL/pressure, pins keep-warm, and exposes
+status. Cost registry (LTX 76 GB base, Flux 36 GB, workspace/frames/resolution/
+upscale) plus a physical-free, free-swap, and safety-margin gate — swap occupancy
+alone no longer blocks work. Engine adapters: Ollama `/api/ps`, oMLX
+`/v1/models/status` and unload, generic `memory_gb` override. Wired admission into
+video/image/chained/ai_parse/inpaint/element, pipeline load, model activation,
+and LLM warm/reserve. `/system/memory`, `/preflight`, `/unload`, `/keep-warm`;
+`/settings/llm/memory` and provider unload; Setup `MemoryPanel`; Generate
+preflight; per-job sampler persisted in `Job.memory_json`; MPS
+`set_per_process_memory_fraction`; encode moved to a thread; uvicorn reload now
+opt-in (`MILIMO_RELOAD=1`).
+
+Notifications: `events.py` gained `seq` ids and `Last-Event-ID` replay; new
+`job_events.py` emits the typed envelope and owns the single terminal write/emit.
+`job_utils` emits queued/started/waiting/retrying/cancelling and persists
+progress/stage; recovery fails interrupted jobs instead of relaunching. Pending
+cancel clears `Job` + `QueuedJob`. Studio got a mounted `StudioToastLayer`, an
+`ActivityCenter` with active/history/unread, StatusStrip stage/progress, the
+`jobBridge` job→shot reconciler, typed SSEProvider with legacy mapping, inline
+Generate progress, and resync/watchdog wiring for takes/assets/renders/models.
+
+Alembic `0006_job_progress` adds `stage`, `started_at`, `memory_json`; LLM schema
+v3 adds `memory_gb`. Tests: `tests/test_memory_budget.py` (25),
+`tests/test_job_events.py` (9), `jobBridge.test.tsx` (6),
+`JobProgressUi.test.tsx` (3). Green: 159 backend, 70 Vitest, 21 Playwright,
+ruff/tsc/lint/build/bundle/verify_setup.
+
+Live evidence: SSE showed `job.queued → started → loading → conditioning →
+denoising`; a paused queued job showed `queued → waiting → cancelled` and
+`/status` ended `cancelled`. `257f/1216×704/upscale` (166.7 GB) was refused with
+the free-RAM/margin reason; a 121f denoise was cancelled at progress 11 with no
+OOM and the 76 GB slot released on demand.
+
+Updated both audits with a task-by-task status table, the roadmap open/deferred
+list, AGENTS architecture/gaps/counts, and the index.
+
+## [2026-11-17] implement | queue priority, load rollback, notification preferences
+
+Closed the remaining P1 gaps that were still open in the two audits.
+
+- `job_utils.job_priority` + `wait_for_turn`: dispatch order is decided before
+  the GPU semaphore — interactive video/image (20), inpaint (30), element (50),
+  ai_parse/depth (60), FIFO within a tier. Tests assert the head order and that a
+  bulk job blocks behind an interactive one.
+- `model_engine.load_pipeline` and `flux_wrapper.load_model` now clear the
+  pipeline and release the slot when construction or the MPS VAE cast raises
+  (M1-05).
+- Studio `notifications/preferences.ts`: persisted toasts/OS/sound preferences,
+  a Setup panel, browser Notification on hidden tabs, and a WebAudio cue.
+  Terminal toasts are suppressed when disabled while history still records.
+- Engine snapshot failures no longer break `/system/memory`; the active-job list
+  is now replaced from `/active_jobs` so a missed terminal cannot leave a spinner.
+
+Counts: 162 backend tests, 72 Vitest tests, 21 Playwright tests.
+
+## [2026-11-17] implement | complete the remaining M2/M4/N4/N5 work
+
+Finished the items still marked open after the first pass.
+
+- **Waiting for memory (M2-03/M4-03)**: `AdmissionDecision` gained `retryable`
+  and `downgrade`. A transient refusal raises `MemoryDeferred`, and
+  `run_queued_job` emits `job.waiting`, clears `started_at`, stores
+  `_memory_waits`/`_memory_not_before`, and re-dispatches with 10–120 s backoff
+  (20 attempts) without holding the GPU semaphore. A permanent refusal applies
+  the largest fitting preset before any load, persists it to Job/QueuedJob/Shot,
+  and emits `job.retrying`.
+- **Downgrade ladder (M2-04)**: drop upscale → frames 121/93/81/65/49 →
+  768×512/640×448/512×320/384×256; images step 1024→512. Preflight returns the
+  exact preset and estimate; Generate renders an Apply & generate banner.
+- **Model-aware grouping (M2-02)**: `_queue_head` sorts by priority, then by the
+  slot already resident, then FIFO, so Flux jobs group behind Flux and video jobs
+  behind LTX.
+- **Metrics (M3-04/N4-04)**: memory loads/unloads/evictions/refusals, queue wait
+  p50/p95/max, and SSE dropped/peak-pending/last-broadcast-age on `/metrics/jobs`
+  and `/system/memory`.
+- **MPS peak (M4-02)**: decoded video/audio references and the executor tuple are
+  released before encode with a cache flush; MPS already tiles decode.
+- **N5**: per-stage ETA from the observed step rate, history Retry in the activity
+  center, optional `MILIMO_JOB_WEBHOOK`, and a Tauri `notify` command using macOS
+  Notification Center (`cargo check` clean).
+
+Tests: 172 backend, 79 Vitest. Live preflight for 121f/768×512/upscale now
+returns `ok:false, retryable:false` with `downgrade: upscale off (95.55 GB)`;
+`/metrics/jobs` returns the new counters and empty histograms on an idle queue.
+
+## [2026-11-17] fix | Studio pinned itself to the placeholder project
+
+Found while validating the downgrade banner live: a server project with id
+`default` (the local sentinel, auto-saved with "Untitled Project") was always the
+newest row, so `useStudioProjectBootstrap` loaded it and ignored every real
+project. Bootstrap now excludes `default` whenever any real project exists, keeps
+an explicitly opened UUID, and de-duplicates the project list read. Added a
+stable `generate-shot` test id to the main Generate button and tests for the
+sentinel and the kept-project path.
+
+The Playwright config no longer reuses an existing Vite server: a dev server on
+:5173 pointed at API :8000 made the suite silently test the wrong database while
+the e2e backend ran on :8010. It now fails loudly instead.
+
+## [2026-11-17] implement | mute, window-title progress, and desktop notifications
+
+Closed the last N5 polish items: per-project notification mute (persisted with
+toasts/sound/OS), a Tauri `set_window_title` command so the desktop window shows
+`% · stage · Milimo` while busy, and the macOS Notification Center `notify`
+command. Also changed the e2e Vite server to `reuseExistingServer: false` so a
+dev server pointed at :8000 can no longer make the suite test the wrong database.
+Counts: 172 backend, 79 Vitest, 21 Playwright.
+
+## [2026-11-17] implement | remaining M5 and dock badge
+
+- **SAM 3 lazy load**: `start_sam_server.py` starts without loading; the first
+  image request loads under a lock, `/load` warms, `/unload` releases with a
+  cache flush, `/health` reports lazy/loading/error, and the memory manager
+  releases SAM through `/unload`. Live check on :8011: startup health returned
+  `model_loaded:false, lazy:true` and `/unload` returned clean without a load.
+- **M5 comparison tool**: `backend/benchmark_models.py` emits a per-lane table
+  (video 86.8 GB, image 43.0 GB, SAM 8.4 GB, depth 0.6 GB on the reference
+  workloads) and can run a small job to record measured peak/load/wall into a
+  gitignored `benchmarks/model-lanes.json`. Quantized/distilled/text-encoder
+  swaps are blocked on model artifacts and documented as such.
+- **Dock badge**: Tauri `set_badge` uses `set_badge_label` (macOS) and
+  `set_badge_count`; the activity center shows the progress percent and active
+  count, cleared on idle. `cargo check` clean.
+- Tests: 175 backend, 79 Vitest, 21 Playwright.
+
+## [2026-11-17] docs | sync wiki, technical docs, and README with M0–M5 / N0–N5
+
+Updated the human-facing and technical sources after the memory and notification
+implementation.
+
+- README: added "Memory, scheduling, and progress"; architecture rows for the
+  budget, events, and desktop progress; 13 routers / 139 operations; Alembic 0006;
+  memory/event API and `/metrics` fields; p50/p95 queue metrics; SAM lazy load;
+  opt-in reload; memory/webhook env vars; 175/79/21 verification; M5/desktop caveats.
+- Wiki: rewrote [[systems/sse-eventing]] for the typed envelope/replay/terminal
+  emitter and Studio surfaces; updated [[systems/architecture]] module map,
+  topology, and gotchas; replaced the stale [[concepts/memory-slots]] audit notes
+  with the implemented budget/lease/TTL/admission behavior; updated
+  [[systems/data-models]] (`job.stage`/`started_at`/`memory_json`, v3 settings,
+  `0006_job_progress`); updated [[systems/frontend-state]] (job store/bridge/
+  preferences/bootstrap); updated [[models/sam-3]] lazy lifecycle and the roadmap
+  phase tables (M0–M5, N0–N5) and [[overview]] counts.
+- Technical docs: `01` (13 routers, typed SSE, lazy SAM, memory section), `02`
+  (Job fields, QueuedJob, v3 settings, recovery), `03` (measured budget/admission/
+  downgrade/scheduling diagram), `04` (typed SSE + Studio job state), `05`
+  (ledger/typed events/startup/cancel), `06` (job_events/services/memory/routes),
+  `CODEBASE_ANALYSIS`, `sam3-bible`, and the user guide (preflight safe preset,
+  waiting for memory, memory/notifications panels, updated limitations).

@@ -57,21 +57,38 @@ the worker died. See
 [[../systems/memory-management-audit-2026-11.md]] for the incident, model costs,
 and the M0–M5 plan.
 
-## Audit Notes (2026-11-17)
+## Implemented behavior (2026-11-17)
 
-- All heavy jobs (video, image/thumbnail, inpaint, element, AI parse, depth) now go
-  through `enqueue_gpu_job` → the global GPU semaphore. The older “direct dispatch”
-  finding is resolved.
-- The pre-check is still static: `VRAM_ESTIMATE_VIDEO_GB=40` and
-  `IMAGE_GB=24` versus `psutil.available × 1.2`; real peaks are ~76 GB and ~36 GB.
-- External engines are invisible to `MemoryManager`; only Ollama has an unload path
-  wired into `runtime.release_local()`.
-- `/models/{id}/activate` and `/deactivate` load/unload pipelines **outside** the job
-  semaphore and can unload LTX during a running job.
-- No idle TTL, no pressure/swap guard, no MPS cap, no peak sampler, and no
-  per-model cost registry.
-- A crashed worker left its Job/QueuedJob at `processing/running` and the reloader
-  parent spinning; recovery only happens on restart.
+Slots are now backed by a measured budget rather than name-only exclusion.
+
+- **Budget** (`services/memory/budget.py`) reads total RAM, a 15% reserve, the MPS
+  recommended working set, physical free, free swap, kernel pressure, in-process
+  slots, external engines, and SAM. The cost registry estimates LTX-2 (76 GB base),
+  Flux (36 GB base), SAM, depth, and LLM residency from parameters.
+- **Admission** runs before every heavy load (video, image, chained, ai_parse,
+  inpaint, element, activation, warm). It counts reclaimable idle slots and
+  unloadable engines, applies a physical-free and swap-safety margin, and returns
+  `retryable` plus a fitting `downgrade`.
+- **Leases** protect running work: a slot with `leases > 0` is never evicted, and a
+  conflicting slot in use refuses the load. Activation/deactivation is refused
+  while a job is active.
+- **Idle TTL** (video/image 300 s, LLM 120 s, SAM 600 s, depth 300 s) and pressure
+  events evict idle slots; `keep-warm` pins a slot; leased slots are exempt.
+- **Engine adapters** measure Ollama (`/api/ps`), oMLX (`/v1/models/status`), and
+  use a declared `memory_gb` for Strata/generic engines, with unload where
+  supported. Strata is still unloadable only by the user.
+- **Peak sampler** records per-stage peak and swap for each job in `memory_json`.
+- **MPS cap** (`set_per_process_memory_fraction`) makes PyTorch fail before macOS
+  thrashes; encode runs off the event loop; load failures release the slot.
+- **Scheduling** is priority-aware with same-slot grouping, a bounded “waiting for
+  memory” retry, and an applied downgrade ladder before allocation.
+- **SAM** loads lazily on the first segmentation request and can be released via
+  `/unload`; its idle budget cost is 0.5 GB instead of 8 GB.
+
+Remaining caveats: the cost registry is hand-tuned; Strata has no remote unload;
+a cancelled job keeps its pipeline until the TTL; only the MPS decode path is
+tiled. See [[../systems/memory-management-audit-2026-11.md]] for the incident,
+measurements, and M0–M5 evidence.
 
 ## Related
 

@@ -123,6 +123,30 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 - **Vision and provenance** — reference images are sent over Ollama/OpenAI/
   Anthropic wires, and each take records the model that enhanced its prompt.
 
+### Memory, scheduling, and progress
+
+- **Measured memory budget** — `services/memory` reads total RAM, the MPS working
+  set, physical free, swap free, in-process slots, external LLM engines, and SAM.
+  The job estimator includes weights, frames, resolution, upscale, and a safety
+  margin. Admission runs before every heavy load; a job that cannot fit is offered
+  the largest preset that does, or waits for the running job to release its slot.
+- **Residency** — slots carry bytes, leases, last-used, and a pin; idle models are
+  evicted on a TTL or under pressure, and a leased slot is never evicted. Ollama
+  and oMLX can be unloaded remotely; Strata is budgeted from a declared `memory_gb`.
+- **One queue, priority-aware** — interactive video/image work outranks bulk
+  elements/thumbnails and background parsing, with same-slot grouping to avoid
+  Flux↔LTX thrash. A transient memory refusal becomes a visible
+  “waiting for memory” state rather than a failure.
+- **Truthful progress** — every job emits typed `job.*` events (`queued`, `started`,
+  `stage`, `progress`, `retrying`, `waiting`, `completed`, `failed`, `cancelled`)
+  with a sequence id and `Last-Event-ID` replay. Studio shows inline progress,
+  toasts, an activity center with history/retry, a macOS dock badge, and optional
+  desktop notifications. A single terminal emitter writes the DB once and emits
+  once.
+- **Recovery** — startup fails interrupted jobs instead of silently re-running
+  them; pending cancel clears both the `Job` and the `QueuedJob`; the OOM retry
+  drops upscale, steps, and frames, then re-admits before retrying.
+
 ## 🛠️ Architecture
 
 ![Milimo Architecture](assets/Milimo_Video_Studio_Architecture_infograph.png)
@@ -137,21 +161,30 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 | **Segmentation** | SAM 3 microservice (port 8001) — text/box/click masks and video tracking |
 | **Prompt AI** | Local-first role plane — Gemma 3 in-process, Ollama, oMLX, Strata, LM Studio, vLLM/llama.cpp; optional cloud behind a daily budget, eval gate, and air-gap |
 | **Processing** | FFmpeg/ffprobe — render, probes, thumbnails, frame extraction, stitching |
-| **Desktop** | Tauri 2 — native Open/Save dialogs, backend supervisor, sidecar-binary lookup |
+| **Memory & scheduling** | Measured budget/admission, leases + TTL eviction, engine adapters (Ollama/oMLX/Strata), priority queue with same-slot grouping, bounded memory waits |
+| **Events** | Typed `job.*` SSE envelope with `seq`/replay, single terminal emitter, Studio toasts/activity center, optional terminal webhook |
+| **Desktop** | Tauri 2 — native Open/Save dialogs, backend supervisor, sidecar-binary lookup, window-title + dock-badge progress, macOS Notification Center |
 
 ### Backend surface
 
-- Twelve routers and 133 routes: projects, jobs, assets, storyboard, elements,
-  shots, models, planner, review, share, depth, settings.
+- Thirteen routers and 139 operations across 122 paths: projects, jobs, assets,
+  storyboard, elements, shots, models, planner, review, share, depth, settings,
+  system memory.
 - Pydantic write boundaries, generated OpenAPI TypeScript, and zod contract checks.
 - Alembic baseline `0001_baseline` plus `0002_render_settings`,
-  `0003_seed_lock`, `0004_asset_thumbnail`, and `0005_app_settings`; legacy DBs
-  are repaired and stamped at head.
+  `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`, and
+  `0006_job_progress` (`job.stage`, `started_at`, `memory_json`); legacy DBs are
+  repaired and stamped at head.
 - LLM plane: persisted settings with provider instances and revision CAS,
   capability-aware discovery, role eval, cloud spend ledger, and staged profiles.
-- `QueuedJob` ledger, one global GPU semaphore, one OOM retry, startup recovery,
+- `QueuedJob` ledger, one global GPU semaphore, priority + same-slot grouping, one
+  budget-aware OOM retry, bounded “waiting for memory”, startup recovery,
   idempotent shot jobs, pause/resume dispatch, queue position/estimate.
-- `X-Request-ID`, timing logs, `/health`, `/metrics/jobs`, and an error-budget UI.
+- Memory API: `/system/memory`, `/system/memory/preflight`,
+  `/system/memory/unload`, `/system/memory/keep-warm`; LLM residency at
+  `/settings/llm/memory` and per-provider unload.
+- `X-Request-ID`, timing logs, `/health` (memory + sampler), `/metrics/jobs`
+  (memory counters, queue-wait p50/p95, SSE stats), and an error-budget UI.
 - Loopback by default, CORS allowlist, optional bearer token, safe Range media
   serving, upload allowlist/size cap.
 
@@ -162,8 +195,13 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
   cleared between jobs.
 - Long video jobs are chunked; the GPU semaphore prevents two heavy models loading
   at once.
-- SAM 3 auto-selects CUDA → MPS → CPU and guards CUDA-only calls.
+- SAM 3 auto-selects CUDA → MPS → CPU and guards CUDA-only calls. The image model
+  is lazy: the service starts at ~0 GB and loads on the first segmentation
+  request (`/load` warms, `/unload` releases); the budget counts it only when
+  resident.
 - `PYTORCH_ENABLE_MPS_FALLBACK=1` is used for unsupported SAM 3 ops.
+- Uvicorn reload is opt-in (`MILIMO_RELOAD=1`); the default run does not walk the
+  repository while a generation is running.
 
 ## 📚 Documentation
 
@@ -232,6 +270,17 @@ Local LLM engines are discovered automatically. Optional environment:
 price), `MILIMO_SECRET_KEY` seals stored API keys with AES-256-GCM, and
 `MILIMO_LLM_RATE_CARD` points at a JSON price override.
 
+Memory and scheduling environment:
+
+- `MILIMO_MEMORY_ENFORCE=0` disables admission (tests/benchmarks only).
+- `MILIMO_MEMORY_RESERVE_GB`, `MILIMO_MPS_MEMORY_FRACTION`,
+  `MILIMO_MEMORY_SWAP_LIMIT_PERCENT` tune the budget.
+- `MILIMO_MEMORY_TTL_{VIDEO,IMAGE,LLM,SAM,DEPTH}` and `MILIMO_MEMORY_KEEP_WARM`
+  tune idle eviction.
+- `MILIMO_RELOAD=1` enables Uvicorn reload for development.
+- `MILIMO_JOB_WEBHOOK` (+ `MILIMO_JOB_WEBHOOK_TOKEN`) posts terminal jobs to a
+  local automation endpoint; off by default.
+
 Desktop:
 
 ```bash
@@ -250,8 +299,8 @@ supervisor will launch a `milimo-backend` sidecar binary if one is shipped.
 curl http://127.0.0.1:8000/health
 ```
 
-Reports device, GPU busy/queued, memory slots, queue pause state, auth mode, and
-free disk.
+Reports device, GPU busy/queued, memory slots and measured budget, sampler state,
+queue pause state, auth mode, and free disk.
 
 ## 🎮 Controls
 
@@ -284,22 +333,23 @@ masking/tracking toggles. New work belongs in Studio.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                    # 125 tests
+./milimov/bin/python -m pytest                    # 175 tests
 ./milimov/bin/python -m ruff check backend        # correctness rules
 ./milimov/bin/python backend/verify_setup.py      # 0 failures expected
 
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                          # 61 tests
+npm test                                          # 79 tests
 npm run build
 npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 125 backend tests, 61 Vitest tests, and 21 Playwright
+The last verified run was 175 backend tests, 79 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
-LLM settings (stream/eval/profile), responsive layout/overflow, perf, and visual
+LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
+budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual
 checks.
 
 ## 🧭 Project layout
@@ -324,6 +374,14 @@ dev_diary/         Build log and social notes
 - **Scoped v1 cut:** no transitions, LUTs, titles, or A2 track; search is ranked
   lexical matching, not embeddings; Shorts/lenses have no template packs.
 - **Depth model** is downloaded separately and is not shipped in the repo.
+- **Memory**: the cost registry is a measured estimate, not a per-model profile;
+  Strata has no unload endpoint; a cancelled job keeps its pipeline until the idle
+  TTL; only the MPS decode path is tiled; memory waits are bounded at 20 retries.
+- **Model efficiency (M5)**: SAM is lazy and `backend/benchmark_models.py` records
+  per-lane baselines, but quantized/distilled checkpoints and text-encoder
+  alternatives need model artifacts that are not vendored.
+- **Desktop**: macOS notifications use `osascript`; dock/window progress is wired,
+  but a tray icon is not.
 - **Visual baselines** are platform-tolerant and locally generated.
 - **LLM caveats:** cancelling a non-stream HTTP call is timeout-bounded rather
   than a socket abort; chained chunk-0 enhancement still follows the pipeline

@@ -54,6 +54,12 @@ toolbars, Inspector primary tabs + More, readable type/control sizes, card actio
 context menus, bulk selection, command palette, shortcut sheet, density modes, and
 a global media viewer for images, video, audio, captions, and text.
 
+The memory/notification pass is also complete: Setup has a measured memory budget
+with per-slot release/pin and counters, Generate shows a preflight safe-preset
+banner and inline stage/progress/ETA, and the shell has toasts, an activity center
+with history/retry, desktop notifications, dock-badge/window-title progress, and
+per-project mute.
+
 Known scoped gaps: no transitions/LUT/titles/A2, lexical rather than embedding
 search, no shorts/lens template packs, and no bundled Python sidecar runtime. Legacy
 `/` remains until the two-clean-release cutover.
@@ -385,7 +391,7 @@ Replace the 7-slice God store with four stores and server-state hooks:
 |---|---|---|
 | `documentStore` | Project graph: sequences, scenes, shots, elements, takes, timeline placements | Server + local cache; undoable |
 | `editorStore` | Active surface, selection, panel sizes, board camera, timeline zoom, compare mode, focus | Local + per-project view endpoint; not undoable |
-| `jobStore` | Server-derived jobs/progress; no local truth | `/active_jobs` poll only (Generate); **SSE is not wired into Studio** — see [[job-notifications-audit-2026-11]] |
+| `jobStore` | Server-derived active jobs, history, unread, metrics | Typed `job.*` SSE through `jobBridge`, `/active_jobs` reconcile, 5 s cancel watchdog — see [[job-notifications-audit-2026-11]] |
 | `agentStore` | Chat messages, plan, approvals, streaming trace | Local session + optional transcript file |
 
 Rules:
@@ -457,9 +463,10 @@ virtualized lists, no per-frame layout recompute.
 - Full keyboard model: `Cmd+K` palette, `Space` play, `J/K/L`, `I/O`, `B` board,
   `E` edit, `G` generate, `R` review, `?` shortcuts, `Esc` focus.
 - Focus management for panels/modals; visible focus rings; skip link.
-- ARIA live for job progress/completion is **planned, not implemented** (no toast
-  layer or live region is mounted in Studio); see
-  [[job-notifications-audit-2026-11]]. No color-only status.
+- ARIA live for job progress/completion is implemented: `StudioToastLayer`
+  (`aria-live="polite"`, `role=status/alert`) and the activity center announce
+  stage, progress, and terminal state; see [[job-notifications-audit-2026-11]].
+  No color-only status.
 - Reduced motion; disable edge animations and camera glides.
 - Contrast tokens; test both dark and high-contrast.
 - Captions/transcripts for all generated audio; export SRT/VTT.

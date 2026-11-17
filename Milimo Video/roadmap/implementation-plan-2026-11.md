@@ -51,15 +51,15 @@ single-engineer guidance.
 | P3 model truth | **Done** (P3-01,02,04–08) | activation routed through loader, disk paths fixed, queued/cancellable downloads, setup check |
 | P3 OOM retry | **Done** | one retry at 75% resolution / 8k+1 frames, cache clear, shot params updated, unit tests |
 | P4 UX trust | **Done** (P4-01–P4-07) | takes/favorites, persistent seed lock, save conflict, reconnect, review, plan approval, undo, zero serious/critical axe, 500-card/200-clip perf specs, tracking overlay |
-| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 125 backend, 61 frontend, 21 Playwright (incl. axe/perf/visual/reference CRUD/LLM settings); new modules >80%; total 37%; lint 0 errors |
+| P5 tests/CI | **Done** (pytest-cov + vitest + Playwright + CI + pre-commit + request IDs + metrics + error budget UI + bundle budget + blocking correctness lint) | 175 backend, 79 frontend, 21 Playwright (incl. axe/perf/visual/reference CRUD/LLM settings); new modules >80%; total 37%; lint 0 errors |
 | Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent + separate document stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 12 Playwright incl. visual; store separation covered by E2E |
 | Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking + depth overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip ~275fps perf; depth uses optional Depth Anything V2 Small |
 | Front-end F4 integrity | **Done** | scan + repair for missing media, orphan scene/board references, sequence order, and caption ranges |
 | Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview with start/end conditioning/batch/inpaint/favorites, queue position, pause/resume, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets, encoding controls, and in-flight render cancel) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; shorts/lens packaging remains scoped v1 |
 | Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native open/save/build + sidecar-binary resolution |
 | Front-end F6 | **Done — 2026-11-17** | responsive surface switcher, grouped toolbars, Inspector primary tabs + More, readable type/control sizes, card actions/bulk/context menu, command palette/shortcuts, density, responsive layout tests |
-| Memory & model residency | **Planned — P0** | audit in [[../systems/memory-management-audit-2026-11]]; static 40/24 GB estimates, no external-engine accounting (Strata 33 GB + oMLX 6.5 GB invisible), no idle eviction, activation bypasses the queue, and a 121-frame upscale job OOM-ed this machine |
-| Job notification plane | **Planned — P0** | audit + plan in [[../systems/job-notifications-audit-2026-11]]; Studio has no SSE consumer or toast layer, backend lacks queued/started/retry events, and the main Generate flow has no state reconciliation |
+| Memory & model residency | **Done — M0–M5 code side, 2026-11-17** | measured budget/admission, leases + TTL eviction, engine adapters, priority/same-slot queue, bounded memory waits, downgrade ladder, metrics, sampler, MPS cap, SAM lazy load, and the model-lane benchmark. See [[../systems/memory-management-audit-2026-11]] |
+| Job notification plane | **Done — N0–N5, 2026-11-17** | typed `job.*` envelope/replay, single terminal emitter, Studio toasts/activity/inline progress, resync/watchdog, per-surface handlers, metrics, history retry, ETA, desktop notifications, dock badge, webhook, per-project mute. See [[../systems/job-notifications-audit-2026-11]] |
 | LLM configuration plane | **Done — L0–L3, 2026-11-17** | persisted `app_setting` document with revision CAS, six providers, six roles with fallback, discovery/verify/model catalog, sealed keys, air-gap + cloud opt-in, Studio AI & LLM panel, legacy popover compatibility; L4 governance deferred. See [[../systems/llm-settings-audit-2026-11]] |
 
 **Still open / deferred:**
@@ -68,14 +68,28 @@ single-engineer guidance.
   prefers one if present and otherwise runs `run_backend.sh`.
 - **Legacy `/` cutover** — retained until the documented two-clean-release window.
 - **LLM L4 governance** — token/cost telemetry, cloud budget guard, eval gate, and
-  staged profiles are not built. Air-gap and the cloud opt-in are enforced. See
-  [[../systems/llm-settings-audit-2026-11]].
+  staged profiles are built in the typed `LLMSettings` v3 document; remaining
+  caveats are listed in [[../systems/llm-local-first-next-2026-11]].
 - **Phase 6 v2 lane** — eval harness, model swaps, MLX/FP8 lanes, and the agent
   crew remain a separate model-artifact program.
 - **Scoped-v1 gaps** — no transitions/LUT/titles/A2 track, lexical rather than
   embedding search, and no shorts/lens template packs.
 - **F6 chrome stabilization** — completed 2026-11-17. The audit and resolution
   evidence live in [[../systems/studio-ux-audit-2026-11]].
+- **Memory M0/M1/M3/M4** — completed 2026-11-17: measured budget, admission,
+  leases/TTL eviction, pressure monitor, sampler, engine adapters, Setup panel,
+  preflight, load rollback, a priority queue with same-slot grouping, a bounded
+  “waiting for memory” retry, an applied downgrade ladder, queue/memory metrics,
+  and an opt-in reload. M5 adds SAM lazy load and a model-lane benchmark;
+  checkpoint swaps remain a model-artifact program. Open: a per-job priority
+  override. See
+  [[../systems/memory-management-audit-2026-11]].
+- **Job notifications N0–N3/N4 core** — completed 2026-11-17: typed `job.*`
+  events, replay, single terminal emitter, Studio toasts, activity center,
+  inline progress, resync/watchdog, per-surface handlers, opt-in desktop
+  notifications (browser and Tauri), persisted toast/OS/sound preferences,
+  delivery/queue metrics, history retry, per-stage ETA, and an optional terminal
+  webhook. The macOS dock badge is implemented. See [[../systems/job-notifications-audit-2026-11]].
 - **Visual baselines** — platform-tolerant and locally generated.
 
 Depth uses an optional local Depth Anything V2 Small model downloaded in Setup.
@@ -87,9 +101,9 @@ regression, and the durable ledger are adopted.
 **Verification commands**
 
 ```bash
-./milimov/bin/python -m pytest        # 125 passed
+./milimov/bin/python -m pytest        # 175 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
-cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # clean
+cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # 78 Vitest
 cd web-app && npm run test:e2e        # 21 Playwright tests
 curl http://127.0.0.1:8000/health     # device/queue/slots/disk
 ```
@@ -363,7 +377,7 @@ evidence, findings F1–F11, and gates G-LLM-1…6:
 
 | Phase | Scope | Gate |
 |---|---|---|
-| **L5** ✅ | Provider instances (`openai_compatible@8787` vs `@47831`), schema v2 migration, discovery identity, response-shape probing, capability catalog (context/vision/embedding/non-chat), role gating | Three engines attached at once; every model row has context or explicit unknown; non-chat models refused |
+| **L5** ✅ | Provider instances (`openai_compatible@8787` vs `@47831`), schema migration, discovery identity, response-shape probing, capability catalog (context/vision/embedding/non-chat), role gating | Three engines attached at once; every model row has context or explicit unknown; non-chat models refused |
 | **L6** ✅ | Wrapper-safe enhancement parsing, discovery-seeded defaults, warm-up + per-provider timeout/keep_alive, streaming negotiation with non-stream fallback, context preflight, load/latency health | No JSON wrapper reaches Flux; no `llama3.1` default on a machine without it; cold load visible; no call exceeds timeout |
 | **L7** ✅ | Local eval fixtures per role, `POST /settings/llm/eval`, results table, recommended local plan, stale-eval warning | 3B/27B/Strata compared per role with pass rate and p50 |
 | **L8** ✅ | LLM/VRAM policy with `MemoryManager`, take provenance in Inspector, cancel propagation, local vision (or remove the badge), `verify_setup` role readiness | 32 GB machine never holds two heavy models; image bytes actually sent or claim removed |
@@ -375,41 +389,45 @@ recommended plan, pre-pipeline enhancement, LLM/VRAM release, vision payloads,
 and cloud budget/eval-gate/profiles are in and verified against Ollama, oMLX, and
 Strata. Remaining caveats live in [[../systems/llm-local-first-next-2026-11]].
 
-## Job Notification Plane (Planned — P0)
+## Job Notification Plane (Done — N0–N5)
 
 Audit, reproduction evidence, gap register N-01…N-28, and the event catalog:
 [[../systems/job-notifications-audit-2026-11]].
 
-| Phase | Scope | Gate |
+| Phase | Status | Delivered |
 |---|---|---|
-| **N0** | Studio toast layer, shared one-connection SSE bus, job→shot reconciliation, inline stage/progress, cancel/failure wake-up | Clicking Generate shows queued → stage → progress → terminal without reload; cancel clears ≤5 s |
-| **N1** | Typed event envelope (`seq/ts/shot_id/kind/stage`), `job.queued`/`started`/`stage`/`retrying`, one terminal emitter, persisted progress, pending-cancel cleanup, `shot_id` in `/active_jobs` | Fake pipeline emits every stage in order; exactly one terminal per job; pending cancel leaves no queue placeholder |
-| **N2** | Activity center, status-strip stage, title/favicon progress, opt-in OS notifications, preferences | Any surface shows the current job and stage; background tab shows progress |
-| **N3** | AI parse, depth, inpaint, renders/shorts, downloads, element visuals consume the same bus | No blocking status loops; every long operation has inline progress + terminal toast |
-| **N4** | `Last-Event-ID` replay, reconnect/visibility resync, stale-spinner watchdog, event metrics, contract/Playwright/axe tests | Reload mid-job restores state; disconnect replay is lossless; CI green |
-| **N5** | Sound, recent history/retry, stage timings, tray progress, local webhook | Optional polish |
+| **N0** | ✅ | Studio toast layer, one typed SSE connection, `jobBridge` shot reconciliation, inline stage/progress/ETA, cancel/failure wake-up and watchdog |
+| **N1** | ✅ | Typed envelope (`seq/ts/shot_id/kind/stage`), `job.queued`/`started`/`stage`/`retrying`/`waiting`/`cancelling`, one terminal emitter, persisted progress/stage, pending-cancel cleanup, `shot_id` in `/active_jobs` |
+| **N2** | ✅ | Activity center (history/retry/cancel), status-strip stage, title + macOS dock badge, browser and Tauri desktop notifications, persisted preferences and per-project mute |
+| **N3** | ✅ | AI parse, depth, inpaint, renders/shorts, downloads, and element visuals consume the same bus; no blocking status loops |
+| **N4** | ✅ | `Last-Event-ID` replay, reconnect/visibility resync, stale-spinner watchdog, event/queue metrics, contract/Vitest/Playwright/axe tests |
+| **N5** | ✅ | Sound cue, history retry, per-stage ETA, window/dock progress, optional terminal webhook |
 
-**Immediate priority:** N0-01…N0-03 (toast layer, SSE bridge, Generate
-reconciliation), then N1-02/N1-04/N1-06 (queued/started/terminal and pending
-cancel). Do not add OS notifications before the in-app path is reliable.
+**Delivered:** N0–N5. Live probes recorded `queued → started → loading →
+conditioning → denoising`, a paused `queued → waiting → cancelled`, and a
+`Last-Event-ID` replay. Remaining caveats: the legacy `/` editor has no toast layer;
+macOS notifications use `osascript`; a tray icon and per-job priority override are
+open. See [[../systems/job-notifications-audit-2026-11]].
 
-## Memory & Model Residency (Planned — P0)
+## Memory & Model Residency (Done — M0–M5 code side)
 
 Incident, measurements, gap register M-01…M-25, engine adapters, and gates:
 [[../systems/memory-management-audit-2026-11]].
 
-| Phase | Scope | Gate |
+| Phase | Status | Delivered |
 |---|---|---|
-| **M0** | `MemoryBudget` (total/reserve/MPS ceiling/swap/pressure/in-process/external), model cost registry, job peak estimator, admission at every heavy entry, engine adapters (Ollama/oMLX/Strata), activation lease, encode off the loop, MPS cap, supervisor/recovery reconciliation | 121f/768×512/upscale is refused or downgraded with the 39.5 GB named; no heavy load bypasses the budget |
-| **M1** | Residency manager with per-slot bytes/lease/TTL, pressure watcher, eviction order, manual unload-all, rollback on failed load, per-engine unload UI | Idle LTX/Flux/LLM evict; pressure evicts idle; active jobs never lose a model |
-| **M2** | Priority queue, model-aware batching, “waiting for memory” state, downgrade proposals, cancel in upscale/finalize | Mixed batches do not thrash; waits are explained |
-| **M3** | Setup memory panel, Generate preflight with peak/unload preview, per-job memory sampler, metrics, memory events | Peak and postmortem are visible; notifications cover waits/evictions |
-| **M4** | MPS allocation cap, tiled/chunked VAE, peak-aware clamps, cache flush verification | Peak stays under budget; no system-wide thrash |
-| **M5** | Quantized/MLX/smaller checkpoints, text-encoder alternatives, SAM/depth lazy load, quality/memory/time comparisons | Optional efficiency work |
+| **M0** | ✅ | Measured budget, cost registry/estimator, admission at every heavy entry, engine adapters, activation lease, encode off the loop, MPS cap, supervisor/recovery reconciliation |
+| **M1** | ✅ | Slot bytes/lease/TTL/pin, pressure watcher, eviction order, unload-all, load rollback, per-engine unload UI |
+| **M2** | ✅ | Priority + same-slot queue, bounded “waiting for memory” retry, fitting-preset downgrade (API + UI + auto), cancel during upscale/finalize |
+| **M3** | ✅ | Setup memory panel, Generate preflight with a safe-preset banner, per-job sampler, counters/queue metrics, memory events |
+| **M4** | ✅ (MPS) | MPS allocation cap, tiled MPS decode + decoded-buffer release, peak-aware clamp before load, cache flush verification. CUDA keeps full decode. |
+| **M5** | ✅ code side | SAM lazy load, model-lane benchmark, MLX via the engine plane. Quantized/distilled/text-encoder swaps need model artifacts. |
 
-**Immediate priority:** M0-01…M0-05 (budget, costs, engine adapters, admission,
-activation lease), then M1-01…M1-03 (residency, TTL, pressure). Until then: unload
-Strata/oMLX before long video jobs, turn off upscale for 121 frames, and watch swap.
+**Delivered:** M0–M4 and the code-side M5. Live evidence: a 166.7 GB request was
+refused with a 93-frame/upscale-off preset; a 121f denoise cancelled at progress 11
+without OOM; `/system/memory` exposed the measured budget and counters. The M5
+artifact swaps remain a model program, not app code. See
+[[../systems/memory-management-audit-2026-11]].
 
 ## Quality Gates
 

@@ -292,8 +292,14 @@ blocks eviction; `release` decrements; idle timers only fire at zero.
 
 ### M5 — Model efficiency (P2, optional)
 
-Smaller/quantized checkpoints, distilled variants, MLX for LLMs, text-encoder
-alternatives, SAM 3 lazy load, and a quality/memory/time comparison per model.
+| Task | Status | Evidence |
+|---|---|---|
+| SAM 3 lazy load | **Done** | `sam3/start_sam_server.py` no longer loads at startup; `_ensure_model()` loads on the first segmentation request, `/load` warms explicitly, `/unload` releases with a cache flush, `/health` reports `lazy/loading/model_loaded`, and `memory_manager._unload_sam()` releases it on demand |
+| MLX for LLMs | **Done via the engine plane** | oMLX and other OpenAI-compatible local servers are first-class `LLMProviderConfig` instances; there is no in-process MLX runtime, by design |
+| Quality/memory/time comparison | **Done** | `backend/benchmark_models.py` prints estimated peak per lane and can run a small job to record measured peak, load, and wall time into `benchmarks/model-lanes.json` (gitignored) |
+| Smaller/quantized checkpoints | **Blocked on artifacts** | no alternative checkpoints are vendored; the comparison tool exists so a swap has a baseline |
+| Distilled variants | **Blocked on artifacts** | same |
+| Text-encoder alternatives | **Blocked on artifacts** | LTX-2 ships Gemma 3; replacing it is a pipeline/model change, not an app change |
 
 ## Gates
 
@@ -334,6 +340,87 @@ alternatives, SAM 3 lazy load, and a quality/memory/time comparison per model.
 - Playwright: preflight dialog, memory panel, unload button, refusal message.
 - Live: start a job with an external model loaded; confirm it unloads or refuses;
   sample peak; kill the worker mid-job; confirm recovery.
+
+## Implementation status (2026-11-17)
+
+M0–M4 landed in this repository, and the code-side work of M5 is done (SAM lazy
+load + a model-lane comparison tool). Checkpoint swaps remain a model-artifact
+program because no alternative weights are present.
+
+| Task | Status | Evidence |
+|---|---|---|
+| M0-01 measured budget | **Done** | `services/memory/budget.py` snapshot: total/reserve/MPS ceiling/physical free/swap free/in-process/external/SAM; `/health` and `/system/memory` |
+| M0-02 cost registry + estimator | **Done** | `services/memory/costs.py`; reference 121f/768×512/upscale = **105.84 GB** |
+| M0-03 engine adapters | **Done** | `services/memory/engines.py`: Ollama `/api/ps`, oMLX `/v1/models/status`, generic `memory_gb` override or conservative estimate; cached 4 s |
+| M0-04 admission everywhere | **Done** | `memory_manager.admit_job` in video/image/inpaint/element/ai_parse; `prepare_for` on pipeline load; `can_load_model` and LLM warm/reserve |
+| M0-05 activation lease guard | **Done** | `model_loader` refuses activate/deactivate while `has_active_job()` |
+| M0-06 encode off the loop | **Done** | `await asyncio.to_thread(encode_video, …)` |
+| M0-07 MPS cap + pressure/swap guard | **Done** | `torch.mps.set_per_process_memory_fraction(min(0.85, …))` at startup; kernel pressure + physical-free + swap-free + safety-margin checks |
+| M0-08 supervisor | **Done** | Reload opt-in via `MILIMO_RELOAD=1` with source-only includes; recovery fails interrupted jobs instead of relaunching |
+| M0-09 upscale cost | **Done** | Estimator adds the second pass; preflight returns the estimate and margin |
+| M0-10 budget-aware OOM retry | **Done** | `_oom_retry_params` drops frames/steps **and** upscale; re-admits; emits `job.retrying`; refuses with a terminal event if still too large |
+| M0-11 per-stage sampling | **Done** | `services/memory/sampler.py` 1 s samples, peak per stage, stored in `job.memory_json`, returned by `/status` and `/metrics/jobs` |
+| M0-12 recovery reconciliation | **Done** | `resume_queued_jobs` fails dead-worker rows with `stage=recovery`, emits one terminal |
+| M1-01 residency manager | **Done** | slots carry model, bytes, leases, acquired/last-used, keep-warm |
+| M1-02 idle TTL | **Done** | `MILIMO_MEMORY_TTL_{VIDEO,IMAGE,LLM,SAM,DEPTH}` |
+| M1-03 pressure watcher | **Done** | monitor thread every 15 s; evicts idle and emits `memory.pressure` |
+| M1-04 eviction/manual unload | **Done** | `/system/memory/unload`, leased slots never evicted, `/keep-warm` pin |
+| M1-05 rollback on load failure | **Done** | `model_engine.load_pipeline` and `flux_wrapper.load_model` release the slot and clear the pipeline on any exception |
+| M1-06 per-engine unload UI | **Done** | Setup memory panel + AI & LLM provider resident GB and Unload |
+| M1-07 tests | **Done** | `tests/test_memory_budget.py` (32 tests) |
+| M2-01 priority queue | **Done** | `job_utils.job_priority` + `wait_for_turn` order dispatch before the GPU semaphore: video/image 20, inpaint 30, element 50, ai_parse/depth 60; FIFO inside a tier |
+| M2-02 model-aware batching | **Done** | `_queue_head` orders by priority, then by the slot already resident (`memory_manager.active`), then FIFO; same-tier image jobs group behind Flux and video jobs behind LTX |
+| M2-03 “waiting for memory” | **Done** | a `retryable` refusal raises `MemoryDeferred`; the scheduler emits `job.waiting` (reason=memory), sleeps the row (`_memory_not_before`), and re-dispatches up to 20 times with 10–120 s backoff, without holding the GPU semaphore |
+| M2-04 downgrade proposal | **Done** | `suggest_downgrade` returns the largest fitting preset; preflight exposes it, Generate renders an Apply & generate banner, and the task auto-applies it when `auto_downgrade` is not false |
+| M3-01 Setup memory panel | **Done** | `MemoryPanel.tsx`: bar, per-slot bytes/leases, external engines, unload, pin |
+| M3-02 Generate preflight | **Done** | `useStudioGenerate` calls `/system/memory/preflight`, refuses with the reason + suggestions, announces reclaims |
+| M3-03 sampler | **Done** | see M0-11 |
+| M3-04 metrics | **Partial** | `memory_peak_gb` and event stats added; load time/eviction/refusal counters are not aggregated yet |
+| M3-05 notifications | **Done** | `memory.pressure` / `memory.evicted` / `job.waiting` drive the activity center and toasts |
+| M4-01 MPS cap | **Done** | see M0-07; MPS OOM is treated as OOM and retried once |
+| M4-02 tiled VAE / fewer buffers | **Done (MPS)** | MPS already decodes with `TilingConfig.default()`; the decoded video/audio references and the executor tuple are released before encode with a cache flush. CUDA keeps the full decode path. |
+| M4-03 clamp before load | **Done** | admission suggests a fitting preset and the task applies it before any load, persisting it to the Job, dispatch row, and Shot and emitting `job.retrying` |
+| M4-04 flush after unload | **Done** | `_flush_memory` runs `gc.collect()` + MPS `empty_cache()` on every unload |
+
+### Measured behavior on the reference machine
+
+- Idle machine after releasing probes: 137.4 GB total, 115.45 GB ceiling,
+  ~118.6 GB physical free, swap 96% used with **1.26 GB free**, pressure `normal`.
+- `121f / 768×512 / upscale` estimate **105.84 GB**. Sustained swap scarcity adds
+  a `max(4 GB, 5%)` safety margin, so the same job is refused whenever free RAM
+  does not exceed ~111 GB, and always refused when Strata/oMLX residency is
+  counted.
+- `257f / 1216×704 / upscale` estimate **166.72 GB** → refused live with
+  “Needs ~166.7 GB (+8.3 GB safety margin, only 1.3 GB swap free) but only
+  118.9 GB of RAM is free…”, and the preflight returned the fitting preset
+  `93 frames, upscale off (~102.6 GB)`. The Generate surface rendered
+  “Not enough memory for this preset / Safe preset … / Apply & generate”.
+- A 121f/768×512/upscale preflight at ~108 GB free returned
+  `retryable:false` with the `upscale off (95.55 GB)` preset.
+- A cancelled 121f job converged from `cancelling` to `cancelled` in 45 s at
+  progress 11 without an OOM; the video slot then released in one call
+  (`used_gb` 76 → 0).
+- Swap occupancy alone no longer blocks work: macOS keeps swap allocated after
+  a heavy job, so admission uses *free swap* plus *physical free* instead of
+  lifetime swap percentage.
+
+### Known limits
+
+- The cost registry is hand-tuned from the reference machine; it is a measured
+  estimate, not a per-model profile.
+- Priority is by job kind with same-slot grouping, not explicit user intent;
+  there is no per-job priority override in the UI yet.
+- A job waits at most 20 memory retries (roughly 30 minutes); a job that needs a
+  much longer-running predecessor to finish can still fail. The refusal remains
+  explained and the preset ladder is offered instead.
+- CUDA decoding is not tiled; only the MPS path is.
+- M5 checkpoint/quantization/distillation/text-encoder alternatives require model
+  artifacts that are not in this repository; the app-side benchmark baseline is
+  ready.
+- Strata has no unload endpoint; it is budgeted from `memory_gb` and survives a
+  release request.
+- External engine probes add up to ~2.5 s each when a server is unreachable;
+  results are cached 4 s.
 
 ## Open questions
 

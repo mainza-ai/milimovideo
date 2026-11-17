@@ -392,35 +392,61 @@ flowchart TD
 
 ### Central Memory Manager (`memory_manager.py`)
 
-On Apple Silicon with unified memory, GPU models share the same physical RAM. The `MemoryManager` enforces mutual exclusion between heavy models to prevent OOM:
+On Apple Silicon with unified memory, GPU models share the same physical RAM.
+Slots still enforce mutual exclusion, but they are now backed by a **measured
+budget** (`backend/services/memory/`):
 
 ```mermaid
 flowchart TD
-    subgraph Slots["Memory Slots"]
-        VIDEO["video — LTX-2 (~76GB)"]
-        IMAGE["image — Flux 2 (~36GB)"]
-        LLM["llm_http — local HTTP LLM (variable)"]
-    end
+    SNAP["snapshot(): total, reserve, MPS ceiling,<br/>physical free, free swap, pressure,<br/>in-process slots, external engines, SAM"]
+    EST["costs.estimate(kind, params):<br/>base + workspace + upscale, ×1.05"]
+    ADMIT{"admit: fits ceiling,<br/>physical free + margin,<br/>free swap?"}
+    WAIT["MemoryDeferred → job.waiting<br/>(bounded, re-dispatch)"]
+    DOWN["suggest_downgrade → largest fitting preset<br/>(apply before allocation)"]
+    REFUSE["terminal job.failed<br/>with estimate + suggestions"]
+    PREP["prepare_for(slot): unload conflicts,<br/>lease slot, then load"]
 
-    subgraph Rules["Conflict Rules"]
-        R1["video ↔ image: mutually exclusive"]
-        R2["video/image drop llm_http before loading"]
-        R3["llm_http: engine-owned residency, released after enhancement"]
-    end
-
-    PREPARE["memory_manager.prepare_for(slot)"] --> CHECK{Conflicts?}
-    CHECK -->|Yes| UNLOAD["Unload conflicting slot"]
-    CHECK -->|No| LOAD["Proceed to load"]
-    UNLOAD --> FLUSH["gc.collect() + mps.empty_cache()"]
-    FLUSH --> LOAD
+    SNAP --> ADMIT
+    EST --> ADMIT
+    ADMIT -->|yes| PREP
+    ADMIT -->|transient| WAIT
+    ADMIT -->|permanent| DOWN
+    DOWN -->|fits| PREP
+    DOWN -->|no| REFUSE
 ```
 
+**Budget inputs:** total RAM, a 15% reserve, `torch.mps.recommended_max_memory()`,
+`psutil.virtual_memory().available`, free swap, `kern.memorystatus_vm_pressure_level`,
+resident slots, external engines, and SAM. Swap **occupancy** is reported but is not
+itself a refusal: macOS keeps swap allocated after a heavy job, so admission uses
+free swap + physical free + pressure.
+
+**Admission runs before every heavy load** — video, image, chained, ai_parse,
+inpaint, element, pipeline activation, LLM warm/reserve. The decision carries
+`retryable`, the reclaimable set, suggestions, and a `downgrade` preset. A
+transient refusal raises `MemoryDeferred` and becomes a visible wait; a permanent
+one applies the fitting preset (upscale off → fewer frames → smaller resolution)
+and persists it to the Job/QueuedJob/Shot before any allocation.
+
 **Slot lifecycle:**
-- `model_engine.py` calls `prepare_for("video")` before loading any LTX pipeline → unloads Flux and any warm `llm_http` engine
-- `flux_wrapper.py` calls `prepare_for("image")` before loading Flux → unloads LTX and `llm_http`
-- `flux_wrapper.py` `unload()` calls `release("image")` to update slot tracking
-- a local LLM call marks `llm_http` active; `runtime.release_local()` unloads every local role model (not just the provider default) and clears the slot when the engine can confirm release
-- single-shot video enhancement runs **before** `prepare_for("video")`, so the LLM never shares memory with LTX; chained chunk 0 still enhances after the load and is released immediately
+- `model_engine.py` calls `prepare_for("video")` before loading any LTX pipeline →
+  unloads Flux and any warm `llm_http` engine; a failed load releases the slot.
+- `flux_wrapper.py` calls `prepare_for("image")` before loading Flux → unloads LTX
+  and `llm_http`; failures release the image slot.
+- Slots carry `leases`; a leased slot is never evicted. Activation/deactivation is
+  refused while a job is active.
+- Idle TTL (`MILIMO_MEMORY_TTL_*`) and pressure evict unleased slots; `keep-warm`
+  pins one. `/system/memory/unload` and `/keep-warm` are the manual controls.
+- Engine adapters measure Ollama (`/api/ps`), oMLX (`/v1/models/status`), and use a
+  declared `memory_gb` for Strata/generic engines. SAM is lazy and released via
+  `/unload`.
+- The sampler records a 1 s peak trace per stage into `Job.memory_json`.
+
+**Scheduling:** the durable `QueuedJob` ledger feeds one GPU semaphore. Dispatch is
+ordered by priority (video/image 20, inpaint 30, element 50, ai_parse/depth 60),
+then by the slot already resident, then FIFO. A “waiting for memory” row sleeps on
+its own timer and is re-dispatched without holding the semaphore. The OOM retry
+drops upscale, steps, and frames, re-admits, and emits `job.retrying`.
 
 ### Local LLM residency and keep-alive
 
@@ -545,7 +571,8 @@ role change persists across restarts.
 
 ### 6.3 Configuration, discovery, and eval
 
-- **Storage** — `app_setting.key = "llm"`, schema v2, revision CAS, redacted keys.
+- **Storage** — `app_setting.key = "llm"`, schema v3 (adds declared `memory_gb`),
+  revision CAS, redacted keys.
 - **Discovery** — loopback scan identified by catalog shape; 401/403 reports
   `needs_key`; attach is idempotent by normalised base URL.
 - **Capability catalog** — context (`/api/show`, `max_model_len`, `meta`),

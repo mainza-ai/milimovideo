@@ -36,7 +36,8 @@ From a fresh clone to a running studio generating video, locally.
    `text_encoder/` (Qwen 3 8B), `tokenizer/`, `ip-adapter.safetensors`.
 5. **SAM 3** (optional but recommended): `conda create -n sam3_env python=3.12`,
    `pip install -e sam3` + FastAPI/uvicorn deps; checkpoint `backend/models/sam3/sam3.pt`
-   auto-downloads from HuggingFace on first start if missing.
+   auto-downloads from HuggingFace on the first segmentation request if missing.
+   The service starts without loading the model (`/load` warms, `/unload` releases).
 6. **Optional depth**: download Depth Anything V2 Small in Setup before using the
    Edit depth overlay.
 7. **Launch the services**:

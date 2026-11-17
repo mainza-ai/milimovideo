@@ -132,12 +132,13 @@ graph TD
 | Interaction | Protocol | Description |
 |---|---|---|
 | **UI → Backend** | HTTP REST | CRUD for projects, shots, elements, assets. Job dispatch. |
-| **Backend → UI** | SSE (Server-Sent Events) | Real-time progress updates, job completion, error logs. |
+| **Backend → UI** | SSE (Server-Sent Events) | Typed `job.*` stage/progress/terminal events with `seq` ids and `Last-Event-ID` replay; render/download/memory events; legacy names mapped for the frozen editor. |
 | **UI Refresh Sync** | HTTP GET `/status/{job_id}` | One-shot job state recovery on page load via `jobPoller`. |
-| **Worker → LTX-2** | Direct Python Import | `ModelManager` loads LTX-2 pipelines into VRAM. One pipeline cached at a time. `MemoryManager.prepare_for("video")` unloads Flux first. |
+| **Worker → LTX-2** | Direct Python Import | `ModelManager` loads LTX-2 pipelines into VRAM. One pipeline cached at a time; `memory_manager.admit_job` runs before the load, `prepare_for("video")` unloads Flux first, and a failed load releases the slot. |
 | **Worker → Flux 2** | Direct Python Import | `FluxInpainter` singleton for image gen + inpainting. `MemoryManager.prepare_for("image")` unloads LTX first. |
 | **Prompt Enhancement** | Role runtime (`services/llm`) | `llm.py` maps media kind to `prompt_video`/`prompt_image`; orders provider instances with fallbacks, checks context and budget, and records provenance. HTTP enhancement runs before the video pipeline loads; local models are released afterwards. |
-| **Backend → SAM** | HTTP REST (port 8001) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. |
+| **Backend → SAM** | HTTP REST (port 8001) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. The image model is lazy (`/load`/`/unload`); tracking lazy-loads its predictor. |
+| **Scheduler → memory** | In-process | Measured budget + admission + leases; a transient refusal becomes a bounded `job.waiting`, a permanent one applies a fitting preset before allocation. |
 | **Timeline → Player** | Headless rAF subscription | `PlaybackEngine` drives `currentTime` via `requestAnimationFrame` with cached layout. `CinematicPlayer` subscribes with throttled drift correction (250ms). |
 | **Playback → Audio** | `GlobalAudioManager` singleton | Web Audio API (`AudioContext` + `AudioBufferSourceNode`) for precise cross-browser playback. Buffers decoded upfront; drift tolerance 0.3s. |
 | **Static Media Serving** | HTTP Range Requests | `server.py` serves `.mp4`/`.mp3`/audio files with `206 Partial Content` and `Accept-Ranges: bytes` for Safari compatibility. |
@@ -174,7 +175,7 @@ Handles video, image, chained, and inpainting generation.
 | `services/element_matcher.py` | `ElementMatcher` — Intelligent production matching engine. Uses 8 signals (exact name, trigger word, scene heading, action keywords, etc.) to link script elements to project assets. |
 
 ### C. The API Layer (Backend)
-5 routers with ~30 endpoints.
+13 routers, 139 operations across 122 OpenAPI paths.
 
 | Router | Prefix | Key Endpoints |
 |---|---|---|
@@ -183,6 +184,14 @@ Handles video, image, chained, and inpainting generation.
 | `assets.py` | `/uploads`, `/assets` | File upload, list media, delete, get last frame |
 | `elements.py` | `/elements`, `/edit`, `/track` | Element CRUD, visualize, inpaint, segment, tracking save/load |
 | `storyboard.py` | `/storyboard` | Parse script (regex + AI), commit, get hierarchy, update scene, generate shot (auto-randomizes seed if fresh), batch generate, generate thumbnails, reorder scenes/shots, add/delete shots |
+| `shots.py` | `/shots` | Takes, select/favorite take, split |
+| `models.py` | `/models` | Registry, downloads/queue/cancel, activate/deactivate, LoRA strength |
+| `planner.py` | `/planner` | Deterministic plan previews |
+| `review.py` | `/projects/{id}/review` | Frame comments/approvals, activity |
+| `share.py` | `/share` | Capability share links |
+| `depth.py` | `/projects/{id}/depth` | Queued depth overlay |
+| `settings.py` | `/settings/llm` | Provider instances/roles, discovery, verify/warm, eval/profiles, memory/unload |
+| `memory.py` | `/system` | `/memory`, `/memory/preflight`, `/memory/unload`, `/memory/keep-warm` |
 
 ### D. The Player System (Frontend)
 "Program Monitor" pattern with multi-component composition.
@@ -200,13 +209,16 @@ Handles video, image, chained, and inpainting generation.
 | `TrackingPanel.tsx` | Video object tracking UI — session lifecycle (start/prompt/propagate/stop), text/click prompts, mask overlay canvas, frame navigation, export/save masks. Mutually exclusive with edit mode. |
 
 ### G. The SSE System (Frontend)
-Reliable server-sent events with auto-reconnect.
+One typed, replayable event stream with reconnect.
 
 | Component | Role |
 |---|---|
-| `SSEProvider.tsx` | React context provider — manages `EventSource` lifecycle with exponential backoff reconnect. Syncs in-flight jobs on mount via `jobPoller`. Listens for `progress`, `complete`, `error`, `log` events. |
-| `useEventSource.ts` | Standalone hook for SSE connections (low-level). Returns `{lastEvent, isConnected}`. |
-| `useSSE()` | Context hook — provides `{isConnected, lastEventTime}` from `SSEProvider`. |
+| `backend/events.py` | `EventManager`: per-client queues, monotonic ids, 120 s / 1000-message replay, dropped/peak-pending stats. `GET /events` accepts `Last-Event-ID` or `last_event_id`. |
+| `backend/job_events.py` | Typed `job.*` envelope (`ts/event/job_id/shot_id/project_id/kind/stage/progress/step/total/eta_seconds/message`); `terminal()` writes the DB once and emits once. |
+| `SSEProvider.tsx` | Single EventSource, exponential backoff, typed job handlers, legacy mapping, system handlers, resync on connect. Ignores native `error` events with no data. |
+| `jobBridge.ts` | Job→shot reconciliation, stage labels, toasts, desktop notifications, `milimo:job-terminal`/`milimo:resync`. |
+| `StudioToastLayer.tsx` / `ActivityCenter.tsx` | The mounted live region and the active/history/cancel/retry popover, document title and dock badge. |
+| `useEventSource.ts` / `useSSE()` | Low-level hook and the `{isConnected, lastEventTime}` context. |
 
 ### E. The Inspector System (Frontend)
 Shot editing panel with sub-components.
@@ -225,8 +237,9 @@ Isolated segmentation and tracking service.
 
 | Component | Role |
 |---|---|
-| `sam3/start_sam_server.py` | FastAPI server (port 8001). Loads SAM 3 at startup with `build_sam3_image_model` + `Sam3Processor`. Video predictor lazy-loaded with MPS/CUDA/CPU device auto-detection. |
-| `GET /health` | Returns `{status, model_loaded, processor_ready}` for readiness probes |
+| `sam3/start_sam_server.py` | FastAPI server (port 8001). Starts with **no model**; loads `build_sam3_image_model` + `Sam3Processor` on the first image request under a lock. Video predictor lazy-loaded with MPS/CUDA/CPU device auto-detection. |
+| `GET /health` | Returns `{status, model_loaded, processor_ready, loading, lazy, error}` |
+| `POST /load` / `POST /unload` | Warm or release the image model; `unload` flushes caches |
 | `POST /predict/mask` | Point/box segmentation → binary PNG mask |
 | `POST /detect` | Text-prompted multi-object detection → JSON (masks, bboxes, scores) |
 | `POST /segment/text` | Text → merged binary mask PNG (for inpainting) |
@@ -242,12 +255,26 @@ Persisted, local-first, and cloud-optional.
 
 | Component | Role |
 |---|---|
-| `services/llm/store.py` | Revisioned `LLMSettings` v2 document in `app_setting`: provider instances, roles, budget, last eval; redacted reads; key source/status |
+| `services/llm/store.py` | Revisioned `LLMSettings` v3 document in `app_setting`: provider instances, roles, budget, last eval, declared `memory_gb`; redacted reads; key source/status |
 | `services/llm/providers.py` | Wire adapters (`gemma_native`, `ollama_native`, `openai_chat`, `anthropic_messages`) with images, streaming, warm/unload, and capability parsing |
 | `services/llm/runtime.py` | Role plans, context preflight, budget checks, fallback, cancellation, telemetry, prompt provenance |
 | `services/llm/discovery.py` | Loopback scan identified by catalog shape (not just an open port); `needs_key` on 401/403 |
 | `services/llm/eval.py` + `fixtures.py` | Local shot/image/script fixtures, pass rate and p50, recommended plan |
 | `services/llm/budget.py` | Fail-closed cloud pricing, daily ledger, spend summary |
 | `services/llm/profiles.py` | Sovereign local / Local preferred / Hybrid routing presets |
-| `routes/settings.py` | Snapshot, revisioned save, air-gap patch, budget, models, discover/attach, verify/warm/remove, test + SSE test, health, eval/apply, profiles, spend |
-| `LLM demos: Studio Setup → AI & LLM` | Provider cards, capability table, role matrix, Check plan, eval table, budget/profiles, streaming test |
+| `routes/settings.py` | Snapshot, revisioned save, air-gap patch, budget, models, discover/attach, verify/warm/remove, test + SSE test, health, eval/apply, profiles, spend, `/memory`, provider unload |
+| `LLM demos: Studio Setup → AI & LLM` | Provider cards, capability table, role matrix, Check plan, eval table, budget/profiles, streaming test, resident GB/unload |
+
+### H. The Memory Budget and Job Event Plane
+Measured, fail-closed scheduling and truthful progress.
+
+| Component | Role |
+|---|---|
+| `services/memory/budget.py` | Snapshot (total/reserve/MPS ceiling/physical free/free swap/pressure/in-process/external/SAM), admission, reclaimable set, fitting-preset ladder, retryability |
+| `services/memory/costs.py` | Per-lane peak estimator (LTX 76 GB base, Flux 36 GB, frames/resolution/upscale/workspace) |
+| `services/memory/engines.py` | Ollama `/api/ps`, oMLX `/v1/models/status`, generic `memory_gb` override, unload adapters |
+| `services/memory/sampler.py` | 1 s per-job sampler: peak, peak stage, per-stage peaks, swap peak |
+| `memory_manager.py` | Slots, leases, conflicts, TTL eviction, keep-warm, pressure monitor, counters, `status()` |
+| `job_utils.py` | Durable ledger, GPU semaphore, priority/same-slot ordering, `MemoryDeferred` retry, OOM retry, progress persistence, queue-wait stats |
+| `routes/memory.py` | Status, preflight, unload, keep-warm |
+| `backend/benchmark_models.py` | M5 per-lane estimated/measured peak, load, and wall-time baseline |

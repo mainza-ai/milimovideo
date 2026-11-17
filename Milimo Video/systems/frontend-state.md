@@ -29,8 +29,10 @@ model but not in-memory documents.
 |---|---|
 | `state/documentStore.ts` (`milimo-studio-document`) | Project, shots, scenes, captions, save status/revision/conflict, document undo/redo, playback time/playing, track states, toasts |
 | `state/editorStore.ts` | Active surface, story view, selection, board camera/positions/areas/links/notes, pins, minimap, timeline zoom/height, inspector state, command dock, recipes, focus mode |
-| `state/jobStore.ts` | Active jobs and metrics; isolated from document/playback |
+| `state/jobStore.ts` | Active jobs (authoritative replace), finished history, unread count, and metrics; isolated from document/playback |
 | `state/agentStore.ts` | Plan history and pending agent proposals |
+| `events/jobBridge.ts` | Job→shot reconciliation, stage labels, toasts, desktop notifications, `milimo:job-terminal`/`resync` |
+| `notifications/preferences.ts` | Persisted toasts/OS/sound and per-project mute (`milimo-studio-notifications`) |
 | TanStack Query (`state/queryClient.ts`) | Health, models, pipelines, review/share, renders, assets, elements, metrics |
 
 The document store is **separate** from the legacy `timelineStore`. Studio routes
@@ -72,8 +74,12 @@ The legacy store still contains the older contract quirks documented in the audi
 
 - **Server reads** flow through TanStack Query or focused hooks; mutations call the
   backend then refresh the affected query.
-- **SSE jobs** update the Studio job store and prompts job polling; document
-  completion updates `videoUrl`/`thumbnailUrl` for the selected take.
+- **SSE jobs** flow into the Studio job store through `jobBridge`: progress/ETA
+  update the shot, a terminal event clears it and refreshes takes/assets/renders,
+  and `milimo:job-terminal`/`milimo:resync` trigger reconciliation. Completion
+  updates `videoUrl`/`thumbnailUrl` for the selected take.
+- **Bootstrap** opens the newest real server project. The local `default` id is a
+  sentinel, never a persisted server choice; an explicitly opened UUID is kept.
 - **Playback** is isolated in its own clock/store surface so 60fps time changes do
   not reconcile the board or timeline tree.
 - **Selection** flows board → shot list → inspector → timeline through editor store
@@ -93,6 +99,14 @@ The legacy store still contains the older contract quirks documented in the audi
   dev-server restart/rebuild.
 - Zod contracts intentionally cover selected endpoints; generated OpenAPI types
   cover the rest. CI checks generated drift.
+- `setActiveJobs` from `/active_jobs` replaces the list; `upsertActive` merges an
+  immediate local job. A missed terminal must be cleared by the resync/status
+  reconcile, not by accumulating active rows.
+- Toasts are rendered by the single mounted `StudioToastLayer`; adding another
+  container would duplicate notifications. Project mute suppresses toasts/OS/sound
+  but history still records every terminal.
+- A native EventSource `error` event has no data; `SSEProvider` ignores empty
+  payloads and lets `onerror` reconnect.
 
 ## Related
 

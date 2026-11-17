@@ -204,7 +204,20 @@ when the count is invalid. The lens copies/saves a reproducible recipe as JSON a
 - **Queue pending** batches all shots without completed takes.
 - **Batch matrix** shows status/progress and per-shot generate/cancel.
 - **Active queue** shows running/queued jobs, position, estimate, and cancel.
-- Only one heavy GPU job runs at a time.
+- Only one heavy GPU job runs at a time; interactive video/image work is dispatched
+  before bulk thumbnails/elements and background parsing.
+- **Memory preflight** runs before the request. If the shot cannot fit:
+  - a running job holds the memory → the shot queues and shows **waiting for
+    memory** instead of failing;
+  - a smaller preset fits → a banner offers **Apply & generate** with the largest
+    safe preset (upscale off, fewer frames, smaller resolution);
+  - nothing fits → the shot is blocked with the estimate and suggestions.
+- **Progress** appears inline (stage, percent, ETA), as a toast, in the top-bar
+  activity center (active/history/retry/cancel), in the document title, and on the
+  macOS dock badge. Reconnects replay missed events; a missed terminal is
+  reconciled from `/status`.
+- Terminal notifications can be muted for the current project in **Setup →
+  Notifications**; toasts, desktop notifications, and sound are separate toggles.
 
 ### Preview first
 
@@ -382,6 +395,13 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
   orphan board nodes/links, and invalid caption ranges. **Repair safe issues**
   clears broken pointers, normalizes sequence order, and sanitizes captions
   without deleting files.
+- **Memory budget**: measured used/available/ceiling, physical free, free swap,
+  pressure, SAM, per-slot model/bytes/leases with **Release**/**Pin**, external LLM
+  engines with **Release**, and load/unload/eviction/refusal counters. **Release
+  all** frees every resident model; **Pin** skips idle eviction.
+- **Notifications**: in-app toasts, sound cue, desktop notifications (macOS uses
+  Notification Center), and per-project mute. Toasts/activity always keep history;
+  mute only suppresses the interruption.
 - Error budget: 7-day job counts by status and recent failures.
 
 Activation loads the real model through the loader and respects the one-slot rule.
@@ -510,8 +530,15 @@ Common issues:
 - Scoped v1 cut: no transitions, LUTs, titles, or A2 track; search is ranked
   lexical matching, not embeddings.
 - The depth model is downloaded separately; it is not shipped with the repo.
-- LLM L4 governance (spend telemetry, budget guard, eval gate, profiles) is not
-  built. Cloud providers are unreachable unless `MILIMO_LLM_CLOUD=1` and the
-  air-gap switch is off. See `Milimo Video/systems/llm-settings-audit-2026-11.md`.
-- Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is a separate
+- **Memory**: costs are a measured estimate, not a per-model profile; Strata has no
+  remote unload; a cancelled job keeps its pipeline until the idle TTL; memory
+  waits are bounded (20 retries); swap exhaustion can refuse jobs until the machine
+  is restarted. See `Milimo Video/systems/memory-management-audit-2026-11.md`.
+- **Model efficiency (M5)**: SAM is lazy and `backend/benchmark_models.py` records
+  per-lane baselines, but quantized/distilled checkpoints and text-encoder
+  alternatives need model artifacts that are not vendored.
+- **Notifications**: the legacy `/` editor receives mapped events but has no toast
+  layer or activity center. macOS desktop notifications use `osascript`; a tray
+  icon is not implemented.
+- Phase 6 v2 artifact work (model swaps, MLX/FP8 lanes, agent crew) is a separate
   program and is not part of scoped v1.

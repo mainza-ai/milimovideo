@@ -90,14 +90,21 @@ SAM 3 runs as a separate FastAPI server, isolated from the main Milimo backend:
 
 **Server**: FastAPI with `uvicorn`, bound to `0.0.0.0:8001`.
 
-**Lifespan Startup**:
-1.  Import `build_sam3_image_model` and `Sam3Processor` from `sam3` package.
-2.  **Device Selection**: `cuda` → `mps` → `cpu` (automatic detection).
-3.  **Checkpoint Loading**: Tries local `backend/models/sam3/sam3.pt` first, **auto-downloads from HuggingFace** if not found.
-4.  `enable_inst_interactivity=True` — activates the `inst_interactive_predictor` for click-based segmentation.
-5.  `Sam3Processor` initialized with model and default confidence threshold (0.5).
-6.  Model set to `.eval()` mode.
-7.  **Video predictor** is lazy-loaded on first `/track/*` request to conserve VRAM. The detected `device` is passed to `Sam3VideoPredictor(device=...)` so the model is placed on the correct device (CUDA, MPS, or CPU).
+**Lifespan Startup (lazy)**:
+1.  The server starts with **no model loaded**; `/health` reports `lazy: true`.
+2.  The first image request (`/predict/mask`, `/detect`, `/segment/text`) calls
+    `_ensure_model()` under a lock:
+    - Import `build_sam3_image_model` and `Sam3Processor`.
+    - **Device Selection**: `cuda` → `mps` → `cpu` (automatic detection).
+    - **Checkpoint Loading**: tries local `backend/models/sam3/sam3.pt` first,
+      **auto-downloads from HuggingFace** if not found.
+    - `enable_inst_interactivity=True` for click-based segmentation.
+    - `Sam3Processor` with default confidence 0.5, then `.eval()`.
+3.  `POST /load` warms the model explicitly; `POST /unload` releases it and flushes
+    accelerator caches. The memory manager calls `/unload` through
+    `memory_manager._unload_sam()`.
+4.  **Video predictor** is lazy-loaded on first `/track/*` request to conserve VRAM.
+    The detected `device` is passed to `Sam3VideoPredictor(device=...)`.
 
 **Endpoints**:
 

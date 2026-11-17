@@ -75,9 +75,15 @@ The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
   seed lock, encoding controls, integrity scan/repair, and native open/save;
 - the local-first LLM plane (L0–L9): persisted provider instances and roles,
   capability catalog, discovery/verify/warm, streaming, role eval, pre-pipeline
-  enhancement and unload, vision payloads, and cloud budget/eval gate/profiles.
+  enhancement and unload, vision payloads, and cloud budget/eval gate/profiles;
+- the measured memory plane (M0–M5 code side): admission, leases, TTL eviction,
+  engine adapters, priority/same-slot queue, memory waits, downgrade ladder,
+  metrics, sampler, SAM lazy load, and the model-lane benchmark;
+- the typed job notification plane (N0–N5): `job.*` events/replay, one terminal
+  emitter, Studio toasts/activity/inline progress, resync/watchdog, desktop
+  notifications, dock badge, webhook, and per-project mute.
 
-Verification: **125 backend tests, 61 Vitest tests, 21 Playwright tests**, clean
+Verification: **175 backend tests, 79 Vitest tests, 21 Playwright tests**, clean
 ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
 failures.
 

@@ -1,5 +1,12 @@
 # Milimo Video — Execution Flow
 
+> **Current implementation note (2026-11-17):** the sequence diagrams below show
+> the pre-ledger shape and use the legacy `progress`/`complete` names. The live
+> path now enqueues a `QueuedJob`, runs memory admission before the load, emits
+> typed `job.*` events (with `seq`/replay), and terminates through one emitter.
+> Read the diagrams for the pipeline internals; read §1/§5/§8 notes and
+> [[systems/sse-eventing]] for the current control plane.
+
 ## 1. Video Generation Sequence
 
 ```mermaid
@@ -22,16 +29,19 @@ sequenceDiagram
 
     API->>DB: Create Job (status=pending)
     API->>DB: Update Shot (status=generating, last_job_id)
-    API->>Utils: Check GPU Semaphore Limit
-    API->>Utils: Register active_jobs[job_id]
-    API->>Worker: BackgroundTasks.add_task(queue_video_task)
+    API->>Utils: enqueue_gpu_job → QueuedJob(status=queued)
+    Utils-->>UI: job.queued {position, estimate_seconds}
     API-->>UI: Return 200 {job_id, status: "queued"}
 
     Note over UI: SSE connection already active
 
-    Worker->>Utils: update_job_db(job_id, "processing")
-    Worker->>Utils: broadcast_progress(job_id, 0, "Loading models...")
-    Utils-->>UI: SSE event: {type: "progress", job_id, progress: 0}
+    Utils->>Utils: wait_for_turn (priority, resident slot, FIFO)
+    Utils->>DB: QueuedJob(status=running), Job(stage=starting)
+    Utils-->>UI: job.started
+    Utils->>Worker: gpu_job_wrapper → generate_video_task
+    Worker->>Worker: memory_manager.admit_job (defer/downgrade/refuse)
+    Worker->>Utils: update_job_progress(stage=loading)
+    Utils-->>UI: job.stage {stage: "loading", progress: 2}
     UI->>Store: handleServerEvent("progress", data)
     Store->>Store: updateShot(shotId, {progress: 0, statusMessage: "Loading models..."})
 
@@ -71,13 +81,14 @@ sequenceDiagram
             Worker->>Utils: update_job_db(job_id, "cancelled")
             Worker-->>Utils: broadcast_progress(status="cancelled")
         end
-        Worker->>Utils: broadcast_progress(job_id, progress%, eta)
-        Utils-->>UI: SSE event (progress update)
+        Worker->>Utils: update_job_progress(stage, step, total, eta)
+        Utils-->>UI: job.stage / job.progress
     end
 
     LTX-->>Worker: Return video tensor
 
     Worker->>FFmpeg: encode_video(tensor, output_path) — libx264 + yuv420p + movflags faststart
+    Note over Worker: encode runs in a worker thread; decoded buffers/caches are released after
     Worker->>FFmpeg: Asynchronous generate_thumbnail(video_path)
     Worker->>Utils: update_job_db(job_id, "completed", output_path, thumbnail_path)
     Worker->>Utils: update_shot_db(shot_id, {video_url, thumbnail_url, status: "completed"})
@@ -257,18 +268,20 @@ sequenceDiagram
     User->>Script: ./run_backend.sh
     Script->>API: Start Uvicorn (port 8000)
     
-    API->>API: Configure Logging
+    API->>API: Configure Logging (reload is opt-in: MILIMO_RELOAD=1)
     API->>API: Create directories (projects/, uploads/, generated/)
-    API->>DB: init_db() — SQLModel.metadata.create_all()
+    API->>DB: init_db() — Alembic upgrade to head (0006_job_progress)
     
     Note over API: Lifespan: Startup
     API->>API: Capture event loop → job_utils.global_loop
-    API->>DB: Find zombie jobs (status="processing")
-    API->>DB: Mark zombies as failed (prevent stale locks)
+    API->>API: torch.mps.set_per_process_memory_fraction + start memory monitor
+    API->>DB: Fail interrupted running rows (stage=recovery), keep queued rows
+    API->>Utils: resume_queued_jobs() — dispatch with fresh memory admission
+    API-->>UI: job.failed/job.queued for recovered rows
     
     API->>API: Mount Static Files (/projects, /uploads, /generated)
-    API->>API: Register API Router (5 sub-routers)
-    API->>API: Register /events SSE endpoint
+    API->>API: Register API Router (13 sub-routers incl. /system)
+    API->>API: Register /events SSE endpoint (Last-Event-ID replay)
 
     User->>Script: ./run_frontend.sh
     Script->>React: npm run dev (port 5173)
@@ -454,16 +467,18 @@ sequenceDiagram
     participant Worker as BackgroundTask
 
     UI->>API: POST /jobs/{job_id}/cancel
-    API->>Utils: active_jobs[job_id]["cancelled"] = True
-    API->>Utils: active_jobs[job_id]["status"] = "cancelling"
-    API-->>UI: {status: "cancelling"} (HTTP 200)
-
-    Note over Worker: Next CUDA/MPS Denoising Step
-    Worker->>Utils: Check active_jobs[job_id]["cancelled"] == True
-    Worker->>Worker: Raise RuntimeError("Cancelled") to escape loop
-    Worker->>Utils: update_job_db(job_id, "cancelled")
-    Worker-->>UI: SSE Event {type: "cancelled", job_id: "X"}
-    Note over UI: Zustand un-locks component state
+    alt Job is active
+        API->>Utils: active_jobs[job_id]["cancelled"] = True
+        API-->>UI: job.cancelling {stage: "cancelling"}
+        Note over Worker: Next denoise/upscale step
+        Worker->>Worker: Raise RuntimeError("Cancelled") to escape loop
+        Worker->>Utils: job_events.terminal("cancelled")
+        API-->>UI: job.cancelled (exactly once)
+    else Job is queued/pending
+        API->>DB: Job(status=cancelled, completed_at), QueuedJob(status=cancelled)
+        API-->>UI: job.cancelled {message: "Cancelled before start"}
+    end
+    Note over UI: jobBridge clears the spinner; a 5 s /status watchdog is the fallback
 
     Note over API: Server Shutdown Fallback
     API->>Utils: cancel_all_jobs() — flags all active maps
