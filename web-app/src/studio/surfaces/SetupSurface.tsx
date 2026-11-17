@@ -14,12 +14,15 @@ export function SetupSurface() {
     const { health, error } = useStudioHealth();
     const { models, pipelines, loading, refresh, setActive } = useStudioModels();
     const [filter, setFilter] = useState<'all' | 'video' | 'image' | 'segmentation'>('all');
+    const [kind, setKind] = useState<'base' | 'lora'>('base');
     const [busy, setBusy] = useState<string | null>(null);
 
     const visible = useMemo(() => {
-        const bases = models.filter((model) => model.type === 'base');
-        return filter === 'all' ? bases : bases.filter((model) => model.pipeline === filter);
-    }, [filter, models]);
+        const matching = models.filter((model) => (
+            kind === 'base' ? model.type === 'base' : model.type !== 'base'
+        ));
+        return filter === 'all' ? matching : matching.filter((model) => model.pipeline === filter);
+    }, [filter, kind, models]);
 
     const activeCount = models.filter((model) => model.status === 'active').length;
 
@@ -100,6 +103,24 @@ export function SetupSurface() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
                     <h3 className="st-panel-title" style={{ margin: 0 }}>Models</h3>
                     <div className="st-button-row">
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant={kind === 'base' ? 'primary' : 'ghost'}
+                            onClick={() => setKind('base')}
+                        >
+                            Base
+                        </button>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant={kind === 'lora' ? 'primary' : 'ghost'}
+                            onClick={() => setKind('lora')}
+                        >
+                            LoRA
+                        </button>
                         {(['all', 'video', 'image', 'segmentation'] as const).map((item) => (
                             <button
                                 key={item}

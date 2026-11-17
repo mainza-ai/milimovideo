@@ -582,3 +582,9 @@ Library gained a Search tab that ranks shots, assets, master references, and
 takes with deterministic token/prefix scoring — no embedding service, no network.
 Results show score and jump to the shot where applicable. Added unit tests for
 ranking and prefix behavior. Verified: 36 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] f4 | LoRA list and activation in Setup
+
+Setup now switches between base models and LoRAs, filtering by pipeline. LoRAs
+use the real activation endpoint (which enforces an active base) and show real
+status, size, and VRAM estimates. Verified: tsc clean, eslint 0 errors.
