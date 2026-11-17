@@ -3,6 +3,7 @@ import {
     Check, CheckCircle2, Loader2, MessageSquare, Play, TriangleAlert, X,
 } from 'lucide-react';
 import { apiUrl, getAssetUrl } from '../config';
+import { SharePayloadSchema } from '../api/contracts';
 import './studio.css';
 
 interface SharedShot {
@@ -53,7 +54,9 @@ export function SharedReviewPage({ token }: { token: string }) {
             const response = await fetch(apiUrl(`/share/${token}`));
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
-            setPayload(data);
+            const parsed = SharePayloadSchema.safeParse(data);
+            if (!parsed.success) throw new Error('Share response failed contract validation');
+            setPayload(parsed.data as SharedPayload);
             setSelectedShotId((current) => current || data.shots?.[0]?.id || null);
             setError(null);
         } catch (exc) {

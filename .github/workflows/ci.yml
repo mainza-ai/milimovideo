@@ -34,6 +34,11 @@ jobs:
       - name: Install frontend for E2E
         working-directory: web-app
         run: npm ci
+      - name: Verify generated API contract
+        working-directory: web-app
+        run: |
+          npm run gen:api
+          git diff --exit-code openapi.json src/api/schema.d.ts
       - name: Install Playwright browser
         working-directory: web-app
         run: npx playwright install --with-deps chromium

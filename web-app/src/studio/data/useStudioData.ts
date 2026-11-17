@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTimelineStore, type Project, type Shot } from '../../stores/timelineStore';
 import { apiUrl, getAssetUrl } from '../../config';
+import { HealthSchema, ReviewPayloadSchema } from '../../api/contracts';
 import {
     useStudioEditor,
     type BoardArea,
@@ -216,9 +217,10 @@ export function useStudioHealth() {
             try {
                 const response = await fetch(apiUrl('/health'));
                 if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const data = await response.json();
+                const parsed = HealthSchema.safeParse(await response.json());
+                if (!parsed.success) throw new Error('Health response failed contract validation');
                 if (alive) {
-                    setHealth(data);
+                    setHealth(parsed.data);
                     setError(null);
                 }
             } catch (exc) {
@@ -331,18 +333,23 @@ export function useStudioReview(projectId: string) {
     const refresh = useCallback(async () => {
         try {
             const response = await fetch(apiUrl(`/projects/${projectId}/review`));
-            const data = response.ok ? await response.json() : EMPTY_REVIEW;
-            setReview({
-                comments: Array.isArray(data.comments) ? data.comments : [],
-                approvals: Array.isArray(data.approvals) ? data.approvals : [],
-                summary: data.summary || EMPTY_REVIEW.summary,
-            });
+            if (!response.ok) {
+                setReview(EMPTY_REVIEW);
+                return;
+            }
+            const parsed = ReviewPayloadSchema.safeParse(await response.json());
+            if (!parsed.success) {
+                addToast('Review response failed contract validation', 'error');
+                setReview(EMPTY_REVIEW);
+                return;
+            }
+            setReview(parsed.data);
         } catch {
             setReview(EMPTY_REVIEW);
         } finally {
             setLoading(false);
         }
-    }, [projectId]);
+    }, [addToast, projectId]);
 
     useEffect(() => {
         void refresh();

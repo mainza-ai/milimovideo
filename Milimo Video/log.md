@@ -434,3 +434,11 @@ focusable main region; timeline clips and trim handles are keyboard reachable
 coverage (WCAG A/AA, zero critical) plus a keyboard surface-navigation test, and
 deduplicated API stubs across E2E specs. Verified: 5 Playwright, 23 vitest, tsc
 clean, eslint 0 errors.
+
+## [2026-11-17] f0 | generated API types, Zod contracts, attribution
+
+Checked in `web-app/openapi.json` + generated `src/api/schema.d.ts` with a
+`npm run gen:api` script and a CI drift check. Added Zod runtime contracts for
+health, plan, review, and share payloads; studio hooks now reject contract drift
+instead of silently shaping unknown JSON. Added the Kubona Apache-2.0 attribution
+file. Verified: 27 vitest, tsc clean, eslint 0 errors.

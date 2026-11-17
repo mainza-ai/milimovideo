@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "node e2e/clean.mjs && playwright test",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "gen:api": "node scripts/gen-api.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -22,6 +23,7 @@
     "tailwind-merge": "^3.4.0",
     "uuid": "^13.0.0",
     "wavesurfer.js": "^7.12.1",
+    "zod": "^4.6.7",
     "zundo": "^2.3.0",
     "zustand": "^5.0.10"
   },
@@ -41,6 +43,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "happy-dom": "^21.0.4",
+    "openapi-typescript": "^7.13.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.9.3",

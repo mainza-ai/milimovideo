@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowUp, Check, CornerDownLeft, Loader2, Sparkles, TriangleAlert, X } from 'lucide-react';
 import type { Shot } from '../../stores/timelineStore';
 import { apiUrl } from '../../config';
+import { PlanResponseSchema } from '../../api/contracts';
 import { useStudioEditor } from '../state/editorStore';
 import {
     useStudioElements,
@@ -101,7 +102,9 @@ export function CommandDock() {
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
-            setPlan(data as Plan);
+            const parsed = PlanResponseSchema.safeParse(data);
+            if (!parsed.success) throw new Error('Plan response failed contract validation');
+            setPlan(parsed.data as Plan);
         } catch (exc) {
             const message = exc instanceof Error ? exc.message : 'Planning failed';
             setError(message);
