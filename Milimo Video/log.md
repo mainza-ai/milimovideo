@@ -693,3 +693,10 @@ objects, camera bodies, camera path across shot order, orbit controls, and a PNG
 snapshot. WebGL failure is caught and fails closed with an explanation. Three is
 code-split into its own chunk so the editor does not pay for it at boot. Verified:
 42 vitest, tsc clean, eslint 0 errors, build passes.
+
+## [2026-11-17] f5 | Yjs collaboration spike
+
+Added an opt-in Collab toggle for the storyboard: Yjs maps for card positions and
+pins, BroadcastChannel transport between tabs on the same machine, remote
+transactions applied without echo loops. No server/cloud. Added a two-doc
+convergence test with a fake channel. Verified: 43 vitest, tsc clean.

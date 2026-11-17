@@ -11,6 +11,7 @@ import {
 } from '../state/editorStore';
 import { ShotCard } from './ShotCard';
 import { cullCards } from '../board/culling';
+import { startBoardCollab, type BoardCollab } from '../collab/boardSync';
 
 const CARD_W = 300;
 const CARD_H = 238;
@@ -78,6 +79,7 @@ export function BoardCanvas() {
         selectedAreaId, selectArea, addArea, updateArea, removeArea, addLink, removeLink,
         boardQuery, setBoardQuery, selectedShotIds, selectShots, toggleShotSelection,
         boardPast, boardFuture, pushBoardHistory, undoBoard, redoBoard, togglePin,
+        collabEnabled, setCollabEnabled, hydrateBoard,
     } = useStudioEditor();
     const hostRef = useRef<HTMLDivElement>(null);
     const [size, setSize] = useState({ width: 900, height: 600 });
@@ -107,6 +109,25 @@ export function BoardCanvas() {
     const [linkSource, setLinkSource] = useState<string | null>(null);
     const [scriptDraft, setScriptDraft] = useState(project.scriptContent || '');
     const [scriptBusy, setScriptBusy] = useState(false);
+    const collabRef = useRef<BoardCollab | null>(null);
+
+    useEffect(() => {
+        if (!collabEnabled || typeof BroadcastChannel === 'undefined') return;
+        const collab = startBoardCollab(project.id, (positions, pinned) => {
+            hydrateBoard(positions, pinned);
+        });
+        collabRef.current = collab;
+        collab.publish(boardPositions, boardPinned);
+        return () => {
+            collab.stop();
+            collabRef.current = null;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [collabEnabled, project.id]);
+
+    useEffect(() => {
+        collabRef.current?.publish(boardPositions, boardPinned);
+    }, [boardPinned, boardPositions]);
 
     useEffect(() => {
         setScriptDraft(project.scriptContent || '');
@@ -731,6 +752,16 @@ export function BoardCanvas() {
                         <Pin size={13} /> {boardPinned[selectedShotIds[0]] ? 'Unpin' : 'Pin'}
                     </button>
                 )}
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={collabEnabled ? 'primary' : 'ghost'}
+                    onClick={() => setCollabEnabled(!collabEnabled)}
+                    title="Live-sync the board with another tab on this machine (Yjs spike)"
+                >
+                    Collab
+                </button>
                 <button
                     type="button"
                     className="st-button"

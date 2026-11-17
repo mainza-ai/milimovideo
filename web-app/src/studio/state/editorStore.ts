@@ -65,6 +65,7 @@ interface EditorState {
     boardAreas: Record<string, BoardArea>;
     boardLinks: BoardLink[];
     boardQuery: string;
+    collabEnabled: boolean;
     boardMode: BoardMode;
     linkKind: LinkKind;
     selectedAreaId: string | null;
@@ -101,6 +102,7 @@ interface EditorState {
     redoBoard: () => void;
     setBoardMode: (mode: BoardMode) => void;
     setBoardQuery: (query: string) => void;
+    setCollabEnabled: (enabled: boolean) => void;
     setLinkKind: (kind: LinkKind) => void;
     selectArea: (areaId: string | null) => void;
     addArea: (area: Omit<BoardArea, 'id'>) => string;
@@ -158,6 +160,7 @@ export const useStudioEditor = create<EditorState>()(
             boardAreas: {},
             boardLinks: [],
             boardQuery: '',
+            collabEnabled: false,
             boardMode: 'select',
             linkKind: 'thread',
             selectedAreaId: null,
@@ -240,6 +243,7 @@ export const useStudioEditor = create<EditorState>()(
             })),
             setBoardMode: (boardMode) => set({ boardMode }),
             setBoardQuery: (boardQuery) => set({ boardQuery }),
+            setCollabEnabled: (collabEnabled) => set({ collabEnabled }),
             setLinkKind: (linkKind) => set({ linkKind }),
             selectArea: (selectedAreaId) => set({ selectedAreaId }),
             addArea: (area) => {
@@ -322,6 +326,7 @@ export const useStudioEditor = create<EditorState>()(
                 boardAreas: state.boardAreas,
                 boardLinks: state.boardLinks,
                 boardQuery: state.boardQuery,
+                collabEnabled: state.collabEnabled,
                 boardMode: state.boardMode,
                 linkKind: state.linkKind,
                 boardMinimapOpen: state.boardMinimapOpen,
