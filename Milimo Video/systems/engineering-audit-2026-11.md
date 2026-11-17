@@ -115,6 +115,7 @@ problem; correctness is.
 | Captions | **Fixed (v1)** | cues persist, SRT/VTT import, optional burn; render writes ASS |
 | API contracts | **Fixed (v1)** | typed ProjectState/ShotState; generated OpenAPI TS + Zod checks; CI drift check |
 | Observability | **Fixed (v1)** | X-Request-ID + timing logs; metrics endpoint + Setup error-budget panel |
+| Store separation | **Fixed (v1)** | studio `/studio` owns its document/save/undo store; legacy `/` owns its own |
 | Performance | **Fixed (v1)** | 500-card board culling/pan ~58fps; 200-clip timeline culling/scroll ~275fps; headless specs committed |
 | Accessibility | **Fixed (v1)** | axe WCAG A/AA zero serious/critical; skip link; keyboard timeline editing |
 | NLE-01 timing | **Fixed** | render computes V1 starts from sequence order |

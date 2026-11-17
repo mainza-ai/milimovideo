@@ -401,9 +401,8 @@ Common issues:
 
 ## 15. Known limitations
 
-- The legacy editor at `/` remains until final cutover.
-- The studio still reads document state through a typed adapter over the legacy
-  store; the full store migration is pending.
+- Studio and the legacy editor now use separate document stores against the same
+  backend; legacy `/` remains until the final cutover.
 - Depth overlay is not implemented because no depth source exists yet. Object
   tracking and masks are integrated.
 - Tauri packages a native shell and save dialog, but the Python backend is not yet

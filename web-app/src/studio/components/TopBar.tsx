@@ -8,7 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { apiUrl } from '../../config';
 import { useStudioData, useStudioReview } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 
 const SURFACES: Array<{ id: StudioSurface; label: string }> = [
     { id: 'story', label: 'Story' },
@@ -32,15 +32,15 @@ export function TopBar() {
             setInspectorOpen: state.setInspectorOpen,
         })),
     );
-    const { saveStatus, saveError, saveProject } = useTimelineStore();
-    const addToast = useTimelineStore((state) => state.addToast);
-    const loadProject = useTimelineStore((state) => state.loadProject);
-    const createNewProject = useTimelineStore((state) => state.createNewProject);
+    const { saveStatus, saveError, saveProject } = useStudioDocumentStore();
+    const addToast = useStudioDocumentStore((state) => state.addToast);
+    const loadProject = useStudioDocumentStore((state) => state.loadProject);
+    const createNewProject = useStudioDocumentStore((state) => state.createNewProject);
     const [menuOpen, setMenuOpen] = useState(false);
     const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
     // zundo's temporal store is attached to the document store.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const temporalStore = (useTimelineStore as any).temporal;
+    const temporalStore = (useStudioDocumentStore as any).temporal;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const canUndo = useStore(temporalStore, (state: any) => state.pastStates.length > 0);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,7 +104,7 @@ export function TopBar() {
                         className="st-project-name"
                         value={project.name}
                         aria-label="Project name"
-                        onChange={(event) => useTimelineStore.getState().setProject({ ...project, name: event.target.value })}
+                        onChange={(event) => useStudioDocumentStore.getState().setProject({ ...project, name: event.target.value })}
                     />
                     <button
                         type="button"

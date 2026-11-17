@@ -44,7 +44,7 @@ at `/`.
 
 | Stage | Status | What exists |
 |---|---|---|
-| **F0 Foundation** | **Done for scoped F0** | Tokens, shell, inspector, dock, editor/job/agent stores + Query, generated types + Zod, axe serious/critical clean, visual baseline, attribution, project switcher, Setup, Playwright flows, Tauri shell. Open: document-store cutover |
+| **F0 Foundation** | **Done for scoped F0** | Tokens, shell, inspector, dock, editor/job/agent + separate document stores, Query, generated types + Zod, axe serious/critical clean, visual baseline, attribution, project switcher, Setup, Playwright flows, Tauri shell |
 | **F1 Story** | **Done for scoped F1** | Spine/filter, board camera/marquee/multi-select/resize/align/distribute/LOD/minimap, areas, typed links, notes, reference cards, review task cards, editable list/script, undo/pin, culling, revision/CAS save. 500-card pan measured ~58fps |
 | **F2 Edit** | **Done for scoped F2** | Compare/wipe/guides; isolated clock; trim/slip/roll/blade/ripple/rate/slide; tracking/mask overlay; audio gain/mute/fades/solo/waveform/A1; captions import+burn; full motion keyframes; render range/presets; table+keyboard; effects tab. 200-clip scroll measured ~275fps; depth has no source |
 | **F3 Generate** | **Done for scoped F3** | Workspace, composer/@mentions, advanced params, preview frame, batch queue+matrix, queue position/estimate/cancel, takes/favorites, inpaint-as-take |
@@ -53,8 +53,8 @@ at `/`.
 | **F5 Shorts/lenses** | **Mostly done** | Shorts candidates/scores/export; pipeline lens; blocking lens; lazy 3D previz; Yjs board spike; Tauri shell with native save and a built debug binary. Open: sidecar bundling and deeper F5 polish |
 
 **Next:** close the remaining measurements (axe serious, 500-card/200-clip FPS),
-migrate the document store off the legacy store, add visual baselines, and decide
-whether Tauri packaging belongs in scope. Keep `/` until those gates are green.
+decide whether Tauri sidecar packaging belongs in scope, and keep `/` until the
+final cutover gates are green.
 
 ## Why This Refactor
 

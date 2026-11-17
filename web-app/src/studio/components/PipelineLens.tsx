@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CheckCircle2, Copy, Loader2, TriangleAlert, X } from 'lucide-react';
-import type { Shot } from '../../stores/timelineStore';
+import type { Shot } from '../state/documentStore';
 import { apiUrl } from '../../config';
 import { saveTextFile } from '../../desktop';
 import type { StudioElement } from '../data/useStudioData';

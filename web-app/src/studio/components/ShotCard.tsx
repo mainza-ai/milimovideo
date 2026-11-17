@@ -1,5 +1,5 @@
 import { GripVertical, Image as ImageIcon, Loader2 } from 'lucide-react';
-import type { Shot } from '../../stores/timelineStore';
+import type { Shot } from '../state/documentStore';
 import { useAssetUrl } from '../data/useStudioData';
 import type { BoardPosition } from '../state/editorStore';
 

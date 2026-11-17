@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
     Film, Image as ImageIcon, ListChecks, Loader2, Play, RotateCcw, Sparkles, Square, Star, X,
 } from 'lucide-react';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { apiUrl, getAssetUrl } from '../../config';
 import {
     useAssetUrl,
@@ -19,7 +19,7 @@ import type { StudioElement } from '../data/useStudioData';
 import { PipelineLens } from '../components/PipelineLens';
 
 export function GenerateSurface() {
-    const project = useTimelineStore((state) => state.project);
+    const project = useStudioDocumentStore((state) => state.project);
     const { selectedShotId, updateShot } = useStudioSelection();
     const elements = useStudioElements(project.id);
     const generate = useStudioGenerate();
@@ -116,7 +116,7 @@ export function GenerateSurface() {
                         }, ...shot.timeline],
                     });
                     setPreview({ url: getAssetUrl(path) || null, status: 'completed' });
-                    useTimelineStore.getState().addToast('Preview frame attached at frame 0', 'success');
+                    useStudioDocumentStore.getState().addToast('Preview frame attached at frame 0', 'success');
                     return;
                 }
                 if (status.status === 'failed' || status.status === 'cancelled') {
@@ -127,7 +127,7 @@ export function GenerateSurface() {
             throw new Error('Preview timed out');
         } catch (exc) {
             setPreview(null);
-            useTimelineStore.getState().addToast(
+            useStudioDocumentStore.getState().addToast(
                 exc instanceof Error ? exc.message : 'Preview failed',
                 'error',
             );
@@ -139,7 +139,7 @@ export function GenerateSurface() {
             .filter((item) => item.status !== 'completed' && (item.prompt || item.action))
             .map((item) => item.id);
         if (shotIds.length === 0) {
-            useTimelineStore.getState().addToast('No pending shots to queue', 'info');
+            useStudioDocumentStore.getState().addToast('No pending shots to queue', 'info');
             return;
         }
         setBatchBusy(true);
@@ -152,10 +152,10 @@ export function GenerateSurface() {
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
             const queued = (data.results || []).filter((item: { status: string }) => item.status === 'queued').length;
-            useTimelineStore.getState().addToast(`Queued ${queued} shot(s)`, 'success');
+            useStudioDocumentStore.getState().addToast(`Queued ${queued} shot(s)`, 'success');
             await refreshJobs();
         } catch (exc) {
-            useTimelineStore.getState().addToast(
+            useStudioDocumentStore.getState().addToast(
                 exc instanceof Error ? exc.message : 'Batch queue failed',
                 'error',
             );
@@ -180,7 +180,7 @@ export function GenerateSurface() {
                             type="button"
                             className="st-spine-shot"
                             data-selected={item.id === shot.id}
-                            onClick={() => useTimelineStore.getState().selectShot(item.id)}
+                            onClick={() => useStudioDocumentStore.getState().selectShot(item.id)}
                         >
                             <span className="st-spine-shot-index st-mono">{index + 1}</span>
                             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -362,7 +362,7 @@ export function GenerateSurface() {
                                 <tr
                                     key={item.id}
                                     data-selected={item.id === shot.id}
-                                    onClick={() => useTimelineStore.getState().selectShot(item.id)}
+                                    onClick={() => useStudioDocumentStore.getState().selectShot(item.id)}
                                 >
                                     <td className="st-mono">{index + 1}</td>
                                     <td>{item.action || item.prompt || 'Untitled'}</td>

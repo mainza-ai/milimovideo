@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import {
     CheckCircle2, Check, Columns2, Film, MessageSquare, Play, Trash2, TriangleAlert, X,
 } from 'lucide-react';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { useStudioEditor } from '../state/editorStore';
 import {
@@ -15,7 +15,7 @@ import {
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 export function ReviewSurface() {
-    const project = useTimelineStore((state) => state.project);
+    const project = useStudioDocumentStore((state) => state.project);
     const { selectedShotId, selectShot, setCurrentTime } = useStudioSelection();
     const { setInspectorTab, setCommandDraft, setCommandMode } = useStudioEditor();
     const shot = project.shots.find((item) => item.id === selectedShotId) || project.shots[0] || null;

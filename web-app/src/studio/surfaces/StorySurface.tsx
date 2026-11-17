@@ -1,14 +1,14 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight, Search, Sparkles } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { useStudioEditor } from '../state/editorStore';
 import { useStudioElements } from '../data/useStudioData';
 import { BoardCanvas } from '../components/BoardCanvas';
 
 export function StorySurface() {
-    const project = useTimelineStore((state) => state.project);
-    const { selectedShotId, selectShot, setCurrentTime } = useTimelineStore(useShallow((state) => ({
+    const project = useStudioDocumentStore((state) => state.project);
+    const { selectedShotId, selectShot, setCurrentTime } = useStudioDocumentStore(useShallow((state) => ({
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,

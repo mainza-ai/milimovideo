@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Download, Film, Loader2, Send } from 'lucide-react';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { useStudioCreateRender, useStudioProject, useStudioRenders } from '../data/useStudioData';
 import { getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
@@ -18,8 +18,8 @@ export function DeliverSurface() {
     const project = useStudioProject();
     const { renders, refresh } = useStudioRenders(project.id);
     const createRender = useStudioCreateRender(project.id);
-    const setProject = useTimelineStore((state) => state.setProject);
-    const saveProject = useTimelineStore((state) => state.saveProject);
+    const setProject = useStudioDocumentStore((state) => state.setProject);
+    const saveProject = useStudioDocumentStore((state) => state.saveProject);
     const [preset, setPreset] = useState<typeof PRESETS[number]['id']>(
         (PRESETS.find((item) => item.id === project.renderPreset)?.id || 'project'),
     );

@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import type { Project, Shot } from '../../stores/types';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 import {
     opacityAtFrame, removeKeyframeAt, sanitizeKeyframes, upsertKeyframe,
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function MotionPanel({ shot, project, updateShot }: Props) {
-    const currentTime = useTimelineStore((state) => state.currentTime);
+    const currentTime = useStudioDocumentStore((state) => state.currentTime);
     const keyframes = sanitizeKeyframes(shot.keyframes || []);
     const clip = computeTimelineLayout(project).find((item) => item.id === shot.id);
     const fps = project.fps || 25;

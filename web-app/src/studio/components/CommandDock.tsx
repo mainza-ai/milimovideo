@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { ArrowUp, Check, CornerDownLeft, Loader2, Sparkles, TriangleAlert, X } from 'lucide-react';
-import type { Shot } from '../../stores/timelineStore';
+import type { Shot } from '../state/documentStore';
 import { apiUrl } from '../../config';
 import { PlanResponseSchema } from '../../api/contracts';
 import { useStudioEditor } from '../state/editorStore';

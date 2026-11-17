@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { Loader2, Play, RotateCcw, Sparkles, Star, Volume2, VolumeX, X } from 'lucide-react';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { MotionPanel } from './MotionPanel';
 import { useStudioEditor } from '../state/editorStore';
@@ -19,7 +19,7 @@ const TABS = ['shot', 'prompt', 'motion', 'takes', 'audio', 'effects', 'review',
 
 export function Inspector() {
     const { selectedShotId, updateShot, addToast } = useStudioSelection();
-    const project = useTimelineStore((state) => state.project);
+    const project = useStudioDocumentStore((state) => state.project);
     const shot = project.shots.find((item) => item.id === selectedShotId) || null;
     const elements = useStudioElements(project.id);
     const generate = useStudioGenerate();

@@ -4,7 +4,7 @@ import {
     Plus, Redo2, RotateCcw, Search, SquareDashed, StickyNote, Trash2, Pin, Undo2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { apiUrl, getAssetUrl } from '../../config';
 import { saveTextFile } from '../../desktop';
 import {
@@ -77,11 +77,11 @@ function linkGeometry(source: { x: number; y: number; width: number; height: num
 }
 
 export function BoardCanvas() {
-    const project = useTimelineStore((state) => state.project);
+    const project = useStudioDocumentStore((state) => state.project);
     const {
         selectedShotId, selectShot, setCurrentTime, addShot, updateShot, deleteShot,
         setProject, saveProject, parseScript, commitStoryboard, addToast,
-    } = useTimelineStore(useShallow((state) => ({
+    } = useStudioDocumentStore(useShallow((state) => ({
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,

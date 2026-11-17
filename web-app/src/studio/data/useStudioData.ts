@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore, type Project, type Shot } from '../../stores/timelineStore';
+import { useStudioDocumentStore, type Project, type Shot } from '../state/documentStore';
 import { apiUrl, getAssetUrl } from '../../config';
 import { HealthSchema, ReviewPayloadSchema } from '../../api/contracts';
 import { useStudioJobs } from '../state/jobStore';
@@ -46,7 +46,7 @@ export interface PipelineReadiness {
 }
 
 export function useStudioModels() {
-    const addToast = useTimelineStore((state) => state.addToast);
+    const addToast = useStudioDocumentStore((state) => state.addToast);
     const [models, setModels] = useState<StudioModel[]>([]);
     const [pipelines, setPipelines] = useState<Record<string, PipelineReadiness>>({});
     const [loading, setLoading] = useState(true);
@@ -154,7 +154,7 @@ export interface StudioRender {
 }
 
 export function useStudioProject(): Project {
-    return useTimelineStore((state) => state.project);
+    return useStudioDocumentStore((state) => state.project);
 }
 
 /**
@@ -163,8 +163,8 @@ export function useStudioProject(): Project {
  * Never creates projects implicitly.
  */
 export function useStudioProjectBootstrap() {
-    const projectId = useTimelineStore((state) => state.project.id);
-    const loadProject = useTimelineStore((state) => state.loadProject);
+    const projectId = useStudioDocumentStore((state) => state.project.id);
+    const loadProject = useStudioDocumentStore((state) => state.loadProject);
 
     useEffect(() => {
         let alive = true;
@@ -190,11 +190,11 @@ export function useStudioData() {
 }
 
 export function useStudioShots(): Shot[] {
-    return useTimelineStore(useShallow((state) => state.project.shots));
+    return useStudioDocumentStore(useShallow((state) => state.project.shots));
 }
 
 export function useStudioSelection() {
-    return useTimelineStore(useShallow((state) => ({
+    return useStudioDocumentStore(useShallow((state) => ({
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
         updateShot: state.updateShot,
@@ -365,7 +365,7 @@ export interface ActiveLora {
 }
 
 export function useStudioLoras(slot: 'video' | 'image' = 'video') {
-    const addToast = useTimelineStore((state) => state.addToast);
+    const addToast = useStudioDocumentStore((state) => state.addToast);
     const [loras, setLoras] = useState<ActiveLora[]>([]);
     const refresh = useCallback(async () => {
         try {
@@ -417,7 +417,7 @@ export function useStudioActiveJobs(projectId: string) {
 }
 
 export function useStudioReview(projectId: string) {
-    const addToast = useTimelineStore((state) => state.addToast);
+    const addToast = useStudioDocumentStore((state) => state.addToast);
     const [review, setReview] = useState<ReviewPayload>(EMPTY_REVIEW);
     const [loading, setLoading] = useState(true);
 
@@ -590,7 +590,7 @@ export function useStudioGenerate() {
                 return data.job_id as string;
             }
 
-            const projectId = useTimelineStore.getState().project.id;
+            const projectId = useStudioDocumentStore.getState().project.id;
             const response = await fetch(apiUrl('/generate/advanced'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -648,7 +648,7 @@ export function useStudioCancel() {
 
 export function useStudioCreateRender(projectId: string) {
     const { addToast } = useStudioSelection();
-    const trackStates = useTimelineStore((state) => state.trackStates);
+    const trackStates = useStudioDocumentStore((state) => state.trackStates);
     return useCallback(async (settings: {
         width: number;
         height: number;
@@ -679,7 +679,7 @@ export function useStudioBoardSync(projectId: string) {
         boardPositions, boardPinned, boardAreas, boardLinks, boardCamera,
         hydrateBoard, setCamera,
     } = useStudioEditor();
-    const addToast = useTimelineStore((state) => state.addToast);
+    const addToast = useStudioDocumentStore((state) => state.addToast);
     const loaded = useRef(false);
     const revision = useRef(0);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

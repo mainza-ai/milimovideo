@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { CheckCircle2, Film, Image as ImageIcon, Library, RefreshCw, Search, Video } from 'lucide-react';
 import { rankSearch, type SearchRecord } from '../search/localSearch';
 import { useStudioEditor } from '../state/editorStore';
-import { useTimelineStore, type Shot } from '../../stores/timelineStore';
+import { useStudioDocumentStore, type Shot } from '../state/documentStore';
 import type { StudioAsset, StudioElement, StudioProjectTake } from '../data/useStudioData';
 
 type SearchItem =
@@ -175,7 +175,7 @@ export function LibrarySurface() {
                                                 ? item.take.shot_id
                                                 : null;
                                         if (shotId) {
-                                            useTimelineStore.getState().selectShot(shotId);
+                                            useStudioDocumentStore.getState().selectShot(shotId);
                                             useStudioEditor.getState().setSurface('story');
                                         }
                                     }}

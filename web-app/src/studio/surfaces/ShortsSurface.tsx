@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Download, Loader2, Scissors, Upload, Zap } from 'lucide-react';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 import { useStudioCreateRender, useStudioProject, useStudioRenders } from '../data/useStudioData';
@@ -17,9 +17,9 @@ const PRESETS = [
 export function ShortsSurface() {
     const project = useStudioProject();
     const { setSurface } = useStudioEditor();
-    const setProject = useTimelineStore((state) => state.setProject);
-    const saveProject = useTimelineStore((state) => state.saveProject);
-    const setCurrentTime = useTimelineStore((state) => state.setCurrentTime);
+    const setProject = useStudioDocumentStore((state) => state.setProject);
+    const saveProject = useStudioDocumentStore((state) => state.saveProject);
+    const setCurrentTime = useStudioDocumentStore((state) => state.setCurrentTime);
     const createRender = useStudioCreateRender(project.id);
     const { renders, refresh } = useStudioRenders(project.id);
     const fileRef = useRef<HTMLInputElement>(null);

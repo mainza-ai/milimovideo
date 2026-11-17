@@ -1,5 +1,5 @@
 import { useStudioData } from '../data/useStudioData';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 
 function formatBytes(bytes: number | null | undefined): string {
     if (!bytes || bytes <= 0) return '—';
@@ -9,7 +9,7 @@ function formatBytes(bytes: number | null | undefined): string {
 
 export function StatusStrip() {
     const { health } = useStudioData();
-    const saveStatus = useTimelineStore((state) => state.saveStatus);
+    const saveStatus = useStudioDocumentStore((state) => state.saveStatus);
 
     return (
         <footer className="st-status-strip">

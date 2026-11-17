@@ -820,3 +820,12 @@ real FFmpeg tests asserting a 180×320 output from a 320×180 source. Verified:
 offscreen render target, readPixels, vertical flip, PNG download). This gives a
 real depth artifact from the current stage placement; the editor still has no
 video-depth overlay source. Verified: 44 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] state | separate studio and legacy document stores
+
+The studio now owns its document/save/undo store (`milimo-studio-document`),
+built from the shared slices but isolated from the legacy editor store. All studio
+imports use `useStudioDocumentStore`; PlaybackEngine has a studio-specific clock.
+Both routes talk to the same backend contract; switching routes no longer shares
+in-memory document state. AGENTS/user guide/roadmap/audit updated. Verified:
+tsc clean, 44 vitest, 9 Playwright (CRUD/export/reviewer path included).

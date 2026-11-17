@@ -15,7 +15,7 @@ import { SetupSurface } from './surfaces/SetupSurface';
 import { ShortsSurface } from './surfaces/ShortsSurface';
 import { useStudioEditor, type StudioSurface } from './state/editorStore';
 import { useStudioProject, useStudioBoardSync, useStudioProjectBootstrap } from './data/useStudioData';
-import { useTimelineStore } from '../stores/timelineStore';
+import { useStudioDocumentStore } from './state/documentStore';
 import { SharedReviewPage } from './SharedReviewPage';
 import { studioQueryClient } from './state/queryClient';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -52,10 +52,10 @@ function StudioShell() {
     const project = useStudioProject();
     useStudioProjectBootstrap();
     useStudioBoardSync(project.id);
-    const isPlaying = useTimelineStore((state) => state.isPlaying);
-    const setIsPlaying = useTimelineStore((state) => state.setIsPlaying);
+    const isPlaying = useStudioDocumentStore((state) => state.isPlaying);
+    const setIsPlaying = useStudioDocumentStore((state) => state.setIsPlaying);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const temporalStore = (useTimelineStore as any).temporal;
+    const temporalStore = (useStudioDocumentStore as any).temporal;
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {

@@ -4,10 +4,10 @@ import {
     Volume2, Wand2, X,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore } from '../../stores/timelineStore';
+import { useStudioDocumentStore } from '../state/documentStore';
 import { apiUrl, getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
-import { PlaybackEngine } from '../../components/Player/PlaybackEngine';
+import { PlaybackEngine } from '../components/PlaybackEngine';
 import { StudioTimeline } from '../components/StudioTimeline';
 import { BlockingLens } from '../components/BlockingLens';
 import { TrackingPanel } from '../../components/Editor/TrackingPanel';
@@ -16,8 +16,8 @@ const Previz3D = lazy(() => import('../components/Previz3D'));
 import { formatDuration, useAssetUrl, useStudioTakes } from '../data/useStudioData';
 
 export function EditSurface() {
-    const project = useTimelineStore((state) => state.project);
-    const { isPlaying, setIsPlaying, setCurrentTime, selectedShotId } = useTimelineStore(useShallow((state) => ({
+    const project = useStudioDocumentStore((state) => state.project);
+    const { isPlaying, setIsPlaying, setCurrentTime, selectedShotId } = useStudioDocumentStore(useShallow((state) => ({
         isPlaying: state.isPlaying,
         setIsPlaying: state.setIsPlaying,
         setCurrentTime: state.setCurrentTime,
@@ -38,7 +38,7 @@ export function EditSurface() {
     const [inpaintPrompt, setInpaintPrompt] = useState('');
     const [inpaintStatus, setInpaintStatus] = useState<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(() => {
-        const state = useTimelineStore.getState();
+        const state = useStudioDocumentStore.getState();
         return state.selectedShotId || null;
     });
     const activeIdRef = useRef(activeId);
@@ -113,9 +113,9 @@ export function EditSurface() {
             }
         };
 
-        const state = useTimelineStore.getState();
+        const state = useStudioDocumentStore.getState();
         sync(state.currentTime, state.isPlaying);
-        const unsubscribe = useTimelineStore.subscribe((next, previous) => {
+        const unsubscribe = useStudioDocumentStore.subscribe((next, previous) => {
             if (next.currentTime !== previous.currentTime || next.isPlaying !== previous.isPlaying) {
                 sync(next.currentTime, next.isPlaying);
             }
@@ -124,7 +124,7 @@ export function EditSurface() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [compareIsImage, compareUrl, fps, isImage, layout, mediaUrl, selectedShotId]);
 
-    const updateShot = useTimelineStore((state) => state.updateShot);
+    const updateShot = useStudioDocumentStore((state) => state.updateShot);
 
     const submitInpaint = async () => {
         if (!active || !maskPrompt.trim() || !inpaintPrompt.trim()) return;
@@ -186,7 +186,7 @@ export function EditSurface() {
                     });
                     await refreshTakes();
                     setInpaintStatus('Applied as a new take');
-                    useTimelineStore.getState().addToast('Inpainted take applied', 'success');
+                    useStudioDocumentStore.getState().addToast('Inpainted take applied', 'success');
                     return;
                 }
                 if (status.status === 'failed' || status.status === 'cancelled') {
@@ -197,7 +197,7 @@ export function EditSurface() {
             throw new Error('Inpaint timed out');
         } catch (exc) {
             setInpaintStatus(exc instanceof Error ? exc.message : 'Inpaint failed');
-            useTimelineStore.getState().addToast(
+            useStudioDocumentStore.getState().addToast(
                 exc instanceof Error ? exc.message : 'Inpaint failed',
                 'error',
             );
@@ -367,7 +367,7 @@ export function EditSurface() {
                     type="button"
                     className="st-icon-button"
                     onClick={() => {
-                        const state = useTimelineStore.getState();
+                        const state = useStudioDocumentStore.getState();
                         state.setCurrentTime(state.currentTime + 1);
                     }}
                     aria-label="Forward one second"
@@ -470,7 +470,7 @@ export function EditSurface() {
 }
 
 function TimecodeDisplay({ totalDuration, fps }: { totalDuration: number; fps: number }) {
-    const currentTime = useTimelineStore((state) => state.currentTime);
+    const currentTime = useStudioDocumentStore((state) => state.currentTime);
     return (
         <span className="st-timecode st-mono">
             {formatDuration(currentTime * fps, fps)} / {formatDuration(totalDuration * fps, fps)}

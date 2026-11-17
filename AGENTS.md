@@ -98,16 +98,17 @@ unless the human explicitly asks. The LLM owns `Milimo Video/`.
 - **Studio** — `/studio`. Strangler shell with Story, Generate, Edit, Review,
   Library, Deliver, Shorts, and Setup. The legacy header links to it.
 
-The document store is **still the legacy timeline store**, wrapped by
-`web-app/src/studio/state/documentStore.ts`. Editing, save conflict/409,
-revision/CAS, undo (document) and board undo are wired. A dedicated document store
-is the remaining migration; do not create a second source of truth.
+Studio has its **own document store** at
+`web-app/src/studio/state/documentStore.ts` (`milimo-studio-document`), built from
+the shared slices but separate from the legacy editor store. Both routes talk to
+the same backend; switching routes does not share in-memory document state. Save
+conflict/409, revision/CAS, document undo, and board undo are wired per route.
 
 ### State layout
 
 - `editorStore` — persisted UI/board/editor state (not project geometry/camera;
   those are server-owned).
-- `documentStore` — typed adapter over the legacy document store.
+- `documentStore` — studio-owned project/shots/save/undo store (reuses slices).
 - `jobStore` — active/queued jobs and error budget.
 - `agentStore` — plan history; recipes live in the editor store.
 - TanStack Query — health/contract-backed reads.
@@ -157,7 +158,6 @@ not just filtergraph strings.
 
 ### Known gaps (do not claim these are done)
 
-- Full document-store migration off the legacy store.
 - Depth stage overlay (no depth source exists yet); mask/tracking is integrated.
 - Tauri sidecar/backend bundling (native shell and save are real).
 - Visual baselines are platform-tolerant but still local-generated.

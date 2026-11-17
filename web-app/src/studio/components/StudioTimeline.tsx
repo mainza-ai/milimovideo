@@ -4,7 +4,7 @@ import {
     UnfoldHorizontal, Upload,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
-import { useTimelineStore, type CaptionCue, type Shot } from '../../stores/timelineStore';
+import { useStudioDocumentStore, type CaptionCue, type Shot } from '../state/documentStore';
 import { computeTimelineLayout, type TimelineClip } from '../../utils/timelineUtils';
 import { useStudioEditor } from '../state/editorStore';
 import { formatDuration } from '../data/useStudioData';
@@ -43,12 +43,12 @@ interface Preview {
 }
 
 export function StudioTimeline() {
-    const project = useTimelineStore((state) => state.project);
+    const project = useStudioDocumentStore((state) => state.project);
     const {
         selectedShotId, selectShot, setCurrentTime, updateShot,
         splitShot, deleteShot, addToast, setProject, addShot, reorderShots,
         trackStates, toggleTrackMute, toggleTrackSolo,
-    } = useTimelineStore(useShallow((state) => ({
+    } = useStudioDocumentStore(useShallow((state) => ({
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,
@@ -118,7 +118,7 @@ export function StudioTimeline() {
         layout.find((clip) => clip.id === shotId);
 
     const blade = async () => {
-        const time = useTimelineStore.getState().currentTime;
+        const time = useStudioDocumentStore.getState().currentTime;
         const target = selectedShotId ? findClip(selectedShotId) : undefined;
         const clip = target && time >= target.start && time <= target.end
             ? target
@@ -165,7 +165,7 @@ export function StudioTimeline() {
     };
 
     const addCue = () => {
-        const startFrame = Math.max(0, Math.round(useTimelineStore.getState().currentTime * fps));
+        const startFrame = Math.max(0, Math.round(useStudioDocumentStore.getState().currentTime * fps));
         const cue = {
             id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
                 ? crypto.randomUUID()
@@ -196,7 +196,7 @@ export function StudioTimeline() {
             addShot({
                 prompt: asset.filename,
                 trackIndex: 2,
-                startFrame: Math.max(0, Math.round(useTimelineStore.getState().currentTime * fps)),
+                startFrame: Math.max(0, Math.round(useStudioDocumentStore.getState().currentTime * fps)),
                 numFrames: frames,
                 videoUrl: asset.url,
                 status: 'completed',
@@ -838,7 +838,7 @@ export function StudioTimeline() {
 }
 
 function Playhead({ timelineZoom }: { timelineZoom: number }) {
-    const currentTime = useTimelineStore((state) => state.currentTime);
+    const currentTime = useStudioDocumentStore((state) => state.currentTime);
     return (
         <div
             className="st-playhead"
