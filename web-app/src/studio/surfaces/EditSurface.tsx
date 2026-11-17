@@ -9,8 +9,7 @@ import { formatDuration, useAssetUrl, useStudioTakes } from '../data/useStudioDa
 
 export function EditSurface() {
     const project = useTimelineStore((state) => state.project);
-    const { currentTime, isPlaying, setIsPlaying, setCurrentTime, selectedShotId } = useTimelineStore(useShallow((state) => ({
-        currentTime: state.currentTime,
+    const { isPlaying, setIsPlaying, setCurrentTime, selectedShotId } = useTimelineStore(useShallow((state) => ({
         isPlaying: state.isPlaying,
         setIsPlaying: state.setIsPlaying,
         setCurrentTime: state.setCurrentTime,
@@ -21,15 +20,29 @@ export function EditSurface() {
     const [compareMode, setCompareMode] = useState<'off' | 'side' | 'wipe'>('off');
     const [wipe, setWipe] = useState(50);
     const [guides, setGuides] = useState({ grid: false, safe: false, thirds: false });
+    const [activeId, setActiveId] = useState<string | null>(() => {
+        const state = useTimelineStore.getState();
+        return state.selectedShotId || null;
+    });
+    const activeIdRef = useRef(activeId);
 
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
-    const active = useMemo(() => {
+    const totalDuration = useMemo(
+        () => Math.max(0, ...layout.map((clip) => clip.end)),
+        [layout],
+    );
+
+    const resolveActive = (time: number) => {
         const selected = selectedShotId ? layout.find((clip) => clip.id === selectedShotId) : null;
         if (selected) return selected;
-        return layout.find((clip) => currentTime >= clip.start && currentTime < clip.end && clip.track === 0)
-            || layout.find((clip) => currentTime >= clip.start && currentTime < clip.end && clip.track === 1)
+        return layout.find((clip) => time >= clip.start && time < clip.end && clip.track === 0)
+            || layout.find((clip) => time >= clip.start && time < clip.end && clip.track === 1)
             || null;
-    }, [currentTime, layout, selectedShotId]);
+    };
+
+    const active = selectedShotId
+        ? layout.find((clip) => clip.id === selectedShotId) || null
+        : layout.find((clip) => clip.id === activeId) || null;
     const mediaUrl = useAssetUrl(active?.shot.videoUrl);
     const isImage = !!mediaUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
     const { takes } = useStudioTakes(active?.shot.id);
@@ -38,27 +51,48 @@ export function EditSurface() {
     const compareIsImage = !!compareUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
     const fps = project.fps || 25;
 
+    // The clock writes currentTime every frame. Sync media and the active clip
+    // through a subscription instead of re-rendering the whole edit surface.
     useEffect(() => {
-        const video = videoRef.current;
-        if (!video || isImage) return;
-        const local = active ? Math.max(0, (currentTime - active.start) + (active.shot.trimIn || 0) / fps) : 0;
-        if (Math.abs(video.currentTime - local) > 0.3) {
-            try { video.currentTime = local; } catch { /* metadata not ready */ }
-        }
-        if (isPlaying) void video.play().catch(() => {});
-        else video.pause();
-    }, [active, currentTime, fps, isImage, isPlaying, mediaUrl]);
+        const sync = (time: number, playing: boolean) => {
+            const clip = resolveActive(time);
+            const nextId = clip?.id ?? null;
+            if (nextId !== activeIdRef.current) {
+                activeIdRef.current = nextId;
+                setActiveId(nextId);
+            }
+            if (!clip) return;
+            const local = Math.max(0, (time - clip.start) + (clip.shot.trimIn || 0) / fps);
 
-    useEffect(() => {
-        const video = compareVideoRef.current;
-        if (!video || compareIsImage || !compareUrl) return;
-        const local = active ? Math.max(0, (currentTime - active.start) + (active.shot.trimIn || 0) / fps) : 0;
-        if (Math.abs(video.currentTime - local) > 0.3) {
-            try { video.currentTime = local; } catch { /* metadata not ready */ }
-        }
-        if (isPlaying) void video.play().catch(() => {});
-        else video.pause();
-    }, [active, compareIsImage, compareUrl, currentTime, fps, isPlaying]);
+            const video = videoRef.current;
+            if (video && mediaUrl && !isImage) {
+                if (Math.abs(video.currentTime - local) > 0.3) {
+                    try { video.currentTime = local; } catch { /* metadata not ready */ }
+                }
+                if (playing) void video.play().catch(() => {});
+                else video.pause();
+            }
+
+            const compare = compareVideoRef.current;
+            if (compare && compareUrl && !compareIsImage) {
+                if (Math.abs(compare.currentTime - local) > 0.3) {
+                    try { compare.currentTime = local; } catch { /* metadata not ready */ }
+                }
+                if (playing) void compare.play().catch(() => {});
+                else compare.pause();
+            }
+        };
+
+        const state = useTimelineStore.getState();
+        sync(state.currentTime, state.isPlaying);
+        const unsubscribe = useTimelineStore.subscribe((next, previous) => {
+            if (next.currentTime !== previous.currentTime || next.isPlaying !== previous.isPlaying) {
+                sync(next.currentTime, next.isPlaying);
+            }
+        });
+        return unsubscribe;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [compareIsImage, compareUrl, fps, isImage, layout, mediaUrl, selectedShotId]);
 
     return (
         <div className="st-edit">
@@ -142,10 +176,18 @@ export function EditSurface() {
                 <button type="button" className="st-button" data-variant="primary" onClick={() => setIsPlaying(!isPlaying)} aria-label={isPlaying ? 'Pause' : 'Play'}>
                     {isPlaying ? <Pause size={15} /> : <Play size={15} />}
                 </button>
-                <button type="button" className="st-icon-button" onClick={() => setCurrentTime(currentTime + 1)} aria-label="Forward one second">
+                <button
+                    type="button"
+                    className="st-icon-button"
+                    onClick={() => {
+                        const state = useTimelineStore.getState();
+                        state.setCurrentTime(state.currentTime + 1);
+                    }}
+                    aria-label="Forward one second"
+                >
                     <SkipForward size={15} />
                 </button>
-                <span className="st-timecode st-mono">{formatDuration(currentTime * fps, fps)} / {formatDuration(Math.max(0, ...layout.map((c) => c.end)) * fps, fps)}</span>
+                <TimecodeDisplay totalDuration={totalDuration} fps={fps} />
                 <span style={{ flex: 1 }} />
                 <button
                     type="button"
@@ -177,5 +219,14 @@ export function EditSurface() {
 
             <StudioTimeline />
         </div>
+    );
+}
+
+function TimecodeDisplay({ totalDuration, fps }: { totalDuration: number; fps: number }) {
+    const currentTime = useTimelineStore((state) => state.currentTime);
+    return (
+        <span className="st-timecode st-mono">
+            {formatDuration(currentTime * fps, fps)} / {formatDuration(totalDuration * fps, fps)}
+        </span>
     );
 }

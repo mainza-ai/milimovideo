@@ -540,3 +540,12 @@ mute, and delete, plus a track/start/duration readout. Global edit-surface keys:
 B blade at playhead, R ripple delete, [ / ] slide the selected V1 clip. Keys are
 ignored while typing or with modifiers. Verified: 32 vitest, tsc clean, eslint 0
 errors, build passes.
+
+## [2026-11-17] f2 | isolate the playback clock
+
+Removed currentTime from the studio selection hook and from EditSurface /
+StudioTimeline outer subscriptions. Media sync and active-clip changes now run
+through a store subscription; only a tiny playhead and timecode subscribe per
+frame. Inspector motion-frame readouts moved into a MotionPanel child. This
+removes the previous whole-surface re-render storm at playback. Verified:
+32 vitest, tsc clean, eslint 0 errors, build passes.

@@ -196,7 +196,6 @@ export function useStudioSelection() {
         selectShot: state.selectShot,
         updateShot: state.updateShot,
         patchShot: state.patchShot,
-        currentTime: state.currentTime,
         isPlaying: state.isPlaying,
         setIsPlaying: state.setIsPlaying,
         setCurrentTime: state.setCurrentTime,

@@ -44,11 +44,10 @@ interface Preview {
 export function StudioTimeline() {
     const project = useTimelineStore((state) => state.project);
     const {
-        currentTime, selectedShotId, selectShot, setCurrentTime, updateShot,
+        selectedShotId, selectShot, setCurrentTime, updateShot,
         splitShot, deleteShot, addToast, setProject, addShot, reorderShots,
         trackStates, toggleTrackMute, toggleTrackSolo,
     } = useTimelineStore(useShallow((state) => ({
-        currentTime: state.currentTime,
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,
@@ -78,7 +77,7 @@ export function StudioTimeline() {
     const selectedCue = captions.find((cue) => cue.id === selectedCueId) || null;
 
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
-    const duration = Math.max(10, ...layout.map((clip) => clip.end), currentTime) + 2;
+    const duration = Math.max(10, ...layout.map((clip) => clip.end)) + 2;
     const width = Math.max(900, duration * timelineZoom + 180);
 
     const ticks = useMemo(() => {
@@ -102,15 +101,16 @@ export function StudioTimeline() {
         layout.find((clip) => clip.id === shotId);
 
     const blade = async () => {
+        const time = useTimelineStore.getState().currentTime;
         const target = selectedShotId ? findClip(selectedShotId) : undefined;
-        const clip = target && currentTime >= target.start && currentTime <= target.end
+        const clip = target && time >= target.start && time <= target.end
             ? target
-            : v1Clips.find((item) => currentTime > item.start && currentTime < item.end);
+            : v1Clips.find((item) => time > item.start && time < item.end);
         if (!clip) {
             addToast('Place the playhead inside a clip to blade it', 'info');
             return;
         }
-        const frame = bladeSourceFrame(clip.shot, currentTime - clip.start, fps);
+        const frame = bladeSourceFrame(clip.shot, time - clip.start, fps);
         if (frame == null) {
             addToast('The cut is too close to a clip edge', 'info');
             return;
@@ -148,7 +148,7 @@ export function StudioTimeline() {
     };
 
     const addCue = () => {
-        const startFrame = Math.max(0, Math.round(currentTime * fps));
+        const startFrame = Math.max(0, Math.round(useTimelineStore.getState().currentTime * fps));
         const cue = {
             id: typeof crypto !== 'undefined' && 'randomUUID' in crypto
                 ? crypto.randomUUID()
@@ -179,7 +179,7 @@ export function StudioTimeline() {
             addShot({
                 prompt: asset.filename,
                 trackIndex: 2,
-                startFrame: Math.max(0, Math.round(currentTime * fps)),
+                startFrame: Math.max(0, Math.round(useTimelineStore.getState().currentTime * fps)),
                 numFrames: frames,
                 videoUrl: asset.url,
                 status: 'completed',
@@ -300,7 +300,7 @@ export function StudioTimeline() {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentTime, project, selectedShotId]);
+    }, [project, selectedShotId]);
 
     return (
         <section className="st-timeline" aria-label="Timeline">
@@ -808,14 +808,21 @@ export function StudioTimeline() {
                         </div>
                     </div>
 
-                    <div
-                        className="st-playhead"
-                        style={{ left: 110 + currentTime * timelineZoom }}
-                        aria-hidden="true"
-                    />
+                    <Playhead timelineZoom={timelineZoom} />
                 </div>
             </div>
             )}
         </section>
+    );
+}
+
+function Playhead({ timelineZoom }: { timelineZoom: number }) {
+    const currentTime = useTimelineStore((state) => state.currentTime);
+    return (
+        <div
+            className="st-playhead"
+            style={{ left: 110 + currentTime * timelineZoom }}
+            aria-hidden="true"
+        />
     );
 }
