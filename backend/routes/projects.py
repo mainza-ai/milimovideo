@@ -14,6 +14,7 @@ from schemas import (
 import uuid
 import os
 import shutil
+import subprocess
 import logging
 import json
 from datetime import datetime
@@ -705,6 +706,12 @@ async def render_project(
     render_id = f"render_{uuid.uuid4().hex[:8]}"
     settings = (req.settings if req else RenderSettings()) or RenderSettings()
     track_states = (req.track_states if req else {}) or {}
+    source_path = req.source_path if req else None
+    if source_path:
+        from file_utils import resolve_path
+        resolved_source = resolve_path(source_path)
+        if not resolved_source or not os.path.exists(resolved_source):
+            raise HTTPException(status_code=404, detail="Render source not found")
     fps = settings.fps or project.fps
     width = settings.width or project.resolution_w
     height = settings.height or project.resolution_h
@@ -719,6 +726,7 @@ async def render_project(
         params_json=json.dumps({
             "settings": settings.model_dump(),
             "track_states": track_states,
+            "source_path": source_path,
         }),
     )
     session.add(job)
@@ -726,7 +734,7 @@ async def render_project(
 
     background_tasks.add_task(
         _render_background,
-        project_id, render_id, fps, width, height, settings, track_states,
+        project_id, render_id, fps, width, height, settings, track_states, source_path,
     )
     return {"job_id": render_id, "status": "rendering"}
 
@@ -739,6 +747,7 @@ async def _render_background(
     height: int,
     settings: RenderSettings,
     track_states: dict,
+    source_path: Optional[str] = None,
 ):
     """Build the filtergraph from computed layout, render, and stream progress."""
     import asyncio
@@ -820,50 +829,73 @@ async def _render_background(
             v1_clips, v2_clips, a1_clips = [], [], []
             v1_cursor = 0
 
-            for shot in all_shots:
-                if not shot.video_url:
-                    continue
-                resolved = resolve_path(shot.video_url)
-                if not resolved or not os.path.exists(resolved):
-                    logger.warning(f"Render skipping missing media: {shot.video_url}")
-                    continue
-
-                source_frames = max(
-                    0,
-                    (shot.num_frames or 121) - (shot.trim_in or 0) - (shot.trim_out or 0),
-                )
-                if source_frames <= 0:
-                    continue
-                speed = min(4.0, max(0.25, shot.speed or 1.0))
-                duration_frames = max(1, round(source_frames / speed))
-
-                if shot.track_index == 0:
-                    start_frame = v1_cursor
-                    v1_cursor += duration_frames
-                else:
-                    start_frame = shot.start_frame or 0
-
-                clip = {
-                    "path": resolved,
-                    "start_frame": start_frame,
-                    "duration_frames": duration_frames,
+            if source_path:
+                resolved_source = resolve_path(source_path)
+                probe = subprocess.check_output([
+                    "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                    "-of", "default=nw=1:nk=1", str(resolved_source),
+                ], text=True).strip()
+                source_frames = max(1, round(float(probe or 0) * fps))
+                v1_clips = [{
+                    "path": resolved_source,
+                    "start_frame": 0,
+                    "duration_frames": source_frames,
                     "source_frames": source_frames,
-                    "speed": speed,
-                    "fade_in": shot.audio_fade_in or 0,
-                    "fade_out": shot.audio_fade_out or 0,
-                    "trim_in": shot.trim_in or 0,
-                    "keyframes": _parse_json_field(shot.keyframes, []),
-                    "gain": shot.audio_gain if shot.audio_gain is not None else 1.0,
-                    "muted": bool(shot.audio_muted),
+                    "speed": 1.0,
+                    "fade_in": 0,
+                    "fade_out": 0,
+                    "trim_in": 0,
+                    "keyframes": [],
+                    "gain": 1.0,
+                    "muted": False,
                     "hidden": False,
-                    "has_audio": await _has_audio_stream(resolved),
-                }
-                if shot.track_index == 0:
-                    v1_clips.append(clip)
-                elif shot.track_index == 1:
-                    v2_clips.append(clip)
-                elif shot.track_index == 2:
-                    a1_clips.append(clip)
+                    "has_audio": await _has_audio_stream(resolved_source),
+                }]
+            else:
+                for shot in all_shots:
+                    if not shot.video_url:
+                        continue
+                    resolved = resolve_path(shot.video_url)
+                    if not resolved or not os.path.exists(resolved):
+                        logger.warning(f"Render skipping missing media: {shot.video_url}")
+                        continue
+
+                    source_frames = max(
+                        0,
+                        (shot.num_frames or 121) - (shot.trim_in or 0) - (shot.trim_out or 0),
+                    )
+                    if source_frames <= 0:
+                        continue
+                    speed = min(4.0, max(0.25, shot.speed or 1.0))
+                    duration_frames = max(1, round(source_frames / speed))
+
+                    if shot.track_index == 0:
+                        start_frame = v1_cursor
+                        v1_cursor += duration_frames
+                    else:
+                        start_frame = shot.start_frame or 0
+
+                    clip = {
+                        "path": resolved,
+                        "start_frame": start_frame,
+                        "duration_frames": duration_frames,
+                        "source_frames": source_frames,
+                        "speed": speed,
+                        "fade_in": shot.audio_fade_in or 0,
+                        "fade_out": shot.audio_fade_out or 0,
+                        "trim_in": shot.trim_in or 0,
+                        "keyframes": _parse_json_field(shot.keyframes, []),
+                        "gain": shot.audio_gain if shot.audio_gain is not None else 1.0,
+                        "muted": bool(shot.audio_muted),
+                        "hidden": False,
+                        "has_audio": await _has_audio_stream(resolved),
+                    }
+                    if shot.track_index == 0:
+                        v1_clips.append(clip)
+                    elif shot.track_index == 1:
+                        v2_clips.append(clip)
+                    elif shot.track_index == 2:
+                        a1_clips.append(clip)
 
             if not v1_clips and not v2_clips and not a1_clips:
                 raise ValueError("No valid video or audio clips found to render.")

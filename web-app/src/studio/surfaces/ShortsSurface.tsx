@@ -3,7 +3,9 @@ import { CheckCircle2, Download, Loader2, Scissors, Upload, Zap } from 'lucide-r
 import { useStudioDocumentStore } from '../state/documentStore';
 import { getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
-import { useStudioCreateRender, useStudioProject, useStudioRenders } from '../data/useStudioData';
+import {
+    useStudioAssets, useStudioCreateRender, useStudioProject, useStudioRenders,
+} from '../data/useStudioData';
 import { useStudioEditor } from '../state/editorStore';
 import { parseCaptions } from '../captions/parse';
 import { buildCandidates, type ShortCue } from '../shorts/candidates';
@@ -22,6 +24,9 @@ export function ShortsSurface() {
     const setCurrentTime = useStudioDocumentStore((state) => state.setCurrentTime);
     const createRender = useStudioCreateRender(project.id);
     const { renders, refresh } = useStudioRenders(project.id);
+    const { assets } = useStudioAssets();
+    const videoAssets = useMemo(() => assets.filter((asset) => asset.type === 'video'), [assets]);
+    const [sourceUrl, setSourceUrl] = useState('');
     const fileRef = useRef<HTMLInputElement>(null);
 
     const [cues, setCues] = useState<ShortCue[]>([]);
@@ -89,6 +94,7 @@ export function ShortsSurface() {
                     start_frame: Math.round(selected.start * fps),
                     end_frame: Math.round(selected.end * fps),
                     fit: 'crop',
+                    source_path: sourceUrl || undefined,
                     crf: 18,
                     preset: 'fast',
                 });
@@ -130,6 +136,18 @@ export function ShortsSurface() {
                             if (file) void importTranscript(file);
                         }}
                     />
+                    <select
+                        className="st-select"
+                        style={{ width: 210, height: 28 }}
+                        value={sourceUrl}
+                        aria-label="Shorts source"
+                        onChange={(event) => setSourceUrl(event.target.value)}
+                    >
+                        <option value="">Source: project cut</option>
+                        {videoAssets.map((asset) => (
+                            <option key={asset.id} value={asset.url}>{asset.filename}</option>
+                        ))}
+                    </select>
                     {cues.length > 0 && (
                         <button
                             type="button"

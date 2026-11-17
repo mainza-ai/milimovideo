@@ -323,6 +323,7 @@ class RenderSettings(BaseModel):
 class RenderRequest(BaseModel):
     settings: RenderSettings = RenderSettings()
     track_states: Dict[str, dict] = {}
+    source_path: Optional[str] = None  # explicit source for shorts/variants
 
 
 class SelectTakeRequest(BaseModel):

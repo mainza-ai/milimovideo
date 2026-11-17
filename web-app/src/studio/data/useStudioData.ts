@@ -713,13 +713,19 @@ export function useStudioCreateRender(projectId: string) {
         start_frame?: number;
         end_frame?: number;
         fit?: 'pad' | 'crop';
+        source_path?: string;
         crf?: number;
         preset?: string;
     }) => {
+        const { source_path, ...renderSettings } = settings;
         const response = await fetch(apiUrl(`/projects/${projectId}/render`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ settings, track_states: trackStates }),
+            body: JSON.stringify({
+                settings: renderSettings,
+                track_states: trackStates,
+                source_path,
+            }),
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) {

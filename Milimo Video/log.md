@@ -901,3 +901,11 @@ Setup. Fixed semantic meta grids (`dl`), unlabeled prompt fields, icon-only
 timeline zoom buttons, and nested trim-handle interactivity. Every studio surface
 now has zero serious/critical WCAG A/AA violations. Verified: 44 vitest, tsc
 clean, 3 axe tests.
+
+## [2026-11-17] shorts | export from an explicit source asset
+
+Render accepts `source_path`, letting Shorts cut candidates directly from an
+uploaded long video instead of only the project cut. The source is probed for
+duration, rendered through the same filtergraph/range/crop path, and validated by
+a real FFmpeg test (2s source, 1s vertical export). Shorts has a source selector
+over uploaded video assets. Verified: 44 vitest, tsc clean.

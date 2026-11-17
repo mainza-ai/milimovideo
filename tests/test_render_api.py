@@ -136,6 +136,43 @@ def test_render_v2_alpha_blends_pixels(app_client, project):
     assert rgb[0] > 40 and rgb[2] > 40, rgb
 
 
+def test_render_from_an_explicit_source_path(app_client, project):
+    pid = project["id"]
+    generated = Path(config.PROJECTS_DIR) / pid / "generated"
+    _make_clip(generated / "source.mp4", "orange", seconds=2.0)
+
+    payload = {
+        "id": pid, "name": "Source Render", "fps": 25, "seed": 42,
+        "resolution_w": 320, "resolution_h": 180, "revision": 0,
+        "shots": [], "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+
+    response = app_client.post(
+        f"/projects/{pid}/render",
+        json={
+            "settings": {
+                "width": 180, "height": 320, "fps": 25, "fit": "crop",
+                "start_frame": 25, "end_frame": 50,
+            },
+            "track_states": {},
+            "source_path": f"/projects/{pid}/generated/source.mp4",
+        },
+    )
+    assert response.status_code == 200, response.text
+    render_id = response.json()["job_id"]
+    status = app_client.get(f"/status/{render_id}").json()
+    assert status["status"] == "completed", status
+
+    probe = json.loads(subprocess.check_output([
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-show_entries", "stream=width,height", "-select_streams", "v:0",
+        "-of", "json", str(generated / f"{render_id}.mp4"),
+    ]))
+    assert float(probe["format"]["duration"]) == pytest.approx(1.0, abs=0.15)
+    assert (probe["streams"][0]["width"], probe["streams"][0]["height"]) == (180, 320)
+
+
 def test_render_crop_fits_a_vertical_frame(app_client, project):
     pid = project["id"]
     generated = Path(config.PROJECTS_DIR) / pid / "generated"
