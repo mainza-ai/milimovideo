@@ -602,3 +602,12 @@ passes.
 Version stack entries can now be compared against the selected take in Review
 with a synced wipe and stop control. This closes the review compare gap without
 leaving the surface. Verified: 36 vitest, tsc clean, eslint 0 errors.
+
+## [2026-11-17] db | adopt an Alembic baseline
+
+Added `backend/alembic.ini`, env, and a `0001_baseline` revision built from
+SQLModel metadata. `init_db()` now runs Alembic: fresh DBs upgrade the baseline;
+legacy DBs get the idempotent column repair, are stamped, then upgrade. Kept
+create-all/repair as a safety net until future revisions exist. Added migration
+tests for the stamped version and current columns; verified fresh and legacy DB
+paths manually. Verified: 51 pytest.

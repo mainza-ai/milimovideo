@@ -1,0 +1,26 @@
+from sqlalchemy import inspect, text
+
+from database import engine
+
+
+def test_alembic_baseline_is_stamped(app_client):
+    inspector = inspect(engine)
+    assert "alembic_version" in inspector.get_table_names()
+    with engine.connect() as connection:
+        version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+    assert version == "0001_baseline"
+
+
+def test_current_schema_columns_are_present(app_client):
+    inspector = inspect(engine)
+    shot_columns = {column["name"] for column in inspector.get_columns("shot")}
+    assert {
+        "sequence_index", "selected_take_id", "favorite_take_id", "keyframes",
+        "speed", "audio_gain", "audio_muted", "audio_fade_in", "audio_fade_out",
+    } <= shot_columns
+
+    project_columns = {column["name"] for column in inspector.get_columns("project")}
+    assert {
+        "revision", "board_layout", "board_revision", "view_state", "captions",
+        "captions_burn", "render_preset", "script_content",
+    } <= project_columns

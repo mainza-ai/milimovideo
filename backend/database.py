@@ -285,7 +285,35 @@ def _add_missing_columns() -> None:
             logger.info(f"Schema repair: backfilled sequence_index for {len(project_ids)} project(s)")
 
 
+def _alembic_config():
+    from alembic.config import Config
+
+    root = os.path.dirname(os.path.abspath(__file__))
+    cfg = Config(os.path.join(root, "alembic.ini"))
+    cfg.set_main_option("script_location", os.path.join(root, "alembic"))
+    cfg.set_main_option("sqlalchemy.url", str(engine.url).replace("%", "%%"))
+    return cfg
+
+
 def init_db():
+    """Create/upgrade the schema through Alembic.
+
+    Legacy databases (tables exist, no alembic_version) get the idempotent
+    column repair first, then are stamped at the baseline so future revisions
+    apply cleanly. Fresh databases run the baseline directly.
+    """
+    from alembic import command
+    from sqlalchemy import inspect
+
+    cfg = _alembic_config()
+    tables = set(inspect(engine).get_table_names())
+    if tables and "alembic_version" not in tables:
+        _add_missing_columns()
+        command.stamp(cfg, "head")
+
+    command.upgrade(cfg, "head")
+
+    # Keep a create-all safety net for models introduced between revisions.
     SQLModel.metadata.create_all(engine)
     _add_missing_columns()
 
