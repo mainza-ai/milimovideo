@@ -197,7 +197,6 @@ def get_projects(session: Session = Depends(get_session)):
         # but ProjectState definition expects shots list.
         # We can optimize later, for now load shots.
         # Ensure we return valid shots structure
-        shots_data = [] # We might need to load shots if we want to show them
         results.append(ProjectState(
             id=p.id,
             name=p.name,

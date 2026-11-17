@@ -977,3 +977,11 @@ Enabled flake8-bugbear B023 and bound the chunk index, encoded video/audio, outp
 path, and chunk count as defaults in the chained runner. The callbacks already ran
 before the loop advanced, but late binding was fragile. Verified: 72 pytest, ruff
 clean, compileall.
+
+## [2026-11-17] correctness | clean dead locals and restore thumbnail fallback
+
+Enabled F841. Removed dead chained/render locals, dropped an unused Flux generator
+(seed is already applied globally), and stopped discarding model-loader results.
+Fixed a real wiring gap: `/uploads` computed a fallback thumbnail URL but never
+assigned it, so generated videos without `thumbnail_path` showed no image. Added
+coverage. Verified: 73 pytest, ruff clean, compileall.

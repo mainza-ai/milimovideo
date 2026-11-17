@@ -272,10 +272,10 @@ async def activate_model(model_id: str):
 
     if model.requires_base:
         # LoRAs are attached to an already-active base pipeline.
-        result = await model_loader.add_lora(model_id, strength=1.0)
+        await model_loader.add_lora(model_id, strength=1.0)
     else:
         try:
-            result = await model_loader.activate_base_model(model_id)
+            await model_loader.activate_base_model(model_id)
         except MemoryError as exc:
             raise HTTPException(status_code=507, detail=str(exc))
 
@@ -312,9 +312,9 @@ async def deactivate_model(model_id: str):
     from services.model_loader import model_loader
 
     if model.requires_base:
-        result = await model_loader.remove_lora(model_id)
+        await model_loader.remove_lora(model_id)
     else:
-        result = await model_loader.deactivate_base_model(model_id)
+        await model_loader.deactivate_base_model(model_id)
 
     await event_manager.broadcast("model_status_change", {
         "model_id": model_id,

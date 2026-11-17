@@ -12,4 +12,5 @@ select = [
     "F82",  # undefined names, invalid __all__
     "F811", # redefinitions that shadow real bindings
     "B023", # closures must bind loop variables they capture
+    "F841", # unused locals often hide incomplete wiring
 ]

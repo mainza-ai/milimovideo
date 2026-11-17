@@ -155,7 +155,6 @@ def build_complex_filtergraph(
 
     input_idx = 1
     filter_chains: List[str] = []
-    video_outputs: List[str] = []
     audio_outputs: List[str] = []
 
     def add_audio_chain(shot: Dict[str, Any], input_index: int, track_index: int) -> None:

@@ -137,16 +137,13 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             chunk_prompt = chunk_config.get("prompt", prompt)
             chunk_images = chunk_config.get("images", []) # list of (path, idx, strength)
             chunk_media_sequence = chunk_config.get("media_sequence", []) # list of paths
-            overlap_count = 0
             frames_to_trim = 0
             
             # The storyboard manager now handles extracting the overlap frames and
             # injecting them into chunk_media_sequence natively. We calculate how many 
             # frames to trim based on the length of the conditioning sequence.
             if chunk_idx > 0:
-                requested_pixel_overlap = len(chunk_media_sequence)
-                overlap_count = requested_pixel_overlap
-                frames_to_trim = requested_pixel_overlap
+                frames_to_trim = len(chunk_media_sequence)
                 logger.info(f"Chunk Video Conditioning: {len(chunk_media_sequence)} frames.")
             # Critical Fix for Extend + Smart Continue:
             # If this is the first chunk, and we have global input images (from Extend timeline),
@@ -408,7 +405,6 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         final_output_path = paths["output_path"]
         
         # Stitch videos using ffmpeg
-        concat_list = os.path.join(workspace_dir, f"{job_id}_concat_list.txt")
         # We re-encode to avoid codec mismatches between original chunks and trimmed chunks.
         input_args = []
         filter_parts = []
@@ -471,13 +467,11 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
         # GENERATE THUMBNAIL (For Timeline UI)
         # Generate thumbnail from final video
         thumb_path = paths["thumbnail_path"]
-        thumbnail_web_path = None
         try:
             subprocess.run([
                 "ffmpeg", "-y", "-i", final_output_path, "-ss", "00:00:00.500", "-vframes", "1", thumb_path
             ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             logger.info(f"Generated thumbnail: {thumb_path}")
-            thumbnail_web_path = f"/projects/{project_id}/thumbnails/{os.path.basename(thumb_path)}" if project_id else thumb_path
         except Exception as e:
             logger.warning(f"Failed to generate thumbnail: {e}")
 

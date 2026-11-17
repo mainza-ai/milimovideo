@@ -779,8 +779,6 @@ class FluxInpainter:
                 
                 mask_flat = torch.from_numpy(mask_arr).reshape(1, -1, 1).to(self.device).to(self.dtype)
                 
-                # Generator
-                generator = torch.Generator(device=self.device).manual_seed(seed)
                 noise = torch.randn_like(x_orig)
                 
                 # Start Img2Img style?

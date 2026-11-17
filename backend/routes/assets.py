@@ -263,10 +263,9 @@ async def list_uploads(session: Session = Depends(get_session)):
                         if len(parts) >= 5 and parts[3] == "generated":
                             parts[3] = "thumbnails"
                             parts[-1] = parts[-1].replace(".mp4", "_thumb.jpg")
-                            cand_url = "/".join(parts)
-                            # Check existence?
-                            # we assume existence if DB entry exists to save IO
-                            pass 
+                            # Assume the derived thumbnail exists when the DB
+                            # entry does; a missing file simply falls back to no image.
+                            thumb_url = "/".join(parts)
                     except: pass
         
         files.append({
