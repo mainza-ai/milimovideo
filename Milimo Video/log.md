@@ -953,3 +953,10 @@ Closed the missing native-open half of F5-05: Tauri now exposes `read_text_file`
 and `openTextFile` uses the dialog plugin with a browser file-picker fallback.
 Pipeline lens recipe import uses the native picker on desktop. Added desktop
 tests. Verified: 52 vitest, tsc clean, eslint 0 errors, cargo check.
+
+## [2026-11-17] ci | enforce the JS bundle budget
+
+Added `npm run check:bundle`: it fails when the built JS total exceeds 2 MB or a
+single chunk exceeds 800 KB. Current build is 1,518 KiB across 3 chunks, largest
+564 KiB. Wired the check into CI after `npm run build` and the verification matrix.
+Verified locally: build pass, bundle check pass.

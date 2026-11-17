@@ -218,6 +218,7 @@ npx tsc -b --pretty false
 npm run lint
 npm test                                       # Vitest
 npm run build
+npm run check:bundle
 npm run test:e2e                               # Playwright (starts backend+Vite)
 ```
 

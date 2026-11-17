@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "node e2e/clean.mjs && playwright test",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "preview": "vite preview",
     "gen:api": "node scripts/gen-api.mjs",
     "tauri": "tauri"
