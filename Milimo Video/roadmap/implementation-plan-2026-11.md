@@ -55,17 +55,25 @@ single-engineer guidance.
 | Front-end F0/F1 | **Done for scoped F0/F1** (shell, Query, job/agent + separate document stores, visual baseline, board culling/marquee/resize/align/areas/links/notes/reference/task cards/undo, editable list/script, project switcher, Setup) | axe 0, 12 Playwright incl. visual; store separation covered by E2E |
 | Front-end F2 | **Done for scoped F2** (trim/slip/roll/blade/ripple/rate/slide, compare/guides, tracking + depth overlay, waveforms/fades/solo, caption import/toggle, opacity/scale/pan/volume keyframes, render range, table+keyboard, effects tab) | pure-op tests, real render/pixels, 200-clip ~275fps perf; depth uses optional Depth Anything V2 Small |
 | Front-end F4 integrity | **Done** | scan + repair for missing media, orphan scene/board references, sequence order, and caption ranges |
-| Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview with start/end conditioning/batch/inpaint/favorites, queue position, pause/resume, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets, encoding controls, and in-flight render cancel) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; deeper shorts polish open |
+| Front-end F3/F4 | **Done for scoped F3/F4** (composer/preview with start/end conditioning/batch/inpaint/favorites, queue position, pause/resume, plan/recipes, review compare/comments/share, ranked search, master-reference CRUD, LoRA strength, deliver presets, encoding controls, and in-flight render cancel) | contract tests + Playwright CRUD/export/reviewer-agent/reference CRUD; shorts/lens packaging remains scoped v1 |
 | Front-end F5 | **Done for scoped F5** | shorts candidates+editable range+source export, pipeline lens recipe import/export, blocking lens, lazy 3D previz, Yjs board spike, Tauri shell + native open/save/build + sidecar-binary resolution |
 
-**Still open:** a bundled Python sidecar binary is not shipped or built; the desktop
-supervisor prefers one if present and otherwise runs `run_backend.sh`.
+**Still open / deferred:**
+
+- **Bundled Python sidecar binary** — not shipped or built. The desktop supervisor
+  prefers one if present and otherwise runs `run_backend.sh`.
+- **Legacy `/` cutover** — retained until the documented two-clean-release window.
+- **Phase 6 v2 lane** — eval harness, model swaps, MLX/FP8 lanes, and the agent
+  crew remain a separate model-artifact program.
+- **Scoped-v1 gaps** — no transitions/LUT/titles/A2 track, lexical rather than
+  embedding search, and no shorts/lens template packs.
+- **Visual baselines** — platform-tolerant and locally generated.
+
 Depth uses an optional local Depth Anything V2 Small model downloaded in Setup.
 The studio now has its own document store; legacy `/` retains its own store until
-cutover. Measured perf is
-58 fps for 500-card pan and 275 fps for 200-clip scroll (headless, frame-limit
-off). Alembic, OpenAPI types, OOM retry, tracking, visual regression, and the
-durable ledger are adopted.
+cutover. Measured perf is 58 fps for 500-card pan and 275 fps for 200-clip scroll
+(headless, frame-limit off). Alembic, OpenAPI types, OOM retry, tracking, visual
+regression, and the durable ledger are adopted.
 
 **Verification commands**
 

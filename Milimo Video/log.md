@@ -1057,3 +1057,10 @@ Re-ran the complete gate after the plan follow-ups: 82 pytest, 52 Vitest across
 agent, perf, visual), `compileall`, ruff correctness lint, tsc, ESLint 0 errors,
 Vite build, 1,524 KiB bundle budget, `cargo check`, and `verify_setup` with 0
 failures / 0 warnings. Measured 500-card pan ~58fps and 200-clip scroll ~279fps.
+
+## [2026-11-17] docs | clarify remaining plan scope
+
+Replaced the stale "deeper shorts polish open" note and expanded "Still open"
+into explicit remaining/deferred items: bundled Python sidecar, legacy cutover,
+the Phase 6 v2 lane, scoped-v1 gaps (transitions/LUT/titles/A2, embedding search,
+template packs), and local visual baselines. No code changed.
