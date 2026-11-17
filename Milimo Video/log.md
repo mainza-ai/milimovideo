@@ -829,3 +829,11 @@ imports use `useStudioDocumentStore`; PlaybackEngine has a studio-specific clock
 Both routes talk to the same backend contract; switching routes no longer shares
 in-memory document state. AGENTS/user guide/roadmap/audit updated. Verified:
 tsc clean, 44 vitest, 9 Playwright (CRUD/export/reviewer path included).
+
+## [2026-11-17] verify | final closure matrix
+
+Final gates after the document-store split, crop reframe, tracking, effects,
+reference/task cards, LoRA strength, queued AI parsing, Tauri shell, axe and perf
+work: 61 pytest, 44 vitest, 9 Playwright, tsc clean, eslint 0 errors, Vite build
+pass, verify_setup 0 failures, axe zero serious/critical, 500-card pan 57.8 fps,
+200-clip scroll 277.9 fps. Working tree clean.
