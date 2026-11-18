@@ -101,7 +101,10 @@ released by Milimo. See [[memory-management-audit-2026-11]].
 
 - Cancelling a non-stream HTTP call cannot abort the socket mid-flight; it is
   bounded by the provider timeout and no further work runs.
-- Chained chunk-0 enhancement still happens after the pipeline load (bounded
+- Chunk-0 HTTP enhancement now runs before the pipeline load and the chained
+  task skips its post-load re-run (`_llm_preenhanced`). Gemma still needs the
+  loaded text encoder. Earlier note: chained chunk-0 enhancement happened after
+  the pipeline load (bounded
   overlap, then unload); the single-shot path now pre-enhances.
 - Strata does not expose a context window; preflight skips it as `unknown`.
 - Cloud pricing is reference data; override with `MILIMO_LLM_RATE_CARD`.

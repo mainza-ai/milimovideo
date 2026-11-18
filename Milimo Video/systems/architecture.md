@@ -163,7 +163,8 @@ SQLite or the model layer directly.
 - Ollama defaults to `keep_alive: 0`; a 27B model otherwise sits on VRAM. The
   active role plan, not `config.LLM_PROVIDER`, chooses the provider now. HTTP
   enhancement runs before the video pipeline loads and releases every local role
-  model afterwards; chained chunk-0 is the remaining overlap.
+  model afterwards; chunk-0 HTTP enhancement is now marked pre-enhanced so the
+  chained task does not overlap the LTX load.
 - Gemma is in-process only: a role that resolves to Gemma needs the loaded LTX
   text encoder, so `prompt_image` must use an HTTP provider.
 - Cloud providers are unreachable unless `MILIMO_LLM_CLOUD=1` **and** the air-gap

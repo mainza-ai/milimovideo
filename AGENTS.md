@@ -229,7 +229,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 212 backend tests, 90 Vitest tests, and 21 Playwright tests, plus
+baseline is 213 backend tests, 90 Vitest tests, and 21 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -242,9 +242,9 @@ Do not claim these are done:
   template packs remain. LUT, titles, A2, V1 crossfades, and lens pack import are
   supported.
 - LLM caveats: non-stream HTTP cancellation is timeout-bounded (not a socket
-  abort), chained chunk-0 enhancement still follows the pipeline load, Strata
-  exposes no context window, cloud prices are reference data overrideable with
-  `MILIMO_LLM_RATE_CARD`, vision detection is heuristic, and the legacy `/`
+  abort), Strata exposes no context window, cloud prices are reference data
+  overrideable with `MILIMO_LLM_RATE_CARD`, vision detection is heuristic, and
+  the legacy `/`
   popover edits only `prompt_video`. See
   `Milimo Video/systems/llm-local-first-next-2026-11.md`.
 - Job notification caveats: the legacy `/` editor still consumes mapped

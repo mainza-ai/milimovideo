@@ -1640,10 +1640,17 @@ trims, and project media URLs. Resolve XML remains (no adapter).
 - **V1 crossfade**: `shot.transition_in` (Alembic 0010), shared overlap clamp in
   the timeline layout, render, and OTIO metadata; incoming alpha ramps 0→1 over
   the previous clip. Real pixel test asserts a red/blue midpoint mix.
-- Tests: 212 backend, 90 Vitest, 21 Playwright.
+- Tests: 213 backend, 90 Vitest, 21 Playwright.
 
 ## [2026-11-18] implement | lens recipe packs
 
 The pipeline lens accepts a `{name, recipes}` object or a bare array, validates
 every recipe, and lists them for selection; single recipes still apply directly.
 Shorts template packs remain.
+
+## [2026-11-18] fix | skip chunk-0 re-enhancement after pre-load pass
+
+The chained task now consults `should_enhance_chunk`: when `_preenhance_http`
+already rewrote the prompt before LTX loaded, chunk 0 is not enhanced again after
+the pipeline occupies memory. Gemma still uses the in-pipeline path. Unit test
+covers pre-enhanced, unenhanced, disabled, and later chunks.

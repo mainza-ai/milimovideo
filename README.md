@@ -385,7 +385,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 212 backend tests, 90 Vitest tests, and 21 Playwright
+The last verified run was 213 backend tests, 90 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual
@@ -430,8 +430,8 @@ dev_diary/         Build log and social notes
   wired (tray menu: show/quit).
 - **Visual baselines** are platform-tolerant and locally generated.
 - **LLM caveats:** cancelling a non-stream HTTP call is timeout-bounded rather
-  than a socket abort; chained chunk-0 enhancement still follows the pipeline
-  load; Strata reports no context window; cloud list prices are reference data
+  than a socket abort; Strata reports no context window; cloud list prices are
+  reference data
   (`MILIMO_LLM_RATE_CARD` overrides); vision detection is heuristic; the legacy
   `/` popover edits only `prompt_video`.
 - **Phase 6 v2 work** (model-artifact eval, model swaps, MLX/FP8 lanes, agent

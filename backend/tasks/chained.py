@@ -17,6 +17,19 @@ import job_events
 
 logger = logging.getLogger(__name__)
 
+
+def should_enhance_chunk(params: dict, chunk_idx: int) -> bool:
+    """Chunk 0 is enhanced before the pipeline load when an HTTP role ran.
+
+    Re-running it inside the chained task would call the LLM (and possibly load
+    Gemma) after LTX already occupies memory.
+    """
+    return (
+        chunk_idx == 0
+        and bool(params.get("enhance_prompt", True))
+        and not bool(params.get("_llm_preenhanced"))
+    )
+
 # Storyboard Manager Import
 try:
     from backend.storyboard.manager import StoryboardManager
@@ -169,8 +182,9 @@ async def generate_chained_video_task(job_id: str, params: dict, pipeline):
             # We only need to ensure we use the prompt it returns.
             do_pipeline_enhance = False 
 
-            # Only enhance manually for Chunk 0 if it wasn't handled (e.g. Extend mode needs Director prompt)
-            if chunk_idx == 0 and params.get("enhance_prompt", True):
+            # Only enhance manually for Chunk 0 if the pre-pipeline HTTP pass did
+            # not already do it. Gemma still needs the loaded text encoder.
+            if should_enhance_chunk(params, chunk_idx):
                 from llm import enhance_prompt as llm_enhance
                 
                 # Only load the LTX text encoder when the role resolves to Gemma.

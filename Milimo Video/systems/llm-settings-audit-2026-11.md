@@ -425,7 +425,8 @@ Ollama, oMLX, and Strata.
 
 - Cancelling a non-stream HTTP call is timeout-bounded, not an instant socket
   abort.
-- Chained chunk-0 enhancement still runs after the pipeline load.
+- Chunk-0 HTTP enhancement runs before the pipeline load; the chained task
+  skips its post-load re-run when `_llm_preenhanced` is set.
 - The legacy `/` popover edits only the `prompt_video` role.
 - Existing v1 documents keep their stored role models; **Check plan** and
   `verify_setup` name every model missing from a live catalog.
