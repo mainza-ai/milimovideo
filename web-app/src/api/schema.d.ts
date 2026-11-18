@@ -971,6 +971,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/otio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Project Otio
+         * @description Export the computed cut as an OpenTimelineIO timeline for Resolve/Premiere/FCP.
+         */
+        get: operations["export_project_otio_projects__project_id__otio_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/plan": {
         parameters: {
             query?: never;
@@ -5611,6 +5631,39 @@ export interface operations {
     project_integrity_projects__project_id__integrity_get: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_project_otio_projects__project_id__otio_get: {
+        parameters: {
+            query?: {
+                fps?: number | null;
+            };
             header?: never;
             path: {
                 project_id: string;
