@@ -1526,7 +1526,7 @@ wiki.
 Searched current releases and production workflows and filed
 [[research/model-landscape-2026-11]].
 
-- **LTX-2.5** (Aug 11, 2026; 22B, Gemma 4, native audio) has an official diffusers
+- **LTX-2.5** (Aug 11, 2026; 22B, native audio) has an official diffusers
   pipeline with `enable_model_cpu_offload()` and `vae.enable_tiling()`; support is
   not in a diffusers release yet (install from main). This is the real #6 path, not
   a vendored-pipeline patch.
