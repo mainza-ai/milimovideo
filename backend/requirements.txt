@@ -1,6 +1,6 @@
 fastapi==0.128.0
 uvicorn>=0.30
-python-multipart>=0.0.9
+python-multipart>=0.0.33
 requests>=2.31
 huggingface_hub>=0.24
 # hf_transfer is optional; enable it with MILIMO_HF_TRANSFER=1.
