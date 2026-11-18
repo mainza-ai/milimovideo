@@ -94,3 +94,14 @@ def test_ltx25_pipeline_override_dispatches_to_the_adapter(app_client, monkeypat
     ))
     assert called["job_id"] == "ltx25-dispatch"
     assert called["params"]["pipeline_override"] == "ltx25"
+
+
+def test_ltx25_exports_the_native_audio_track(tmp_path):
+    import numpy as np
+
+    from models.ltx25_wrapper import LTX25Engine
+
+    audio = (np.sin(np.linspace(0, 200, 4800))[None, None, :] * 0.2).astype("float32")
+    target = tmp_path / "audio.wav"
+    assert LTX25Engine.export_audio(audio, str(target)) is True
+    assert target.exists() and target.stat().st_size > 1000

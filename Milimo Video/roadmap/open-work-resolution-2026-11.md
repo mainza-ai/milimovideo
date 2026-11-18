@@ -35,7 +35,7 @@ a test; "open" means no code or no verified path.
 | Issue #1 (Wan 2.2) | Open | **Feature gap**: a separate model family, not an LTX patch. |
 | PR #7 (`enhance_prompt` tuple) | Open | **Superseded**: both call sites already unpack on `main` (`tasks/image.py:98`, `tasks/video.py:290`). Close with a pointer. |
 | PR #8 (`encode_video` no_grad) | Open | **Still valid**: `media_io.py` has no `torch.no_grad()` around generator consumption; the CUDA inference-tensor crash is real. Rebase, test, merge. |
-| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 217 tests pass locally. |
+| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 218 tests pass locally. |
 | Security alerts | Disabled | `vulnerability-alerts` returns 404; Dependabot/security alerts are not enabled. |
 
 ### Roadmap / AGENTS deferrals
@@ -63,8 +63,9 @@ The full model/workflow matrix and sources are in
   synchronized audio/multishot. The official diffusers `LTX2Pipeline` has
   `enable_model_cpu_offload()` and `vae.enable_tiling()` — the supported offload
   path, instead of bolting it onto the vendored pipeline. Official minimum is
-  32 GB VRAM; 8–16 GB int8 reports are community experiments. Diffusers 0.37.1
-  ships `LTX2Pipeline`; the `ltx25` adapter uses it, but the weights remain gated.
+  32 GB VRAM; 8–16 GB int8 reports are community experiments. Diffusers 0.40.0
+  ships `LTX2Pipeline`; the `ltx25` adapter uses it and was verified locally on
+  MPS after accepting the gated license.
 - **Wan 2.2 TI2V-5B is the permissive low-VRAM engine.** Apache 2.0, diffusers,
   native 720p/24 fps text+image-to-video; ~8 GB with ComfyUI offload. Wan 2.5+ is
   closed, so 2.2 is the ceiling for open weights.
@@ -99,9 +100,9 @@ SQLAlchemy `<2.1` pin. Pin now, migrate deliberately.
 
 | Step | Change | Acceptance |
 |---|---|---|
-| P1-1 | **Adopt the diffusers LTX-2.5 engine.** `LTX2Pipeline`, `enable_model_cpu_offload()`, `vae.enable_tiling()`, native audio, int8/W4A8 quants; map it behind the current task interface, keep LTX-2 as fallback. | **Adapter delivered** — `models/ltx25_wrapper.py`, `tasks/ltx25.py`, `pipeline_override=ltx25`, manifest/memory/UI, fake-pipe tests. Gated weights and 32 GB CUDA/Apple validation remain. |
+| P1-1 | **Adopt the diffusers LTX-2.5 engine.** `LTX2Pipeline`, `enable_model_cpu_offload()`, `vae.enable_tiling()`, native audio, int8/W4A8 quants; map it behind the current task interface, keep LTX-2 as fallback. | **Adapter delivered and locally verified** — `models/ltx25_wrapper.py`, `tasks/ltx25.py`, `pipeline_override=ltx25`, manifest/memory/UI, fake-pipe tests, plus a real MPS 9-frame/256² run with native audio and shot/poster ingestion. Gated weights are not committed; 32 GB CUDA validation remains. |
 | P1-2 | **Add Wan 2.2 TI2V-5B as the low-VRAM CUDA engine.** Diffusers adapter, Apache 2.0 license gate, registry/manifest, costs, UI, 720p/24 baseline. | **MVP delivered** — queue + `pipeline_override=wan`, manifest/download, costs, UI, real 17f/256 MPS generation + 40-step API run. CUDA 8–24 GB validation still required; image-to-video not wired. |
-| P1-3 | **Quantized Flux 2 (#2).** Upgrade diffusers to a Klein-capable release (0.37.1+), add GGUF manifest/registry entries, `Flux2KleinPipeline` + `GGUFQuantizationConfig`, and a quantized/offloaded Qwen3 text encoder. | **MVP delivered** — diffusers 0.37.1, Q4_K_M manifest, `MILIMO_FLUX_GGUF`, MPS 256² generation verified. IP-Adapter/inpaint remain full-checkpoint; CUDA offload and 12–16 GB validation pending. |
+| P1-3 | **Quantized Flux 2 (#2).** Upgrade diffusers to a Klein-capable release (0.37.1+), add GGUF manifest/registry entries, `Flux2KleinPipeline` + `GGUFQuantizationConfig`, and a quantized/offloaded Qwen3 text encoder. | **MVP delivered** — diffusers 0.37.1 at the time (current 0.40.0), Q4_K_M manifest, `MILIMO_FLUX_GGUF`, MPS 256² generation verified. IP-Adapter/inpaint remain full-checkpoint; CUDA offload and 12–16 GB validation pending. |
 | P1-4 | CUDA regression checklist: no_grad encode, VRAM admission, FP8/quant selection, 8/16/24/48 GB behavior; calibrate the manifest estimates. | Manual run recorded on a CUDA host; estimates within 10%. |
 | P1-5 | Bundle the backend: PyInstaller/Nuitka one-folder with Torch or an embedded runtime; Tauri sidecar; first-run model download; macOS notarization and Windows build in CI. | A clean machine launches Studio with no Python/venv. |
 | P1-6 | Legacy cutover: after two clean packaged releases, remove `/` or freeze it behind a plugin; update docs/flags/e2e. | Studio is the only route; rollback documented. |
@@ -155,7 +156,7 @@ Hard dependencies:
   diffusers adapter is shipped and does not bundle them.
 - Wan 2.2 5B is Apache 2.0 and diffusers-supported; its 14B/S2V/Animate variants
   come later. Wan 2.5+ has no open weights.
-- Quantized Flux needs diffusers 0.37.1+, the 5.7 GB GGUF artifact, and a
+- Quantized Flux needs diffusers 0.40.0+, the 5.7 GB GGUF artifact, and a
   quantized/offloaded Qwen3 encoder.
 - License-gated engines (Hunyuan 1.5, MiniMax H3, Qwen-Image 2.1) must not be
   bundled; they need a user-installed plugin path and a license gate.

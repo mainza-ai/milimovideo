@@ -134,18 +134,23 @@ async def generate_ltx25_video_task(job_id: str, params: dict) -> None:
                     pass
 
         thumbnail_web = None
-        try:
-            await asyncio.to_thread(
-                subprocess.run,
-                ["ffmpeg", "-y", "-i", output_path, "-ss", "00:00:00.500",
-                 "-vframes", "1", thumbnail_path],
-                check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            )
-            thumbnail_web = (
-                f"/projects/{project_id}/thumbnails/{os.path.basename(thumbnail_path)}"
-            )
-        except Exception as exc:
-            logger.warning("LTX-2.5 thumbnail failed: %s", exc)
+        for offset in ("00:00:00.500", "00:00:00"):
+            try:
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["ffmpeg", "-y", "-ss", offset, "-i", output_path,
+                     "-vframes", "1", thumbnail_path],
+                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                if os.path.exists(thumbnail_path) and os.path.getsize(thumbnail_path) > 0:
+                    thumbnail_web = (
+                        f"/projects/{project_id}/thumbnails/{os.path.basename(thumbnail_path)}"
+                    )
+                    break
+            except Exception:
+                continue
+        if not thumbnail_web:
+            logger.warning("LTX-2.5 thumbnail failed for %s", output_path)
 
         output_url = f"/projects/{project_id}/generated/{os.path.basename(output_path)}"
         from database import Asset, Session, engine as db_engine

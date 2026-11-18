@@ -472,7 +472,7 @@ Open/partial items are tracked in
   fails today; `compileall` cannot catch the runtime `NameError` in split.
 - **OPS-03 — Dependency drift.** `backend/requirements.txt` omits `requests` and
   `huggingface_hub` (both imported), pins `torch` but not `transformers` (while
-  `flux2` pins `transformers==4.56.1`), and has no dev/test extras or lockfile.
+  `flux2` originally pinned `transformers==4.56.1`; the LTX-2.5 upgrade moved it to `>=5.23,<6`), and has no dev/test extras or lockfile.
 - **OPS-04 — The documented environment is broken in this checkout.** The
   `milimov` venv's editable `.pth` files point at
   `/Users/mck/Desktop/milimovideo/...`, not this repo, so `./run_backend.sh` fails

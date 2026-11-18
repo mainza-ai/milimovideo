@@ -178,7 +178,8 @@ Handles video, image, chained, and inpainting generation.
 > **Model status (2026-11):** LTX-2 19B is the primary video engine; Wan 2.2
 > TI2V-5B is integrated as the low-VRAM lane (MPS verified, CUDA validation
 > pending). LTX-2.5 (22B, native audio, diffusers CPU offload/VAE tiling) has an
-> implemented adapter and per-shot `ltx25` pipeline; its weights are gated. Z-Image Turbo and Qwen-Image-Edit-2511
+> implemented adapter and per-shot `ltx25` pipeline; a tiny local MPS generation
+> verified video + native audio, while its weights remain gated for distribution. Z-Image Turbo and Qwen-Image-Edit-2511
 > are image candidates. See `Milimo Video/research/model-landscape-2026-11.md`.
 
 | Component | Role |

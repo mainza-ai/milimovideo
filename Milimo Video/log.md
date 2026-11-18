@@ -1688,3 +1688,18 @@ lens packs, and the current 214/90/21 test baseline.
 - **Docs**: detailed ComfyUI bridge guide, README screenshots, SAM port, LTX-2.5
   page, delete instructions, and current model lanes.
 - Tests: 217 backend, 91 Vitest, 21 Playwright.
+
+## [2026-11-18] implement | real LTX-2.5 download and MPS generation
+
+Accepted the gated access request via the Hub ask-access endpoint and downloaded
+the components referenced by `model_index.json` into
+`backend/models/ltx-2.5-diffusers` (97 GB; duplicate full/merged shards skipped).
+Upgraded `diffusers` to 0.40.0, `transformers` to 5.23.0, and `huggingface-hub`
+to 1.33.0; refreshed the Flux package ranges.
+
+The full pipeline loads in ~57s. The adapter needed an MPS workaround: diffusers'
+LTX2 RoPE builds float64 frequencies when `double_precision` is set, so the MPS
+path disables that flag. Real run: 9 frames at 256², 1 step, seed 42, `a slow
+cinematic dolly-in...`; output was video with native 48 kHz audio. The queued
+`pipeline_override=ltx25` API path completed, attached the shot, wrote a poster,
+and `ffprobe` showed both video and audio streams. Tests: 218 backend.

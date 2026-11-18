@@ -166,7 +166,7 @@ The system follows a modular, inference-focused pipeline architecture:
 ## 7. Configuration & Environment Variables
 
 ### Runtime Environment
--   **Dependencies**: Requires specific versions as per `pyproject.toml`: `torch==2.8.0`, `torchvision==0.23.0`, `transformers==4.56.1`.
+-   **Dependencies**: Requires specific versions as per `pyproject.toml`: `torch>=2.8.0`, `torchvision>=0.23.0`, `transformers>=5.23,<6`, `safetensors>=0.8,<1`.
 -   **Configuration**:
     -   `FLUX2_MODEL_PATH`, `AE_MODEL_PATH`: Environment variables overrides for weight paths.
     -   `OPENROUTER_API_KEY`: API key for remote prompt upsampling.

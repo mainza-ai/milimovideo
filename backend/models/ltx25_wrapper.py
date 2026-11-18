@@ -40,13 +40,22 @@ class LTX25Engine:
                 "gated community license."
             )
         logger.info("Loading LTX-2.5 from %s on %s (%s)", self.model_dir, self.device, self.dtype)
-        pipe = LTX2Pipeline.from_pretrained(self.model_dir, torch_dtype=self.dtype)
+        pipe = LTX2Pipeline.from_pretrained(self.model_dir, dtype=self.dtype)
         if self.device == "cuda" and config.LTX25_OFFLOAD:
             pipe.enable_model_cpu_offload()
         else:
             pipe.to(self.device)
         if hasattr(pipe, "vae") and hasattr(pipe.vae, "enable_tiling"):
             pipe.vae.enable_tiling()
+        if self.device == "mps":
+            # Diffusers' LTX2 RoPE builds float64 frequencies when
+            # double_precision is set; MPS has no float64. Use its float32 path.
+            for module in list(pipe.connectors.modules()) + list(pipe.transformer.modules()):
+                if "double_precision" in getattr(module, "__dict__", {}):
+                    module.double_precision = False
+                config = getattr(module, "config", None)
+                if config is not None and hasattr(config, "rope_double_precision"):
+                    config.rope_double_precision = False
         self.pipe = pipe
         logger.info("LTX-2.5 ready")
 
@@ -130,19 +139,21 @@ class LTX25Engine:
         container.close()
 
     @staticmethod
-    def export_audio(audio, output_path: str, sample_rate: int = 24000) -> bool:
+    def export_audio(audio, output_path: str, sample_rate: int = 48000) -> bool:
         if audio is None:
             return False
         try:
-            import torchaudio
+            from scipy.io import wavfile
 
-            array = np.asarray(audio)
+            array = np.asarray(audio, dtype=np.float32)
             if array.ndim == 3:
                 array = array[0]
             if array.ndim == 1:
-                array = array[None, :]
-            tensor = torch.from_numpy(array)
-            torchaudio.save(output_path, tensor, sample_rate)
+                array = array[:, None]
+            elif array.ndim == 2 and array.shape[0] < array.shape[1]:
+                array = array.T
+            array = np.clip(array, -1.0, 1.0)
+            wavfile.write(output_path, sample_rate, (array * 32767).astype(np.int16))
             return True
         except Exception as exc:
             logger.warning("LTX-2.5 audio export failed: %s", exc)

@@ -50,7 +50,7 @@ frozen fallback during the cutover.
 | Lane | Engine |
 |---|---|
 | **Video** | LTX-2 19B (`ti2vid`, `ic_lora`, `keyframe`, chained) |
-| **Video upgrade** | LTX-2.5 22B (`pipeline_override=ltx25`, gated diffusers weights; adapter implemented) |
+| **Video upgrade** | LTX-2.5 22B (`pipeline_override=ltx25`, gated diffusers weights; adapter and local MPS run verified) |
 | **Low-VRAM video** | Wan 2.2 TI2V-5B (`pipeline_override=wan`) |
 | **Image** | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint inpainting, optional Q4_K_M GGUF |
 | **Segmentation** | SAM 3 microservice — text/box/click masks and video tracking |
@@ -142,7 +142,7 @@ Set `MILIMO_COMFY_URL` or `MILIMO_SAM_PORT` to override either.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # 217 backend tests
+./milimov/bin/python -m pytest                 # 218 backend tests
 ./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # 0 failures expected
 
@@ -155,7 +155,7 @@ npm run check:bundle
 npm run test:e2e                               # 21 Playwright tests
 ```
 
-Last verified: 217 backend, 91 Vitest, 21 Playwright; CI green on `main` and
+Last verified: 218 backend, 91 Vitest, 21 Playwright; CI green on `main` and
 `develop` (backend + frontend). Render changes are checked with real FFmpeg pixels,
 not only filtergraph strings.
 
@@ -193,8 +193,9 @@ Milimo Video/      Project wiki
 - **Search:** ranked lexical matching; no embedding model is bundled.
 - **Shorts:** template packs are not implemented (lens recipe packs are).
 - **CUDA:** LTX-2 has no CPU offload; LTX-2 FP8 is refused below its budget.
-  The LTX-2.5 adapter is implemented, but its gated weights must be accepted and
-  downloaded; CUDA 8–24 GB Wan validation is still pending.
+  The LTX-2.5 adapter is implemented and a tiny local MPS run (video + native
+  audio) is verified; gated weights are not committed, and CUDA 32 GB validation
+  is still pending. CUDA 8–24 GB Wan validation is also pending.
 - **Packaging:** no bundled Python/Torch sidecar binary yet.
 - **Memory:** costs are measured estimates, Strata has no unload endpoint, and a
   cancelled job keeps its pipeline until the idle TTL.
