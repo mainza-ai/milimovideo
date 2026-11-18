@@ -46,6 +46,20 @@ def _mps_gb() -> float:
     return 0.0
 
 
+def _cuda_state() -> tuple[float, float, float] | None:
+    """(free_gb, total_gb, allocated_gb) for device 0, or None."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            free, total = torch.cuda.mem_get_info(0)
+            allocated = torch.cuda.memory_allocated(0)
+            return free / 1e9, total / 1e9, allocated / 1e9
+    except Exception:
+        pass
+    return None
+
+
 def _mps_ceiling_gb() -> float | None:
     try:
         import torch
@@ -87,11 +101,22 @@ def snapshot(
     slots = slots or {}
     vm = psutil.virtual_memory()
     swap = psutil.swap_memory()
-    total = vm.total / 1e9
-    reserve = max(float(config.MEMORY_RESERVE_GB), total * 0.15)
-    recommended = _mps_ceiling_gb()
-    ceiling = min(recommended, total - reserve) if recommended else total - reserve
-    in_process = _mps_gb()
+    cuda = _cuda_state()
+    recommended = _mps_ceiling_gb() if not cuda else None
+    if cuda:
+        free_vram, total, allocated = cuda
+        reserve = max(float(config.CUDA_RESERVE_GB), total * (1.0 - float(config.CUDA_MEMORY_FRACTION)))
+        ceiling = max(0.5, total - reserve)
+        in_process = allocated
+        device = "cuda"
+        physical_available = free_vram
+    else:
+        total = vm.total / 1e9
+        reserve = max(float(config.MEMORY_RESERVE_GB), total * 0.15)
+        ceiling = min(recommended, total - reserve) if recommended else total - reserve
+        in_process = _mps_gb()
+        device = "mps" if recommended else "cpu"
+        physical_available = vm.available / 1e9
 
     resident_non_llm = sum(
         state.cost_gb for slot, state in slots.items() if slot != "llm_http"
@@ -113,15 +138,22 @@ def snapshot(
     # reported separately: macOS keeps swap allocated after a heavy job, and
     # treating that as live pressure would refuse every job until reboot.
     pressure = _read_pressure()
-    physical_available = vm.available / 1e9
     swap_free = swap.free / 1e9
-    if physical_available < reserve * 0.25:
+    if cuda:
+        # VRAM is the hard limit on CUDA; use it for pressure as well as sizing.
+        if physical_available < 1.0:
+            pressure = "critical"
+        elif physical_available < total * 0.10 and pressure == "normal":
+            pressure = "warning"
+    elif physical_available < reserve * 0.25:
         pressure = "critical"
     _last_pressure = pressure
 
     notes: list[str] = []
     if recommended:
         notes.append("MPS recommended working set")
+    if cuda:
+        notes.append(f"CUDA VRAM budget ({total:.1f} GB, {config.CUDA_MEMORY_FRACTION:.0%} cap)")
     if swap_free < 2.0:
         notes.append(f"swap is nearly exhausted ({swap_free:.1f} GB free)")
     if any(engine.unknown for engine in external_rows):
@@ -146,6 +178,7 @@ def snapshot(
         notes=notes,
         physical_available_gb=physical_available,
         swap_free_gb=swap_free,
+        device=device,
     )
 
 
@@ -207,7 +240,9 @@ def _suggestions(
     if any(engine.can_unload and engine.resident_gb for engine in snap.external_engines):
         hints.append("Unload local text models in Setup → AI & LLM")
     if snap.pressure != "normal":
-        hints.append("Wait for system memory pressure to clear")
+        hints.append("Wait for accelerator memory pressure to clear")
+    if snap.device == "cuda":
+        hints.append("CUDA CPU offload is not implemented; use a larger GPU or a smaller checkpoint")
     return hints
 
 
@@ -365,7 +400,8 @@ def admit(
             "Close other apps or unload models before starting this job."
         )
     if (
-        snap.swap_free_gb
+        snap.device != "cuda"
+        and snap.swap_free_gb
         and snap.swap_free_gb < 2.0
         and snap.physical_available_gb < snap.total_gb * 0.25
     ):
@@ -376,12 +412,20 @@ def admit(
         )
     # With little swap left there is no fallback for an estimate miss, so keep
     # a real margin instead of admitting a job that exactly fills free RAM.
-    safety_margin = max(4.0, estimate.total_gb * 0.05) if snap.swap_free_gb < 4.0 else 0.5
+    if snap.device == "cuda":
+        safety_margin = max(1.0, estimate.total_gb * 0.05)
+    else:
+        safety_margin = max(4.0, estimate.total_gb * 0.05) if snap.swap_free_gb < 4.0 else 0.5
     if snap.physical_available_gb and estimate.total_gb + safety_margin > physical_room:
+        pool = "VRAM" if snap.device == "cuda" else "RAM"
+        swap_note = (
+            "" if snap.device == "cuda"
+            else f", only {snap.swap_free_gb:.1f} GB swap free"
+        )
         return refuse(
-            f"Needs ~{estimate.total_gb:.1f} GB (+{safety_margin:.1f} GB safety margin, "
-            f"only {snap.swap_free_gb:.1f} GB swap free) but only {physical_room:.1f} GB of RAM "
-            f"is free even after releasing idle models ({snap.physical_available_gb:.1f} GB now)."
+            f"Needs ~{estimate.total_gb:.1f} GB (+{safety_margin:.1f} GB safety margin{swap_note}) "
+            f"but only {physical_room:.1f} GB of {pool} is free even after releasing idle models "
+            f"({snap.physical_available_gb:.1f} GB now)."
         )
     if estimate.total_gb > effective + 0.01:
         return refuse(
@@ -392,7 +436,7 @@ def admit(
     if estimate.total_gb > snap.ceiling_gb * 0.95:
         warnings.append("estimated peak is within 5% of the MPS ceiling")
     if snap.pressure == "warning":
-        warnings.append("system memory pressure is elevated")
+        warnings.append("accelerator memory pressure is elevated")
     if snap.swap_percent > float(config.MEMORY_SWAP_LIMIT_PERCENT):
         warnings.append(
             f"swap is {snap.swap_percent:.0f}% used ({snap.swap_free_gb:.1f} GB free); "
@@ -404,16 +448,20 @@ def admit(
     )
 
 def set_mps_cap() -> float:
-    """Cap this process so PyTorch fails before macOS thrashes."""
+    """Cap this process so PyTorch fails before the OS thrashes (MPS or CUDA)."""
     try:
         import torch
 
-        if not (hasattr(torch, "mps") and torch.backends.mps.is_available()):
-            return 0.0
-        fraction = max(0.1, min(0.95, float(config.MPS_MEMORY_FRACTION)))
-        torch.mps.set_per_process_memory_fraction(fraction)
-        logger.info("MPS per-process memory fraction set to %.2f", fraction)
-        return fraction
+        if torch.cuda.is_available():
+            fraction = max(0.1, min(0.99, float(config.CUDA_MEMORY_FRACTION)))
+            torch.cuda.set_per_process_memory_fraction(fraction, 0)
+            logger.info("CUDA per-process memory fraction set to %.2f", fraction)
+            return fraction
+        if hasattr(torch, "mps") and torch.backends.mps.is_available():
+            fraction = max(0.1, min(0.95, float(config.MPS_MEMORY_FRACTION)))
+            torch.mps.set_per_process_memory_fraction(fraction)
+            logger.info("MPS per-process memory fraction set to %.2f", fraction)
+            return fraction
     except Exception as exc:
-        logger.debug("Could not set MPS memory fraction: %s", exc)
-        return 0.0
+        logger.debug("Could not set accelerator memory fraction: %s", exc)
+    return 0.0

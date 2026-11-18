@@ -88,7 +88,7 @@ class ModelManager:
             memory_manager.prepare_for(
                 "video",
                 model_id=pipeline_type,
-                cost_gb=costs.VIDEO_BASE_GB,
+                cost_gb=costs.base_gb("video"),
             )
             
             paths = self.get_model_paths()

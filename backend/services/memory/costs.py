@@ -13,8 +13,11 @@ from typing import Any, Dict
 from .models import CostBreakdown
 
 # Measured on the reference 128 GB Apple Silicon machine.
-VIDEO_BASE_GB = 76.0        # LTX-2 19B + Gemma 3 + VAE
+VIDEO_BASE_GB = 76.0        # LTX-2 19B + Gemma 3 + VAE (Apple unified memory)
 IMAGE_BASE_GB = 36.0        # Flux 2 9B + Qwen3 encoder + AE/CLIP/IP
+# CUDA auto-selects the FP8 LTX checkpoint (manifest: 40 GB) and bf16 Flux 9B.
+VIDEO_BASE_GB_CUDA = 40.0
+IMAGE_BASE_GB_CUDA = 18.0
 SAM_BASE_GB = 8.0
 DEPTH_BASE_GB = 0.6
 
@@ -24,6 +27,26 @@ SAFETY_FACTOR = 1.05
 
 _PARAM_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[bB](?![a-zA-Z])")
 _BITS_RE = re.compile(r"(iq(\d+)_(?:xxs|xs|s|m|l)|q(\d+)(?:_[a-z0-9]+)?|(\d+)\s*bit|bf16|fp16|f16)", re.IGNORECASE)
+
+
+def _cuda_available() -> bool:
+    try:
+        import torch
+
+        return bool(torch.cuda.is_available())
+    except Exception:
+        return False
+
+
+def base_gb(kind: str) -> float:
+    if _cuda_available():
+        return {
+            "video": VIDEO_BASE_GB_CUDA,
+            "image": IMAGE_BASE_GB_CUDA,
+            "sam": SAM_BASE_GB,
+            "depth": DEPTH_BASE_GB,
+        }.get(kind, 0.0)
+    return slot_base_gb(kind)
 
 
 def slot_base_gb(slot: str) -> float:
@@ -72,6 +95,7 @@ def estimate(kind: str, params: Dict[str, Any] | None = None) -> CostBreakdown:
     params = params or {}
     kind = (kind or "video").lower()
     if kind == "video":
+        video_base = base_gb("video")
         frames = int(params.get("num_frames") or 121)
         width = int(params.get("width") or 768)
         height = int(params.get("height") or 512)
@@ -81,14 +105,14 @@ def estimate(kind: str, params: Dict[str, Any] | None = None) -> CostBreakdown:
         if upscale:
             workspace = workspace * 1.6 + 2.0
         workspace += VIDEO_ENCODE_GB
-        total = (VIDEO_BASE_GB + workspace) * SAFETY_FACTOR
+        total = (video_base + workspace) * SAFETY_FACTOR
         notes = [
             f"{frames} frames at {width}x{height}",
             "upscale pass included" if upscale else "no upscale",
         ]
         return CostBreakdown(
             kind=kind,
-            base_gb=VIDEO_BASE_GB,
+            base_gb=video_base,
             workspace_gb=workspace,
             total_gb=round(total, 2),
             upscale=upscale,
@@ -98,12 +122,13 @@ def estimate(kind: str, params: Dict[str, Any] | None = None) -> CostBreakdown:
             notes=notes,
         )
     if kind == "image":
+        image_base = base_gb("image")
         refs = int(params.get("reference_count") or 0)
         workspace = 4.0 + min(4, refs) * 0.5 + IMAGE_SAVE_GB
-        total = (IMAGE_BASE_GB + workspace) * SAFETY_FACTOR
+        total = (image_base + workspace) * SAFETY_FACTOR
         return CostBreakdown(
             kind=kind,
-            base_gb=IMAGE_BASE_GB,
+            base_gb=image_base,
             workspace_gb=workspace,
             total_gb=round(total, 2),
             frames=1,

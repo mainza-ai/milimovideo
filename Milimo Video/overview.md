@@ -83,7 +83,7 @@ The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
   emitter, Studio toasts/activity/inline progress, resync/watchdog, desktop
   notifications, dock badge, webhook, and per-project mute.
 
-Verification: **175 backend tests, 79 Vitest tests, 21 Playwright tests**, clean
+Verification: **180 backend tests, 79 Vitest tests, 21 Playwright tests**, clean
 ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
 failures.
 

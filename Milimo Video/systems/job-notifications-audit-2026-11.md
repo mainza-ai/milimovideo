@@ -359,7 +359,7 @@ N0, N1, N2, N3, and the core of N4 landed. N5 remains optional.
 | N4-02 resync | **Done** | reconnect dispatches `milimo:resync`; active-job and takes/assets/renders hooks listen |
 | N4-03 stale spinner watchdog | **Done** | reconcile against `/status` on mount/resync; cancel watchdog |
 | N4-04 metrics | **Partial** | `clients`, `sequence`, `replay_buffer`, memory peak exposed; delivery lag/histogram not aggregated |
-| N4-05 tests | **Done** | `tests/test_job_events.py` (16), `jobBridge.test.tsx` (6), `JobProgressUi.test.tsx` (6), `generatePreflight.test.ts` (3), `bootstrap.test.ts` (2) |
+| N4-05 tests | **Done** | `tests/test_job_events.py` (17), `jobBridge.test.tsx` (6), `JobProgressUi.test.tsx` (6), `generatePreflight.test.ts` (3), `bootstrap.test.ts` (2) |
 
 ### Live probe (2026-11-17)
 

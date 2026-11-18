@@ -72,16 +72,19 @@ class ModelLoaderService:
             return True, "No VRAM estimate — skipping check"
 
         if torch.cuda.is_available():
-            props = torch.cuda.get_device_properties(0)
-            total_gb = props.total_mem / 1e9
-            allocated_gb = torch.cuda.memory_allocated(0) / 1e9
-            available_gb = total_gb - allocated_gb
+            free_bytes, total_bytes = torch.cuda.mem_get_info(0)
+            available_gb = free_bytes / 1e9
+            total_gb = total_bytes / 1e9
 
             if available_gb >= vram_estimate_gb * 1.1:
-                return True, f"CUDA: {available_gb:.1f} GB available, need {vram_estimate_gb:.1f} GB"
+                return True, (
+                    f"CUDA: {available_gb:.1f} GB of {total_gb:.1f} GB VRAM free, "
+                    f"need {vram_estimate_gb:.1f} GB"
+                )
             return False, (
-                f"Insufficient CUDA VRAM: {available_gb:.1f} GB available, "
-                f"need {vram_estimate_gb:.1f} GB (+ 10% safety)"
+                f"Insufficient CUDA VRAM: {available_gb:.1f} GB of {total_gb:.1f} GB free, "
+                f"need {vram_estimate_gb:.1f} GB (+10% safety). CPU offload is not implemented; "
+                "use a larger GPU or a smaller checkpoint."
             )
 
         elif torch.backends.mps.is_available():
@@ -311,7 +314,7 @@ class ModelLoaderService:
         slot = "video" if model.pipeline == "video" else "image"
         from services.memory import costs
 
-        cost = costs.VIDEO_BASE_GB if slot == "video" else costs.IMAGE_BASE_GB
+        cost = costs.base_gb("video") if slot == "video" else costs.base_gb("image")
         # Clear existing LoRAs for this slot
         self.clear_loras(slot)
 

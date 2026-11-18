@@ -107,6 +107,7 @@ class MemorySnapshot:
     # allocated long after a heavy job without indicating current pressure.
     physical_available_gb: float = 0.0
     swap_free_gb: float = 0.0
+    device: str = "unknown"  # mps | cuda | cpu
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -129,6 +130,7 @@ class MemorySnapshot:
             "notes": list(self.notes),
             "physical_available_gb": round(self.physical_available_gb, 2),
             "swap_free_gb": round(self.swap_free_gb, 2),
+            "device": self.device,
         }
 
 

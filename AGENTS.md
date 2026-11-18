@@ -214,7 +214,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 175 backend tests, 79 Vitest tests, and 21 Playwright tests, plus
+baseline is 180 backend tests, 79 Vitest tests, and 21 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -241,9 +241,10 @@ Do not claim these are done:
 - Memory caveats: the cost registry is hand-tuned (measured estimate, not a
   per-model profile); Strata has no unload endpoint and is budgeted from its
   `memory_gb` override; a cancelled job keeps its pipeline until the idle TTL;
-  only the MPS decode path is tiled; memory waits are bounded at 20 retries; M5
-  checkpoint swaps need model artifacts and a baseline tool lives in
-  `backend/benchmark_models.py`.
+  only the MPS decode path is tiled; memory waits are bounded at 20 retries; on
+  CUDA the budget uses free VRAM and the FP8 40 GB base, but CPU offload and
+  quantized Flux checkpoints are not implemented; M5 checkpoint swaps need model
+  artifacts and a baseline tool lives in `backend/benchmark_models.py`.
   Any change that loads a model must call `memory_manager.admit_job` /
   `prepare_for` and include external engines in the budget. See
   `Milimo Video/systems/memory-management-audit-2026-11.md`.

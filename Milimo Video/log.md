@@ -1425,7 +1425,7 @@ Counts: 172 backend, 79 Vitest, 21 Playwright.
 - **Dock badge**: Tauri `set_badge` uses `set_badge_label` (macOS) and
   `set_badge_count`; the activity center shows the progress percent and active
   count, cleared on idle. `cargo check` clean.
-- Tests: 175 backend, 79 Vitest, 21 Playwright.
+- Tests: 180 backend, 79 Vitest, 21 Playwright.
 
 ## [2026-11-17] docs | sync wiki, technical docs, and README with M0–M5 / N0–N5
 
@@ -1450,3 +1450,28 @@ implementation.
   (ledger/typed events/startup/cancel), `06` (job_events/services/memory/routes),
   `CODEBASE_ANALYSIS`, `sam3-bible`, and the user guide (preflight safe preset,
   waiting for memory, memory/notifications panels, updated limitations).
+
+## [2026-11-17] investigate | triage the five open GitHub issues
+
+The issues are from March, before the memory/event implementation, so each was
+checked against `main` rather than assumed current.
+
+- **#4 AE 404 — fixed.** `flux2.util` now downloads the FLUX.2 AE from
+  `black-forest-labs/FLUX.2-dev` (`ae_repo_id`); the manifest's nonexistent
+  `FLUX.2-klein` repo and dead 9B AE entry were corrected, the AE is marked gated,
+  and `load_ae` raises a clear error instead of `sys.exit(1)`.
+- **#6 16 GB CUDA OOM — mitigated.** The budget now sizes against free VRAM
+  (`torch.cuda.mem_get_info`), caps the process at `MILIMO_CUDA_MEMORY_FRACTION`,
+  and uses the CUDA FP8 bases (40 GB video / 18 GB image). A 16 GB card is refused
+  before load with a “VRAM” reason and the offload note; an 80 GB card admits the
+  same job. CPU offload is still not implemented (no hooks in the vendored LTX
+  pipelines).
+- **#3 API — resolved by documentation.** Added `docs/07_api.md` with REST/SSE
+  batch examples, preflight, auth, cancellation, and guardrails.
+- **#2 quantized models — open.** No GGUF loader/artifacts; the concrete plan and
+  the M5 benchmark baseline are recorded.
+- **#1 Wan 2.2 — open.** A separate model family (DiT/VAE/umT5/LoRAs); the LTX
+  adapters and chunk/audio math cannot be reused.
+
+New page: [[systems/github-issues-triage-2026-11]]. Tests: 36 memory (incl. CUDA/
+AE), full suite re-run.

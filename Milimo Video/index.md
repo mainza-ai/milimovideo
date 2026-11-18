@@ -63,6 +63,10 @@ navigate, then drills into pages.
   activity center, inline progress, resync/watchdog, metrics, history retry, ETA,
   desktop notifications, dock badge, webhook, and per-project mute, with live
   probes.
+- [systems/github-issues-triage-2026-11](systems/github-issues-triage-2026-11.md) —
+  triage of the five open GitHub issues against the November implementation:
+  the fixed AE download, CUDA VRAM admission/OOM mitigation, API documentation,
+  and the still-open Wan 2.2 / quantized-checkpoint feature work.
 - [systems/llm-local-first-next-2026-11](systems/llm-local-first-next-2026-11.md) —
   local-first LLM audit **and implementation record**: live measurements from
   Ollama/oMLX/Strata, findings F1–F11, phases L5–L9 (instances, capability truth,

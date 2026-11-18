@@ -15,6 +15,7 @@ from .text_encoder import load_mistral_small_embedder, load_qwen3_embedder
 FLUX2_MODEL_INFO = {
     "flux.2-klein-4b": {
         "repo_id": "black-forest-labs/FLUX.2-klein-4B",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux-2-klein-4b.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Klein4BParams(),
@@ -26,6 +27,7 @@ FLUX2_MODEL_INFO = {
     },
     "flux.2-klein-9b": {
         "repo_id": "black-forest-labs/FLUX.2-klein-9B",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux-2-klein-9b.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Klein9BParams(),
@@ -37,6 +39,7 @@ FLUX2_MODEL_INFO = {
     },
     "flux.2-klein-base-4b": {
         "repo_id": "black-forest-labs/FLUX.2-klein-base-4B",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux-2-klein-base-4b.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Klein4BParams(),
@@ -48,6 +51,7 @@ FLUX2_MODEL_INFO = {
     },
     "flux.2-klein-base-9b": {
         "repo_id": "black-forest-labs/FLUX.2-klein-base-9B",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux-2-klein-base-9b.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Klein9BParams(),
@@ -59,6 +63,7 @@ FLUX2_MODEL_INFO = {
     },
     "flux.2-dev": {
         "repo_id": "black-forest-labs/FLUX.2-dev",
+        "ae_repo_id": "black-forest-labs/FLUX.2-dev",
         "filename": "flux2-dev.safetensors",
         "filename_ae": "ae.safetensors",
         "params": Flux2Params(),
@@ -124,17 +129,19 @@ def load_ae(model_name: str, device: str | torch.device = "cuda") -> AutoEncoder
         # download from huggingface
         try:
             weight_path = huggingface_hub.hf_hub_download(
-                repo_id=config["repo_id"],
+                # The Klein 9B repo ships a diffusers `vae/` but no native
+                # `ae.safetensors`; the FLUX.2 autoencoder lives in FLUX.2-dev.
+                repo_id=config.get("ae_repo_id", config["repo_id"]),
                 filename=config["filename_ae"],
                 repo_type="model",
             )
-        except huggingface_hub.errors.RepositoryNotFoundError:
-            print(
-                f"Failed to access the model repository. Please check your internet "
-                f"connection and make sure you've access to {config['repo_id']}."
-                "Stopping."
-            )
-            sys.exit(1)
+        except Exception as exc:
+            repo = config.get("ae_repo_id", config["repo_id"])
+            raise RuntimeError(
+                f"Could not download the FLUX.2 autoencoder from {repo}: {exc}. "
+                "Accept the FLUX.2-dev license and set HF_TOKEN, or download the "
+                "diffusers VAE in Setup."
+            ) from exc
 
     if isinstance(device, str):
         device = torch.device(device)

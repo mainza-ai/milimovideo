@@ -59,6 +59,9 @@ MEMORY_ENFORCE = os.environ.get("MILIMO_MEMORY_ENFORCE", "1") == "1"
 MEMORY_RESERVE_GB = float(os.environ.get("MILIMO_MEMORY_RESERVE_GB", "16"))
 MEMORY_SWAP_LIMIT_PERCENT = float(os.environ.get("MILIMO_MEMORY_SWAP_LIMIT_PERCENT", "85"))
 MPS_MEMORY_FRACTION = float(os.environ.get("MILIMO_MPS_MEMORY_FRACTION", "0.85"))
+# CUDA budget: leave headroom for the driver/desktop and cap this process.
+CUDA_MEMORY_FRACTION = float(os.environ.get("MILIMO_CUDA_MEMORY_FRACTION", "0.90"))
+CUDA_RESERVE_GB = float(os.environ.get("MILIMO_CUDA_RESERVE_GB", "1.0"))
 # Idle eviction TTLs in seconds; 0 disables eviction for that slot.
 MEMORY_IDLE_TTL_SEC = {
     "video": int(os.environ.get("MILIMO_MEMORY_TTL_VIDEO", "300")),

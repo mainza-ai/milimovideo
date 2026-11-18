@@ -200,7 +200,9 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 
 ### MPS-first notes
 
-- FP8 is CUDA-only; Apple Silicon uses the regular MPS path.
+- FP8 is CUDA-only; Apple Silicon uses the regular MPS path. On CUDA the budget
+  uses free VRAM (`mem_get_info`) and the FP8 19B base (40 GB); the process is
+  capped with `set_per_process_memory_fraction` (default 0.90).
 - The VAE is cast to float32 on MPS to prevent black output; accelerator caches are
   cleared between jobs.
 - Long video jobs are chunked; the GPU semaphore prevents two heavy models loading
@@ -216,6 +218,8 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 ## 📚 Documentation
 
 - [User Guide](docs/user_guide.md) — the definitive Studio-first manual.
+- [Local API and automation](docs/07_api.md) — REST batch generation, SSE progress,
+  preflight, auth, and queue control.
 - [Wiki index](Milimo%20Video/index.md) — interlinked systems, models, pipelines,
   workflows, decisions, and roadmap.
 - [System Architecture](docs/01_system_architecture.md)
@@ -343,7 +347,7 @@ masking/tracking toggles. New work belongs in Studio.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                    # 175 tests
+./milimov/bin/python -m pytest                    # 180 tests
 ./milimov/bin/python -m ruff check backend        # correctness rules
 ./milimov/bin/python backend/verify_setup.py      # 0 failures expected
 
@@ -356,7 +360,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 175 backend tests, 79 Vitest tests, and 21 Playwright
+The last verified run was 180 backend tests, 79 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual
@@ -387,6 +391,9 @@ dev_diary/         Build log and social notes
 - **Memory**: the cost registry is a measured estimate, not a per-model profile;
   Strata has no unload endpoint; a cancelled job keeps its pipeline until the idle
   TTL; only the MPS decode path is tiled; memory waits are bounded at 20 retries.
+- **16 GB CUDA**: LTX-2 FP8 is estimated at 40 GB. The job is refused before load;
+  CPU offload is not implemented and no quantized Flux 2 checkpoint is shipped yet.
+  See the [issue triage](Milimo%20Video/systems/github-issues-triage-2026-11.md).
 - **Model efficiency (M5)**: SAM is lazy and `backend/benchmark_models.py` records
   per-lane baselines, but quantized/distilled checkpoints and text-encoder
   alternatives need model artifacts that are not vendored.

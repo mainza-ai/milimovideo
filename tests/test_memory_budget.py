@@ -340,6 +340,91 @@ def test_enforcement_off_always_admits(monkeypatch):
     assert decision.warnings
 
 
+# ── CUDA ─────────────────────────────────────────────────────────────
+
+
+def test_cuda_snapshot_sizes_against_vram(monkeypatch):
+    monkeypatch.setattr(budget, "_cuda_state", lambda: (12.0, 16.0, 4.0))
+    monkeypatch.setattr(budget, "_read_pressure", lambda: "normal")
+    monkeypatch.setattr(budget, "_sam_gb", lambda: 0.0)
+    monkeypatch.setattr(budget.engines, "collect", lambda *a, **k: [])
+    monkeypatch.setattr(config, "CUDA_MEMORY_FRACTION", 0.90)
+    monkeypatch.setattr(config, "CUDA_RESERVE_GB", 1.0)
+
+    snap = budget.snapshot()
+
+    assert snap.device == "cuda"
+    assert snap.total_gb == pytest.approx(16.0)
+    assert snap.physical_available_gb == pytest.approx(12.0)
+    assert snap.in_process_gb == pytest.approx(4.0)
+    assert snap.ceiling_gb == pytest.approx(14.4, abs=0.1)
+    assert any("CUDA VRAM" in note for note in snap.notes)
+
+
+def test_cuda_cost_uses_the_fp8_video_and_bf16_image_bases(monkeypatch):
+    monkeypatch.setattr(costs, "_cuda_available", lambda: True)
+    video = costs.estimate("video", {"num_frames": 121, "width": 768, "height": 512})
+    image = costs.estimate("image", {})
+    assert video.base_gb == costs.VIDEO_BASE_GB_CUDA
+    assert image.base_gb == costs.IMAGE_BASE_GB_CUDA
+    monkeypatch.setattr(costs, "_cuda_available", lambda: False)
+    assert costs.estimate("video", {}).base_gb == costs.VIDEO_BASE_GB
+
+
+def test_cuda_admission_refuses_a_16gb_card_with_a_vram_reason(monkeypatch):
+    monkeypatch.setattr(config, "MEMORY_ENFORCE", True)
+    monkeypatch.setattr(config, "SKIP_VRAM_CHECK", False)
+    monkeypatch.setattr(costs, "_cuda_available", lambda: True)
+    monkeypatch.setattr(budget, "_cuda_state", lambda: (12.0, 16.0, 4.0))
+    monkeypatch.setattr(budget, "_read_pressure", lambda: "normal")
+    monkeypatch.setattr(budget, "_sam_gb", lambda: 0.0)
+    monkeypatch.setattr(budget.engines, "collect", lambda *a, **k: [])
+
+    decision = budget.admit(
+        "video", {"num_frames": 121, "width": 768, "height": 512, "upscale": True}
+    )
+
+    assert decision.ok is False
+    assert "VRAM" in (decision.reason or "")
+    assert decision.retryable is False
+    assert any("offload" in hint for hint in decision.suggestions)
+
+
+def test_cuda_ceiling_admits_a_card_that_can_hold_the_peak(monkeypatch):
+    monkeypatch.setattr(config, "MEMORY_ENFORCE", True)
+    monkeypatch.setattr(config, "SKIP_VRAM_CHECK", False)
+    monkeypatch.setattr(costs, "_cuda_available", lambda: True)
+    monkeypatch.setattr(budget, "_cuda_state", lambda: (78.0, 80.0, 2.0))
+    monkeypatch.setattr(budget, "_read_pressure", lambda: "normal")
+    monkeypatch.setattr(budget, "_sam_gb", lambda: 0.0)
+    monkeypatch.setattr(budget.engines, "collect", lambda *a, **k: [])
+
+    decision = budget.admit(
+        "video", {"num_frames": 121, "width": 768, "height": 512, "upscale": True}
+    )
+    assert decision.ok is True
+    assert decision.snapshot.device == "cuda"
+
+
+def test_flux2_ae_points_at_the_real_flux2_repos():
+    import json
+    from pathlib import Path
+
+    from flux2.util import FLUX2_MODEL_INFO
+
+    manifest = json.loads(
+        (Path(__file__).resolve().parents[1] / "backend/models_manifest.json").read_text()
+    )
+    models = {entry["id"]: entry for entry in manifest["models"]}
+    assert models["flux2-klein-9b"]["huggingface"]["repo"] == "black-forest-labs/FLUX.2-klein-9B"
+    assert models["flux2-ae"]["huggingface"]["repo"] == "black-forest-labs/FLUX.2-dev"
+    assert models["flux2-ae"]["gated"] is True
+
+    info = FLUX2_MODEL_INFO["flux.2-klein-9b"]
+    assert info["repo_id"] == "black-forest-labs/FLUX.2-klein-9B"
+    assert info["ae_repo_id"] == "black-forest-labs/FLUX.2-dev"
+
+
 # ── Engines ──────────────────────────────────────────────────────────
 
 

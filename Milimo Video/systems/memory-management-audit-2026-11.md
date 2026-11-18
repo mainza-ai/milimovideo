@@ -367,7 +367,7 @@ program because no alternative weights are present.
 | M1-04 eviction/manual unload | **Done** | `/system/memory/unload`, leased slots never evicted, `/keep-warm` pin |
 | M1-05 rollback on load failure | **Done** | `model_engine.load_pipeline` and `flux_wrapper.load_model` release the slot and clear the pipeline on any exception |
 | M1-06 per-engine unload UI | **Done** | Setup memory panel + AI & LLM provider resident GB and Unload |
-| M1-07 tests | **Done** | `tests/test_memory_budget.py` (32 tests) |
+| M1-07 tests | **Done** | `tests/test_memory_budget.py` (37 tests) |
 | M2-01 priority queue | **Done** | `job_utils.job_priority` + `wait_for_turn` order dispatch before the GPU semaphore: video/image 20, inpaint 30, element 50, ai_parse/depth 60; FIFO inside a tier |
 | M2-02 model-aware batching | **Done** | `_queue_head` orders by priority, then by the slot already resident (`memory_manager.active`), then FIFO; same-tier image jobs group behind Flux and video jobs behind LTX |
 | M2-03 “waiting for memory” | **Done** | a `retryable` refusal raises `MemoryDeferred`; the scheduler emits `job.waiting` (reason=memory), sleeps the row (`_memory_not_before`), and re-dispatches up to 20 times with 10–120 s backoff, without holding the GPU semaphore |

@@ -160,7 +160,7 @@ class FluxInpainter:
         # Unload conflicting models (e.g., LTX) before loading Flux
         from memory_manager import memory_manager
         from services.memory import costs
-        memory_manager.prepare_for("image", model_id="flux2", cost_gb=costs.IMAGE_BASE_GB)
+        memory_manager.prepare_for("image", model_id="flux2", cost_gb=costs.base_gb("image"))
 
         try:
             from flux2.util import load_ae, load_flow_model, load_text_encoder, FLUX2_MODEL_INFO

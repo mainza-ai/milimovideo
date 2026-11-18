@@ -53,6 +53,12 @@ RePaint inpainting for the masking/editing tools.
 | Flow model (9B) | `backend/models/flux2/flux-2-klein-9b.safetensors` |
 | Native AE (preferred) | `backend/models/flux2/ae.safetensors` |
 | Diffusers AE fallback | `backend/models/flux2/vae/` |
+
+The native file is not in `FLUX.2-klein-9B` (that repo only ships `vae/`); the
+FLUX.2 AE lives in the gated `black-forest-labs/FLUX.2-dev` repo. `flux2.util`
+now carries `ae_repo_id` for it. Accept the FLUX.2-dev license / set `HF_TOKEN`,
+or download the diffusers VAE in Setup. `FLUX.1-dev/ae.safetensors` is a different
+autoencoder and is not a valid substitute.
 | Text encoder (Qwen 3 8B) | `backend/models/flux2/text_encoder/` |
 | IP-Adapter weights | `backend/models/flux2/ip-adapter.safetensors` |
 

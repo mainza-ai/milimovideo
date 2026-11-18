@@ -585,7 +585,7 @@
       "size_bytes": 18157185168,
       "relative_path": "backend/models/flux2/flux-2-klein-9b.safetensors",
       "huggingface": {
-        "repo": "black-forest-labs/FLUX.2-klein",
+        "repo": "black-forest-labs/FLUX.2-klein-9B",
         "filename": "flux-2-klein-9b.safetensors"
       },
       "device_compatibility": ["mps", "cuda", "cpu"],
@@ -611,18 +611,18 @@
       "size_bytes": 336211292,
       "relative_path": "backend/models/flux2/ae.safetensors",
       "huggingface": {
-        "repo": "black-forest-labs/FLUX.2-klein",
+        "repo": "black-forest-labs/FLUX.2-dev",
         "filename": "ae.safetensors"
       },
       "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Native AE — enables reference image conditioning. Falls back to diffusers VAE if missing.",
+      "description": "Native FLUX.2 AE — enables reference image conditioning. Lives in the gated FLUX.2-dev repo (accept its license / set HF_TOKEN). Falls back to the 9B diffusers VAE if missing.",
       "depends_on": [],
       "alternatives": ["flux2-vae-diffusers"],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 0.5,
       "recommended_dtype": "bfloat16",
-      "gated": false,
+      "gated": true,
       "license": "non-commercial"
     },
     {
@@ -637,7 +637,7 @@
       "size_bytes": null,
       "relative_path": "backend/models/flux2/vae",
       "huggingface": {
-        "repo": "black-forest-labs/FLUX.2-klein",
+        "repo": "black-forest-labs/FLUX.2-klein-9B",
         "subdir": "vae"
       },
       "device_compatibility": ["mps", "cuda", "cpu"],
@@ -663,7 +663,7 @@
       "size_bytes": null,
       "relative_path": "backend/models/flux2/text_encoder",
       "huggingface": {
-        "repo": "black-forest-labs/FLUX.2-klein",
+        "repo": "black-forest-labs/FLUX.2-klein-9B",
         "subdir": "text_encoder"
       },
       "device_compatibility": ["mps", "cuda", "cpu"],
@@ -689,7 +689,7 @@
       "size_bytes": null,
       "relative_path": "backend/models/flux2/tokenizer",
       "huggingface": {
-        "repo": "black-forest-labs/FLUX.2-klein",
+        "repo": "black-forest-labs/FLUX.2-klein-9B",
         "subdir": "tokenizer"
       },
       "device_compatibility": ["mps", "cuda", "cpu"],
