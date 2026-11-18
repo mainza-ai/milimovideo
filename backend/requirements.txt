@@ -1,4 +1,4 @@
-fastapi==0.128.0
+fastapi==0.163.0
 uvicorn>=0.30
 python-multipart>=0.0.9
 requests>=2.31
@@ -14,19 +14,19 @@ pycocotools
 # decord or eva-decord (optional for macOS)
 # Keep the vendored flux2 package's pinned versions; requirements are
 # installed after the editable packages, so unpinned entries would override them.
-einops==0.8.1
+einops==0.8.2
 transformers==4.56.1
-safetensors==0.4.5
-accelerate==1.12.0
+safetensors==0.8.0
+accelerate==1.15.0
 fire
 sentencepiece
 diffusers
 scikit-image
 # Pin the DB stack: SQLAlchemy 2.1 rejects naive datetimes and the repo still
 # stores datetime.utcnow() values. Migrate to aware datetimes before lifting.
-sqlmodel==0.0.31
+sqlmodel==0.0.50
 sqlalchemy>=2.0.14,<2.1
-pydantic==2.12.5
+pydantic==2.14.3
 sse-starlette>=2.1
 alembic>=1.13
 pytest>=8.0
