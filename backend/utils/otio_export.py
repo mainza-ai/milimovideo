@@ -68,16 +68,16 @@ def _clip_for_shot(shot, fps: float, start_frame: int):
         "speed": speed,
         "last_job_id": shot.last_job_id,
         "track_index": shot.track_index,
+        "transition_in": int(getattr(shot, "transition_in", 0) or 0),
     }
     return clip, start_frame, duration
 
 
 def build_otio_timeline(project, shots: Iterable, fps: Optional[int] = None):
-    """Build a 3-track OTIO timeline: V1 (magnetic), V2, A1.
+    """Build a 4-track OTIO timeline: V1 (magnetic), V2, A1, A2.
 
-    V1 start frames are computed in sequence order; V2/A1 use ``start_frame``.
-    Audio-bearing video clips live on V1/V2; ``track_index == 2`` is an audio
-    track. The NLE is expected to relink media if the checkout moved.
+    V1 start frames are computed in sequence order; V2/A1/A2 use ``start_frame``.
+    Audio-bearing video clips live on V1/V2; ``track_index`` 2/3 are A1/A2. The NLE is expected to relink media if the checkout moved.
 
     Speed is represented as a ``LinearTimeWarp`` effect plus ``metadata.milimo``.
     OTIO readers that do not apply effects to track layout may show the source
@@ -98,10 +98,13 @@ def build_otio_timeline(project, shots: Iterable, fps: Optional[int] = None):
     v1 = otio.schema.Track(name="V1", kind=otio.schema.TrackKind.Video)
     v2 = otio.schema.Track(name="V2", kind=otio.schema.TrackKind.Video)
     a1 = otio.schema.Track(name="A1", kind=otio.schema.TrackKind.Audio)
+    a2 = otio.schema.Track(name="A2", kind=otio.schema.TrackKind.Audio)
 
     v1_cursor = 0
+    v1_previous_duration = 0
     v2_cursor = 0
     a1_cursor = 0
+    a2_cursor = 0
     end_frame = 0
 
     def append_at(track, clip, start, cursor, rate):
@@ -118,9 +121,26 @@ def build_otio_timeline(project, shots: Iterable, fps: Optional[int] = None):
 
     for shot in ordered:
         if shot.track_index == 0:
+            transition = 0
+            if v1_previous_duration:
+                source_frames = max(
+                    1,
+                    max(0, int(shot.num_frames or 121))
+                    - max(0, int(shot.trim_in or 0))
+                    - max(0, int(shot.trim_out or 0)),
+                )
+                speed = min(4.0, max(0.25, float(shot.speed or 1.0)))
+                duration = max(1, round(source_frames / speed))
+                transition = min(
+                    max(0, int(getattr(shot, "transition_in", 0) or 0)),
+                    duration // 2,
+                    v1_previous_duration // 2,
+                )
+            v1_cursor = max(0, v1_cursor - transition)
             clip, start, duration = _clip_for_shot(shot, rate, v1_cursor)
             v1.append(clip)
-            v1_cursor += duration
+            v1_cursor = start + duration
+            v1_previous_duration = duration
             end_frame = max(end_frame, v1_cursor)
         elif shot.track_index == 1:
             start = max(0, int(shot.start_frame or 0))
@@ -132,12 +152,18 @@ def build_otio_timeline(project, shots: Iterable, fps: Optional[int] = None):
             clip, start, duration = _clip_for_shot(shot, rate, start)
             a1_cursor = append_at(a1, clip, start, a1_cursor, rate)
             end_frame = max(end_frame, a1_cursor)
+        elif shot.track_index == 3:
+            start = max(0, int(shot.start_frame or 0))
+            clip, start, duration = _clip_for_shot(shot, rate, start)
+            a2_cursor = append_at(a2, clip, start, a2_cursor, rate)
+            end_frame = max(end_frame, a2_cursor)
 
     timeline = otio.schema.Timeline(name=project.name or "Milimo cut")
     stack = otio.schema.Stack(name="Milimo cut")
     stack.append(v1)
     stack.append(v2)
     stack.append(a1)
+    stack.append(a2)
     timeline.tracks = stack
     timeline.global_start_time = otio.opentime.RationalTime(0, rate)
     timeline.metadata["milimo"] = {

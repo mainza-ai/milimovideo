@@ -762,6 +762,19 @@ export function GenerateSurface() {
                                     <input className="st-input" type="number" min={0} max={100} value={shot.priority ?? 50} onChange={(event) => updateShot(shot.id, { priority: Number(event.target.value) })} />
                                 </label>
                                 <label>
+                                    <span className="st-label" title="Crossfade overlap with the previous V1 clip">Transition</span>
+                                    <input
+                                        className="st-input"
+                                        type="number"
+                                        min={0}
+                                        step={0.1}
+                                        value={((shot.transitionIn ?? 0) / (project.fps || 25)).toFixed(1)}
+                                        onChange={(event) => updateShot(shot.id, {
+                                            transitionIn: Math.max(0, Number(event.target.value)) * (project.fps || 25),
+                                        })}
+                                    />
+                                </label>
+                                <label>
                                     <span className="st-label">Pipeline</span>
                                     <select className="st-select" value={shot.pipelineOverride || 'auto'} onChange={(event) => updateShot(shot.id, { pipelineOverride: event.target.value as typeof shot.pipelineOverride })}>
                                         <option value="auto">auto</option>

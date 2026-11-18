@@ -46,6 +46,9 @@ COMFY_JOB_TIMEOUT_SEC = float(os.environ.get("MILIMO_COMFY_JOB_TIMEOUT", "3600")
 # declared residency is admitted before a workflow and released with /free.
 COMFY_DECLARED_GB = float(os.environ.get("MILIMO_COMFY_GB", "2"))
 
+# Optional font file for burned-in titles. Empty uses FFmpeg's fontconfig default.
+TITLE_FONT_PATH = os.environ.get("MILIMO_TITLE_FONT", "").strip()
+
 # Comma-separated allowlist. Empty means the safe local defaults.
 CORS_ORIGINS = [
     origin.strip()

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePipelineRecipe } from './recipe';
+import { parsePipelineRecipe, parseRecipePack } from './recipe';
 
 describe('parsePipelineRecipe', () => {
     it('reads a saved recipe and normalizes the resolution string', () => {
@@ -48,5 +48,30 @@ describe('parsePipelineRecipe', () => {
         expect(() => parsePipelineRecipe(JSON.stringify({
             prompt: 'x', frames: 121, resolution: 'wide',
         }))).toThrow('resolution');
+    });
+});
+
+describe('parseRecipePack', () => {
+    const base = { prompt: 'shot', frames: 49, resolution: '512x288' };
+
+    it('reads a named pack and preserves order', () => {
+        const pack = parseRecipePack(JSON.stringify({
+            name: 'Noir',
+            recipes: [base, { ...base, prompt: 'second' }],
+        }));
+        expect(pack.name).toBe('Noir');
+        expect(pack.recipes.map((recipe) => recipe.prompt)).toEqual(['shot', 'second']);
+    });
+
+    it('accepts a bare array as an unnamed pack', () => {
+        const pack = parseRecipePack(JSON.stringify([base]));
+        expect(pack.name).toBe('Recipe pack');
+        expect(pack.recipes).toHaveLength(1);
+    });
+
+    it('rejects empty packs and names the bad entry', () => {
+        expect(() => parseRecipePack('[]')).toThrow('no recipes');
+        expect(() => parseRecipePack(JSON.stringify({ recipes: [{ prompt: 'x' }] })))
+            .toThrow('Recipe 1:');
     });
 });

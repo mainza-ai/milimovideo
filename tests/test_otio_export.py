@@ -67,10 +67,11 @@ def test_otio_export_keeps_v1_v2_a1_and_trims(app_client, project):
     timeline = otio.adapters.read_from_string(response.text, "otio_json")
     assert timeline.name == "OTIO Film"
     tracks = timeline.tracks
-    assert [track.name for track in tracks] == ["V1", "V2", "A1"]
+    assert [track.name for track in tracks] == ["V1", "V2", "A1", "A2"]
     assert [track.kind for track in tracks] == [
         otio.schema.TrackKind.Video,
         otio.schema.TrackKind.Video,
+        otio.schema.TrackKind.Audio,
         otio.schema.TrackKind.Audio,
     ]
 
@@ -216,3 +217,34 @@ def test_otio_export_uses_missing_reference_for_offline_media(app_client, projec
     clip = timeline.tracks[0][0]
     assert isinstance(clip.media_reference, otio.schema.MissingReference)
     assert clip.media_reference.available_range.duration.value == 50
+
+
+def test_otio_keeps_a2_separate(app_client, project):
+    pid = project["id"]
+    generated = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], pid, "generated")
+    os.makedirs(generated, exist_ok=True)
+    for shot_id in ("a2-a1", "a2-a2"):
+        with open(os.path.join(generated, f"{shot_id}.mp4"), "wb") as handle:
+            handle.write(b"placeholder")
+    state = {
+        "id": pid, "name": "A2 Film", "fps": 25, "seed": 42, "scenes": [],
+        "revision": project.get("revision", 0),
+        "shots": [
+            _shot(pid, "a2-a1", 0, track=2, frames=40, start=0),
+            _shot(pid, "a2-a2", 1, track=3, frames=40, start=80),
+        ],
+    }
+    assert app_client.put(f"/projects/{pid}", json=state).status_code == 200
+    exported = app_client.get(f"/projects/{pid}/otio")
+    assert exported.status_code == 200
+    timeline = otio.adapters.read_from_string(exported.text, "otio_json")
+    names = [track.name for track in timeline.tracks]
+    assert "A1" in names and "A2" in names
+
+    imported = app_client.post(
+        f"/projects/{pid}/otio/import",
+        files={"file": ("cut.otio", exported.content, "application/json")},
+    )
+    assert imported.status_code == 200, imported.text
+    shots = imported.json()["shots"]
+    assert {shot["track_index"] for shot in shots} == {2, 3}

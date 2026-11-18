@@ -1940,6 +1940,14 @@
             "title": "Shots",
             "type": "array"
           },
+          "titles": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/TitleCue"
+            },
+            "title": "Titles",
+            "type": "array"
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -2874,6 +2882,11 @@
             "title": "Track Index",
             "type": "integer"
           },
+          "transition_in": {
+            "default": 0,
+            "title": "Transition In",
+            "type": "integer"
+          },
           "trim_in": {
             "default": 0,
             "title": "Trim In",
@@ -3049,6 +3062,64 @@
           "type"
         ],
         "title": "TimelineItem",
+        "type": "object"
+      },
+      "TitleCue": {
+        "description": "A burned-in title overlay positioned in normalized frame coordinates.",
+        "properties": {
+          "box": {
+            "default": true,
+            "title": "Box",
+            "type": "boolean"
+          },
+          "color": {
+            "default": "#ffffff",
+            "title": "Color",
+            "type": "string"
+          },
+          "end_frame": {
+            "default": 0,
+            "title": "End Frame",
+            "type": "integer"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "size": {
+            "default": 48,
+            "title": "Size",
+            "type": "integer"
+          },
+          "start_frame": {
+            "default": 0,
+            "title": "Start Frame",
+            "type": "integer"
+          },
+          "text": {
+            "default": "",
+            "title": "Text",
+            "type": "string"
+          },
+          "x": {
+            "default": 0.5,
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "default": 0.5,
+            "title": "Y",
+            "type": "number"
+          }
+        },
+        "title": "TitleCue",
         "type": "object"
       },
       "TrackPromptRequest": {

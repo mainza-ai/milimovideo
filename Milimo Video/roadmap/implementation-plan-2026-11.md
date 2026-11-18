@@ -85,8 +85,7 @@ single-engineer guidance.
   and SeedVR2 (Apache 2.0) are candidates for optional stages.
 - **Phase 6 v2 lane** — eval harness, model swaps, MLX/FP8 lanes, and the agent
   crew remain a separate model-artifact program.
-- **Scoped-v1 gaps** — no transitions/titles/A2 track (3D LUT delivered),
-  lexical rather than
+- **Scoped-v1 gaps** — only a V1 crossfade (no dip/wipe/slide), lexical rather than
   embedding search, and no shorts/lens template packs.
 - **F6 chrome stabilization** — completed 2026-11-17. The audit and resolution
   evidence live in [[../systems/studio-ux-audit-2026-11]].

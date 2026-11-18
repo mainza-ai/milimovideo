@@ -3443,6 +3443,11 @@ export interface components {
             seed: number;
             /** Shots */
             shots: components["schemas"]["ShotState"][];
+            /**
+             * Titles
+             * @default []
+             */
+            titles: components["schemas"]["TitleCue"][];
             /** Updated At */
             updated_at?: number | null;
         };
@@ -3877,6 +3882,11 @@ export interface components {
              */
             track_index: number;
             /**
+             * Transition In
+             * @default 0
+             */
+            transition_in: number;
+            /**
              * Trim In
              * @default 0
              */
@@ -3961,6 +3971,54 @@ export interface components {
              * @enum {string}
              */
             type: "image" | "video";
+        };
+        /**
+         * TitleCue
+         * @description A burned-in title overlay positioned in normalized frame coordinates.
+         */
+        TitleCue: {
+            /**
+             * Box
+             * @default true
+             */
+            box: boolean;
+            /**
+             * Color
+             * @default #ffffff
+             */
+            color: string;
+            /**
+             * End Frame
+             * @default 0
+             */
+            end_frame: number;
+            /** Id */
+            id?: string | null;
+            /**
+             * Size
+             * @default 48
+             */
+            size: number;
+            /**
+             * Start Frame
+             * @default 0
+             */
+            start_frame: number;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+            /**
+             * X
+             * @default 0.5
+             */
+            x: number;
+            /**
+             * Y
+             * @default 0.5
+             */
+            y: number;
         };
         /** TrackPromptRequest */
         TrackPromptRequest: {

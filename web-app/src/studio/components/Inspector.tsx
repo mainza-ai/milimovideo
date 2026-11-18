@@ -512,7 +512,7 @@ export function Inspector() {
                                     </label>
                                 </div>
                                 <dl className="st-meta-grid" style={{ marginTop: 10 }}>
-                                    <dt>Track</dt><dd>{shot.trackIndex === 2 ? 'A1' : shot.trackIndex === 1 ? 'V2' : 'V1'}</dd>
+                                    <dt>Track</dt><dd>{shot.trackIndex === 3 ? 'A2' : shot.trackIndex === 2 ? 'A1' : shot.trackIndex === 1 ? 'V2' : 'V1'}</dd>
                                     <dt>Frames</dt><dd className="st-mono">{shot.numFrames}</dd>
                                     <dt>Trim</dt><dd className="st-mono">{shot.trimIn || 0} / {shot.trimOut || 0}</dd>
                                 </dl>

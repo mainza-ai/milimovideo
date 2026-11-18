@@ -192,7 +192,8 @@ CFG, pipeline override, prompt enhancement, and upscale.
 
 Keep LTX frame counts at `8k+1` (for example 49, 81, 121). The pipeline lens warns
 when the count is invalid. The lens copies/saves a reproducible recipe as JSON and
-**Import JSON** loads one back into the draft before you apply it.
+**Import JSON** loads one or a `{name, recipes}` pack into the draft before you
+apply it.
 
 ### Generate, cancel, queue
 
@@ -206,7 +207,8 @@ when the count is invalid. The lens copies/saves a reproducible recipe as JSON a
 - **Active queue** shows running/queued jobs, position, estimate, and cancel.
 - **Pipeline** in Advanced parameters selects `auto`/LTX or **wan 2.2 (5B)**. Wan
   is a separate low-VRAM text-to-video engine; it does not use the LTX chained or
-  audio path. **Steps** and **Priority** (lower = earlier) persist with the shot.
+  audio path. **Steps**, **Priority** (lower = earlier), and **Transition**
+  (V1 crossfade seconds) persist with the shot.
 - Only one heavy GPU job runs at a time; interactive video/image work is dispatched
   before bulk thumbnails/elements and background parsing.
 - **Memory preflight** runs before the request. If the shot cannot fit:
@@ -389,6 +391,8 @@ Recipes save a plan by name and can be reloaded against the current selection. U
   loudness normalization. **Add 3D LUT** loads a `.cube`/`.3dl`/`.dat`/`.m3d` file
   and applies it to the V1/V2 composite before captions. These values persist
   with the project.
+- **Titles** adds a burned-in text overlay (text, in/out, size, color). Titles
+  render after the LUT and before captions.
 - **Burn captions** toggles ASS burn-in.
 - **Create export** queues a real FFmpeg render through the job ledger.
 - Render history shows status, progress, errors, an output link, and **Cancel** for
@@ -567,10 +571,12 @@ Common issues:
   yet.
 - Visual baselines are platform-tolerant; performance is measured in headless
   Chromium and may differ on a desktop compositor.
-- Shorts and lenses are scoped F5: candidate ranges are editable and recipes
-  import/export, but there are no template packs.
-- Scoped v1 cut: no transitions, titles, or A2 track; 3D LUT grading is
-  supported. Search is ranked
+- Shorts and lenses are scoped F5: candidate ranges are editable, recipes
+  import/export, and lens packs (`{name, recipes}`) import with per-recipe
+  selection. Shorts template packs remain.
+- Scoped v1 cut: only a V1 crossfade is implemented (no dip/wipe/slide
+  transitions); LUT, titles, A2, lens pack import, and captions are supported.
+  Shorts template packs remain. Search is ranked
   lexical matching, not embeddings.
 - The depth model is downloaded separately; it is not shipped with the repo.
 - **Memory**: costs are a measured estimate, not a per-model profile; Strata has no

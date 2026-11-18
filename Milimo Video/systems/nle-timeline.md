@@ -102,6 +102,21 @@ The legacy `/` timeline remains a 3-track DOM editor with its own store and expo
 modal. It is frozen except for P0 fixes. Do not add new features to it; Studio is the
 current shell.
 
+## Titles and A2
+
+Burned-in titles are a project JSON list rendered with `drawtext` after the LUT
+and before captions; Deliver exposes text, in/out, size, and color. A2 is a real
+second audio lane (`track_index == 3`) mixed with A1 and embedded audio through the
+same `amix` graph, with its own mute/solo state and OTIO export/import.
+
+## Crossfades
+
+A per-shot `transition_in` (frames) overlaps a V1 clip with its predecessor and
+ramps the incoming alpha from 0 to 1 with `geq`; the outgoing clip stays visible
+underneath. The clamp is half of both clips. The timeline layout, render, and OTIO
+metadata share the same overlap math. Other transition types (dip, wipe, slide)
+are not implemented.
+
 ## Grading
 
 A project can carry one 3D LUT (`project.render_lut`), uploaded into
@@ -114,9 +129,7 @@ channel dominates.
 
 ## Known scoped gaps
 
-- No transitions or title clips. A project 3D LUT is applied to the final V1/V2
-  composite before captions.
-- No A2 track.
+- Only a V1 crossfade; dip/wipe/slide transitions are not implemented.
 - No canvas media layer; clips are DOM elements with culling.
 - Proxies and media relink are not implemented.
 

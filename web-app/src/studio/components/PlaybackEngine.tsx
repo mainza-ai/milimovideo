@@ -21,7 +21,7 @@ export const PlaybackEngine = () => {
     }, [project.shots, project.fps]);
 
     useEffect(() => {
-        const audioClips = project.shots.filter(s => s.trackIndex === 2 && s.videoUrl);
+        const audioClips = project.shots.filter(s => (s.trackIndex === 2 || s.trackIndex === 3) && s.videoUrl);
         GlobalAudioManager.getInstance().sync(audioClips);
     }, [project.shots]);
 
@@ -49,14 +49,21 @@ export const PlaybackEngine = () => {
                 lastTimeRef.current = 0;
             }
 
-            const isMuted = trackStates[2]?.muted;
-            const audioClips = stateProject.shots.filter(s => s.trackIndex === 2);
+            const audioClips = stateProject.shots.filter(s => s.trackIndex === 2 || s.trackIndex === 3);
+            const hasSolo = Object.values(trackStates).some((state) => !!state?.solo);
+            const trackMuted = (clip: { trackIndex?: number }) => {
+                const state = trackStates[clip.trackIndex ?? 0];
+                if (state?.solo) return false;
+                if (hasSolo) return true;
+                return !!state?.muted;
+            };
             GlobalAudioManager.getInstance().tick(
                 nextTime,
                 stateProject.fps || 25,
                 isPlaying,
-                isMuted,
+                false,
                 audioClips,
+                trackMuted,
             );
 
             rafRef.current = requestAnimationFrame(loop);

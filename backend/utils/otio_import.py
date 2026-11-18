@@ -70,6 +70,7 @@ def _clip_shot(clip, project_id: str, track_index: int, index: int, start_frame:
         "start_frame": max(0, start_frame),
         "trim_in": trim_in,
         "trim_out": trim_out,
+        "transition_in": int(meta.get("transition_in") or 0),
         "speed": _speed(clip),
         "timeline": [],
         "status": "pending",
@@ -91,10 +92,12 @@ def shots_from_otio(project_id: str, payload: str | bytes, format: str | None = 
     counter = 0
 
     for track in timeline.tracks:
-        name = (track.name or "").upper()
-        if track.kind == otio.schema.TrackKind.Audio or name.startswith("A"):
+        name = (track.name or "").upper().replace(" ", "")
+        if name.startswith("A2"):
+            track_index = 3
+        elif track.kind == otio.schema.TrackKind.Audio or name.startswith("A"):
             track_index = 2
-        elif name.startswith("V2") or name.startswith("V 2"):
+        elif name.startswith("V2"):
             track_index = 1
         else:
             track_index = 0

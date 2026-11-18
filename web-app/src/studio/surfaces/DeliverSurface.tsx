@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Film, Loader2, Send, Trash2, Upload } from 'lucide-react';
+import { Download, Film, Loader2, Plus, Send, Trash2, Upload } from 'lucide-react';
 import { useStudioDocumentStore } from '../state/documentStore';
 import {
     useStudioCancelJob, useStudioCreateRender, useStudioProject, useStudioRenders,
@@ -37,6 +37,11 @@ export function DeliverSurface() {
     const otioInputRef = useRef<HTMLInputElement>(null);
     const lutInputRef = useRef<HTMLInputElement>(null);
     const [lutBusy, setLutBusy] = useState(false);
+    const [titleText, setTitleText] = useState('');
+    const [titleStart, setTitleStart] = useState(0);
+    const [titleEnd, setTitleEnd] = useState(3);
+    const [titleSize, setTitleSize] = useState(48);
+    const [titleColor, setTitleColor] = useState('#ffffff');
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
     const totalDuration = Math.max(0.1, ...layout.map((clip) => clip.end));
     const [rangeStart, setRangeStart] = useState(0);
@@ -85,6 +90,7 @@ export function DeliverSurface() {
         const selected = PRESETS.find((item) => item.id === preset) || PRESETS[0];
         setBusy(true);
         try {
+            await saveProject();
             await createRender({
                 width: selected.width || project.resolutionW,
                 height: selected.height || project.resolutionH,
@@ -365,6 +371,130 @@ export function DeliverSurface() {
                     Values persist with the project. Normalization applies a single-pass loudnorm at -16 LUFS.
                     A 3D LUT (`.cube`, `.3dl`, `.dat`, `.m3d`) is applied to the V1/V2 composite before captions.
                 </p>
+            </div>
+
+            <div className="st-panel" style={{ marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <h3 className="st-panel-title" style={{ margin: 0 }}>Titles · {project.titles?.length || 0}</h3>
+                    <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11 }}>
+                        Burned in after LUT, before captions
+                    </span>
+                </div>
+                {(project.titles?.length || 0) > 0 && (
+                    <div className="st-link-list" style={{ marginTop: 8 }}>
+                        {(project.titles || []).map((title) => (
+                            <div key={title.id} className="st-link-row">
+                                <span className="st-mono">
+                                    {(title.startFrame / project.fps).toFixed(1)}–{(title.endFrame / project.fps).toFixed(1)}s
+                                </span>
+                                <span style={{ flex: 1 }}>{title.text}</span>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    data-variant="ghost"
+                                    onClick={() => {
+                                        setProject({
+                                            ...project,
+                                            titles: (project.titles || []).filter((item) => item.id !== title.id),
+                                        });
+                                        void saveProject();
+                                    }}
+                                >
+                                    <Trash2 size={12} /> Remove
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                <div className="st-row" style={{ marginTop: 8, alignItems: 'end' }}>
+                    <label style={{ flex: 2 }}>
+                        <span className="st-label">Text</span>
+                        <input
+                            className="st-input"
+                            value={titleText}
+                            placeholder="Chapter One"
+                            onChange={(event) => setTitleText(event.target.value)}
+                        />
+                    </label>
+                    <label>
+                        <span className="st-label">In (s)</span>
+                        <input
+                            className="st-input"
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={titleStart}
+                            onChange={(event) => setTitleStart(Number(event.target.value))}
+                        />
+                    </label>
+                    <label>
+                        <span className="st-label">Out (s)</span>
+                        <input
+                            className="st-input"
+                            type="number"
+                            min={0}
+                            step={0.1}
+                            value={titleEnd}
+                            onChange={(event) => setTitleEnd(Number(event.target.value))}
+                        />
+                    </label>
+                    <label>
+                        <span className="st-label">Size</span>
+                        <select
+                            className="st-select"
+                            value={titleSize}
+                            onChange={(event) => setTitleSize(Number(event.target.value))}
+                        >
+                            {[32, 48, 64, 96].map((size) => (
+                                <option key={size} value={size}>{size}px</option>
+                            ))}
+                        </select>
+                    </label>
+                    <label>
+                        <span className="st-label">Color</span>
+                        <input
+                            className="st-input"
+                            type="color"
+                            value={titleColor}
+                            onChange={(event) => setTitleColor(event.target.value)}
+                        />
+                    </label>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        disabled={!titleText.trim()}
+                        onClick={() => {
+                            const text = titleText.trim();
+                            if (!text) return;
+                            const start = Math.max(0, Math.round(titleStart * project.fps));
+                            const end = Math.max(start + 1, Math.round(titleEnd * project.fps));
+                            setProject({
+                                ...project,
+                                titles: [
+                                    ...(project.titles || []),
+                                    {
+                                        id: globalThis.crypto?.randomUUID?.() || `title-${Date.now()}`,
+                                        text,
+                                        startFrame: start,
+                                        endFrame: end,
+                                        x: 0.5,
+                                        y: 0.5,
+                                        size: titleSize,
+                                        color: titleColor,
+                                        box: true,
+                                    },
+                                ],
+                            });
+                            void saveProject();
+                            setTitleText('');
+                            addToast('Title added', 'success');
+                        }}
+                    >
+                        <Plus size={12} /> Add title
+                    </button>
+                </div>
             </div>
 
             <div className="st-panel" style={{ marginBottom: 14 }}>

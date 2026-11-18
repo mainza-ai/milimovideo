@@ -35,14 +35,15 @@ a test; "open" means no code or no verified path.
 | Issue #1 (Wan 2.2) | Open | **Feature gap**: a separate model family, not an LTX patch. |
 | PR #7 (`enhance_prompt` tuple) | Open | **Superseded**: both call sites already unpack on `main` (`tasks/image.py:98`, `tasks/video.py:290`). Close with a pointer. |
 | PR #8 (`encode_video` no_grad) | Open | **Still valid**: `media_io.py` has no `torch.no_grad()` around generator consumption; the CUDA inference-tensor crash is real. Rebase, test, merge. |
-| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 206 tests pass locally. |
+| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 212 tests pass locally. |
 | Security alerts | Disabled | `vulnerability-alerts` returns 404; Dependabot/security alerts are not enabled. |
 
 ### Roadmap / AGENTS deferrals
 
 - Bundled Python/Torch sidecar (desktop packaging).
 - Legacy `/` cutover (gated on two clean releases — currently impossible with red CI).
-- Scoped-v1: transitions/titles/A2, embedding search, shorts/lens packs; 3D LUT delivered.
+- Scoped-v1: non-crossfade transitions, embedding search, shorts packs; LUT,
+  titles, A2, V1 crossfades, and lens pack import delivered.
 - LLM caveats: non-stream cancellation, chained chunk-0 enhancement, Strata
   context, rate-card overrides, heuristic vision, legacy popover.
 - Memory: hand-tuned costs, Strata unload, cancelled pipeline TTL, MPS-only tiling,
@@ -115,9 +116,9 @@ is the supported upgrade.
 |---|---|---|
 | **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | **Delivered for OTIO + FCPXML** — export/import OTIO, export/import FCPXML, Deliver buttons, V1/V2/A1, trims, gaps, MissingReference, round-trip tests. Resolve XML remains. |
 | **ComfyUI bridge** | Import/export a ComfyUI workflow, submit it through the queue, ingest outputs and provenance | **Delivered (generic)** — `/comfy/{health,validate,run,free}`, Setup/Generate panels, websocket + polling progress, streamed output ingestion into assets and shots, `comfy` memory slot, model-free live smoke test. Import/export of ComfyUI graphs is copy/import JSON rather than a graph editor. |
-| NLE completeness | Transitions, titles, A2 track | **LUT delivered** — project `.cube`/`.3dl` upload, persisted `render_lut`, `lut3d` before captions, real pixel test. Transitions/titles/A2 remain. |
+| NLE completeness | Transitions, titles, A2 track | **Delivered** — project LUT, burned-in titles, A1/A2 mix, and V1 crossfade overlap with alpha ramp; real pixel tests. Dip/wipe/slide transitions remain. |
 | Embedding search | Local embedding model via the LLM plane, index, ranked results with lexical fallback | Semantic shot search works offline |
-| Shorts/lens packs | Versioned template packs, import/export, preview | Packs install and render deterministically |
+| Shorts/lens packs | Versioned template packs, import/export, preview | **Lens packs delivered** — `{name, recipes}` / array import with per-recipe selection and validation. Shorts template packs remain. |
 | Wan 2.2 family | S2V speech-to-video (with CosyVoice/Qwen3-TTS), Animate character replacement, LoRA loading | Spoken dialogue/lip-sync and character replacement work as shots |
 | Qwen3-TTS voice lane | Apache 2.0 TTS role: voice design/clone, dialogue and voiceover takes, aligned captions | A script line becomes a selectable audio take without cloud |
 | SeedVR2 upscale | One-step 3B upscaler as an optional post stage (16–24 GB; BlockSwap) | 2K/4K output without re-running the video model |

@@ -3,7 +3,7 @@ import { CheckCircle2, Copy, Loader2, TriangleAlert, Upload, X } from 'lucide-re
 import type { Shot } from '../state/documentStore';
 import { openTextFile, saveTextFile } from '../../desktop';
 import type { StudioElement } from '../data/useStudioData';
-import { parsePipelineRecipe } from '../lens/recipe';
+import { parsePipelineRecipe, parseRecipePack, type PipelineRecipe, type RecipePack } from '../lens/recipe';
 
 interface Props {
     shot: Shot;
@@ -23,6 +23,7 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
     const [estimate, setEstimate] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [importError, setImportError] = useState<string | null>(null);
+    const [pack, setPack] = useState<RecipePack | null>(null);
     const [draft, setDraft] = useState({
         prompt: shot.prompt || '',
         negative: shot.negativePrompt || '',
@@ -60,6 +61,20 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
         ingredients: matched.map((element) => element?.trigger_word),
         enhance: draft.enhance,
         upscale: draft.upscale,
+    };
+
+    const applyRecipe = (parsed: PipelineRecipe) => {
+        setDraft({
+            prompt: parsed.prompt,
+            negative: parsed.negativePrompt,
+            frames: parsed.frames,
+            width: parsed.width,
+            height: parsed.height,
+            seed: parsed.seed,
+            model: parsed.model,
+            enhance: parsed.enhance,
+            upscale: parsed.upscale,
+        });
     };
 
     const applyDraft = () => {
@@ -261,18 +276,15 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
                                     try {
                                         const raw = await openTextFile();
                                         if (raw === null) return;
-                                        const parsed = parsePipelineRecipe(raw);
-                                        setDraft({
-                                            prompt: parsed.prompt,
-                                            negative: parsed.negativePrompt,
-                                            frames: parsed.frames,
-                                            width: parsed.width,
-                                            height: parsed.height,
-                                            seed: parsed.seed,
-                                            model: parsed.model,
-                                            enhance: parsed.enhance,
-                                            upscale: parsed.upscale,
-                                        });
+                                        try {
+                                            const single = parsePipelineRecipe(raw);
+                                            setPack(null);
+                                            applyRecipe(single);
+                                        } catch {
+                                            const loaded = parseRecipePack(raw);
+                                            setPack(loaded);
+                                            if (loaded.recipes.length === 1) applyRecipe(loaded.recipes[0]);
+                                        }
                                     } catch (error) {
                                         setImportError(error instanceof Error ? error.message : 'Could not read recipe');
                                     }
@@ -281,6 +293,25 @@ export function PipelineLens({ shot, elements, updateShot, onClose }: Props) {
                                 <Upload size={11} /> Import JSON
                             </button>
                         </div>
+                        {pack && (
+                            <div className="st-lens-warnings" role="status" style={{ display: 'block' }}>
+                                <strong>{pack.name} · {pack.recipes.length} recipes</strong>
+                                <div className="st-button-row" style={{ marginTop: 6 }}>
+                                    {pack.recipes.map((entry, index) => (
+                                        <button
+                                            key={`${entry.prompt}-${index}`}
+                                            type="button"
+                                            className="st-button"
+                                            data-size="sm"
+                                            title={entry.prompt}
+                                            onClick={() => applyRecipe(entry)}
+                                        >
+                                            {index + 1}. {(entry.prompt || 'Untitled').slice(0, 34)}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         {importError && (
                             <div className="st-lens-warnings" role="alert">
                                 <TriangleAlert size={11} /> {importError}

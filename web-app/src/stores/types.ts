@@ -46,6 +46,7 @@ export interface Shot {
     startFrame?: number; // Absolute start for Free tracks
     trimIn: number;
     trimOut: number;
+    transitionIn?: number;
 
     // Result
     lastJobId?: string;
@@ -142,6 +143,18 @@ export interface CaptionCue {
     text: string;
 }
 
+export interface TitleCue {
+    id: string;
+    text: string;
+    startFrame: number;
+    endFrame: number;
+    x?: number;
+    y?: number;
+    size?: number;
+    color?: string;
+    box?: boolean;
+}
+
 export interface Project {
     id: string;
     name: string;
@@ -161,6 +174,7 @@ export interface Project {
     renderAudioBitrate?: string;
     renderAudioNormalize?: boolean;
     renderLut?: string;
+    titles?: TitleCue[];
 }
 
 export interface ProjectSlice {

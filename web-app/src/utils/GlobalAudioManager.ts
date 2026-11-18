@@ -207,7 +207,14 @@ export class GlobalAudioManager {
     /**
      * Ticks the audio engine for a defined time window.
      */
-    public tick(currentTime: number, fps: number, isPlaying: boolean, isMuted: boolean, clips: any[]) {
+    public tick(
+        currentTime: number,
+        fps: number,
+        isPlaying: boolean,
+        isMuted: boolean,
+        clips: any[],
+        isTrackMuted?: (clip: any) => boolean,
+    ) {
         // Resume context on first play attempt (user gesture requirement)
         if (isPlaying && !this.contextResumed) {
             this.resumeIfNeeded();
@@ -224,10 +231,16 @@ export class GlobalAudioManager {
             ) / fps;
             const endTime = startTime + duration;
             const trimInTime = (clip.trimIn || 0) / fps;
+            const trackMuted = isMuted || !!isTrackMuted?.(clip);
 
             // Set volume
             if (entry.gainNode) {
-                entry.gainNode.gain.value = isMuted ? 0 : 1;
+                entry.gainNode.gain.value = trackMuted ? 0 : 1;
+            }
+
+            if (trackMuted) {
+                if (entry.isPlaying) this.stopEntry(entry);
+                return;
             }
 
             if (currentTime >= startTime && currentTime < endTime) {

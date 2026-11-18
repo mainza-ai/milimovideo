@@ -107,6 +107,7 @@ def build_complex_filtergraph(
     audio_normalize: bool = False,
     captions_path: Optional[str] = None,
     lut_path: Optional[str] = None,
+    titles: Optional[List[Dict[str, Any]]] = None,
     start_seconds: float = 0.0,
     duration_seconds: Optional[float] = None,
     fit: str = "pad",
@@ -253,12 +254,16 @@ def build_complex_filtergraph(
                 )
 
             opacity = opacity_expression(keyframes, project_fps)
-            if opacity:
+            transition_s = max(0, int(shot.get("transition_in", 0))) / max(1, project_fps)
+            if opacity or transition_s > 0:
+                alpha = f"clip(({opacity}),0,1)" if opacity else "1"
+                if transition_s > 0:
+                    alpha += f"*clip(T/{transition_s:.4f},0,1)"
                 if not overlay and not transform:
                     fc += ",format=rgba"
                 fc += (
                     ",geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':"
-                    f"a='alpha(X,Y)*clip(({opacity}),0,1)'"
+                    f"a='alpha(X,Y)*({alpha})'"
                 )
 
             fc += f",setpts=PTS+{start_s}/TB"
@@ -281,7 +286,7 @@ def build_complex_filtergraph(
         if duration_frames <= 0 or not shot.get("path"):
             continue
         cmd.extend(["-i", shot["path"]])
-        add_audio_chain(shot, input_idx, 2)
+        add_audio_chain(shot, input_idx, int(shot.get("track_index", 2)))
         input_idx += 1
 
     # Composite V1 over the black canvas.
@@ -315,6 +320,40 @@ def build_complex_filtergraph(
             f"{final_video_label}lut3d=file='{escaped}':interp=trilinear[v_lut]"
         )
         final_video_label = "[v_lut]"
+
+    for title_index, title in enumerate(titles or []):
+        text = str(title.get("text") or "").strip()
+        if not text:
+            continue
+        start = max(0.0, float(title.get("start_frame") or 0) / max(1, project_fps))
+        end = max(start + 0.04, float(title.get("end_frame") or 0) / max(1, project_fps))
+        escaped_text = (
+            text.replace("\\", "\\\\")
+            .replace(":", "\\:")
+            .replace("'", "\\'")
+            .replace("%", "\\%")
+        )
+        color = str(title.get("color") or "#ffffff").lstrip("#")
+        if len(color) != 6 or any(ch not in "0123456789abcdefABCDEF" for ch in color):
+            color = "ffffff"
+        x = max(0.0, min(1.0, float(title.get("x") if title.get("x") is not None else 0.5)))
+        y = max(0.0, min(1.0, float(title.get("y") if title.get("y") is not None else 0.5)))
+        size = max(8, min(256, int(title.get("size") or 48)))
+        options = (
+            f"text='{escaped_text}':expansion=none:fontsize={size}:fontcolor=0x{color}"
+            f":x=(w-text_w)*{x:.4f}:y=(h-text_h)*{y:.4f}"
+            f":enable='between(t,{start:.3f},{end:.3f})'"
+        )
+        if title.get("box", True):
+            options += ":box=1:boxcolor=black@0.35:boxborderw=10"
+        import config as _config
+
+        if _config.TITLE_FONT_PATH:
+            font = str(_config.TITLE_FONT_PATH).replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+            options += f":fontfile='{font}'"
+        label = f"[v_title_{title_index}]"
+        filter_chains.append(f"{final_video_label}drawtext={options}{label}")
+        final_video_label = label
 
     if captions_path:
         escaped = (

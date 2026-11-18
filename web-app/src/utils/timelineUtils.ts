@@ -18,6 +18,7 @@ export const computeTimelineLayout = (project: any): TimelineClip[] => {
     const fps = project.fps || 25;
     const clips: TimelineClip[] = [];
     let v1Time = 0;
+    let v1PreviousDuration = 0;
 
     // We process shots in the order they appear in the project.shots array.
     // For V1 (Track 0), the start time is strictly sequential based on previous V1 shots.
@@ -34,9 +35,15 @@ export const computeTimelineLayout = (project: any): TimelineClip[] => {
         let start = 0;
 
         if (trackIndex === 0) {
-            // Magnetic V1: Starts where the previous V1 ended
-            start = v1Time;
-            v1Time += duration;
+            // Magnetic V1 with an optional crossfade overlap. The incoming clip
+            // starts early and ramps its alpha over the previous one.
+            const requested = Math.max(0, Number(shot.transitionIn || 0)) / fps;
+            const transition = v1PreviousDuration > 0
+                ? Math.min(requested, duration / 2, v1PreviousDuration / 2)
+                : 0;
+            start = Math.max(0, v1Time - transition);
+            v1Time = start + duration;
+            v1PreviousDuration = duration;
         } else {
             // Free placement for V2/A1
             start = Math.max(0, (shot.startFrame || 0) / fps);

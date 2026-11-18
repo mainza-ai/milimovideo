@@ -1602,7 +1602,7 @@ OTIO. Tests: 194 backend, 79 Vitest, 21 Playwright.
   on ComfyUI 0.45.0 (port 8001) completed and produced a PNG.
 - **Docs**: `systems/comfyui-bridge.md`, index, architecture, memory slots,
   roadmap, README, user guide, AGENTS.
-- Tests: 206 backend, 87 Vitest, 21 Playwright.
+- Tests: 206 backend, 90 Vitest, 21 Playwright.
 
 ## [2026-11-18] implement | FCPXML import
 
@@ -1627,4 +1627,23 @@ trims, and project media URLs. Resolve XML remains (no adapter).
   URL both served `/health`, created/loaded projects, and passed memory preflight.
   A real FFmpeg render through a red/blue swap LUT asserted the blue channel; a
   missing LUT returns 404.
-- Tests: 206 backend, 87 Vitest, 21 Playwright.
+- Tests: 206 backend, 90 Vitest, 21 Playwright.
+
+## [2026-11-18] implement | titles, A2, and V1 crossfades
+
+- **Titles**: `project.titles` (Alembic 0009) with Deliver add/remove, drawtext
+  after LUT and before captions, escaped text/color/size/position. Real render
+  test asserts burned-in pixels.
+- **A2**: `track_index == 3` is a real second audio lane with its own mute/solo,
+  Web Audio playback predicate, `amix` with A1/embedded audio, OTIO A2 track
+  export/import, and timeline picker.
+- **V1 crossfade**: `shot.transition_in` (Alembic 0010), shared overlap clamp in
+  the timeline layout, render, and OTIO metadata; incoming alpha ramps 0→1 over
+  the previous clip. Real pixel test asserts a red/blue midpoint mix.
+- Tests: 212 backend, 90 Vitest, 21 Playwright.
+
+## [2026-11-18] implement | lens recipe packs
+
+The pipeline lens accepts a `{name, recipes}` object or a bare array, validates
+every recipe, and lists them for selection; single recipes still apply directly.
+Shorts template packs remain.

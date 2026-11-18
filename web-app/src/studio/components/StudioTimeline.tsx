@@ -20,6 +20,7 @@ const TRACKS = [
     { id: 0, label: 'V1', tone: 'var(--st-v1)' },
     { id: 1, label: 'V2', tone: 'var(--st-v2)' },
     { id: 2, label: 'A1', tone: 'var(--st-a1)' },
+    { id: 3, label: 'A2', tone: 'var(--st-a2)' },
 ];
 
 type Tool = 'select' | 'slip' | 'roll';
@@ -68,6 +69,7 @@ export function StudioTimeline() {
     const [preview, setPreview] = useState<Preview | null>(null);
     const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
     const [audioPickerOpen, setAudioPickerOpen] = useState(false);
+    const [audioTarget, setAudioTarget] = useState<2 | 3>(2);
     const [tableView, setTableView] = useState(false);
     const [scrollLeft, setScrollLeft] = useState(0);
     const [viewportWidth, setViewportWidth] = useState(900);
@@ -189,13 +191,13 @@ export function StudioTimeline() {
         setSelectedCueId(null);
     };
 
-    const addAudioClip = (asset: { url: string; filename: string }) => {
+    const addAudioClip = (asset: { url: string; filename: string }, trackIndex: 2 | 3 = 2) => {
         const audio = new Audio(getAssetUrl(asset.url));
         audio.addEventListener('loadedmetadata', () => {
             const frames = Math.max(1, Math.round((audio.duration || 1) * fps));
             addShot({
                 prompt: asset.filename,
-                trackIndex: 2,
+                trackIndex,
                 startFrame: Math.max(0, Math.round(useStudioDocumentStore.getState().currentTime * fps)),
                 numFrames: frames,
                 videoUrl: asset.url,
@@ -415,7 +417,7 @@ export function StudioTimeline() {
                     data-size="sm"
                     data-variant={audioPickerOpen ? 'primary' : undefined}
                     onClick={() => setAudioPickerOpen(!audioPickerOpen)}
-                    title="Place an uploaded audio asset on A1 at the playhead"
+                    title="Place an uploaded audio asset on A1 or A2 at the playhead"
                 >
                     <Music size={12} /> Audio
                 </button>
@@ -467,7 +469,25 @@ export function StudioTimeline() {
                 <div className="st-audio-picker">
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                         <Music size={12} />
-                        <strong style={{ fontSize: 11 }}>Place audio on A1</strong>
+                        <strong style={{ fontSize: 11 }}>Place audio on</strong>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant={audioTarget === 2 ? 'primary' : 'ghost'}
+                            onClick={() => setAudioTarget(2)}
+                        >
+                            A1
+                        </button>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant={audioTarget === 3 ? 'primary' : 'ghost'}
+                            onClick={() => setAudioTarget(3)}
+                        >
+                            A2
+                        </button>
                         <button
                             type="button"
                             className="st-icon-button"
@@ -490,7 +510,7 @@ export function StudioTimeline() {
                                     type="button"
                                     className="st-button"
                                     data-size="sm"
-                                    onClick={() => addAudioClip(asset)}
+                                    onClick={() => addAudioClip(asset, audioTarget)}
                                 >
                                     <Music size={11} /> {asset.filename}
                                 </button>
@@ -669,7 +689,7 @@ export function StudioTimeline() {
                         <div className="st-timeline-track" key={track.id}>
                             <div className="st-timeline-label">
                                 <strong style={{ color: track.tone }}>{track.label}</strong>
-                                <span>{track.id === 2 ? 'audio' : track.id === 1 ? 'overlay' : 'main'}</span>
+                                <span>{track.id >= 2 ? 'audio' : track.id === 1 ? 'overlay' : 'main'}</span>
                                 <div style={{ display: 'flex', gap: 3, marginTop: 2 }}>
                                     <button
                                         type="button"
@@ -748,7 +768,7 @@ export function StudioTimeline() {
                                             }}
                                             title={`${clip.shot.action || clip.shot.prompt || 'Shot'} · ${durationFrames}f · in ${trimIn} / out ${trimOut}`}
                                         >
-                                            {track.id === 2 && clip.shot.videoUrl && (
+                                            {track.id >= 2 && clip.shot.videoUrl && (
                                                 <span className="st-waveform-wrap">
                                                     <Waveform url={clip.shot.videoUrl} height={22} />
                                                 </span>

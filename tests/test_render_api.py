@@ -503,3 +503,84 @@ def test_render_rejects_a_missing_lut(app_client, project):
         "track_states": {},
     })
     assert response.status_code == 404
+
+
+def test_render_burns_in_titles(app_client, project):
+    pid = project["id"]
+    generated = Path(config.PROJECTS_DIR) / pid / "generated"
+    _make_clip(generated / "title-black.mp4", "black")
+
+    shot = {
+        "id": "title-black", "prompt": "black", "negative_prompt": "", "seed": 42,
+        "width": 320, "height": 180, "fps": 25, "num_frames": 25,
+        "cfg_scale": 1.0, "enhance_prompt": False, "upscale": False,
+        "pipeline_override": "auto", "track_index": 0, "start_frame": 0,
+        "trim_in": 0, "trim_out": 0, "timeline": [],
+        "video_url": f"/projects/{pid}/generated/title-black.mp4",
+        "status": "completed", "sequence_index": 0,
+    }
+    payload = {
+        "id": pid, "name": "Title Render", "fps": 25, "seed": 42,
+        "resolution_w": 320, "resolution_h": 180, "revision": project.get("revision", 0),
+        "shots": [shot], "scenes": [],
+        "titles": [{
+            "id": "title-1", "text": "MILIMO", "start_frame": 0, "end_frame": 25,
+            "x": 0.5, "y": 0.5, "size": 64, "color": "#ffffff", "box": False,
+        }],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    loaded = app_client.get(f"/projects/{pid}").json()
+    assert loaded["titles"][0]["text"] == "MILIMO"
+
+    response = app_client.post(f"/projects/{pid}/render", json={
+        "settings": {"width": 320, "height": 180, "fps": 25}, "track_states": {},
+    })
+    render_id = response.json()["job_id"]
+    status = app_client.get(f"/status/{render_id}").json()
+    assert status["status"] == "completed", status
+
+    raw = subprocess.check_output([
+        "ffmpeg", "-v", "error", "-ss", "0.25", "-i", str(generated / f"{render_id}.mp4"),
+        "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+    ])
+    assert max(raw) > 200, "title pixels were not burned into the frame"
+
+
+def test_render_crossfades_overlapping_v1_clips(app_client, project):
+    pid = project["id"]
+    generated = Path(config.PROJECTS_DIR) / pid / "generated"
+    _make_clip(generated / "xf-red.mp4", "red", seconds=2.0)
+    _make_clip(generated / "xf-blue.mp4", "blue", seconds=2.0)
+
+    shots = []
+    for index, name in enumerate(("red", "blue")):
+        data = {
+            "id": f"xf-{name}", "prompt": name, "negative_prompt": "", "seed": 42,
+            "width": 320, "height": 180, "fps": 25, "num_frames": 50,
+            "cfg_scale": 1.0, "enhance_prompt": False, "upscale": False,
+            "pipeline_override": "auto", "track_index": 0, "start_frame": 0,
+            "trim_in": 0, "trim_out": 0, "timeline": [],
+            "video_url": f"/projects/{pid}/generated/xf-{name}.mp4",
+            "status": "completed", "sequence_index": index,
+        }
+        if index == 1:
+            data["transition_in"] = 25
+        shots.append(data)
+    payload = {
+        "id": pid, "name": "Crossfade Render", "fps": 25, "seed": 42,
+        "resolution_w": 320, "resolution_h": 180, "revision": project.get("revision", 0),
+        "shots": shots, "scenes": [],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    response = app_client.post(f"/projects/{pid}/render", json={
+        "settings": {"width": 320, "height": 180, "fps": 25}, "track_states": {},
+    })
+    render_id = response.json()["job_id"]
+    status = app_client.get(f"/status/{render_id}").json()
+    assert status["status"] == "completed", status
+
+    output = generated / f"{render_id}.mp4"
+    before = _average_rgb(output, 0.5)
+    middle = _average_rgb(output, 1.5)
+    assert before[0] > before[2] + 40, before
+    assert middle[0] > 30 and middle[2] > 30, middle

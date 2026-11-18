@@ -105,6 +105,33 @@ def _sanitize_captions(captions) -> list:
     return cleaned
 
 
+def _sanitize_titles(titles) -> list:
+    cleaned = []
+    for cue in list(titles or [])[:100]:
+        raw = cue.model_dump() if hasattr(cue, "model_dump") else dict(cue or {})
+        text = " ".join(str(raw.get("text") or "").split())
+        if not text:
+            continue
+        start = max(0, int(raw.get("start_frame") or 0))
+        end = max(start + 1, int(raw.get("end_frame") or 0))
+        color = str(raw.get("color") or "#ffffff").lower()
+        if len(color) != 7 or not color.startswith("#") or any(ch not in "0123456789abcdef" for ch in color[1:]):
+            color = "#ffffff"
+        cleaned.append({
+            "id": str(raw.get("id") or uuid.uuid4().hex)[:40],
+            "start_frame": start,
+            "end_frame": end,
+            "text": text[:200],
+            "x": max(0.0, min(1.0, float(raw.get("x") if raw.get("x") is not None else 0.5))),
+            "y": max(0.0, min(1.0, float(raw.get("y") if raw.get("y") is not None else 0.5))),
+            "size": max(8, min(256, int(raw.get("size") or 48))),
+            "color": color,
+            "box": bool(raw.get("box", True)),
+        })
+    cleaned.sort(key=lambda cue: cue["start_frame"])
+    return cleaned
+
+
 def _shot_dict(shot: Shot) -> dict:
     return {
         "id": shot.id,
@@ -134,6 +161,7 @@ def _shot_dict(shot: Shot) -> dict:
         "start_frame": shot.start_frame,
         "trim_in": shot.trim_in,
         "trim_out": shot.trim_out,
+        "transition_in": shot.transition_in,
         "action": shot.action,
         "dialogue": shot.dialogue,
         "character": shot.character,
@@ -245,6 +273,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         scenes=scenes_data,
         captions=_parse_json_field(project.captions, []),
         captions_burn=bool(project.captions_burn),
+        titles=_parse_json_field(project.titles, []),
         render_preset=project.render_preset,
         render_crf=project.render_crf or 18,
         render_speed=project.render_speed or "fast",
@@ -325,6 +354,7 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     db_project.seed = state.seed
     db_project.captions = json.dumps(_sanitize_captions(state.captions))
     db_project.captions_burn = bool(state.captions_burn)
+    db_project.titles = json.dumps(_sanitize_titles(state.titles))
     db_project.render_preset = state.render_preset
     db_project.render_crf = max(0, min(51, state.render_crf))
     db_project.render_speed = state.render_speed if state.render_speed in {
@@ -1001,6 +1031,7 @@ async def _render_background(
 
             v1_clips, v2_clips, a1_clips = [], [], []
             v1_cursor = 0
+            v1_previous_duration = 0
 
             if source_path:
                 resolved_source = resolve_path(source_path)
@@ -1046,9 +1077,17 @@ async def _render_background(
                     speed = min(4.0, max(0.25, shot.speed or 1.0))
                     duration_frames = max(1, round(source_frames / speed))
 
+                    transition = 0
                     if shot.track_index == 0:
-                        start_frame = v1_cursor
-                        v1_cursor += duration_frames
+                        if v1_previous_duration:
+                            transition = min(
+                                max(0, int(shot.transition_in or 0)),
+                                duration_frames // 2,
+                                v1_previous_duration // 2,
+                            )
+                        start_frame = max(0, v1_cursor - transition)
+                        v1_cursor = start_frame + duration_frames
+                        v1_previous_duration = duration_frames
                     else:
                         start_frame = shot.start_frame or 0
 
@@ -1061,6 +1100,7 @@ async def _render_background(
                         "fade_in": shot.audio_fade_in or 0,
                         "fade_out": shot.audio_fade_out or 0,
                         "trim_in": shot.trim_in or 0,
+                        "transition_in": transition,
                         "keyframes": _parse_json_field(shot.keyframes, []),
                         "gain": shot.audio_gain if shot.audio_gain is not None else 1.0,
                         "muted": bool(shot.audio_muted),
@@ -1071,8 +1111,8 @@ async def _render_background(
                         v1_clips.append(clip)
                     elif shot.track_index == 1:
                         v2_clips.append(clip)
-                    elif shot.track_index == 2:
-                        a1_clips.append(clip)
+                    elif shot.track_index in (2, 3):
+                        a1_clips.append({**clip, "track_index": shot.track_index})
 
             if not v1_clips and not v2_clips and not a1_clips:
                 raise ValueError("No valid video or audio clips found to render.")
@@ -1081,6 +1121,7 @@ async def _render_background(
             captions = _parse_json_field(stored_project.captions, []) if stored_project else []
             if stored_project is not None and not stored_project.captions_burn:
                 captions = []
+            titles = _parse_json_field(stored_project.titles, []) if stored_project else []
             captions_path = write_ass_file(captions, width, height, fps)
             if captions_path:
                 await emit_progress(4, f"Burning in {len(captions)} caption cue(s)...")
@@ -1109,6 +1150,7 @@ async def _render_background(
                 audio_normalize=settings.audio_normalize,
                 captions_path=captions_path,
                 lut_path=settings.lut,
+                titles=titles,
                 start_seconds=range_start / max(1, fps),
                 duration_seconds=range_duration,
                 fit=settings.fit,

@@ -71,6 +71,19 @@ class CaptionCue(BaseModel):
     text: str = ""
 
 
+class TitleCue(BaseModel):
+    """A burned-in title overlay positioned in normalized frame coordinates."""
+    id: Optional[str] = None
+    text: str = ""
+    start_frame: int = 0
+    end_frame: int = 0
+    x: float = 0.5
+    y: float = 0.5
+    size: int = 48
+    color: str = "#ffffff"
+    box: bool = True
+
+
 class SceneState(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -110,6 +123,7 @@ class ShotState(BaseModel):
     start_frame: int = 0
     trim_in: int = 0
     trim_out: int = 0
+    transition_in: int = 0
     action: Optional[str] = None
     dialogue: Optional[str] = None
     character: Optional[str] = None
@@ -137,6 +151,7 @@ class ProjectState(BaseModel):
     scenes: List[SceneState] = []
     captions: List[CaptionCue] = []
     captions_burn: bool = True
+    titles: List[TitleCue] = []
     render_preset: Optional[str] = None
     render_crf: int = 18
     render_speed: str = "fast"

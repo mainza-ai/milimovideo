@@ -136,3 +136,47 @@ def test_audio_bitrate_is_written_to_the_command():
     cmd = _cmd(v1=[_clip()], audio_bitrate="256k")
     assert "-b:a" in cmd
     assert cmd[cmd.index("-b:a") + 1] == "256k"
+
+
+def test_titles_are_drawn_after_lut_and_escaped():
+    cmd = _cmd(
+        v1=[_clip()],
+        lut_path="/tmp/grade.cube",
+        titles=[{
+            "text": "A:B's 100%", "start_frame": 0, "end_frame": 25,
+            "x": 0.5, "y": 0.25, "size": 64, "color": "#ffcc00", "box": True,
+        }],
+    )
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "lut3d=" in graph
+    assert "drawtext=" in graph
+    assert "[v_lut]drawtext=" in graph
+    assert "text='A\\:B\\'s 100\\%'" in graph
+    assert "fontcolor=0xffcc00" in graph
+    assert "x=(w-text_w)*0.5000" in graph
+    assert "y=(h-text_h)*0.2500" in graph
+    assert "enable='between(t,0.000,1.000)'" in graph
+    assert graph.index("lut3d=") < graph.index("drawtext=")
+
+
+def test_a2_mixes_with_a1_and_embedded_audio():
+    cmd = _cmd(
+        v1=[_clip()],
+        a1=[
+            _clip("/tmp/a1.wav", track_index=2),
+            _clip("/tmp/a2.wav", track_index=3),
+        ],
+    )
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "amix=inputs=3" in graph
+    assert "a_2" in graph and "a_3" in graph
+
+
+def test_v1_transition_adds_an_alpha_ramp():
+    cmd = _cmd(v1=[
+        _clip(start_frame=0, duration_frames=50),
+        _clip(start_frame=25, duration_frames=50, transition_in=25),
+    ])
+    graph = cmd[cmd.index("-filter_complex") + 1]
+    assert "clip(T/1.0000,0,1)" in graph
+    assert "alpha(X,Y)*" in graph

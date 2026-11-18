@@ -44,8 +44,9 @@ a backend supervisor.
 - **ComfyUI bridge (optional)** — a generic local engine: submit any API-format workflow,
   stream node/step progress, copy every output into project assets, and attach the
   result to a shot. Model-free `EmptyImage → SaveImage` smoke graph included.
-- **Edit** — program monitor, compare/wipe, guides, magnetic V1 plus free V2/A1,
-  trim/slip/roll/blade/ripple/rate/slide, audio gain/mute/fades/solo, waveform,
+- **Edit** — program monitor, compare/wipe, guides, magnetic V1 with crossfades
+  plus free V2/A1/A2, trim/slip/roll/blade/ripple/rate/slide, audio
+gain/mute/fades/solo, waveform,
   captions with SRT/VTT import and burn-in, motion keyframes, render range, a
   timeline table/keyboard path, object tracking, local depth overlay, blocking
   lens, and lazy 3D previz.
@@ -59,11 +60,12 @@ a backend supervisor.
 - Any image, video, audio, or caption file opens in a global preview with native
   playback, full-size image display, download, and text/caption rendering.
 - Video cards use generated poster frames and play a muted preview on hover.
-- Deliver writes the computed cut with V1/V2 compositing, embedded audio + A1 mix,
-  trims, speed, fades, keyframes, a project 3D LUT, captions, render range, and
-  persisted encoding settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
-  **Export OTIO** (or **FCPXML**) hands the computed V1/V2/A1 cut to Resolve,
-  Premiere, or Final Cut; **Import OTIO/FCPXML** reconstructs V1/V2/A1 shots.
+- Deliver writes the computed cut with V1/V2 compositing, embedded audio + A1/A2
+  mix, trims, speed, V1 crossfades, fades, keyframes, a project 3D LUT, titles,
+  captions, render range, and persisted encoding settings (CRF, encoder speed,
+  audio bitrate, optional loudness normalization). **Export OTIO** (or **FCPXML**)
+  hands the computed V1/V2/A1/A2 cut to Resolve, Premiere, or Final Cut;
+  **Import OTIO/FCPXML** reconstructs those tracks.
 - Shorts builds scored candidate windows from a transcript or shot text, supports
   editable in/out ranges, and exports 9:16, 1:1, and 4:5 crops from the cut or an
   uploaded source.
@@ -193,8 +195,9 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
   `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`,
   `0006_job_progress` (`job.stage`, `started_at`, `memory_json`), and
   `0007_shot_priority_steps` (`shot.priority`, `shot.num_inference_steps`), and
-  `0008_project_render_lut` (`project.render_lut`); legacy DBs are repaired and
-  stamped at head.
+  `0008_project_render_lut` (`project.render_lut`), `0009_project_titles`
+  (`project.titles`), and `0010_shot_transition` (`shot.transition_in`); legacy
+  DBs are repaired and stamped at head.
 - LLM plane: persisted settings with provider instances and revision CAS,
   capability-aware discovery, role eval, cloud spend ledger, and staged profiles.
 - `QueuedJob` ledger, one global GPU semaphore, priority + same-slot grouping, one
@@ -382,7 +385,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 206 backend tests, 87 Vitest tests, and 21 Playwright
+The last verified run was 212 backend tests, 90 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual
@@ -407,9 +410,9 @@ dev_diary/         Build log and social notes
 - **No bundled Python runtime.** The desktop shell can start a sidecar binary if
   present, but packaging Python/Torch is not built.
 - **Legacy `/` remains** until the documented two-clean-release cutover window.
-- **Scoped v1 cut:** no transitions, titles, or A2 track; 3D LUT grading and
-  captions are supported. Search is ranked
-  lexical matching, not embeddings; Shorts/lenses have no template packs.
+- **Scoped v1 cut:** only a V1 crossfade is implemented (no dip/wipe/slide
+  transitions); LUT, titles, A2, lens pack import, and captions are supported.
+  Search is ranked lexical matching, not embeddings; shorts template packs remain.
 - **Depth model** is downloaded separately and is not shipped in the repo.
 - **Memory**: the cost registry is a measured estimate, not a per-model profile;
   Strata has no unload endpoint; a cancelled job keeps its pipeline until the idle

@@ -60,7 +60,7 @@ banner and inline stage/progress/ETA, and the shell has toasts, an activity cent
 with history/retry, desktop notifications, dock-badge/window-title progress, and
 per-project mute.
 
-Known scoped gaps: no transitions/titles/A2 (3D LUT delivered), lexical rather than embedding
+Known scoped gaps: only a V1 crossfade (no dip/wipe/slide), lexical rather than embedding
 search, no shorts/lens template packs, and no bundled Python sidecar runtime. Legacy
 `/` remains until the two-clean-release cutover.
 

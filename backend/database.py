@@ -37,6 +37,7 @@ class Project(SQLModel, table=True):
     render_audio_bitrate: str = "192k"
     render_audio_normalize: bool = False
     render_lut: Optional[str] = None  # project-relative .cube/.3dl URL applied to the final grade
+    titles: Optional[str] = None  # JSON list of {id,text,start_frame,end_frame,x,y,size,color,box}
     storyboard_archive: Optional[str] = None  # last pre-commit snapshot
 
     shots: List["Shot"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
@@ -63,6 +64,7 @@ class Shot(SQLModel, table=True):
     start_frame: int = Field(default=0) # Absolute start time (frames) for Non-Linear tracks
     trim_in: int = Field(default=0) # Trim from start (frames)
     trim_out: int = Field(default=0) # Trim from end (frames)
+    transition_in: int = Field(default=0) # Crossfade overlap at the start (frames, V1)
     
     project: Optional[Project] = Relationship(back_populates="shots")
     scene: Optional[Scene] = Relationship(back_populates="shots")
@@ -249,6 +251,7 @@ def _add_missing_columns() -> None:
             "render_audio_bitrate": "TEXT NOT NULL DEFAULT '192k'",
             "render_audio_normalize": "BOOLEAN NOT NULL DEFAULT 0",
             "render_lut": "TEXT",
+            "titles": "TEXT",
             "storyboard_archive": "TEXT",
         },
         "shot": {
@@ -265,6 +268,7 @@ def _add_missing_columns() -> None:
             "seed_locked": "BOOLEAN NOT NULL DEFAULT 1",
             "num_inference_steps": "INTEGER NOT NULL DEFAULT 40",
             "priority": "INTEGER NOT NULL DEFAULT 50",
+            "transition_in": "INTEGER NOT NULL DEFAULT 0",
         },
         "asset": {
             "thumbnail_url": "TEXT",

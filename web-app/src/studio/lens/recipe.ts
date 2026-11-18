@@ -33,13 +33,7 @@ function readResolution(value: unknown): { width: number; height: number } {
     throw new Error('resolution must be "WxH" or {width,height}');
 }
 
-export function parsePipelineRecipe(raw: string): PipelineRecipe {
-    let data: unknown;
-    try {
-        data = JSON.parse(raw);
-    } catch {
-        throw new Error('Recipe is not valid JSON');
-    }
+export function normalizePipelineRecipe(data: unknown): PipelineRecipe {
     if (!data || typeof data !== 'object') throw new Error('Recipe must be an object');
     const record = data as Record<string, unknown>;
 
@@ -73,5 +67,50 @@ export function parsePipelineRecipe(raw: string): PipelineRecipe {
         height,
         enhance: Boolean(record.enhance),
         upscale: Boolean(record.upscale),
+    };
+}
+
+export function parsePipelineRecipe(raw: string): PipelineRecipe {
+    let data: unknown;
+    try {
+        data = JSON.parse(raw);
+    } catch {
+        throw new Error('Recipe is not valid JSON');
+    }
+    return normalizePipelineRecipe(data);
+}
+
+export interface RecipePack {
+    name: string;
+    recipes: PipelineRecipe[];
+}
+
+export function parseRecipePack(raw: string): RecipePack {
+    let data: unknown;
+    try {
+        data = JSON.parse(raw);
+    } catch {
+        throw new Error('Pack is not valid JSON');
+    }
+    const record = data && typeof data === 'object' && !Array.isArray(data)
+        ? data as Record<string, unknown>
+        : null;
+    const list = Array.isArray(data)
+        ? data
+        : record && Array.isArray(record.recipes)
+            ? record.recipes
+            : null;
+    if (!list) throw new Error('Pack must be an array or {name, recipes}');
+    if (list.length === 0) throw new Error('Pack has no recipes');
+    if (list.length > 100) throw new Error('Pack has too many recipes (max 100)');
+    return {
+        name: (record && typeof record.name === 'string' && record.name.trim()) || 'Recipe pack',
+        recipes: list.map((entry, index) => {
+            try {
+                return normalizePipelineRecipe(entry);
+            } catch (error) {
+                throw new Error(`Recipe ${index + 1}: ${error instanceof Error ? error.message : 'invalid'}`);
+            }
+        }),
     };
 }
