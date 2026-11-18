@@ -1,7 +1,7 @@
 ---
 type: systems
 created: 2026-10-09
-updated: 2026-11-17
+updated: 2026-11-18
 tags: architecture frontend backend microservice sse alembic studio
 sources:
   - ../docs/01_system_architecture.md

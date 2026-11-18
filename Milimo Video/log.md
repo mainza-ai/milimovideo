@@ -1662,3 +1662,11 @@ polls `cancel_check` every 100ms; cancellation closes the socket instead of
 waiting for the provider timeout. `runtime.chat` and the non-stream stream
 fallback map `ProviderCancelled` to `LLMCancelled`. A fake slow-server test
 asserts a sub-2s abort.
+
+## [2026-11-18] docs | README, docs, and wiki refresh
+
+Rewrote the README as a concise current overview (surfaces, engines, architecture,
+quick start, optional ComfyUI, verification, limitations). Updated the system
+architecture, data-model, execution-flow, API, user-guide, overview, and timeline
+pages for Wan 2.2, optional ComfyUI, LUT, titles, A2, crossfades, OTIO/FCPXML,
+lens packs, and the current 214/90/21 test baseline.

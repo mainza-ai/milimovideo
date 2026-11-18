@@ -3,7 +3,7 @@
 Catalog of every wiki page. Updated on every change. The LLM reads this first to
 navigate, then drills into pages.
 
-- Last updated: 2026-11-17
+- Last updated: 2026-11-18
 
 ## Overview
 - [overview](overview.md) — what Milimo Video is: the AI-native cinematic studio,

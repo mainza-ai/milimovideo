@@ -4,12 +4,12 @@
 
 Milimo Video is a local-first, AI-native cinematic studio with a split architecture:
 
-- **Frontend**: React 18 / Vite / TypeScript — UI, Timeline State, Multi-Track NLE, Preview Player
-- **Backend**: Python / FastAPI — Model Inference, Asset Management, Job Queue, Database
-- **AI Models**: LTX-2 (Video), Flux 2 (Image/Inpainting), SAM 3 (Segmentation)
-- **LLM**: Local-first provider/role plane — Gemma (in-process), Ollama, oMLX, Strata, LM Studio, OpenAI-compatible; optional cloud behind budget, eval gate, and air-gap
-- **Memory**: Central `MemoryManager` enforces mutual exclusion between GPU models
-- **Microservice**: SAM 3 runs as a separate FastAPI server on port 8001
+- **Frontend**: React 19.2 / Vite / TypeScript — Studio shell, timeline, preview, review, delivery; the original NLE stays at `/` during the cutover
+- **Backend**: Python / FastAPI — model inference, assets, durable queue, SQLite, SSE
+- **AI models**: LTX-2 19B (video), Wan 2.2 TI2V-5B (low-VRAM video), Flux 2 (image/inpainting), SAM 3 (segmentation), Depth Anything V2 (optional)
+- **LLM**: local-first provider/role plane — Gemma (in-process), Ollama, oMLX, Strata, LM Studio, OpenAI-compatible; optional cloud behind budget, eval gate, and air-gap
+- **Memory**: central `MemoryManager` budgets bytes, leases slots, and admits before every heavy load
+- **External engines**: optional SAM 3 (port 8001) and optional ComfyUI (port 8001 by default); core generation never requires ComfyUI
 
 ## 2. High-Level Architecture Diagram
 
@@ -115,6 +115,13 @@ graph TD
         Flux2_Model --> GPU
     end
 
+    subgraph "ComfyUI (optional, port 8001)"
+        Comfy[ComfyUI Server] --> ComfyPrompt["/prompt"]
+        Comfy --> ComfyHistory["/history"]
+        Comfy --> ComfyView["/view"]
+        Comfy --> ComfyWS["/ws progress"]
+    end
+
     subgraph "SAM 3 Microservice (port 8001)"
         SAM_Svc[FastAPI Server] --> SAM_Model[SAM 3 Model]
         SAM_Svc --> SAM_Health["/health"]
@@ -125,6 +132,7 @@ graph TD
     end
 
     API -->|"Range-Aware Media Serving"| FS[File System]
+    API -.->|"optional /comfy"| Comfy
 ```
 
 ## 3. Core Component Interactions
@@ -138,6 +146,7 @@ graph TD
 | **Worker → Flux 2** | Direct Python Import | `FluxInpainter` singleton for image gen + inpainting. `MemoryManager.prepare_for("image")` unloads LTX first. |
 | **Prompt Enhancement** | Role runtime (`services/llm`) | `llm.py` maps media kind to `prompt_video`/`prompt_image`; orders provider instances with fallbacks, checks context and budget, and records provenance. HTTP enhancement runs before the video pipeline loads; local models are released afterwards. |
 | **Backend → SAM** | HTTP REST (port 8001) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. The image model is lazy (`/load`/`/unload`); tracking lazy-loads its predictor. |
+| **Backend → ComfyUI** | HTTP REST + WebSocket | Optional `/comfy/*` bridge submits API-format workflows, relays progress, streams outputs into assets, and calls `/free` for residency. `MILIMO_COMFY_ENABLED=0` removes it. |
 | **Scheduler → memory** | In-process | Measured budget + admission + leases; a transient refusal becomes a bounded `job.waiting`, a permanent one applies a fitting preset before allocation. |
 | **Timeline → Player** | Headless rAF subscription | `PlaybackEngine` drives `currentTime` via `requestAnimationFrame` with cached layout. `CinematicPlayer` subscribes with throttled drift correction (250ms). |
 | **Playback → Audio** | `GlobalAudioManager` singleton | Web Audio API (`AudioContext` + `AudioBufferSourceNode`) for precise cross-browser playback. Buffers decoded upfront; drift tolerance 0.3s. |
@@ -147,12 +156,15 @@ graph TD
 ## 4. Key Subsystems
 
 ### A. The Timeline Engine (Frontend)
-CSS-based NLE — no canvas rendering. Uses absolute positioning for performance.
+The Studio timeline is a DOM-handle NLE with an isolated playback clock and a
+table/keyboard equivalent. The legacy timeline below remains the frozen fallback.
 
 | Component | Role |
 |---|---|
-| `timelineStore.ts` | Single Zustand store (7 slices) — source of truth |
-| `VisualTimeline.tsx` | Renders tracks, clips, playhead. Handles drag-and-drop. |
+| `studio/state/documentStore.ts` | Studio project document, revision/CAS save, undo |
+| `studio/components/StudioTimeline.tsx` | V1/V2/A1/A2, captions, titles, trim gestures, audio picker |
+| `timelineStore.ts` | Legacy 7-slice Zustand store (frozen) |
+| `VisualTimeline.tsx` | Legacy track/clip/playhead renderer |
 | `TimelineTrack.tsx` | Renders a single track with clips. |
 | `TimelineClip.tsx` | Individual clip with drag/resize handles. Uses `translateX` for GPU compositing. |
 | `AudioClip.tsx` | Specialized clip for audio tracks with waveform-like display. |
@@ -163,11 +175,11 @@ CSS-based NLE — no canvas rendering. Uses absolute positioning for performance
 ### B. The Generation Pipeline (Backend)
 Handles video, image, chained, and inpainting generation.
 
-> **Model roadmap (2026-11):** the current video engine is LTX-2 19B. LTX-2.5
-> (22B, native audio, diffusers CPU offload/VAE tiling, official 32 GB floor) and
-> Wan 2.2 TI2V-5B (Apache 2.0, low-VRAM CUDA) are the planned engines; Z-Image
-> Turbo and Qwen-Image-Edit-2511 are the image candidates. See
-> `Milimo Video/research/model-landscape-2026-11.md`.
+> **Model status (2026-11):** LTX-2 19B is the primary video engine; Wan 2.2
+> TI2V-5B is integrated as the low-VRAM lane (MPS verified, CUDA validation
+> pending). LTX-2.5 (22B, native audio, diffusers CPU offload/VAE tiling) is the
+> next upgrade but its weights are gated. Z-Image Turbo and Qwen-Image-Edit-2511
+> are image candidates. See `Milimo Video/research/model-landscape-2026-11.md`.
 
 | Component | Role |
 |---|---|
@@ -181,7 +193,7 @@ Handles video, image, chained, and inpainting generation.
 | `services/element_matcher.py` | `ElementMatcher` — Intelligent production matching engine. Uses 8 signals (exact name, trigger word, scene heading, action keywords, etc.) to link script elements to project assets. |
 
 ### C. The API Layer (Backend)
-13 routers, 139 operations across 122 OpenAPI paths.
+13 routers, 145 operations across 128 OpenAPI paths.
 
 | Router | Prefix | Key Endpoints |
 |---|---|---|
@@ -198,6 +210,7 @@ Handles video, image, chained, and inpainting generation.
 | `depth.py` | `/projects/{id}/depth` | Queued depth overlay |
 | `settings.py` | `/settings/llm` | Provider instances/roles, discovery, verify/warm, eval/profiles, memory/unload |
 | `memory.py` | `/system` | `/memory`, `/memory/preflight`, `/memory/unload`, `/memory/keep-warm` |
+| `comfy.py` | `/comfy` | `/health`, `/validate`, `/run`, `/free` (optional bridge) |
 
 ### D. The Player System (Frontend)
 "Program Monitor" pattern with multi-component composition.
@@ -243,7 +256,7 @@ Isolated segmentation and tracking service.
 
 | Component | Role |
 |---|---|
-| `sam3/start_sam_server.py` | FastAPI server (port 8001). Starts with **no model**; loads `build_sam3_image_model` + `Sam3Processor` on the first image request under a lock. Video predictor lazy-loaded with MPS/CUDA/CPU device auto-detection. |
+| `sam3/start_sam_server.py` | Optional FastAPI server (port 8001; collides with Comfy Desktop by default). Starts with **no model**; loads `build_sam3_image_model` + `Sam3Processor` on the first image request under a lock. Video predictor lazy-loaded with MPS/CUDA/CPU device auto-detection. |
 | `GET /health` | Returns `{status, model_loaded, processor_ready, loading, lazy, error}` |
 | `POST /load` / `POST /unload` | Warm or release the image model; `unload` flushes caches |
 | `POST /predict/mask` | Point/box segmentation → binary PNG mask |
@@ -277,7 +290,7 @@ Measured, fail-closed scheduling and truthful progress.
 | Component | Role |
 |---|---|
 | `services/memory/budget.py` | Snapshot (total/reserve/MPS ceiling/physical free/free swap/pressure/in-process/external/SAM), admission, reclaimable set, fitting-preset ladder, retryability |
-| `services/memory/costs.py` | Per-lane peak estimator (LTX 76 GB base, Flux 36 GB, frames/resolution/upscale/workspace) |
+| `services/memory/costs.py` | Per-lane peak estimator (LTX 76 GB base, Flux 36 GB, Wan 34 GB, declared ComfyUI residency, frames/resolution/upscale/workspace) |
 | `services/memory/engines.py` | Ollama `/api/ps`, oMLX `/v1/models/status`, generic `memory_gb` override, unload adapters |
 | `services/memory/sampler.py` | 1 s per-job sampler: peak, peak stage, per-stage peaks, swap peak |
 | `memory_manager.py` | Slots, leases, conflicts, TTL eviction, keep-warm, pressure monitor, counters, `status()` |

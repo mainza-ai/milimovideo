@@ -1,7 +1,7 @@
 ---
 type: systems
 created: 2026-10-09
-updated: 2026-11-17
+updated: 2026-11-18
 tags: nle timeline studio playback render ffmpeg
 sources:
   - ../docs/user_guide.md
@@ -38,11 +38,9 @@ DOM timeline as the frozen fallback.
 
 - **V1** — magnetic story track. Order is `sequence_index`; `start_frame` is ignored.
 - **V2** — free overlay track with alpha compositing.
-- **A1** — free audio/music track.
+- **A1 / A2** — free audio/music tracks, each with mute/solo and OTIO export.
 - **C1** — caption lane backed by project caption cues.
-
-A2 is **not implemented** in scoped v1. The render graph and UI stop at V1/V2/A1
-plus captions.
+- **Titles** — project-level burned-in text overlays, not a track.
 
 ## Tools and interactions
 

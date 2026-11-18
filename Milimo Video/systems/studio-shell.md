@@ -1,7 +1,7 @@
 ---
 type: systems
 created: 2026-11-16
-updated: 2026-11-17
+updated: 2026-11-18
 tags: frontend architecture canvas timeline studio shell ux
 sources:
   - wiki/research/frontend-video-platforms-2026.md
@@ -60,9 +60,9 @@ banner and inline stage/progress/ETA, and the shell has toasts, an activity cent
 with history/retry, desktop notifications, dock-badge/window-title progress, and
 per-project mute.
 
-Known scoped gaps: only a V1 crossfade (no dip/wipe/slide), lexical rather than embedding
-search, no shorts/lens template packs, and no bundled Python sidecar runtime. Legacy
-`/` remains until the two-clean-release cutover.
+Known scoped gaps: only a V1 crossfade (no dip/wipe/slide), lexical rather than
+embedding search, no shorts template packs (lens packs import), and no bundled
+Python sidecar runtime. Legacy `/` remains until the two-clean-release cutover.
 
 ## Design Stance
 
@@ -153,7 +153,7 @@ the shot list is the accessible/bulk-edit view.
 │                                                      │ Take      │
 ├──────────────────────────────────────────────────────┤ Audio     │
 │ Timeline (45–60% height)                             │ Effects   │
-│ ruler · V2 · V1 · A1 · captions · markers             │ History   │
+│ ruler · V2 · V1 · A1 · A2 · titles · captions         │ History   │
 └──────────────────────────────────────────────────────┴───────────┘
 ```
 

@@ -379,7 +379,7 @@ classDiagram
 ### Type Enums
 | Enum | Values | Used By |
 |---|---|---|
-| `PipelineOverride` | `"auto" \| "ti2vid" \| "ic_lora" \| "keyframe"` | `ShotConfig.pipeline_override` |
+| `PipelineOverride` | `"auto" \| "ti2vid" \| "ic_lora" \| "keyframe" \| "wan"` | `ShotConfig.pipeline_override` |
 | `ConditioningType` | `"image" \| "video"` | `ConditioningItem.type` |
 | `ElementType` | `"character" \| "location" \| "object"` | `StoryElement.type` |
 | `ViewMode` | `"timeline" \| "elements" \| "storyboard" \| "images"` | `UISlice.viewMode` |
@@ -388,9 +388,9 @@ classDiagram
 
 | Table | Primary Key | Relationships | Description |
 |---|---|---|---|
-| `project` | `id` (UUID hex) | → shots, scenes | Global settings (resolution, FPS, seed) |
+| `project` | `id` (UUID hex) | → shots, scenes | Global settings, captions, titles, `render_lut`, encoding defaults, board/view state, and revision |
 | `scene` | `id` (UUID hex) | → project (FK) | Storyboard scenes with script content |
-| `shot` | `id` (UUID hex) | → project (FK) | Atomic unit: generation spec + timeline clip |
+| `shot` | `id` (UUID hex) | → project (FK) | Atomic unit: generation spec + timeline clip. Includes `transition_in` (V1 crossfade frames), `num_inference_steps`, and `priority`. |
 | `element` | `id` (UUID hex) | indexed by project_id | Story elements (characters/locations/objects) with trigger words for IP-Adapter |
 | `asset` | `id` (UUID hex) | nullable project_id | Uploaded/generated media files. `meta_json` stores generation params (prompt, seed, guidance, reference elements). |
 | `job` | `id` (string) | nullable project_id | Async task tracking with progress, stage, start time, per-job memory trace, and results. Status transitions: `pending/queued → processing → completed/failed/cancelled`. |
@@ -410,6 +410,13 @@ classDiagram
 Secrets are sealed with AES-256-GCM when `MILIMO_SECRET_KEY` is set; reads return
 only `has_key`, `secret_source`, and `key_status`. The spend ledger is a separate
 `app_setting` row capped at the last 200 entries.
+
+### Migrations
+
+Alembic head is `0010_shot_transition`. The chain covers render settings, seed
+lock, asset thumbnails, app settings, job progress, shot priority/steps, project
+LUT, project titles, and shot `transition_in`. Legacy databases are repaired and
+stamped at startup.
 
 ### Connection Configuration
 ```python

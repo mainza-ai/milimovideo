@@ -178,7 +178,37 @@ curl http://127.0.0.1:8000/projects/$PROJECT_ID/active_jobs
 A queued cancel clears both the `Job` and its dispatch row and emits one
 `job.cancelled`. Pausing stops new dispatch after the current job.
 
-## 8. Automation guardrails
+## 8. Optional ComfyUI bridge
+
+ComfyUI is an opt-in external engine. Core generation never calls it. With
+`MILIMO_COMFY_ENABLED=0`, `/comfy/health` returns `enabled:false` without a network
+probe, and `/comfy/run` / `/comfy/free` return 409.
+
+```bash
+curl -s http://127.0.0.1:8000/comfy/health
+curl -s -X POST http://127.0.0.1:8000/comfy/validate \
+  -H 'Content-Type: application/json' \
+  -d '{"workflow":{"1":{"class_type":"EmptyImage","inputs":{"width":64,"height":48}},"2":{"class_type":"SaveImage","inputs":{"images":["1",0]}}}}'
+```
+
+`POST /comfy/run` takes `project_id`, optional `shot_id`, an API-format `workflow`,
+optional per-node `overrides`, and optional `estimate_gb`/`estimate_seconds`. It
+returns a normal `job_id`; use `/status/{job_id}` and the `job.*` stream. Outputs
+are copied into the project and attached to the shot.
+
+Set `MILIMO_COMFY_URL` if ComfyUI is not on `http://127.0.0.1:8001`, and
+`MILIMO_COMFY_GB` to declare its residency.
+
+## 9. Render, titles, and grading
+
+`POST /projects/{project_id}/render` accepts `settings.lut` (a project `.cube`/
+`.3dl`/`.dat`/`.m3d` URL), `start_frame`/`end_frame`, `fit`, and encoding fields.
+Project `titles` are a list of `{text,start_frame,end_frame,x,y,size,color,box}` and
+are burned in after the LUT, before captions. Shot `transition_in` is a V1
+crossfade duration in frames. `GET /projects/{id}/otio?format=otio|fcpxml` exports
+the V1/V2/A1/A2 cut; `POST /projects/{id}/otio/import` accepts OTIO or FCPXML.
+
+## 10. Automation guardrails
 
 - The API is local-first. Cloud providers remain off unless `MILIMO_LLM_CLOUD=1`
   and air-gap is off; a batch cannot silently spend money.

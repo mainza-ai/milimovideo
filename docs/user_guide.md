@@ -294,8 +294,8 @@ Tracks:
 
 - **V1** — magnetic story track. Order is `sequence_index`.
 - **V2** — free overlay track.
-- **A1** — audio/music track.
-- **C1** — captions.
+- **A1 / A2** — audio/music tracks, each with mute/solo.
+- **C1** — captions. Titles are project-level overlays, not a track.
 
 Tools:
 
@@ -307,7 +307,7 @@ Tools:
 - **Slide ◀/▶**: move the selected V1 clip earlier/later.
 - **Caption**: add a cue at the playhead; edit text/in/out inline.
 - **Import**: SRT/VTT captions.
-- **Audio**: place an uploaded audio asset on A1 at the playhead.
+- **Audio**: choose A1 or A2 and place an uploaded audio asset at the playhead.
 - **M/S**: mute or solo a track.
 - **Table**: editable list of clips, trims, speed, mute, delete.
 - Keyboard: `B`, `R`, `[`, `]`; trim handles support arrow keys.
@@ -315,6 +315,8 @@ Tools:
 ### Rate, trims, fades, keyframes
 
 - Speed is 0.25–4× and changes timeline duration; render applies `setpts`/`atempo`.
+- **Transition** (Generate → Advanced) overlaps a V1 clip with the previous one and
+  crossfades the incoming clip; the clamp is half of both clips.
 - Trim in/out are source frames.
 - Audio gain, mute, fade-in, fade-out are per clip.
 - Motion keyframes interpolate opacity, scale, pan X/Y, and volume. Add at the

@@ -1,7 +1,7 @@
 ---
 type: overview
 created: 2026-10-09
-updated: 2026-11-17
+updated: 2026-11-18
 tags: overview local-first nle open-source studio
 sources:
   - README.md
@@ -34,7 +34,9 @@ a backend supervisor.
 | Model | Role |
 |---|---|
 | **LTX-2 19B** | Dual-stream transformer for cinematic video generation (text-to-video, image-to-video, keyframe interpolation) |
-| **Flux 2 Klein 9B** | High-fidelity image synthesis with IP-Adapter reference conditioning and RePaint inpainting |
+| **Wan 2.2 TI2V-5B** | Apache 2.0 low-VRAM text-to-video lane (`pipeline_override=wan`) |
+| **Flux 2 Klein 9B** | High-fidelity image synthesis with IP-Adapter reference conditioning and RePaint inpainting; optional Q4_K_M GGUF |
+| **ComfyUI (optional)** | External API-format workflows; never required by core generation |
 | **SAM 3** | Text-prompted segmentation, click-to-segment, and video object tracking (standalone microservice) |
 | **Gemma 3** | In-process `prompt_video` rewriting inside the loaded LTX pipeline |
 | **Local LLM engines** | Ollama, oMLX, Strata, LM Studio, vLLM/llama.cpp for image prompts, script parsing, agent plans, and review |
@@ -47,9 +49,10 @@ a backend supervisor.
   `Shot` graph. Board position never defines sequence order.
 - **Immutable takes.** Every completed generation is a take with seed, model, and
   lineage. Selecting a take repoints the shot; old takes remain comparable.
-- **Truthful render.** The export is the computed cut: magnetic V1 from
-  `sequence_index`, free V2/A1, alpha compositing, embedded audio + A1 mix, trims,
-  speed, fades, keyframes, captions, render range, and persisted encoding settings.
+- **Truthful render.** The export is the computed cut: magnetic V1 with crossfades,
+  free V2/A1/A2, alpha compositing, embedded audio + A1/A2 mix, trims, speed,
+  fades, keyframes, titles, a project 3D LUT, captions, render range, and
+  persisted encoding settings.
 - **A deterministic default.** Seed lock is on; the same prompt and parameters
   reproduce the same take. Randomizing a new take is explicit.
 - **Plan before spend.** The command dock proposes a diff with model/time/VRAM
@@ -64,7 +67,7 @@ a backend supervisor.
   sanitized uploads, safe media Range serving, and no cloud dependency in the hot
   path.
 
-## Current State (2026-11-17)
+## Current State (2026-11-18)
 
 The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
 
@@ -81,7 +84,9 @@ The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
   metrics, sampler, SAM lazy load, and the model-lane benchmark;
 - the typed job notification plane (N0–N5): `job.*` events/replay, one terminal
   emitter, Studio toasts/activity/inline progress, resync/watchdog, desktop
-  notifications, dock badge, webhook, and per-project mute.
+  notifications, dock badge, webhook, and per-project mute;
+- the finishing pass: project 3D LUT, burned-in titles, A2 audio, V1 crossfades,
+  OTIO/FCPXML import/export, lens recipe packs, and an optional ComfyUI bridge.
 
 Verification: **214 backend tests, 90 Vitest tests, 21 Playwright tests**, clean
 ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero

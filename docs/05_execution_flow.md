@@ -1,11 +1,12 @@
 # Milimo Video — Execution Flow
 
-> **Current implementation note (2026-11-17):** the sequence diagrams below show
+> **Current implementation note (2026-11-18):** the sequence diagrams below show
 > the pre-ledger shape and use the legacy `progress`/`complete` names. The live
 > path now enqueues a `QueuedJob`, runs memory admission before the load, emits
 > typed `job.*` events (with `seq`/replay), and terminates through one emitter.
 > Read the diagrams for the pipeline internals; read §1/§5/§8 notes and
-> [[systems/sse-eventing]] for the current control plane.
+> [[systems/sse-eventing]] for the current control plane. Optional external
+> engines (ComfyUI) run through the same ledger and never gate core generation.
 
 ## 1. Video Generation Sequence
 
