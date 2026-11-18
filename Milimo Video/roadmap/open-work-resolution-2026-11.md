@@ -1,7 +1,7 @@
 ---
 type: roadmap
 created: 2026-11-17
-updated: 2026-11-17
+updated: 2026-11-18
 tags: open-work plan ci cuda packaging wan quantized cutover
 sources:
   - ../../.github/workflows/ci.yml
@@ -53,6 +53,11 @@ a test; "open" means no code or no verified path.
 - Per-job priority override; desktop tray icon; legacy notification surface.
 - Visual baselines are local/platform-tolerant.
 - One perf spec is flaky under load (500-card pan threshold).
+- **F7 whole-frontend UX** — audited 2026-11-18 but **not implemented**: truthful
+  save/shot status after reload, project-scoped Library, one right rail per
+  surface, a usable mobile Story shell, timeline reachability, title/LUT preview
+  parity, and warning/copy semantics. See
+  [[../systems/frontend-ux-audit-2026-11-18]] and [[frontend-ux-plan-2026-11-18]].
 
 ## 2. Market scan (2026-11-17)
 

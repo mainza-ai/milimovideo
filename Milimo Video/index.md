@@ -45,6 +45,12 @@ navigate, then drills into pages.
 - [systems/studio-media-audit-2026-11](systems/studio-media-audit-2026-11.md) —
   2026-11 media-open audit: passive media, missing preview paths, legacy localhost
   URLs, caption misclassification, and the global image/video/audio/text viewer.
+- [systems/frontend-ux-audit-2026-11-18](systems/frontend-ux-audit-2026-11-18.md) —
+  2026-11-18 whole-frontend UX audit: eight surfaces at 1440×900 and 390×844,
+  axe-clean but 24 findings (`F7-01…F7-24`) covering untruthful save/shot status,
+  project-global Library media, 680px of Generate rails, a 124px mobile Story
+  board, truncated safety warnings, timeline overflow, and copy/tone semantics.
+  Companion plan: [[roadmap/frontend-ux-plan-2026-11-18]].
 - [systems/llm-settings-audit-2026-11](systems/llm-settings-audit-2026-11.md) —
   LLM configuration audit **and implementation record**: Kubona reference patterns,
   the old Gemma/Ollama gaps, the shipped L0–L3 plane (persisted providers/roles,
@@ -170,6 +176,11 @@ navigate, then drills into pages.
 - [roadmap/comfyui-frontend-plan-2026-11](roadmap/comfyui-frontend-plan-2026-11.md) —
   the phased ComfyUI frontend plan (C0 trust → C1 binding/media → C2 library →
   C3 results/batch → C4 remote → C5 polish), with acceptance criteria.
+- [roadmap/frontend-ux-plan-2026-11-18](roadmap/frontend-ux-plan-2026-11-18.md) —
+  the F7 whole-frontend UX plan: F7-0 truthful status → F7-1 project media →
+  F7-2 one rail per surface → F7-3 mobile shell → F7-4 timeline/preview parity →
+  F7-5 language/tone → F7-6 verification gate. Maps every finding to a phase,
+  with acceptance criteria and effort. **Planned, not started.**
 - [roadmap/implementation-plan-2026-11](roadmap/implementation-plan-2026-11.md) —
   the sequenced fix-and-ship plan. Scoped P0–P5, F0–F5, and F6 are complete; the page
   lists remaining/deferred work (bundled sidecar, legacy cutover, Phase 6 v2 lane,

@@ -1737,3 +1737,24 @@ Executed the ComfyUI frontend plan:
 Live checks: catalog 2,082 nodes, schema fetch, project image upload to Comfy,
 missing-node preflight error, workflow CRUD, smoke run completed with output/poster,
 asset deletion. Tests: 222 backend, 95 Vitest, 22 Playwright.
+
+## [2026-11-18] audit | Whole-frontend UX audit and F7 plan
+
+Audited all eight Studio surfaces with a live seven-shot probe project at
+1440×900 and 390×844, including axe (`wcag2a`, `wcag2aa`), DOM measurements,
+and source review.
+
+- **Axe:** 0 serious/critical violations on every surface at both widths; no body
+  overflow; text ≥10px and controls ≥28px except four 26×26 Story quick actions.
+- **24 findings (`F7-01…F7-24`):** untruthful `Unsaved`/`Save idle` state after
+  load, shot status not hydrated, project-global Library (`/uploads` selects all
+  assets), 124px mobile Story board, truncated memory warnings, 680px of Generate
+  rails, broken-image fallbacks, 249/441px timeline scroll, title/LUT preview
+  mismatch, and copy/tone/pluralization defects.
+- **Filed:** [[systems/frontend-ux-audit-2026-11-18]] (evidence + gap register)
+  and [[roadmap/frontend-ux-plan-2026-11-18]] (F7-0 truth → F7-1 media → F7-2
+  rails → F7-3 mobile → F7-4 timeline/preview → F7-5 language → F7-6 gate).
+- **Updated:** index, implementation plan, open-work resolution, and a
+  “superseded by” note on the 2026-11-17 chrome audit.
+- **Not implemented:** this pass is audit/report/plan only. F7 code changes start
+  with F7-0.

@@ -11,11 +11,17 @@ related:
   - studio-shell.md
   - architecture.md
   - frontend-state.md
+  - frontend-ux-audit-2026-11-18.md
   - ../roadmap/frontend-refactor-2026-11.md
   - ../roadmap/implementation-plan-2026-11.md
 ---
 
 # Studio UX Audit — 2026-11-17
+
+> **Superseded for whole-frontend coverage** by
+> [[frontend-ux-audit-2026-11-18.md]] (eight surfaces at 1440 and 390, axe, and
+> the `F7-01…F7-24` register). This page remains the F6 chrome/density audit
+> trail and its resolution record.
 
 ## Verdict
 
