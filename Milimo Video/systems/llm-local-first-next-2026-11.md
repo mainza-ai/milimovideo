@@ -99,8 +99,8 @@ released by Milimo. See [[memory-management-audit-2026-11]].
 
 ### Still open
 
-- Cancelling a non-stream HTTP call cannot abort the socket mid-flight; it is
-  bounded by the provider timeout and no further work runs.
+- Non-stream HTTP cancellation now cancels the in-flight request task and closes
+  the socket (slow-server test asserts a sub-2s abort).
 - Chunk-0 HTTP enhancement now runs before the pipeline load and the chained
   task skips its post-load re-run (`_llm_preenhanced`). Gemma still needs the
   loaded text encoder. Earlier note: chained chunk-0 enhancement happened after

@@ -409,7 +409,7 @@ no OOM.
   default.
 - A cancelled job keeps its loaded pipeline until the 300 s idle TTL unless
   `Release all` is used.
-- Non-stream LLM cancellation is still timeout-bounded (not a socket abort).
+- Non-stream LLM cancellation cancels the in-flight task and closes the socket.
 
 ## Open questions
 

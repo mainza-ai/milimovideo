@@ -380,6 +380,7 @@ def complete(
                     keep_alive=hop["keep_alive"],
                     json_mode=json_mode,
                     image_path=image_path if has_input_image else None,
+                    cancel_check=cancel_check,
                 )
                 result = LLMResult(
                     text=done.text,
@@ -396,6 +397,8 @@ def complete(
             return result
         except LLMCancelled:
             raise
+        except providers.ProviderCancelled as exc:
+            raise LLMCancelled(str(exc)) from exc
         except Exception as exc:
             _record_failure(provider_id, exc)
             errors.append(f"{provider_id}: {getattr(exc, 'message', str(exc))}")
@@ -465,6 +468,7 @@ async def acomplete(
                     keep_alive=hop["keep_alive"],
                     json_mode=json_mode,
                     image_path=image_path if has_input_image else None,
+                    cancel_check=cancel_check,
                 )
                 result = LLMResult(
                     text=done.text,
@@ -481,6 +485,8 @@ async def acomplete(
             return result
         except LLMCancelled:
             raise
+        except providers.ProviderCancelled as exc:
+            raise LLMCancelled(str(exc)) from exc
         except Exception as exc:
             _record_failure(provider_id, exc)
             errors.append(f"{provider_id}: {getattr(exc, 'message', str(exc))}")
@@ -583,7 +589,10 @@ async def astream(
                     keep_alive=hop["keep_alive"],
                     json_mode=json_mode,
                     image_path=image_path if has_input_image else None,
+                    cancel_check=cancel_check,
                 )
+            except providers.ProviderCancelled as exc2:
+                raise LLMCancelled(str(exc2)) from exc2
             except Exception as exc2:
                 _record_failure(provider_id, exc2)
                 errors.append(f"{provider_id}: {getattr(exc2, 'message', str(exc2))}")

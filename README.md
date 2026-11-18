@@ -385,7 +385,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 213 backend tests, 90 Vitest tests, and 21 Playwright
+The last verified run was 214 backend tests, 90 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual
@@ -429,8 +429,7 @@ dev_diary/         Build log and social notes
 - **Desktop**: macOS notifications use `osascript`; dock/window/tray progress is
   wired (tray menu: show/quit).
 - **Visual baselines** are platform-tolerant and locally generated.
-- **LLM caveats:** cancelling a non-stream HTTP call is timeout-bounded rather
-  than a socket abort; Strata reports no context window; cloud list prices are
+- **LLM caveats:** Strata reports no context window; cloud list prices are
   reference data
   (`MILIMO_LLM_RATE_CARD` overrides); vision detection is heuristic; the legacy
   `/` popover edits only `prompt_video`.

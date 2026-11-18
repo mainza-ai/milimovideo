@@ -423,8 +423,8 @@ preflight, eval + recommended plan, pre-pipeline enhancement, LLM/VRAM release,
 vision payloads, and cloud budget/eval-gate/profiles. Verified live against
 Ollama, oMLX, and Strata.
 
-- Cancelling a non-stream HTTP call is timeout-bounded, not an instant socket
-  abort.
+- Cancelling a non-stream HTTP call cancels the in-flight task and closes the
+  socket.
 - Chunk-0 HTTP enhancement runs before the pipeline load; the chained task
   skips its post-load re-run when `_llm_preenhanced` is set.
 - The legacy `/` popover edits only the `prompt_video` role.

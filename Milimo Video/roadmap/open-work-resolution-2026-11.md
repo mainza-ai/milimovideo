@@ -35,7 +35,7 @@ a test; "open" means no code or no verified path.
 | Issue #1 (Wan 2.2) | Open | **Feature gap**: a separate model family, not an LTX patch. |
 | PR #7 (`enhance_prompt` tuple) | Open | **Superseded**: both call sites already unpack on `main` (`tasks/image.py:98`, `tasks/video.py:290`). Close with a pointer. |
 | PR #8 (`encode_video` no_grad) | Open | **Still valid**: `media_io.py` has no `torch.no_grad()` around generator consumption; the CUDA inference-tensor crash is real. Rebase, test, merge. |
-| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 213 tests pass locally. |
+| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 214 tests pass locally. |
 | Security alerts | Disabled | `vulnerability-alerts` returns 404; Dependabot/security alerts are not enabled. |
 
 ### Roadmap / AGENTS deferrals
@@ -44,8 +44,9 @@ a test; "open" means no code or no verified path.
 - Legacy `/` cutover (gated on two clean releases — currently impossible with red CI).
 - Scoped-v1: non-crossfade transitions, embedding search, shorts packs; LUT,
   titles, A2, V1 crossfades, and lens pack import delivered.
-- LLM caveats: non-stream cancellation, Strata context, rate-card overrides,
-  heuristic vision, legacy popover. Pre-load chunk-0 enhancement is delivered.
+- LLM caveats: Strata context, rate-card overrides, heuristic vision, legacy
+  popover. Pre-load chunk-0 enhancement and socket-abort cancellation are
+  delivered.
 - Memory: hand-tuned costs, Strata unload, cancelled pipeline TTL, MPS-only tiling,
   20 memory waits, CUDA offload and quantized checkpoints.
 - M5 artifact work; Phase 6 v2 lane (eval harness, model swaps, MLX/FP8, crew).
@@ -125,7 +126,7 @@ is the supported upgrade.
 | Image lane upgrade | Z-Image Turbo (6B, Apache 2.0, 8-step, MLX) for thumbnails/pre-viz; Qwen-Image-Edit-2511 (20B, Apache 2.0) for multi-reference editing | Fast drafts on 8–16 GB; reference edits replace the IP-Adapter trigger workaround |
 | Optional external engines | License-gated HunyuanVideo 1.5, MiniMax H3, Qwen-Image 2.1; user-supplied only | Clear license acknowledgement; never bundled or default |
 | M5 artifacts | Distilled/quantized LTX, MLX/FP8 lanes, quality/memory/time matrix | A chosen artifact is measurably better on the reference machine |
-| LLM caveats | Socket abort for non-stream HTTP; pre-load chunk-0 enhancement; Strata context; legacy popover parity | **Chunk 0 delivered** — the pre-pipeline HTTP pass marks `_llm_preenhanced` and the chained task skips its post-load re-run. Cancellation/Strata/legacy remain. |
+| LLM caveats | Socket abort for non-stream HTTP; pre-load chunk-0 enhancement; Strata context; legacy popover parity | **Chunk 0 + cancellation delivered** — pre-load pass skips the chained re-run; non-stream requests cancel their in-flight task/socket. Strata/legacy remain. |
 | Small polish | **Per-job priority + steps** persisted and used by the queue; **macOS tray icon** with show/quit and tooltip progress | Delivered; legacy notification parity remains |
 
 ## 6. P3 — Quality and operations

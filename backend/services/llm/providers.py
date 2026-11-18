@@ -8,11 +8,13 @@ in one place. Sync (`httpx.Client`) serves GPU worker threads; async
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
 import mimetypes
 import time
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Sequence
 
@@ -21,6 +23,10 @@ import httpx
 from .capabilities import classify_model, extract_context
 
 logger = logging.getLogger("llm.providers")
+
+
+class ProviderCancelled(Exception):
+    """The caller cancelled an in-flight HTTP request."""
 
 
 class ProviderError(RuntimeError):
@@ -348,6 +354,7 @@ async def acomplete(
     keep_alive: str | None = None,
     json_mode: bool = False,
     image_path: str | None = None,
+    cancel_check=None,
 ) -> Completion:
     """Async completion for request handlers."""
     if wire == "gemma_native":
@@ -359,7 +366,30 @@ async def acomplete(
     started = time.monotonic()
     try:
         async with httpx.AsyncClient(base_url=base_url.rstrip("/"), timeout=timeout_sec) as client:
-            response = await client.request(method, path, headers=headers, json=payload)
+            if cancel_check is None:
+                response = await client.request(method, path, headers=headers, json=payload)
+            else:
+                request = asyncio.create_task(
+                    client.request(method, path, headers=headers, json=payload)
+                )
+                try:
+                    while True:
+                        done, _ = await asyncio.wait({request}, timeout=0.1)
+                        if done:
+                            response = request.result()
+                            break
+                        if cancel_check():
+                            request.cancel()
+                            with suppress(asyncio.CancelledError, Exception):
+                                await request
+                            raise ProviderCancelled(f"{provider}: request cancelled")
+                finally:
+                    if not request.done():
+                        request.cancel()
+                        with suppress(asyncio.CancelledError, Exception):
+                            await request
+    except ProviderCancelled:
+        raise
     except Exception as exc:
         raise _wrap_httpx(provider, exc) from exc
     if response.status_code >= 400:

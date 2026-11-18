@@ -1640,7 +1640,7 @@ trims, and project media URLs. Resolve XML remains (no adapter).
 - **V1 crossfade**: `shot.transition_in` (Alembic 0010), shared overlap clamp in
   the timeline layout, render, and OTIO metadata; incoming alpha ramps 0→1 over
   the previous clip. Real pixel test asserts a red/blue midpoint mix.
-- Tests: 213 backend, 90 Vitest, 21 Playwright.
+- Tests: 214 backend, 90 Vitest, 21 Playwright.
 
 ## [2026-11-18] implement | lens recipe packs
 
@@ -1654,3 +1654,11 @@ The chained task now consults `should_enhance_chunk`: when `_preenhance_http`
 already rewrote the prompt before LTX loaded, chunk 0 is not enhanced again after
 the pipeline occupies memory. Gemma still uses the in-pipeline path. Unit test
 covers pre-enhanced, unenhanced, disabled, and later chunks.
+
+## [2026-11-18] fix | abort non-stream LLM HTTP requests
+
+`services.llm.providers.acomplete` now runs the request as a cancellable task and
+polls `cancel_check` every 100ms; cancellation closes the socket instead of
+waiting for the provider timeout. `runtime.chat` and the non-stream stream
+fallback map `ProviderCancelled` to `LLMCancelled`. A fake slow-server test
+asserts a sub-2s abort.
