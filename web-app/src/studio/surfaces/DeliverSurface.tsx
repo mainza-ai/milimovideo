@@ -178,6 +178,31 @@ export function DeliverSurface() {
                         {otioBusy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                         Export OTIO
                     </button>
+                    <button
+                        type="button"
+                        className="st-button"
+                        title="Export the cut as FCPXML"
+                        onClick={() => {
+                            void apiFetch(`/projects/${project.id}/otio?format=fcpxml`)
+                                .then(async (response) => {
+                                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                    const blob = await response.blob();
+                                    const url = URL.createObjectURL(blob);
+                                    const anchor = document.createElement('a');
+                                    anchor.href = url;
+                                    anchor.download = `${project.name || 'milimo'}.fcpxml`;
+                                    anchor.click();
+                                    URL.revokeObjectURL(url);
+                                    addToast('FCPXML timeline exported', 'success');
+                                })
+                                .catch((error) => addToast(
+                                    error instanceof Error ? error.message : 'FCPXML export failed',
+                                    'error',
+                                ));
+                        }}
+                    >
+                        <Download size={13} /> Export FCPXML
+                    </button>
                     <button type="button" className="st-button" data-variant="primary" disabled={busy} onClick={() => void start()}>
                         {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                         {busy ? 'Queueing…' : 'Create export'}

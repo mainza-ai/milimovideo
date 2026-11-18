@@ -58,8 +58,8 @@ a backend supervisor.
 - Deliver writes the computed cut with V1/V2 compositing, embedded audio + A1 mix,
   trims, speed, fades, keyframes, captions, render range, and persisted encoding
   settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
-  **Export OTIO** hands the computed V1/V2/A1 cut to Resolve, Premiere, or Final Cut;
-  **Import OTIO** reconstructs V1/V2/A1 shots from a returned timeline.
+  **Export OTIO** (or **FCPXML**) hands the computed V1/V2/A1 cut to Resolve,
+  Premiere, or Final Cut; **Import OTIO** reconstructs V1/V2/A1 shots.
 - Shorts builds scored candidate windows from a transcript or shot text, supports
   editable in/out ranges, and exports 9:16, 1:1, and 4:5 crops from the cut or an
   uploaded source.
@@ -355,7 +355,7 @@ masking/tracking toggles. New work belongs in Studio.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                    # 193 tests
+./milimov/bin/python -m pytest                    # 194 tests
 ./milimov/bin/python -m ruff check backend        # correctness rules
 ./milimov/bin/python backend/verify_setup.py      # 0 failures expected
 
@@ -368,7 +368,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 193 backend tests, 79 Vitest tests, and 21 Playwright
+The last verified run was 194 backend tests, 79 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual

@@ -5533,6 +5533,16 @@
               ],
               "title": "Fps"
             }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "otio",
+              "title": "Format",
+              "type": "string"
+            }
           }
         ],
         "responses": {

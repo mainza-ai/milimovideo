@@ -1573,3 +1573,9 @@ Executed the code-completable P1/P2 items.
 - **Tauri tray**: tray icon with show/quit, tooltip command wired to the activity
   center; `cargo check` clean.
 - Tests: 193 backend, 79 Vitest, 21 Playwright.
+
+## [2026-11-18] implement | FCPXML export
+
+Added `otio-fcpx-xml-adapter` and `?format=fcpxml` to the OTIO endpoint, a Deliver
+**Export FCPXML** button, and a round-trip test that reads the XML back through
+OTIO. Tests: 194 backend, 79 Vitest, 21 Playwright.

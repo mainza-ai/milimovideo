@@ -147,6 +147,27 @@ def test_otio_round_trip_reconstructs_tracks_and_trims(app_client, project):
     assert all(shot["video_url"].startswith(f"/projects/{pid}/") for shot in shots)
 
 
+def test_fcpxml_export_is_readable_by_otio(app_client, project):
+    pid = project["id"]
+    generated = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], pid, "generated")
+    os.makedirs(generated, exist_ok=True)
+    with open(os.path.join(generated, "fcpx-a.mp4"), "wb") as handle:
+        handle.write(b"placeholder")
+    state = {
+        "id": pid, "name": "FCP Film", "fps": 25, "seed": 42, "scenes": [],
+        "revision": project.get("revision", 0),
+        "shots": [_shot(pid, "fcpx-a", 0, frames=50)],
+    }
+    assert app_client.put(f"/projects/{pid}", json=state).status_code == 200
+
+    response = app_client.get(f"/projects/{pid}/otio", params={"format": "fcpxml"})
+    assert response.status_code == 200, response.text
+    assert response.text.startswith("<?xml") or "<fcpxml" in response.text
+    assert ".fcpxml" in response.headers["content-disposition"]
+    timeline = otio.adapters.read_from_string(response.text, "fcpx_xml")
+    assert timeline.tracks
+
+
 def test_otio_export_uses_missing_reference_for_offline_media(app_client, project):
     pid = project["id"]
     state = {

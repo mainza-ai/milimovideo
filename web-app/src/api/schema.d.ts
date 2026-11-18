@@ -5706,6 +5706,7 @@ export interface operations {
         parameters: {
             query?: {
                 fps?: number | null;
+                format?: string;
             };
             header?: never;
             path: {

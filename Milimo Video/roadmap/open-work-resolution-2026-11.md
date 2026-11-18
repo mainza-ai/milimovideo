@@ -35,7 +35,7 @@ a test; "open" means no code or no verified path.
 | Issue #1 (Wan 2.2) | Open | **Feature gap**: a separate model family, not an LTX patch. |
 | PR #7 (`enhance_prompt` tuple) | Open | **Superseded**: both call sites already unpack on `main` (`tasks/image.py:98`, `tasks/video.py:290`). Close with a pointer. |
 | PR #8 (`encode_video` no_grad) | Open | **Still valid**: `media_io.py` has no `torch.no_grad()` around generator consumption; the CUDA inference-tensor crash is real. Rebase, test, merge. |
-| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 193 tests pass locally. |
+| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 194 tests pass locally. |
 | Security alerts | Disabled | `vulnerability-alerts` returns 404; Dependabot/security alerts are not enabled. |
 
 ### Roadmap / AGENTS deferrals
@@ -113,7 +113,7 @@ is the supported upgrade.
 
 | Item | Work | Acceptance |
 |---|---|---|
-| **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | **Delivered for OTIO** — export + import endpoints and Deliver buttons, V1/V2/A1, trims, gaps, MissingReference, round-trip test. FCPXML/Resolve XML remains. |
+| **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | **Delivered for OTIO + FCPXML** — export/import OTIO, FCPXML export, Deliver buttons, V1/V2/A1, trims, gaps, MissingReference, round-trip tests. Resolve XML and FCPXML import remain. |
 | **ComfyUI bridge** | Import/export a ComfyUI workflow, submit it through the queue, ingest outputs and provenance | An LTX-2.5/Wan workflow runs from Studio and its output becomes a take |
 | NLE completeness | Transitions, LUTs, titles, A2 track (after the OTIO handoff) | Export pixels match the timeline; UI round-trips |
 | Embedding search | Local embedding model via the LLM plane, index, ranked results with lexical fallback | Semantic shot search works offline |

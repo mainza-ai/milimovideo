@@ -29,6 +29,7 @@ sqlmodel==0.0.31
 sqlalchemy>=2.0.14,<2.1
 pydantic==2.12.5
 opentimelineio>=0.18
+otio-fcpx-xml-adapter>=1.0
 sse-starlette>=2.1
 alembic>=1.13
 pytest>=8.0

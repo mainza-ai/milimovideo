@@ -865,6 +865,7 @@ async def import_project_otio(
 def export_project_otio(
     project_id: str,
     fps: Optional[int] = None,
+    format: str = "otio",
     session: Session = Depends(get_session),
 ):
     """Export the computed cut as an OpenTimelineIO timeline for Resolve/Premiere/FCP."""
@@ -876,10 +877,23 @@ def export_project_otio(
         .where(Shot.project_id == project_id)
         .order_by(Shot.sequence_index.is_(None), Shot.sequence_index, Shot.created_at, Shot.id)
     ).all()
-    from utils.otio_export import otio_json
+    from utils.otio_export import build_otio_timeline, otio_json
 
-    content = otio_json(project, shots, fps=fps or project.fps)
+    if format not in ("otio", "fcpxml"):
+        raise HTTPException(status_code=400, detail="format must be otio or fcpxml")
     safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in (project.name or "milimo"))
+    if format == "fcpxml":
+        import opentimelineio as otio
+
+        content = otio.adapters.write_to_string(
+            build_otio_timeline(project, shots, fps=fps or project.fps), "fcpx_xml"
+        )
+        return Response(
+            content=content,
+            media_type="application/xml",
+            headers={"Content-Disposition": f'attachment; filename="{safe[:64]}.fcpxml"'},
+        )
+    content = otio_json(project, shots, fps=fps or project.fps)
     return Response(
         content=content,
         media_type="application/json",
