@@ -78,10 +78,13 @@ def _clip_shot(clip, project_id: str, track_index: int, index: int, start_frame:
     }
 
 
-def shots_from_otio(project_id: str, payload: str | bytes) -> dict[str, Any]:
+def shots_from_otio(project_id: str, payload: str | bytes, format: str | None = None) -> dict[str, Any]:
     if isinstance(payload, bytes):
         payload = payload.decode("utf-8")
-    timeline = otio.adapters.read_from_string(payload, "otio_json")
+    if format is None:
+        head = payload.lstrip()[:200].lower()
+        format = "fcpx_xml" if head.startswith(("<?xml", "<fcpxml")) or "<fcpxml" in head else "otio_json"
+    timeline = otio.adapters.read_from_string(payload, format)
     rate = timeline.global_start_time.rate if timeline.global_start_time else 25
     fps = int(round(rate)) or 25
     shots: list[dict[str, Any]] = []

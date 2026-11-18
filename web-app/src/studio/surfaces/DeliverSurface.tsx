@@ -111,9 +111,9 @@ export function DeliverSurface() {
                     <input
                         ref={otioInputRef}
                         type="file"
-                        accept=".otio,.json,application/json"
+                        accept=".otio,.fcpxml,.xml,.json,application/json"
                         style={{ display: 'none' }}
-                        aria-label="Import OTIO file"
+                        aria-label="Import OTIO or FCPXML file"
                         onChange={(event) => {
                             const file = event.target.files?.[0];
                             event.target.value = '';
@@ -133,7 +133,7 @@ export function DeliverSurface() {
                                     addToast(`Imported ${shots.length} shot(s) from OTIO`, 'success');
                                 })
                                 .catch((error) => addToast(
-                                    error instanceof Error ? error.message : 'OTIO import failed',
+                                    error instanceof Error ? error.message : 'Timeline import failed',
                                     'error',
                                 ))
                                 .finally(() => setOtioImportBusy(false));
@@ -143,7 +143,7 @@ export function DeliverSurface() {
                         type="button"
                         className="st-button"
                         disabled={otioImportBusy}
-                        title="Import an OTIO timeline as shots"
+                        title="Import an OTIO or FCPXML timeline as shots"
                         onClick={() => otioInputRef.current?.click()}
                     >
                         {otioImportBusy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}

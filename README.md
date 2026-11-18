@@ -63,7 +63,7 @@ a backend supervisor.
   trims, speed, fades, keyframes, captions, render range, and persisted encoding
   settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
   **Export OTIO** (or **FCPXML**) hands the computed V1/V2/A1 cut to Resolve,
-  Premiere, or Final Cut; **Import OTIO** reconstructs V1/V2/A1 shots.
+  Premiere, or Final Cut; **Import OTIO/FCPXML** reconstructs V1/V2/A1 shots.
 - Shorts builds scored candidate windows from a transcript or shot text, supports
   editable in/out ranges, and exports 9:16, 1:1, and 4:5 crops from the cut or an
   uploaded source.
@@ -379,7 +379,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 202 backend tests, 83 Vitest tests, and 21 Playwright
+The last verified run was 203 backend tests, 83 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual

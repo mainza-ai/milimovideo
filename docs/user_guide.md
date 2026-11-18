@@ -389,6 +389,9 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 - **Create export** queues a real FFmpeg render through the job ledger.
 - Render history shows status, progress, errors, an output link, and **Cancel** for
   queued/running renders.
+- **Export OTIO** or **Export FCPXML** writes the computed V1/V2/A1 cut for Resolve,
+  Premiere, or Final Cut. **Import OTIO/FCPXML** rebuilds shots from a returned
+  timeline, including trims, speed, and project media URLs.
 - The preset is stored with the project.
 
 Render truth includes V1/V2 compositing, alpha, embedded audio, A1 mix, trims,

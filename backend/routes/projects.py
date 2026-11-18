@@ -846,19 +846,19 @@ async def import_project_otio(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
 ):
-    """Parse an OTIO timeline into shots; the client applies it as one edit."""
+    """Parse an OTIO or FCPXML timeline into shots; the client applies it as one edit."""
     project = session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     payload = await file.read()
     if not payload:
-        raise HTTPException(status_code=400, detail="Empty OTIO file")
+        raise HTTPException(status_code=400, detail="Empty timeline file")
     from utils.otio_import import shots_from_otio
 
     try:
         return shots_from_otio(project_id, payload)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid OTIO timeline: {exc}") from exc
+        raise HTTPException(status_code=400, detail=f"Invalid timeline: {exc}") from exc
 
 
 @router.get("/projects/{project_id}/otio")

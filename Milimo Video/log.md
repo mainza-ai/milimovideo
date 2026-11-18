@@ -1602,4 +1602,11 @@ OTIO. Tests: 194 backend, 79 Vitest, 21 Playwright.
   on ComfyUI 0.45.0 (port 8001) completed and produced a PNG.
 - **Docs**: `systems/comfyui-bridge.md`, index, architecture, memory slots,
   roadmap, README, user guide, AGENTS.
-- Tests: 202 backend, 83 Vitest, 21 Playwright.
+- Tests: 203 backend, 83 Vitest, 21 Playwright.
+
+## [2026-11-18] implement | FCPXML import
+
+The OTIO import route auto-detects XML and reads it with the `fcpx_xml` adapter,
+so a Final Cut/Premiere round-trip returns shots too. Deliver labels the action
+**Import OTIO/FCPXML**; a two-clip round-trip test asserts fps, frame counts,
+trims, and project media URLs. Resolve XML remains (no adapter).

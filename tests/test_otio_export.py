@@ -168,6 +168,37 @@ def test_fcpxml_export_is_readable_by_otio(app_client, project):
     assert timeline.tracks
 
 
+def test_fcpxml_round_trip_imports_into_shots(app_client, project):
+    pid = project["id"]
+    generated = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], pid, "generated")
+    os.makedirs(generated, exist_ok=True)
+    for shot_id in ("fcpx-rt-a", "fcpx-rt-b"):
+        with open(os.path.join(generated, f"{shot_id}.mp4"), "wb") as handle:
+            handle.write(b"placeholder")
+    state = {
+        "id": pid, "name": "FCP Import", "fps": 25, "seed": 42, "scenes": [],
+        "revision": project.get("revision", 0),
+        "shots": [
+            _shot(pid, "fcpx-rt-a", 0, frames=50),
+            _shot(pid, "fcpx-rt-b", 1, frames=40, trim_in=5, trim_out=5),
+        ],
+    }
+    assert app_client.put(f"/projects/{pid}", json=state).status_code == 200
+    export = app_client.get(f"/projects/{pid}/otio", params={"format": "fcpxml"})
+    assert export.status_code == 200
+
+    imported = app_client.post(
+        f"/projects/{pid}/otio/import",
+        files={"file": ("cut.fcpxml", export.content, "application/xml")},
+    )
+    assert imported.status_code == 200, imported.text
+    data = imported.json()
+    assert data["fps"] == 25
+    assert len(data["shots"]) == 2
+    assert sum(shot["num_frames"] for shot in data["shots"]) == 90
+    assert all(shot["video_url"].startswith(f"/projects/{pid}/") for shot in data["shots"])
+
+
 def test_otio_export_uses_missing_reference_for_offline_media(app_client, project):
     pid = project["id"]
     state = {
