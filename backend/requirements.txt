@@ -12,10 +12,12 @@ Pillow
 psutil
 pycocotools
 # decord or eva-decord (optional for macOS)
-einops
-transformers
-safetensors
-accelerate
+# Keep the vendored flux2 package's pinned versions; requirements are
+# installed after the editable packages, so unpinned entries would override them.
+einops==0.8.1
+transformers==4.56.1
+safetensors==0.4.5
+accelerate==1.12.0
 fire
 sentencepiece
 diffusers
