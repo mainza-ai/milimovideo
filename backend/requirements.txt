@@ -20,7 +20,10 @@ fire
 sentencepiece
 diffusers
 scikit-image
-sqlmodel
+# Pin the DB stack: SQLAlchemy 2.1 rejects naive datetimes and the repo still
+# stores datetime.utcnow() values. Migrate to aware datetimes before lifting.
+sqlmodel==0.0.31
+sqlalchemy>=2.0.14,<2.1
 sse-starlette>=2.1
 alembic>=1.13
 pytest>=8.0

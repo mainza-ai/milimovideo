@@ -20,6 +20,8 @@ jobs:
           pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
           pip install -e ./LTX-2/packages/ltx-core -e ./LTX-2/packages/ltx-pipelines -e ./flux2
           pip install -r backend/requirements.txt
+      - name: Verify dependency set
+        run: python -m pip check
       - name: Compile
         run: python -m compileall -q backend
       - name: Tests
