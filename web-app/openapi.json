@@ -5818,7 +5818,7 @@
     },
     "/projects/{project_id}/otio/import": {
       "post": {
-        "description": "Parse an OTIO timeline into shots; the client applies it as one edit.",
+        "description": "Parse an OTIO or FCPXML timeline into shots; the client applies it as one edit.",
         "operationId": "import_project_otio_projects__project_id__otio_import_post",
         "parameters": [
           {

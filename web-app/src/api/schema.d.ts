@@ -1082,7 +1082,7 @@ export interface paths {
         put?: never;
         /**
          * Import Project Otio
-         * @description Parse an OTIO timeline into shots; the client applies it as one edit.
+         * @description Parse an OTIO or FCPXML timeline into shots; the client applies it as one edit.
          */
         post: operations["import_project_otio_projects__project_id__otio_import_post"];
         delete?: never;
