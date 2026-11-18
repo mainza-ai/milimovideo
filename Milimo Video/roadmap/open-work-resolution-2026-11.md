@@ -64,7 +64,7 @@ issues triaged. Everything else is blocked on this.
 | P0-3 | Close PR #7 as superseded with line references. | **Done** — closed with the `tasks/image.py:98` / `tasks/video.py:290` evidence. |
 | P0-4 | Reply/close #4 and #3; reply to #6 with the CUDA admission behavior and the CPU-offload limitation; label #1/#2. | **Done** — #4/#3 closed; #6/#2/#1 replied and labeled `enhancement`/`help wanted`. |
 | P0-5 | Enable Dependabot + security alerts. | **Done** — `.github/dependabot.yml`; vulnerability alerts enabled (204), Dependabot alerts 200. |
-| P0-6 | Re-run the release gate twice on `main` and start the legacy cutover clock. | **In progress** — first green CI at `6a36cc8`; the second clean release/tag is the remaining gate. |
+| P0-6 | Re-run the release gate twice on `main` and start the legacy cutover clock. | **CI gate met** — two consecutive green CI cycles on both branches (`6a36cc8`, `48a5d75`). No release tags exist, so the formal two-release cutover still needs tagged releases. |
 
 **Long-term P0 follow-up:** migrate the 42 `datetime.utcnow` sites to
 `datetime.now(timezone.utc)` (or explicitly `NaiveDatetime` fields), then lift the
@@ -75,7 +75,7 @@ SQLAlchemy `<2.1` pin. Pin now, migrate deliberately.
 | Step | Change | Acceptance |
 |---|---|---|
 | P1-1 | **CPU-offload feasibility spike (2 days).** The vendored LTX pipelines expose no `cpu_offload` hooks. Evaluate moving the transformer/VAE to CPU between stages, or conclude it is out of scope. | **Decided** — `ModelLedger` builds each component on `self.device` and the pipelines hold references per stage; no accelerate hooks exist and a 19B FP8 transformer (~20 GB) still exceeds 16 GB. A config flag cannot fix it; the path is quantized checkpoints (#2) or a larger GPU. |
-| P1-2 | **Quantized Flux 2 (#2).** Add GGUF entries to the manifest/registry, a loader into `flux2.model.Flux2` (or a diffusers GGUF path), per-checkpoint costs, and take provenance. | **Blocked on the Klein pipeline** — diffusers 0.36 has GGUF quantization and `Flux2Pipeline` (Mistral3/dev), but no `Flux2KleinPipeline`/Qwen3 path; the vendored custom package has no GGUF reader. Needs diffusers 0.37.dev or an in-house dequant loader, plus the 5.7 GB Q4_K_M artifact. |
+| P1-2 | **Quantized Flux 2 (#2).** Add GGUF entries to the manifest/registry, a loader into `flux2.model.Flux2` (or a diffusers GGUF path), per-checkpoint costs, and take provenance. | **Design ready, not implemented** — diffusers 0.37.1 (not installed; 0.36 lacks it) has `Flux2KleinPipeline`, `Flux2Transformer2DModel.from_single_file`, and GGUF. The Q4_K_M transformer is 5.7 GB, but the Qwen3 8B text encoder is still ~16 GB bf16, so a 12 GB card also needs a quantized/offloaded text encoder. The full path is a dependency upgrade + new loader + encoder strategy, not a one-line manifest entry. |
 | P1-3 | CUDA regression checklist: no_grad encode, VRAM admission, FP8 selection, 16/24/48 GB behavior. | Manual run on a CUDA host recorded; no OOM after hours of denoise. |
 | P1-4 | CUDA cost calibration: verify the 40 GB FP8 / 18 GB Flux bases against a real card; adjust manifest estimates. | Estimates within 10% of measured peak. |
 
