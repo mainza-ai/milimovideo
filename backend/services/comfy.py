@@ -20,6 +20,7 @@ import os
 import re
 import time
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterable, Optional
 
@@ -196,12 +197,21 @@ class ComfyClient:
         timeout: Optional[float] = None,
         transport: Optional[httpx.BaseTransport] = None,
     ) -> None:
+        token = None
+        if base_url is None:
+            from services.comfy_settings import comfy_settings
+
+            settings = comfy_settings.effective_values()
+            base_url = settings["url"]
+            token = settings["token"]
         self.base_url = (base_url or config.COMFY_URL).rstrip("/")
         self.timeout = float(timeout or config.COMFY_TIMEOUT_SEC)
+        headers = {"Authorization": f"Bearer {token}"} if token else None
         self._client = httpx.Client(
             base_url=self.base_url,
             timeout=self.timeout,
             transport=transport,
+            headers=headers,
         )
 
     def close(self) -> None:
@@ -239,9 +249,18 @@ class ComfyClient:
             response.raise_for_status()
             stats = response.json()
             system = stats.get("system") or {}
+            version = str(system.get("comfyui_version") or "")
+            try:
+                current = tuple(int(part) for part in version.split(".")[:3])
+                minimum = tuple(int(part) for part in config.COMFY_MIN_VERSION.split(".")[:3])
+                compatible = current >= minimum
+            except ValueError:
+                compatible = True
             payload.update({
                 "reachable": True,
-                "version": system.get("comfyui_version"),
+                "version": version,
+                "compatible": compatible,
+                "min_version": config.COMFY_MIN_VERSION,
                 "os": system.get("os"),
                 "ram_total_gb": round(float(system.get("ram_total") or 0) / 1e9, 2),
                 "ram_free_gb": round(float(system.get("ram_free") or 0) / 1e9, 2),
@@ -285,6 +304,107 @@ class ComfyClient:
         response = self._get("/object_info")
         response.raise_for_status()
         return response.json()
+
+    def schema_for(self, class_types: Iterable[str]) -> Dict[str, Any]:
+        """Return input/output specs for only the classes a workflow uses."""
+        wanted = {str(name) for name in class_types if name}
+        info = self.object_info()
+        return {name: info[name] for name in wanted if name in info}
+
+    def catalog(self) -> Dict[str, Any]:
+        """Compact node catalog for pickers; full specs are fetched per class."""
+        info = self.object_info()
+        nodes = [
+            {
+                "class_type": class_type,
+                "display_name": spec.get("display_name") or class_type,
+                "category": spec.get("category") or "",
+                "output_node": bool(spec.get("output_node")),
+                "outputs": spec.get("output") or [],
+            }
+            for class_type, spec in info.items()
+        ]
+        nodes.sort(key=lambda row: (row["category"], row["class_type"]))
+        templates: Dict[str, Any] = {}
+        try:
+            response = self._get("/workflow_templates")
+            response.raise_for_status()
+            templates = response.json()
+        except (ComfyError, ValueError, httpx.HTTPStatusError):
+            templates = {}
+        return {"node_count": len(nodes), "nodes": nodes, "templates": templates}
+
+    def models(self, folder: str) -> list[str]:
+        response = self._get(f"/models/{folder}")
+        response.raise_for_status()
+        data = response.json()
+        return [str(item) for item in data] if isinstance(data, list) else []
+
+    def validate_live(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
+        """Check node classes, required inputs, and combo choices live."""
+        parsed = parse_workflow(workflow)
+        info = self.object_info()
+        errors: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        for node_id, node in parsed.items():
+            class_type = str(node.get("class_type"))
+            spec = info.get(class_type)
+            if not spec:
+                errors.append({
+                    "node_id": node_id,
+                    "class_type": class_type,
+                    "field": None,
+                    "message": f"ComfyUI has no node class '{class_type}'",
+                })
+                continue
+            inputs = node.get("inputs") or {}
+            required = (spec.get("input") or {}).get("required") or {}
+            for field_name, rule in required.items():
+                value = inputs.get(field_name)
+                if value is None or value == "":
+                    errors.append({
+                        "node_id": node_id,
+                        "class_type": class_type,
+                        "field": field_name,
+                        "message": f"Required input '{field_name}' is empty",
+                    })
+                    continue
+                if isinstance(value, list) and len(value) == 2:
+                    continue  # linked from another node
+                if isinstance(rule, list) and rule:
+                    choices = rule[0]
+                    if isinstance(choices, list):
+                        if not choices:
+                            warnings.append(f"{class_type}.{field_name}: ComfyUI reports no choices")
+                        elif value not in choices:
+                            errors.append({
+                                "node_id": node_id,
+                                "class_type": class_type,
+                                "field": field_name,
+                                "message": f"'{value}' is not in ComfyUI's choices for '{field_name}'",
+                            })
+        structural = validate_workflow(parsed)
+        return {
+            "ok": not errors,
+            "errors": errors,
+            "warnings": [*structural["warnings"], *warnings],
+            "node_count": len(parsed),
+            "output_nodes": structural["output_nodes"],
+            "width": structural["width"],
+            "height": structural["height"],
+        }
+
+    def upload_image(self, filename: str, content: bytes, *, subfolder: str = "milimo") -> Dict[str, Any]:
+        response = self._post(
+            "/upload/image",
+            files={"image": (filename, content, "application/octet-stream")},
+            data={"type": "input", "subfolder": subfolder},
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("name"):
+            raise ComfyError("ComfyUI upload did not return a filename")
+        return data
 
     # ── Submit / history / outputs ──────────────────────────────
     def submit(self, workflow: Dict[str, Any], client_id: Optional[str] = None) -> str:
@@ -387,11 +507,24 @@ class ComfyClient:
                 "type": output.type,
             }) as response:
                 response.raise_for_status()
+                max_bytes = max(1, int(config.COMFY_MAX_OUTPUT_MB)) * 1024 * 1024
+                total = 0
                 with open(path, "wb") as handle:
                     for chunk in response.iter_bytes(1024 * 1024):
+                        total += len(chunk)
+                        if total > max_bytes:
+                            raise ComfyError(
+                                f"{output.filename} exceeds the {config.COMFY_MAX_OUTPUT_MB} MB output cap"
+                            )
                         handle.write(chunk)
         except httpx.HTTPError as exc:
+            with suppress(OSError):
+                os.remove(path)
             raise ComfyUnavailable(f"Could not download {output.filename}: {exc}") from exc
+        except ComfyError:
+            with suppress(OSError):
+                os.remove(path)
+            raise
         try:
             return os.path.getsize(path)
         except OSError:

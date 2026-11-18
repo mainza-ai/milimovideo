@@ -495,6 +495,12 @@
       },
       "ComfyRunRequest": {
         "properties": {
+          "bindings": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Bindings",
+            "type": "object"
+          },
           "estimate_gb": {
             "anyOf": [
               {
@@ -576,6 +582,28 @@
           },
           "workflow": {
             "title": "Workflow"
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Id"
+          },
+          "workflow_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Name"
           }
         },
         "required": [
@@ -583,6 +611,129 @@
           "workflow"
         ],
         "title": "ComfyRunRequest",
+        "type": "object"
+      },
+      "ComfySavedWorkflowRequest": {
+        "properties": {
+          "bindings": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Bindings",
+            "type": "object"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
+          },
+          "is_default": {
+            "default": false,
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "workflow": {
+            "title": "Workflow"
+          }
+        },
+        "required": [
+          "name",
+          "workflow"
+        ],
+        "title": "ComfySavedWorkflowRequest",
+        "type": "object"
+      },
+      "ComfySettingsRequest": {
+        "properties": {
+          "declared_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Gb"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "expected_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Revision"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "ComfySettingsRequest",
+        "type": "object"
+      },
+      "ComfyUploadRequest": {
+        "properties": {
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "project_id",
+          "url"
+        ],
+        "title": "ComfyUploadRequest",
         "type": "object"
       },
       "ComfyWorkflowRequest": {
@@ -598,6 +749,11 @@
               }
             ],
             "title": "Filename Prefix"
+          },
+          "live": {
+            "default": false,
+            "title": "Live",
+            "type": "boolean"
           },
           "overrides": {
             "additionalProperties": {
@@ -3470,6 +3626,25 @@
         ]
       }
     },
+    "/comfy/catalog": {
+      "get": {
+        "operationId": "comfy_catalog_comfy_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Comfy Catalog",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
     "/comfy/free": {
       "post": {
         "description": "Ask ComfyUI to unload cached models and release our residency slot.",
@@ -3510,6 +3685,47 @@
         ]
       }
     },
+    "/comfy/models": {
+      "get": {
+        "operationId": "comfy_models_comfy_models_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "folder",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Folder",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Comfy Models",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
     "/comfy/run": {
       "post": {
         "description": "Queue a ComfyUI workflow and ingest every output file it writes.",
@@ -3545,6 +3761,142 @@
           }
         },
         "summary": "Comfy Run",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
+    "/comfy/schema": {
+      "get": {
+        "operationId": "comfy_schema_comfy_schema_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "classes",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Classes",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Comfy Schema",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
+    "/comfy/settings": {
+      "get": {
+        "operationId": "comfy_get_settings_comfy_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Comfy Get Settings",
+        "tags": [
+          "comfy"
+        ]
+      },
+      "put": {
+        "operationId": "comfy_update_settings_comfy_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComfySettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Comfy Update Settings",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
+    "/comfy/upload": {
+      "post": {
+        "operationId": "comfy_upload_comfy_upload_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComfyUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Comfy Upload",
         "tags": [
           "comfy"
         ]
@@ -5619,6 +5971,249 @@
         "summary": "Save Board",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/comfy/workflows": {
+      "get": {
+        "operationId": "list_comfy_workflows_projects__project_id__comfy_workflows_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Comfy Workflows",
+        "tags": [
+          "comfy"
+        ]
+      },
+      "post": {
+        "operationId": "create_comfy_workflow_projects__project_id__comfy_workflows_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComfySavedWorkflowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Comfy Workflow",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
+    "/projects/{project_id}/comfy/workflows/{workflow_id}": {
+      "delete": {
+        "operationId": "delete_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "schema": {
+              "title": "Workflow Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Comfy Workflow",
+        "tags": [
+          "comfy"
+        ]
+      },
+      "put": {
+        "operationId": "update_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "schema": {
+              "title": "Workflow Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComfySavedWorkflowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Comfy Workflow",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
+    "/projects/{project_id}/comfy/workflows/{workflow_id}/default": {
+      "post": {
+        "operationId": "default_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__default_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workflow_id",
+            "required": true,
+            "schema": {
+              "title": "Workflow Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Default Comfy Workflow",
+        "tags": [
+          "comfy"
         ]
       }
     },

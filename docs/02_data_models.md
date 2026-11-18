@@ -395,7 +395,8 @@ classDiagram
 | `asset` | `id` (UUID hex) | nullable project_id | Uploaded/generated media files. `meta_json` stores generation params (prompt, seed, guidance, reference elements). |
 | `job` | `id` (string) | nullable project_id | Async task tracking with progress, stage, start time, per-job memory trace, and results. Status transitions: `pending/queued → processing → completed/failed/cancelled`. |
 | `queuedjob` | `id` (string) | job_id | Durable dispatch ledger: kind, params (incl. memory-retry markers), status, attempts, timestamps. |
-| `app_setting` | `key` (string) | none | Versioned JSON documents. `llm` holds `LLMSettings` v3 (provider instances with `memory_gb`, roles, budget, last eval, revision); `llm_spend` holds the daily cloud ledger. |
+| `comfyworkflow` | `id` (UUID hex) | → project (FK) | Named API-format ComfyUI graph, bindings JSON, revision, default flag. |
+| `app_setting` | `key` (string) | none | Versioned JSON documents. `llm` holds `LLMSettings` v3 (provider instances with `memory_gb`, roles, budget, last eval, revision); `llm_spend` holds the daily cloud ledger; `comfy` holds URL/enabled/declared GB/token. |
 
 ### LLM settings document (`app_setting.key = "llm"`)
 
@@ -413,10 +414,10 @@ only `has_key`, `secret_source`, and `key_status`. The spend ledger is a separat
 
 ### Migrations
 
-Alembic head is `0010_shot_transition`. The chain covers render settings, seed
+Alembic head is `0011_comfy_workflows`. The chain covers render settings, seed
 lock, asset thumbnails, app settings, job progress, shot priority/steps, project
-LUT, project titles, and shot `transition_in`. Legacy databases are repaired and
-stamped at startup.
+LUT, project titles, shot `transition_in`, and named ComfyUI workflows. Legacy
+databases are repaired and stamped at startup.
 
 ### Connection Configuration
 ```python

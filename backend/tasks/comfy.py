@@ -97,7 +97,7 @@ def _video_thumbnail(project_id: str, record: dict) -> None:
         logger.warning("ComfyUI video thumbnail failed: %s", exc)
 
 
-def _asset_rows(project_id: str, job_id: str, records: list[dict], params: dict) -> list[str]:
+def _asset_rows(project_id: str, job_id: str, records: list[dict], params: dict, prompt_id: str | None = None) -> list[str]:
     """Insert Asset rows so ComfyUI outputs appear in Library."""
     from database import Asset, Session, engine
 
@@ -122,6 +122,9 @@ def _asset_rows(project_id: str, job_id: str, records: list[dict], params: dict)
                     "workflow_node": record["node_id"],
                     "source_filename": record["source_filename"],
                     "prompt": params.get("prompt"),
+                    "workflow_id": params.get("workflow_id"),
+                    "workflow_name": params.get("workflow_name"),
+                    "prompt_id": prompt_id,
                 }),
             ))
             session.commit()
@@ -164,12 +167,14 @@ async def run_comfy_task(job_id: str, params: dict) -> None:
     update_job_progress(job_id, 2, "Checking ComfyUI…", stage="starting")
 
     from memory_manager import memory_manager
+    from services.comfy_settings import comfy_settings
 
+    declared_gb = float(comfy_settings.effective_values()["declared_gb"])
     estimate = memory_manager.admit_job(job_id, "comfy", {
         **params,
         "width": width,
         "height": height,
-        "estimate_gb": params.get("estimate_gb") or config.COMFY_DECLARED_GB,
+        "estimate_gb": params.get("estimate_gb") or declared_gb,
     })
     if not estimate.ok:
         raise MemoryDeferred(estimate.reason or "Not enough memory for ComfyUI")
@@ -239,7 +244,7 @@ async def run_comfy_task(job_id: str, params: dict) -> None:
         if not records:
             raise ComfyError("ComfyUI outputs could not be downloaded")
 
-        asset_ids = _asset_rows(project_id, job_id, records, params)
+        asset_ids = _asset_rows(project_id, job_id, records, params, prompt_id=prompt_id)
         primary = next(
             (record for record in records if record["kind"] in ("video", "image")),
             records[0],
@@ -273,6 +278,8 @@ async def run_comfy_task(job_id: str, params: dict) -> None:
                 "type": primary["kind"],
                 "engine": "comfyui",
                 "prompt_id": prompt_id,
+                "workflow_id": params.get("workflow_id"),
+                "workflow_name": params.get("workflow_name"),
                 "project_id": project_id,
                 "shot_id": shot_id,
                 "asset_id": primary.get("asset_id"),

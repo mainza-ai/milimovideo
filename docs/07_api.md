@@ -197,7 +197,51 @@ returns a normal `job_id`; use `/status/{job_id}` and the `job.*` stream. Output
 are copied into the project and attached to the shot.
 
 Set `MILIMO_COMFY_URL` if ComfyUI is not on `http://127.0.0.1:8001`, and
-`MILIMO_COMFY_GB` to declare its residency.
+`MILIMO_COMFY_GB` to declare its residency. Settings are persisted locally and can
+be read/changed over HTTP:
+
+```bash
+curl -s http://127.0.0.1:8000/comfy/settings
+curl -s -X PUT http://127.0.0.1:8000/comfy/settings \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"http://127.0.0.1:8001","enabled":true,"declared_gb":2,"expected_revision":0}'
+```
+
+The read API redacts the bearer token (`has_token`); send `token` on PUT to
+replace it and an empty string to clear it.
+
+### ComfyUI discovery and media
+
+```bash
+curl -s http://127.0.0.1:8000/comfy/catalog
+curl -s 'http://127.0.0.1:8000/comfy/schema?classes=CheckpointLoaderSimple,KSampler'
+curl -s 'http://127.0.0.1:8000/comfy/models?folder=checkpoints'
+curl -s -X POST http://127.0.0.1:8000/comfy/upload \
+  -H 'Content-Type: application/json' \
+  -d '{"project_id":"PROJECT_ID","url":"/projects/PROJECT_ID/assets/general/source.png"}'
+```
+
+`validate` accepts `live:true` for `/object_info` preflight:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/comfy/validate \
+  -H 'Content-Type: application/json' \
+  -d '{"live":true,"workflow":{"1":{"class_type":"EmptyImage","inputs":{"width":64,"height":48}},"2":{"class_type":"SaveImage","inputs":{"images":["1",0],"filename_prefix":"x"}}}}'
+```
+
+### Saved workflows
+
+```bash
+curl -s http://127.0.0.1:8000/projects/PROJECT_ID/comfy/workflows
+curl -s -X POST http://127.0.0.1:8000/projects/PROJECT_ID/comfy/workflows \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Smoke","workflow":{...},"bindings":{"width":{"node":"1","input":"width"}}}'
+```
+
+Update with `expected_revision`; a stale write returns 409. `POST
+/projects/{id}/comfy/workflows/{workflow_id}/default` sets the project default;
+`DELETE` removes it. `POST /comfy/run` accepts `workflow_id`, `workflow_name`,
+`bindings`, `estimate_seconds`, and `shot_id`.
 
 ## 9. Render, titles, and grading
 

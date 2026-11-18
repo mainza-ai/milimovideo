@@ -254,9 +254,19 @@ does not edit node graphs; it runs a workflow you export from ComfyUI.
    image/video is attached to the shot. **Cancel** deletes/interrupts the ComfyUI
    prompt.
 
-Reuse a saved graph with different inputs by editing the JSON, or pass per-node
-`overrides` through the API. **Setup → ComfyUI bridge** shows reachability,
-version, queue depth, free RAM, and **Free cached models** (`/free`).
+Use **Shot bindings** to map prompt, negative prompt, seed, width, height, steps,
+CFG, and model into node inputs; the same graph then runs across shots. **Node
+inputs** inspects and edits the selected node, and a `LoadImage` node can pull an
+image from **Library** into ComfyUI's input folder. Save named workflows with
+**Save as…**, update/rename/set default, import/export packs, and queue selected
+shots from **Batch across shots**. **Validate** performs live `/object_info`
+preflight when ComfyUI is reachable, so missing nodes/models and empty required
+inputs appear before queueing. Results show preview cards and **Use as shot
+media**.
+
+**Setup → ComfyUI bridge** now edits URL, enabled state, declared GB, and an
+optional bearer token, in addition to probe/free/open. Comfy's own templates are
+UI-format; use **Workflow → Save (API Format)** before importing.
 
 ComfyUI is admitted as a declared external slot (`MILIMO_COMFY_GB`, default 2 GB)
 and competes for the same GPU queue. ComfyUI defaults to port 8001 and SAM 3 to

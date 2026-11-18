@@ -139,18 +139,41 @@ ComfyUI is an external GPU process. Milimo:
 - [Local API](07_api.md) — job, SSE, and ComfyUI endpoints
 - `Milimo Video/systems/comfyui-bridge.md` — implementation and internal contract
 
-## 8. Current frontend limits
+## 8. Implemented Studio surface
 
-The shipped panel is a paste-JSON runner, not a workflow editor. It does not yet:
+The Generate panel now supports:
 
-- bind shot prompt/seed/resolution/model fields to node inputs;
-- upload project images into ComfyUI's input directory for `LoadImage`;
-- validate node classes/models against the live `/object_info`;
-- save named workflows per project (one browser draft only);
-- choose a primary output from a multi-output result set;
-- show inline node/step progress or recover the job after reload;
-- edit the Comfy URL/residency/token in Setup (environment variables only).
+- live preflight against ComfyUI `/object_info` (class, required input, and model
+  choice checks) with per-node error rows;
+- shot bindings for prompt, negative prompt, seed, width, height, steps, CFG, and
+  model; bindings are applied at run time, so one graph is reusable across shots;
+- a node input inspector for the selected node, including typed widgets and
+  link-aware display;
+- `LoadImage` project-media upload: choose a project image, proxy it to ComfyUI's
+  input folder, and write the returned filename into the node;
+- named workflow library per project: save, update, rename, set default, delete,
+  import/export packs (API-format JSON);
+- per-project drafts, copy/download/format, and `⌘/Ctrl+Enter` to run;
+- output result cards with previews and **Use as shot media**;
+- inline queue/progress/cancel/retry, active-job recovery after reload, and a
+  batch queue across selected shots;
+- in-app connection settings: URL, enabled state, declared GB, optional bearer
+  token, and a version-compatibility warning;
+- bounded workflow size/node count and streamed output caps.
 
-The 2026-11 audit, severity register, and phased C0–C5 plan are in
+## 9. Remaining limits
+
+- Comfy's own template JSON is UI-format and often uses subgraphs. Auto-converting
+  it to API format is not implemented; use **Workflow → Save (API Format)** and
+  import that file, or use the project workflow library.
+- The full node-graph editor remains ComfyUI's job. Milimo exposes bindings and a
+  selected-node input inspector, not a canvas.
+- Manual ComfyUI jobs are not cancelled from Milimo; only Milimo-owned prompts have
+  cancel controls.
+- The JSON editor has line/character counts and parse errors but no syntax
+  highlighting or code folding.
+- ComfyUI model downloads and custom-node installation stay in ComfyUI.
+
+The 2026-11 audit and phased C0–C5 status are in
 `Milimo Video/systems/comfyui-frontend-audit-2026-11.md` and
 `Milimo Video/roadmap/comfyui-frontend-plan-2026-11.md`.

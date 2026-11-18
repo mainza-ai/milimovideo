@@ -116,6 +116,20 @@ class Shot(SQLModel, table=True):
     
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+class ComfyWorkflow(SQLModel, table=True):
+    """Named, revisioned ComfyUI API-format workflow for a project."""
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    project_id: str = Field(index=True, foreign_key="project.id")
+    name: str
+    description: str = ""
+    graph_json: str = "{}"
+    bindings_json: str = "{}"
+    revision: int = 0
+    is_default: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class AppSetting(SQLModel, table=True):
     """Versioned application settings blob (currently the LLM configuration plane)."""
     key: str = Field(primary_key=True)

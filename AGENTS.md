@@ -136,7 +136,7 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
   `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`,
   `0006_job_progress` (`Job.stage`, `started_at`, `memory_json`),
   `0007_shot_priority_steps`, `0008_project_render_lut`, `0009_project_titles`,
-  and `0010_shot_transition`, with startup
+  `0010_shot_transition`, and `0011_comfy_workflows`, with startup
   upgrade; legacy DBs are repaired and stamped. Do not add schema columns without
   a migration and migration test.
 - Generated OpenAPI client types: `npm run gen:api`; CI checks drift.
@@ -232,7 +232,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 218 backend tests, 91 Vitest tests, and 21 Playwright tests, plus
+baseline is 222 backend tests, 95 Vitest tests, and 22 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -330,10 +330,10 @@ Run from the repo root unless noted:
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 61 Vitest tests
+npm test                                       # 95 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 21 Playwright tests
+npm run test:e2e                               # 22 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```

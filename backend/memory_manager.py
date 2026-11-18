@@ -333,6 +333,10 @@ class MemoryManager:
             return
         try:
             from services.comfy import ComfyClient
+            from services.comfy_settings import comfy_settings
+
+            if not comfy_settings.effective_values()["enabled"]:
+                return
 
             with ComfyClient(timeout=3.0) as client:
                 queue = client.queue()

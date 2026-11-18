@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/comfy/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comfy Catalog */
+        get: operations["comfy_catalog_comfy_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/comfy/free": {
         parameters: {
             query?: never;
@@ -61,6 +78,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/comfy/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comfy Models */
+        get: operations["comfy_models_comfy_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/comfy/run": {
         parameters: {
             query?: never;
@@ -75,6 +109,58 @@ export interface paths {
          * @description Queue a ComfyUI workflow and ingest every output file it writes.
          */
         post: operations["comfy_run_comfy_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comfy/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comfy Schema */
+        get: operations["comfy_schema_comfy_schema_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comfy/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comfy Get Settings */
+        get: operations["comfy_get_settings_comfy_settings_get"];
+        /** Comfy Update Settings */
+        put: operations["comfy_update_settings_comfy_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comfy/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Comfy Upload */
+        post: operations["comfy_upload_comfy_upload_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -970,6 +1056,59 @@ export interface paths {
         /** Save Board */
         put: operations["save_board_projects__project_id__board_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/comfy/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Comfy Workflows */
+        get: operations["list_comfy_workflows_projects__project_id__comfy_workflows_get"];
+        put?: never;
+        /** Create Comfy Workflow */
+        post: operations["create_comfy_workflow_projects__project_id__comfy_workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/comfy/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Comfy Workflow */
+        put: operations["update_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__put"];
+        post?: never;
+        /** Delete Comfy Workflow */
+        delete: operations["delete_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/projects/{project_id}/comfy/workflows/{workflow_id}/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Default Comfy Workflow */
+        post: operations["default_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__default_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2776,6 +2915,13 @@ export interface components {
         };
         /** ComfyRunRequest */
         ComfyRunRequest: {
+            /**
+             * Bindings
+             * @default {}
+             */
+            bindings: {
+                [key: string]: unknown;
+            };
             /** Estimate Gb */
             estimate_gb?: number | null;
             /** Estimate Seconds */
@@ -2801,6 +2947,56 @@ export interface components {
             timeout_sec?: number | null;
             /** Workflow */
             workflow: unknown;
+            /** Workflow Id */
+            workflow_id?: string | null;
+            /** Workflow Name */
+            workflow_name?: string | null;
+        };
+        /** ComfySavedWorkflowRequest */
+        ComfySavedWorkflowRequest: {
+            /**
+             * Bindings
+             * @default {}
+             */
+            bindings: {
+                [key: string]: unknown;
+            };
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Expected Revision */
+            expected_revision?: number | null;
+            /**
+             * Is Default
+             * @default false
+             */
+            is_default: boolean;
+            /** Name */
+            name: string;
+            /** Workflow */
+            workflow: unknown;
+        };
+        /** ComfySettingsRequest */
+        ComfySettingsRequest: {
+            /** Declared Gb */
+            declared_gb?: number | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Expected Revision */
+            expected_revision?: number | null;
+            /** Token */
+            token?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /** ComfyUploadRequest */
+        ComfyUploadRequest: {
+            /** Project Id */
+            project_id: string;
+            /** Url */
+            url: string;
         };
         /**
          * ComfyWorkflowRequest
@@ -2809,6 +3005,11 @@ export interface components {
         ComfyWorkflowRequest: {
             /** Filename Prefix */
             filename_prefix?: string | null;
+            /**
+             * Live
+             * @default false
+             */
+            live: boolean;
             /**
              * Overrides
              * @default {}
@@ -4165,6 +4366,26 @@ export interface operations {
             };
         };
     };
+    comfy_catalog_comfy_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     comfy_free_comfy_free_post: {
         parameters: {
             query?: never;
@@ -4205,6 +4426,37 @@ export interface operations {
             };
         };
     };
+    comfy_models_comfy_models_get: {
+        parameters: {
+            query: {
+                folder: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     comfy_run_comfy_run_post: {
         parameters: {
             query?: never;
@@ -4215,6 +4467,123 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ComfyRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comfy_schema_comfy_schema_get: {
+        parameters: {
+            query: {
+                classes: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comfy_get_settings_comfy_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    comfy_update_settings_comfy_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComfySettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comfy_upload_comfy_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComfyUploadRequest"];
             };
         };
         responses: {
@@ -5813,6 +6182,172 @@ export interface operations {
                 "application/json": components["schemas"]["BoardLayoutPayload"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_comfy_workflows_projects__project_id__comfy_workflows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_comfy_workflow_projects__project_id__comfy_workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComfySavedWorkflowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComfySavedWorkflowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    default_comfy_workflow_projects__project_id__comfy_workflows__workflow_id__default_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

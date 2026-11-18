@@ -1326,7 +1326,7 @@ Generate progress, and resync/watchdog wiring for takes/assets/renders/models.
 Alembic `0006_job_progress` adds `stage`, `started_at`, `memory_json`; LLM schema
 v3 adds `memory_gb`. Tests: `tests/test_memory_budget.py` (25),
 `tests/test_job_events.py` (9), `jobBridge.test.tsx` (6),
-`JobProgressUi.test.tsx` (3). Green: 159 backend, 70 Vitest, 21 Playwright,
+`JobProgressUi.test.tsx` (3). Green: 159 backend, 70 Vitest, 22 Playwright,
 ruff/tsc/lint/build/bundle/verify_setup.
 
 Live evidence: SSE showed `job.queued → started → loading → conditioning →
@@ -1355,7 +1355,7 @@ Closed the remaining P1 gaps that were still open in the two audits.
 - Engine snapshot failures no longer break `/system/memory`; the active-job list
   is now replaced from `/active_jobs` so a missed terminal cannot leave a spinner.
 
-Counts: 162 backend tests, 72 Vitest tests, 21 Playwright tests.
+Counts: 162 backend tests, 72 Vitest tests, 22 Playwright tests.
 
 ## [2026-11-17] implement | complete the remaining M2/M4/N4/N5 work
 
@@ -1408,7 +1408,7 @@ toasts/sound/OS), a Tauri `set_window_title` command so the desktop window shows
 `% · stage · Milimo` while busy, and the macOS Notification Center `notify`
 command. Also changed the e2e Vite server to `reuseExistingServer: false` so a
 dev server pointed at :8000 can no longer make the suite test the wrong database.
-Counts: 172 backend, 79 Vitest, 21 Playwright.
+Counts: 172 backend, 79 Vitest, 22 Playwright.
 
 ## [2026-11-17] implement | remaining M5 and dock badge
 
@@ -1425,7 +1425,7 @@ Counts: 172 backend, 79 Vitest, 21 Playwright.
 - **Dock badge**: Tauri `set_badge` uses `set_badge_label` (macOS) and
   `set_badge_count`; the activity center shows the progress percent and active
   count, cleared on idle. `cargo check` clean.
-- Tests: 181 backend, 79 Vitest, 21 Playwright.
+- Tests: 181 backend, 79 Vitest, 22 Playwright.
 
 ## [2026-11-17] docs | sync wiki, technical docs, and README with M0–M5 / N0–N5
 
@@ -1519,7 +1519,7 @@ wiki.
 - **P1-2 status**: diffusers 0.36 has GGUF quantization but no Klein/Qwen3
   pipeline; the 5.7 GB Q4_K_M artifact is available but needs a 0.37.dev pipeline
   or an in-house dequant loader.
-- Tests: 181 backend, 79 Vitest, 21 Playwright.
+- Tests: 181 backend, 79 Vitest, 22 Playwright.
 
 ## [2026-11-17] research | model and workflow landscape, plan re-sequence
 
@@ -1557,7 +1557,7 @@ Executed the code-completable P1/P2 items.
   `MILIMO_FLUX_GGUF`, manifest Q4_K_M entry, GGUF guards for IP-Adapter/inpaint.
   Real MPS generation 256×256 verified (non-black, 6k colors); app-level path
   verified.
-- Tests: 190 backend (OTIO 2, GGUF 2, Wan 5), 79 Vitest, 21 Playwright.
+- Tests: 190 backend (OTIO 2, GGUF 2, Wan 5), 79 Vitest, 22 Playwright.
 - Caveats: CUDA validation for Wan/GGUF, LTX-2.5 diffusers, image-to-video for
   Wan, XML/OTIO import, and the sidecar/cutover remain.
 
@@ -1572,13 +1572,13 @@ Executed the code-completable P1/P2 items.
   kind default. Tests for persistence and queue order.
 - **Tauri tray**: tray icon with show/quit, tooltip command wired to the activity
   center; `cargo check` clean.
-- Tests: 193 backend, 79 Vitest, 21 Playwright.
+- Tests: 193 backend, 79 Vitest, 22 Playwright.
 
 ## [2026-11-18] implement | FCPXML export
 
 Added `otio-fcpx-xml-adapter` and `?format=fcpxml` to the OTIO endpoint, a Deliver
 **Export FCPXML** button, and a round-trip test that reads the XML back through
-OTIO. Tests: 194 backend, 79 Vitest, 21 Playwright.
+OTIO. Tests: 194 backend, 79 Vitest, 22 Playwright.
 
 ## [2026-11-18] implement | ComfyUI bridge
 
@@ -1602,7 +1602,7 @@ OTIO. Tests: 194 backend, 79 Vitest, 21 Playwright.
   on ComfyUI 0.45.0 (port 8001) completed and produced a PNG.
 - **Docs**: `systems/comfyui-bridge.md`, index, architecture, memory slots,
   roadmap, README, user guide, AGENTS.
-- Tests: 206 backend, 91 Vitest, 21 Playwright.
+- Tests: 206 backend, 95 Vitest, 22 Playwright.
 
 ## [2026-11-18] implement | FCPXML import
 
@@ -1627,7 +1627,7 @@ trims, and project media URLs. Resolve XML remains (no adapter).
   URL both served `/health`, created/loaded projects, and passed memory preflight.
   A real FFmpeg render through a red/blue swap LUT asserted the blue channel; a
   missing LUT returns 404.
-- Tests: 206 backend, 91 Vitest, 21 Playwright.
+- Tests: 206 backend, 95 Vitest, 22 Playwright.
 
 ## [2026-11-18] implement | titles, A2, and V1 crossfades
 
@@ -1640,7 +1640,7 @@ trims, and project media URLs. Resolve XML remains (no adapter).
 - **V1 crossfade**: `shot.transition_in` (Alembic 0010), shared overlap clamp in
   the timeline layout, render, and OTIO metadata; incoming alpha ramps 0→1 over
   the previous clip. Real pixel test asserts a red/blue midpoint mix.
-- Tests: 217 backend, 91 Vitest, 21 Playwright.
+- Tests: 217 backend, 95 Vitest, 22 Playwright.
 
 ## [2026-11-18] implement | lens recipe packs
 
@@ -1687,7 +1687,7 @@ lens packs, and the current 214/90/21 test baseline.
   SAM 3, and Depth; Setup/Model Library show Recommended and rationale.
 - **Docs**: detailed ComfyUI bridge guide, README screenshots, SAM port, LTX-2.5
   page, delete instructions, and current model lanes.
-- Tests: 217 backend, 91 Vitest, 21 Playwright.
+- Tests: 217 backend, 95 Vitest, 22 Playwright.
 
 ## [2026-11-18] implement | real LTX-2.5 download and MPS generation
 
@@ -1702,7 +1702,7 @@ LTX2 RoPE builds float64 frequencies when `double_precision` is set, so the MPS
 path disables that flag. Real run: 9 frames at 256², 1 step, seed 42, `a slow
 cinematic dolly-in...`; output was video with native 48 kHz audio. The queued
 `pipeline_override=ltx25` API path completed, attached the shot, wrote a poster,
-and `ffprobe` showed both video and audio streams. Tests: 218 backend.
+and `ffprobe` showed both video and audio streams. Tests: 222 backend.
 
 ## [2026-11-18] audit | ComfyUI frontend integration
 
@@ -1716,3 +1716,24 @@ node definitions and 11 workflow templates that the UI does not use. P1 gaps:
 no shot/node bindings, no project-media upload, structural-only validation, global
 localStorage draft, no output selection, no job recovery after reload. Updated the
 P2 roadmap row, implementation plan, ComfyUI docs, and index.
+
+## [2026-11-18] implement | ComfyUI C0–C5 frontend surface
+
+Executed the ComfyUI frontend plan:
+
+- **C0:** live `/object_info` preflight with per-node errors, per-project drafts,
+  export/copy/format, dirty state, bounds, active-job recovery.
+- **C1:** shot bindings for prompt/negative/seed/size/steps/CFG/model, per-node
+  input inspector, model picker, project-image upload via `/comfy/upload` and
+  `LoadImage` rewrite.
+- **C2:** persisted named workflows (Alembic 0011), CRUD/revision/default/rename,
+  pack import/export, provenance fields on Asset/terminal.
+- **C3:** result cards with preview/“Use as shot media”, inline progress/cancel/
+  retry, batch queue, estimate field.
+- **C4:** in-app Comfy settings (URL/enabled/GB/token, revision CAS), version gate,
+  workflow/node/output caps.
+- **C5:** copy/download/format, ⌘/Ctrl+Enter run, Playwright panel test.
+
+Live checks: catalog 2,082 nodes, schema fetch, project image upload to Comfy,
+missing-node preflight error, workflow CRUD, smoke run completed with output/poster,
+asset deletion. Tests: 222 backend, 95 Vitest, 22 Playwright.

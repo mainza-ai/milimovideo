@@ -799,7 +799,7 @@ export function GenerateSurface() {
                         </div>
                     </details>
                 </div>
-                <ComfyWorkflowPanel projectId={project.id} shotId={shot.id} />
+                <ComfyWorkflowPanel key={project.id} projectId={project.id} shotId={shot.id} />
                 <div className="st-inspector-section">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                         <span className="st-label">Active queue · {activeJobs.length}</span>

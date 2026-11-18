@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Response, UploadFile, File
 from typing import List, Optional
 from sqlmodel import Session, select, SQLModel
-from database import get_session, Project, Shot, Scene
+from database import ComfyWorkflow, get_session, Project, Shot, Scene
 from schemas import (
     BoardLayoutPayload,
     BoardViewPayload,
@@ -304,6 +304,9 @@ def delete_project(project_id: str, session: Session = Depends(get_session)):
     scenes = session.exec(select(Scene).where(Scene.project_id == project_id)).all()
     for sc in scenes:
         session.delete(sc)
+    workflows = session.exec(select(ComfyWorkflow).where(ComfyWorkflow.project_id == project_id)).all()
+    for workflow in workflows:
+        session.delete(workflow)
     session.delete(project)
     session.commit()
     

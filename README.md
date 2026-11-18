@@ -116,7 +116,10 @@ budget, and price gates pass.
 
 ComfyUI is a separate local engine, never a dependency. Build a graph in ComfyUI,
 choose **Workflow → Save (API Format)**, and run it from **Generate → ComfyUI
-workflow**. Outputs are copied into the project and attached to the shot.
+workflow**. The panel supports live preflight, shot bindings, per-node inputs,
+project-image upload, saved workflows/packs, result selection, inline progress,
+retry/batch, and in-app connection settings. Outputs are copied into the project
+and attached to the shot.
 
 ```bash
 export MILIMO_COMFY_URL=http://127.0.0.1:8001
@@ -148,20 +151,20 @@ Set `MILIMO_COMFY_URL` or `MILIMO_SAM_PORT` to override either.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # 218 backend tests
+./milimov/bin/python -m pytest                 # 222 backend tests
 ./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # 0 failures expected
 
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 91 Vitest tests
+npm test                                       # 95 Vitest tests
 npm run build
 npm run check:bundle
-npm run test:e2e                               # 21 Playwright tests
+npm run test:e2e                               # 22 Playwright tests
 ```
 
-Last verified: 218 backend, 91 Vitest, 21 Playwright; CI green on `main` and
+Last verified: 222 backend, 95 Vitest, 22 Playwright; CI green on `main` and
 `develop` (backend + frontend). Render changes are checked with real FFmpeg pixels,
 not only filtergraph strings.
 
@@ -205,8 +208,9 @@ Milimo Video/      Project wiki
 - **Packaging:** no bundled Python/Torch sidecar binary yet.
 - **Memory:** costs are measured estimates, Strata has no unload endpoint, and a
   cancelled job keeps its pipeline until the idle TTL.
-- **ComfyUI:** workflow editing stays in ComfyUI; residency is declared, not
-  measured per model.
+- **ComfyUI:** workflow editing stays in ComfyUI; its native UI-format templates
+  require **Save (API Format)** before import; residency is declared, not measured
+  per model.
 
 ## Community
 

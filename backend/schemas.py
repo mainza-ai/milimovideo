@@ -297,6 +297,29 @@ class ComfyWorkflowRequest(BaseModel):
     workflow: Any
     overrides: Dict[str, Dict[str, Any]] = {}
     filename_prefix: Optional[str] = None
+    live: bool = False
+
+
+class ComfyUploadRequest(BaseModel):
+    project_id: str
+    url: str
+
+
+class ComfySettingsRequest(BaseModel):
+    url: Optional[str] = None
+    enabled: Optional[bool] = None
+    declared_gb: Optional[float] = None
+    token: Optional[str] = None
+    expected_revision: Optional[int] = None
+
+
+class ComfySavedWorkflowRequest(BaseModel):
+    name: str
+    description: str = ""
+    workflow: Any
+    bindings: Dict[str, Any] = {}
+    is_default: bool = False
+    expected_revision: Optional[int] = None
 
 
 class ComfyRunRequest(BaseModel):
@@ -306,6 +329,9 @@ class ComfyRunRequest(BaseModel):
     overrides: Dict[str, Dict[str, Any]] = {}
     filename_prefix: Optional[str] = None
     prompt: Optional[str] = None
+    workflow_id: Optional[str] = None
+    workflow_name: Optional[str] = None
+    bindings: Dict[str, Any] = {}
     estimate_gb: Optional[float] = None
     estimate_seconds: Optional[float] = None
     timeout_sec: Optional[float] = None

@@ -89,7 +89,7 @@ The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
 - the finishing pass: project 3D LUT, burned-in titles, A2 audio, V1 crossfades,
   OTIO/FCPXML import/export, lens recipe packs, and an optional ComfyUI bridge.
 
-Verification: **218 backend tests, 91 Vitest tests, 21 Playwright tests**, clean
+Verification: **222 backend tests, 95 Vitest tests, 22 Playwright tests**, clean
 ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
 failures.
 

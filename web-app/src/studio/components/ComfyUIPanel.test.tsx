@@ -61,7 +61,25 @@ describe('ComfyWorkflowPanel', () => {
     beforeEach(() => {
         window.localStorage.removeItem('milimo-comfy-workflow');
         useStudioJobs.setState({ activeJobs: [], history: [], metrics: null, lastUpdated: null, unread: 0 });
-        useStudioDocumentStore.setState({ toasts: [], updateShot: vi.fn() });
+        useStudioDocumentStore.setState({
+            toasts: [],
+            updateShot: vi.fn(),
+            project: {
+                id: 'proj-1',
+                name: 'Test',
+                fps: 25,
+                seed: 42,
+                resolutionW: 768,
+                resolutionH: 512,
+                shots: [{
+                    id: 'shot-1', prompt: 'a prompt', negativePrompt: '', seed: 7,
+                    width: 768, height: 512, numFrames: 25, numInferenceSteps: 8,
+                    cfgScale: 2, pipelineOverride: 'auto', trackIndex: 0,
+                    trimIn: 0, trimOut: 0, timeline: [], status: 'pending',
+                }],
+                scenes: [],
+            },
+        } as any);
     });
 
     afterEach(() => {
@@ -78,8 +96,12 @@ describe('ComfyWorkflowPanel', () => {
         await waitFor(() => expect(screen.getByText('2 nodes')).toBeTruthy());
         expect(calls.some((call) => call.url.includes('/comfy/validate'))).toBe(true);
 
-        fireEvent.click(screen.getByText('Run workflow'));
-        await waitFor(() => expect(useStudioJobs.getState().activeJobs).toHaveLength(1));
+        await waitFor(() => {
+            const button = screen.getByText('Run').closest('button');
+            expect(button?.disabled).toBe(false);
+        });
+        fireEvent.click(screen.getByText('Run'));
+        await waitFor(() => expect(calls.some((call) => call.url.includes('/comfy/run'))).toBe(true), { timeout: 3000 });
 
         const run = calls.find((call) => call.url.includes('/comfy/run'));
         const body = bodyOf(run?.init);
@@ -89,14 +111,12 @@ describe('ComfyWorkflowPanel', () => {
             '1': { class_type: 'EmptyImage' },
             '2': { class_type: 'SaveImage' },
         });
-        expect(useStudioJobs.getState().activeJobs[0]).toMatchObject({
-            job_id: 'job_comfy_test', kind: 'comfy', status: 'queued',
-        });
+        expect(body.workflow_id).toBeUndefined();
         expect(useStudioDocumentStore.getState().updateShot).toHaveBeenCalledWith(
             'shot-1',
             expect.objectContaining({ isGenerating: true, lastJobId: 'job_comfy_test' }),
         );
-        expect(window.localStorage.getItem('milimo-comfy-workflow')).toContain('EmptyImage');
+        expect(window.localStorage.getItem('milimo-comfy-workflow:proj-1')).toContain('EmptyImage');
     });
 
     it('hides the Generate panel while ComfyUI is offline', async () => {

@@ -35,7 +35,7 @@ a test; "open" means no code or no verified path.
 | Issue #1 (Wan 2.2) | Open | **Feature gap**: a separate model family, not an LTX patch. |
 | PR #7 (`enhance_prompt` tuple) | Open | **Superseded**: both call sites already unpack on `main` (`tasks/image.py:98`, `tasks/video.py:290`). Close with a pointer. |
 | PR #8 (`encode_video` no_grad) | Open | **Still valid**: `media_io.py` has no `torch.no_grad()` around generator consumption; the CUDA inference-tensor crash is real. Rebase, test, merge. |
-| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 218 tests pass locally. |
+| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 222 tests pass locally. |
 | Security alerts | Disabled | `vulnerability-alerts` returns 404; Dependabot/security alerts are not enabled. |
 
 ### Roadmap / AGENTS deferrals
@@ -118,7 +118,7 @@ is the supported upgrade.
 |---|---|---|
 | **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | **Delivered for OTIO + FCPXML** — export/import OTIO, export/import FCPXML, Deliver buttons, V1/V2/A1, trims, gaps, MissingReference, round-trip tests. Resolve XML remains. |
 | **ComfyUI bridge** | Import/export a ComfyUI workflow, submit it through the queue, ingest outputs and provenance | **Backend delivered** — `/comfy/{health,validate,run,free}`, queue/memory admission, websocket + polling progress, streamed outputs into assets/shots, smoke test. Frontend is a paste-JSON runner; see the audit below. |
-| **ComfyUI frontend depth** | Live preflight, shot bindings, project-media upload, workflow library/templates, result selection, provenance, inline progress, remote config | **Planned** — C0 trust/recovery, C1 binding/media, C2 library, C3 results/batch, C4 remote, C5 polish in [[comfyui-frontend-plan-2026-11]]. See [[../systems/comfyui-frontend-audit-2026-11]]. |
+| **ComfyUI frontend depth** | Live preflight, shot bindings, project-media upload, workflow library/templates, result selection, provenance, inline progress, remote config | **C0/C1/C3 delivered; C2/C4/C5 mostly delivered** — bindings, media upload, live preflight, per-project library, result selection, batch/retry, inline progress, settings/token/version gate, E2E. Remaining: UI-format template conversion, manual Comfy queue controls, syntax-highlighted editor. See [[comfyui-frontend-plan-2026-11]]. |
 | NLE completeness | Transitions, titles, A2 track | **Delivered** — project LUT, burned-in titles, A1/A2 mix, and V1 crossfade overlap with alpha ramp; real pixel tests. Dip/wipe/slide transitions remain. |
 | Embedding search | Local embedding model via the LLM plane, index, ranked results with lexical fallback | Semantic shot search works offline |
 | Shorts/lens packs | Versioned template packs, import/export, preview | **Lens packs delivered** — `{name, recipes}` / array import with per-recipe selection and validation. Shorts template packs remain. |

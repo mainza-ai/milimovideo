@@ -442,19 +442,20 @@ without OOM; `/system/memory` exposed the measured budget and counters. The M5
 artifact swaps remain a model program, not app code. See
 [[../systems/memory-management-audit-2026-11]].
 
-## ComfyUI Frontend Track (Planned)
+## ComfyUI Frontend Track (Delivered / partial)
 
-The bridge backend is shipped; the frontend is a paste-JSON runner. The 2026-11
+The bridge backend and the reusable frontend surface are shipped. The 2026-11
 audit and phased plan are:
 
-- [[../systems/comfyui-frontend-audit-2026-11]] — C-01…C-24 gap register and live
-  evidence (unknown nodes pass structural validation; 2,082 Comfy nodes and 11
-  templates are not surfaced).
-- [[comfyui-frontend-plan-2026-11]] — **C0** live preflight/recovery, **C1**
-  shot bindings + project-media upload, **C2** workflow library/templates,
-  **C3** result selection/provenance/batch, **C4** remote config, **C5** polish/E2E.
+- [[../systems/comfyui-frontend-audit-2026-11]] — original C-01…C-24 gap register,
+  implementation update, and residual limits.
+- [[comfyui-frontend-plan-2026-11]] — **C0** live preflight/recovery ✅, **C1**
+  shot bindings + project-media upload ✅, **C2** workflow library/packs ✅
+  (Comfy template auto-conversion deferred), **C3** result selection/provenance/
+  batch ✅, **C4** settings/version gate ✅ (manual queue controls deferred),
+  **C5** copy/format/keyboard/E2E ✅ (syntax-highlighted editor deferred).
 
-Recommended next release: **C0 + C1**. ComfyUI remains optional throughout.
+ComfyUI remains optional throughout.
 
 ## Quality Gates
 

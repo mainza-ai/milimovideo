@@ -20,7 +20,21 @@ into a reusable workflow surface without turning Milimo into a node editor.
 
 Priority order: **trust → reuse → library → results → remote → polish**.
 
-## C0 — Trust and recovery (P1, 2–3 days)
+## Status 2026-11-18
+
+| Phase | Status | Delivered / remaining |
+|---|---|---|
+| **C0** | ✅ | Live `/object_info` preflight, per-node errors, active-job recovery, per-project drafts, copy/download/format, bounds |
+| **C1** | ✅ | Binding schema/controls, node input inspector, model picker, project-image upload, reusable graphs |
+| **C2** | ⚠ | Library CRUD/revisions/default, rename, pack import/export, provenance. Comfy's UI-format/subgraph templates still need **Save (API Format)** |
+| **C3** | ✅ | Output result set/primary selection, inline progress/cancel, retry, batch queue, cost/ETA field |
+| **C4** | ⚠ | In-app settings/token/GB, version gate, caps. Manual Comfy queue controls are not exposed |
+| **C5** | ⚠ | Copy/download/format, dirty state, keyboard run, E2E. Syntax highlighting/line numbers remain |
+
+Recommended next release is a **C2 template-conversion / C4 queue-control** pass only
+if those are required; the normal generation surface is complete.
+
+## C0 — Trust and recovery (P1, 2–3 days) ✅
 
 | Work | Acceptance |
 |---|---|
@@ -34,7 +48,7 @@ Priority order: **trust → reuse → library → results → remote → polish*
 **Tests:** missing node/model preflight, malformed JSON line, draft isolation,
 recovered job cancel, export file.
 
-## C1 — Binding and media bridge (P1, 4–6 days)
+## C1 — Binding and media bridge (P1, 4–6 days) ✅
 
 | Work | Acceptance |
 |---|---|
@@ -49,7 +63,7 @@ recovered job cancel, export file.
 error; uploaded image reaches a live/fake Comfy input; temp cleanup on success,
 failure, and cancel.
 
-## C2 — Workflow library and templates (P2, 1–2 weeks)
+## C2 — Workflow library and templates (P2, 1–2 weeks) ⚠
 
 | Work | Acceptance |
 |---|---|
@@ -62,7 +76,7 @@ failure, and cancel.
 **Tests:** CRUD/revision conflict, template list/import, pack round-trip, provenance
 on Asset/Job.
 
-## C3 — Results, progress, and batch (P2, 1 week)
+## C3 — Results, progress, and batch (P2, 1 week) ✅
 
 | Work | Acceptance |
 |---|---|
@@ -75,7 +89,7 @@ on Asset/Job.
 **Tests:** multi-output primary selection, recovered progress, retry, duplicate
 guard, batch with bindings, size/ETA display.
 
-## C4 — Remote, setup, and controls (P2–P3, 3–5 days)
+## C4 — Remote, setup, and controls (P2–P3, 3–5 days) ⚠
 
 | Work | Acceptance |
 |---|---|
@@ -88,7 +102,7 @@ guard, batch with bindings, size/ETA display.
 **Tests:** config persistence, remote/token redaction, version mismatch, queue
 control isolation, output cap.
 
-## C5 — Editor polish and E2E (P3, 3–4 days)
+## C5 — Editor polish and E2E (P3, 3–4 days) ⚠
 
 | Work | Acceptance |
 |---|---|
@@ -115,11 +129,14 @@ after C0.
 
 ## Definition of done for the track
 
-- A saved graph can be reused across shots with prompt/seed/size/model bindings.
-- A reference image can be uploaded from the project and used by `LoadImage`.
-- Validate catches missing nodes, missing models, and bad required inputs before
+- [x] A saved graph can be reused across shots with prompt/seed/size/model bindings.
+- [x] A reference image can be uploaded from the project and used by `LoadImage`.
+- [x] Validate catches missing nodes, missing models, and bad required inputs before
   queueing.
-- Workflows survive project switches, reloads, and revisions.
-- Multi-output runs have an explicit primary and reproducible provenance.
-- Offline, disabled, and remote configurations are explicit and safe.
-- No core Milimo path depends on ComfyUI.
+- [x] Workflows survive project switches, reloads, and revisions.
+- [x] Multi-output runs have an explicit primary and reproducible provenance.
+- [x] Offline, disabled, and remote configurations are explicit and safe.
+- [x] No core Milimo path depends on ComfyUI.
+- [ ] Comfy UI-format templates auto-convert to API format (requires a graph
+  compiler; not shipped).
+- [ ] Manual Comfy queue control (Milimo only controls its own prompts).

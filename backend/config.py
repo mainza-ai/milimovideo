@@ -43,6 +43,10 @@ COMFY_URL = os.environ.get("MILIMO_COMFY_URL", "http://127.0.0.1:8001").rstrip("
 COMFY_TIMEOUT_SEC = float(os.environ.get("MILIMO_COMFY_TIMEOUT", "30"))
 # Wall-clock ceiling for a queued workflow (model downloads excluded).
 COMFY_JOB_TIMEOUT_SEC = float(os.environ.get("MILIMO_COMFY_JOB_TIMEOUT", "3600"))
+COMFY_MAX_NODES = int(os.environ.get("MILIMO_COMFY_MAX_NODES", "500"))
+COMFY_MAX_WORKFLOW_BYTES = int(os.environ.get("MILIMO_COMFY_MAX_WORKFLOW_BYTES", str(1024 * 1024)))
+COMFY_MAX_OUTPUT_MB = int(os.environ.get("MILIMO_COMFY_MAX_OUTPUT_MB", "4096"))
+COMFY_MIN_VERSION = os.environ.get("MILIMO_COMFY_MIN_VERSION", "0.40").strip()
 # ComfyUI keeps its own models resident and has no per-model accounting. The
 # declared residency is admitted before a workflow and released with /free.
 COMFY_DECLARED_GB = float(os.environ.get("MILIMO_COMFY_GB", "2"))

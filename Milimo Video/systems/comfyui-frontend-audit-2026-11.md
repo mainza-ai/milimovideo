@@ -24,7 +24,45 @@ The ComfyUI backend is a usable **generic workflow bridge**. The frontend is a
 gaps are not transport or output ingestion; they are workflow binding, discovery,
 persistence, validation, project-media handoff, and result selection.
 
-Current state: **backend ahead of frontend by roughly one product phase**.
+Current state: **C0/C1 implemented, C2/C3/C4 largely implemented, C5 polish
+partial**. The original gap register below is retained as the audit snapshot; see
+the implementation update for what changed.
+
+## Implementation update (2026-11-18)
+
+The C0–C5 plan was executed after this audit. Resolved:
+
+| Area | Resolution |
+|---|---|
+| C-01/C-02 | Shot binding controls for prompt, negative, seed, width, height, steps, CFG, and model |
+| C-03 | `POST /comfy/upload` proxies project media to ComfyUI's input folder; `LoadImage` node picker |
+| C-04 | Live `/object_info` preflight (classes, required inputs, model choices) and per-node error rows |
+| C-05 | `/comfy/catalog`, `/comfy/schema`, `/comfy/models` exposed and used by the panel |
+| C-06 | Named per-project workflows plus a per-project browser draft |
+| C-07 | Output result cards with preview and **Use as shot media** |
+| C-08 | Active Comfy jobs discovered on mount; cancel/progress recover after reload |
+| C-09 | Copy, download, format, line/character counts, dirty state |
+| C-10 | Workflow library CRUD, rename, revisions, default, pack import/export |
+| C-11 | Inline queue/step/progress/cancel/retry in the panel |
+| C-13 | In-app URL/enabled/GB/token settings with revision CAS |
+| C-14 | Bearer token on Comfy requests, version compatibility gate |
+| C-15 | Asset provenance now includes workflow id/name and Comfy `prompt_id` |
+| C-17 | Batch queue across selected shots |
+| C-18 | Workflow/node size caps and output byte cap |
+| C-22 | Backend unit coverage + a Playwright Comfy panel test |
+
+Still open:
+
+- **C-10 templates:** Comfy's own templates are UI-format and often contain
+  subgraph UUID nodes; auto-conversion to API format is not implemented. Import
+  requires **Workflow → Save (API Format)**.
+- **C-16 queue controls:** Milimo cancels only its own prompts; manual Comfy queue
+  items are not managed from Studio.
+- **C-19/C-20 syntax/line numbers:** counts, dirty state, and keyboard run are in;
+  a syntax-highlighted/folding editor is not.
+- **C-21** dirty indicator is present; explicit “discard draft” is still absent.
+- **C-23/C-24** version gate is present; the offline panel still requires Setup to
+  change the URL.
 
 ## Method
 

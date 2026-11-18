@@ -67,6 +67,8 @@ class _FakeComfy(BaseHTTPRequestHandler):
             payload = self._body()
             type(self).freed.append(payload)
             self._json({"ok": True})
+        elif path == "/upload/image":
+            self._json({"name": "uploaded.png", "subfolder": "milimo", "type": "input"})
         else:
             self._json({"error": "not found"}, 404)
 
@@ -92,6 +94,26 @@ class _FakeComfy(BaseHTTPRequestHandler):
                     "metadata": {"kind": "image", "width": 64, "height": 48},
                 }]}},
             }})
+        elif path == "/object_info":
+            self._json({
+                "EmptyImage": {
+                    "input": {"required": {
+                        "width": ["INT", {"default": 512}],
+                        "height": ["INT", {"default": 512}],
+                    }},
+                    "output": ["IMAGE"], "output_node": False, "category": "image",
+                    "display_name": "Empty Image",
+                },
+                "SaveImage": {
+                    "input": {"required": {"images": ["IMAGE"]}},
+                    "output": [], "output_node": True, "category": "image",
+                    "display_name": "Save Image",
+                },
+            })
+        elif path == "/workflow_templates":
+            self._json({"test": ["Smoke"]})
+        elif path == "/models/checkpoints":
+            self._json([])
         elif path == "/view":
             self.send_response(200)
             self.send_header("Content-Type", "image/png")
@@ -335,3 +357,94 @@ def test_comfy_is_optional_and_can_be_disabled(app_client, project, monkeypatch)
         "kind": "image", "params": {"width": 512, "height": 512},
     })
     assert preflight.status_code == 200
+
+
+def test_live_preflight_rejects_unknown_nodes(fake_comfy):
+    from services.comfy import ComfyClient
+
+    workflow = {
+        "1": {"class_type": "DefinitelyMissing", "inputs": {}},
+        "2": {"class_type": "SaveImage", "inputs": {"images": ["1", 0]}},
+    }
+    with ComfyClient(base_url=fake_comfy, timeout=5) as client:
+        result = client.validate_live(workflow)
+    assert result["ok"] is False
+    assert result["errors"][0]["class_type"] == "DefinitelyMissing"
+
+
+def test_catalog_schema_and_upload(fake_comfy):
+    from services.comfy import ComfyClient
+
+    with ComfyClient(base_url=fake_comfy, timeout=5) as client:
+        catalog = client.catalog()
+        assert catalog["node_count"] == 2
+        assert catalog["templates"]["test"] == ["Smoke"]
+        schema = client.schema_for(["SaveImage", "Nope"])
+        assert set(schema) == {"SaveImage"}
+        assert client.models("checkpoints") == []
+        upload = client.upload_image("still.png", PNG_BYTES)
+        assert upload["name"] == "uploaded.png"
+
+
+def test_comfy_settings_are_persisted_and_token_is_redacted(app_client):
+    original = app_client.get("/comfy/settings").json()
+    try:
+        saved = app_client.put("/comfy/settings", json={
+            "url": "http://127.0.0.1:9999",
+            "enabled": False,
+            "declared_gb": 7.5,
+            "token": "secret-token",
+            "expected_revision": original["revision"],
+        })
+        assert saved.status_code == 200, saved.text
+        data = saved.json()
+        assert data["enabled"] is False
+        assert data["declared_gb"] == 7.5
+        assert data["has_token"] is True
+        assert "secret-token" not in saved.text
+        conflict = app_client.put("/comfy/settings", json={
+            "url": "http://127.0.0.1:9999",
+            "expected_revision": original["revision"],
+        })
+        assert conflict.status_code == 409
+    finally:
+        app_client.put("/comfy/settings", json={
+            "url": original["url"],
+            "enabled": True,
+            "declared_gb": original["declared_gb"],
+            "token": "",
+        })
+
+
+def test_saved_workflows_crud_revision_and_default(app_client, project):
+    pid = project["id"]
+    created = app_client.post(f"/projects/{pid}/comfy/workflows", json={
+        "name": "Smoke",
+        "description": "empty image",
+        "workflow": EMPTY_IMAGE_WORKFLOW,
+        "bindings": {"width": {"node": "1", "input": "width"}},
+        "is_default": True,
+    })
+    assert created.status_code == 200, created.text
+    row = created.json()
+    assert row["is_default"] is True
+    assert row["revision"] == 0
+
+    updated = app_client.put(f"/projects/{pid}/comfy/workflows/{row['id']}", json={
+        "name": "Smoke v2",
+        "workflow": EMPTY_IMAGE_WORKFLOW,
+        "bindings": {},
+        "expected_revision": 0,
+    })
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["name"] == "Smoke v2"
+    assert updated.json()["revision"] == 1
+
+    conflict = app_client.put(f"/projects/{pid}/comfy/workflows/{row['id']}", json={
+        "name": "stale", "workflow": EMPTY_IMAGE_WORKFLOW, "expected_revision": 0,
+    })
+    assert conflict.status_code == 409
+
+    listed = app_client.get(f"/projects/{pid}/comfy/workflows").json()
+    assert listed[0]["name"] == "Smoke v2"
+    assert app_client.delete(f"/projects/{pid}/comfy/workflows/{row['id']}").status_code == 200

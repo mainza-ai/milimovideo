@@ -144,6 +144,9 @@ Observed live: ComfyUI 0.45.0, 2082 nodes, no checkpoints; the model-free
 
 ## Frontend status
 
-The bridge API is ahead of the panel: the current UI is a paste-JSON runner. See
-[[comfyui-frontend-audit-2026-11]] for the C-01…C-24 gap register and
-[[../roadmap/comfyui-frontend-plan-2026-11]] for the C0–C5 plan.
+The panel now supports live preflight, shot bindings, a node input inspector,
+project-image upload, saved workflows/packs, result selection, inline
+progress/cancel/retry, batch queue, per-project drafts, and in-app settings.
+Comfy's UI-format templates still require **Save (API Format)**. See
+[[comfyui-frontend-audit-2026-11]] and
+[[../roadmap/comfyui-frontend-plan-2026-11]].
