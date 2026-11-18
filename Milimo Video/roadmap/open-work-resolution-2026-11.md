@@ -52,7 +52,30 @@ a test; "open" means no code or no verified path.
 - Visual baselines are local/platform-tolerant.
 - One perf spec is flaky under load (500-card pan threshold).
 
-## 2. P0 — Restore a trustworthy baseline (1–2 days)
+## 2. Market scan (2026-11-17)
+
+The full model/workflow matrix and sources are in
+[[../research/model-landscape-2026-11]]. The decisions that change this plan:
+
+- **LTX-2.5 (Aug 2026) is the strategic 32 GB+ video upgrade.** 22B, native
+  synchronized audio/multishot. The official diffusers `LTX2Pipeline` has
+  `enable_model_cpu_offload()` and `vae.enable_tiling()` — the supported offload
+  path, instead of bolting it onto the vendored pipeline. Official minimum is
+  32 GB VRAM; 8–16 GB int8 reports are community experiments. Support is not in a
+  diffusers release yet; install from main or `LTX-2.5-Diffusers`.
+- **Wan 2.2 TI2V-5B is the permissive low-VRAM engine.** Apache 2.0, diffusers,
+  native 720p/24 fps text+image-to-video; ~8 GB with ComfyUI offload. Wan 2.5+ is
+  closed, so 2.2 is the ceiling for open weights.
+- **Do not bundle license-restricted models.** HunyuanVideo 1.5 excludes
+  EU/UK/KR; MiniMax H3 excludes US/EU/UK/KR; Qwen-Image 2.1 is research-only.
+  Support them only as optional, user-installed engines.
+- **Interoperability is the workflow.** ComfyUI is the graph/experimentation
+  surface; OTIO/FCPXML/Resolve XML is the finishing handoff. Build those before
+  trying to clone every NLE feature.
+- **Audio/upscale lanes are commodity.** Qwen3-TTS (Apache 2.0) and SeedVR2
+  (Apache 2.0) should be optional stages, not bespoke models.
+
+## 3. P0 — Restore a trustworthy baseline (1–2 days)
 
 **Goal:** green CI on `main` and `develop`, stale contributions resolved, GitHub
 issues triaged. Everything else is blocked on this.
@@ -70,33 +93,38 @@ issues triaged. Everything else is blocked on this.
 `datetime.now(timezone.utc)` (or explicitly `NaiveDatetime` fields), then lift the
 SQLAlchemy `<2.1` pin. Pin now, migrate deliberately.
 
-## 3. P1 — CUDA and low-VRAM correctness (1–2 weeks)
+## 4. P1 — Video engines, CUDA, and shipping (3–5 weeks)
 
 | Step | Change | Acceptance |
 |---|---|---|
-| P1-1 | **CPU-offload feasibility spike (2 days).** The vendored LTX pipelines expose no `cpu_offload` hooks. Evaluate moving the transformer/VAE to CPU between stages, or conclude it is out of scope. | **Decided** — `ModelLedger` builds each component on `self.device` and the pipelines hold references per stage; no accelerate hooks exist and a 19B FP8 transformer (~20 GB) still exceeds 16 GB. A config flag cannot fix it; the path is quantized checkpoints (#2) or a larger GPU. |
-| P1-2 | **Quantized Flux 2 (#2).** Add GGUF entries to the manifest/registry, a loader into `flux2.model.Flux2` (or a diffusers GGUF path), per-checkpoint costs, and take provenance. | **Design ready, not implemented** — diffusers 0.37.1 (not installed; 0.36 lacks it) has `Flux2KleinPipeline`, `Flux2Transformer2DModel.from_single_file`, and GGUF. The Q4_K_M transformer is 5.7 GB, but the Qwen3 8B text encoder is still ~16 GB bf16, so a 12 GB card also needs a quantized/offloaded text encoder. The full path is a dependency upgrade + new loader + encoder strategy, not a one-line manifest entry. |
-| P1-3 | CUDA regression checklist: no_grad encode, VRAM admission, FP8 selection, 16/24/48 GB behavior. | Manual run on a CUDA host recorded; no OOM after hours of denoise. |
-| P1-4 | CUDA cost calibration: verify the 40 GB FP8 / 18 GB Flux bases against a real card; adjust manifest estimates. | Estimates within 10% of measured peak. |
+| P1-1 | **Adopt the diffusers LTX-2.5 engine.** Spike `LTX-2.5-Diffusers` / diffusers `main` with `LTX2Pipeline`, `enable_model_cpu_offload()`, `vae.enable_tiling()`, and int8/W4A8 quants; map it behind the current task interface, keep the vendored LTX-2 engine as a fallback. | 32 GB CUDA runs bf16/FP8 with offload/tiling; 16 GB int8 is validated as an explicit experimental target, not promised; Mac falls back cleanly. This is the supported resolution for #6. |
+| P1-2 | **Add Wan 2.2 TI2V-5B as the low-VRAM CUDA engine.** Diffusers adapter, Apache 2.0 license gate, registry/manifest, costs, UI, 720p/24 baseline. | 8–24 GB CUDA generates 720p; preflight covers it; it does not disturb LTX memory accounting. |
+| P1-3 | **Quantized Flux 2 (#2).** Upgrade diffusers to a Klein-capable release (0.37.1+), add GGUF manifest/registry entries, `Flux2KleinPipeline` + `GGUFQuantizationConfig`, and a quantized/offloaded Qwen3 text encoder. | Q4_K_M image generation on 12–16 GB; quality/time compared with `backend/benchmark_models.py`. |
+| P1-4 | CUDA regression checklist: no_grad encode, VRAM admission, FP8/quant selection, 8/16/24/48 GB behavior; calibrate the manifest estimates. | Manual run recorded on a CUDA host; estimates within 10%. |
+| P1-5 | Bundle the backend: PyInstaller/Nuitka one-folder with Torch or an embedded runtime; Tauri sidecar; first-run model download; macOS notarization and Windows build in CI. | A clean machine launches Studio with no Python/venv. |
+| P1-6 | Legacy cutover: after two clean packaged releases, remove `/` or freeze it behind a plugin; update docs/flags/e2e. | Studio is the only route; rollback documented. |
+| P1-7 | Packaged-app smoke: create/save, small image + video generation, export, SSE, memory refusal, SAM optional. | Checklist green on macOS arm64 and Windows x64. |
 
-## 4. P1 — Packaging and legacy cutover (1–2 weeks)
+**P1-1 replaces the old “CPU offload spike.”** Bolting offload onto the vendored
+LTX-2 pipeline is not viable; the diffusers LTX-2.5 path already implements it and
+is the supported upgrade.
 
-| Step | Change | Acceptance |
-|---|---|---|
-| P1-5 | Bundle the backend: PyInstaller/Nuitka one-folder with Torch, or an embedded Python runtime; Tauri sidecar entry; first-run model download; macOS notarization and Windows build in CI. | A clean machine launches Studio with no Python/venv; `milimo-backend` is found by the supervisor. |
-| P1-6 | Legacy cutover: after two clean packaged releases, remove the `/` fallback (or freeze it behind a plugin), delete the legacy store, update the docs/flags. | Studio is the only route; rollback flag documented; e2e updated. |
-| P1-7 | Packaged-app smoke: project create/save, image + video generation (small), export, SSE progress, memory refusal, SAM optional. | Checklist green on macOS arm64 and Windows x64. |
-
-## 5. P2 — Product gaps (4–8 weeks, parallelizable)
+## 5. P2 — Workflow and product gaps (6–10 weeks, parallelizable)
 
 | Item | Work | Acceptance |
 |---|---|---|
-| NLE completeness | Transitions, LUTs, titles, A2 track; render + UI + tests | Export pixels match the timeline; UI round-trips |
-| Embedding search | Local embedding model via the LLM plane, index, ranked results with fallback to lexical | Search finds semantically related shots; no cloud dependency |
+| **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | A Resolve/Premiere timeline opens with correct cuts, trims, and audio; round-trip preserves V1/V2/A1 |
+| **ComfyUI bridge** | Import/export a ComfyUI workflow, submit it through the queue, ingest outputs and provenance | An LTX-2.5/Wan workflow runs from Studio and its output becomes a take |
+| NLE completeness | Transitions, LUTs, titles, A2 track (after the OTIO handoff) | Export pixels match the timeline; UI round-trips |
+| Embedding search | Local embedding model via the LLM plane, index, ranked results with lexical fallback | Semantic shot search works offline |
 | Shorts/lens packs | Versioned template packs, import/export, preview | Packs install and render deterministically |
-| Wan 2.2 (#1) | New `WanPipeline` adapter (DiT/VAE/umT5), registry family, LoRA loader, task branch, costs, UI, baselines | A Wan checkpoint generates video and LoRAs apply; memory preflight covers it |
+| Wan 2.2 family | S2V speech-to-video (with CosyVoice/Qwen3-TTS), Animate character replacement, LoRA loading | Spoken dialogue/lip-sync and character replacement work as shots |
+| Qwen3-TTS voice lane | Apache 2.0 TTS role: voice design/clone, dialogue and voiceover takes, aligned captions | A script line becomes a selectable audio take without cloud |
+| SeedVR2 upscale | One-step 3B upscaler as an optional post stage (16–24 GB; BlockSwap) | 2K/4K output without re-running the video model |
+| Image lane upgrade | Z-Image Turbo (6B, Apache 2.0, 8-step, MLX) for thumbnails/pre-viz; Qwen-Image-Edit-2511 (20B, Apache 2.0) for multi-reference editing | Fast drafts on 8–16 GB; reference edits replace the IP-Adapter trigger workaround |
+| Optional external engines | License-gated HunyuanVideo 1.5, MiniMax H3, Qwen-Image 2.1; user-supplied only | Clear license acknowledgement; never bundled or default |
 | M5 artifacts | Distilled/quantized LTX, MLX/FP8 lanes, quality/memory/time matrix | A chosen artifact is measurably better on the reference machine |
-| LLM caveats | True socket abort for non-stream HTTP; move chained chunk-0 enhancement before the pipeline load; document Strata context; legacy popover parity | Cancellation is immediate; chunk 0 never overlaps the LTX load |
+| LLM caveats | Socket abort for non-stream HTTP; pre-load chunk-0 enhancement; Strata context; legacy popover parity | Cancellation is immediate; chunk 0 never overlaps the LTX load |
 | Small polish | Per-job priority override; macOS tray icon; legacy notification parity | Settings persist; no regressions |
 
 ## 6. P3 — Quality and operations
@@ -110,20 +138,26 @@ SQLAlchemy `<2.1` pin. Pin now, migrate deliberately.
 ## 7. Sequence and dependencies
 
 ```
-Week 1      P0-1..P0-6  (CI green, PR/issue triage)
-Weeks 2-3   P1-1..P1-4  (offload decision, quantized Flux, CUDA validation)
-Weeks 4-5   P1-5..P1-7  (sidecar, packaged smoke)
-Week 6      legacy cutover clock + P2 start (NLE/search/packs in parallel)
-Weeks 7-12  Wan, M5 artifacts, product gaps
+Week 1       P0-1..P0-6  (CI green, PR/issue triage)
+Weeks 2-4    P1-1       (LTX-2.5 diffusers/offload spike + migration)
+Weeks 2-3    P1-2       (Wan 2.2 5B engine, in parallel)
+Weeks 4-5    P1-3/P1-4  (quantized Flux, CUDA validation)
+Weeks 5-7    P1-5..P1-7  (sidecar, packaged smoke, cutover clock)
+Weeks 8-14   P2         (OTIO/ComfyUI first, then NLE/audio/upscale/Wan family)
 ```
 
 Hard dependencies:
 
 - Legacy cutover needs two green packaged releases.
-- Quantized Flux needs GGUF artifacts and a loader; it also answers #2 and most of
-  #6 for 12–16 GB cards.
-- Wan needs its own checkpoints; it must not be forced through LTX assumptions.
-- CUDA validation needs a real 16/24/48 GB host (CI has no GPU).
+- LTX-2.5 needs diffusers `main`/the `LTX-2.5-Diffusers` repo until a release ships;
+  this is a dependency upgrade, not just a model download.
+- Wan 2.2 5B is Apache 2.0 and diffusers-supported; its 14B/S2V/Animate variants
+  come later. Wan 2.5+ has no open weights.
+- Quantized Flux needs diffusers 0.37.1+, the 5.7 GB GGUF artifact, and a
+  quantized/offloaded Qwen3 encoder.
+- License-gated engines (Hunyuan 1.5, MiniMax H3, Qwen-Image 2.1) must not be
+  bundled; they need a user-installed plugin path and a license gate.
+- CUDA validation needs a real 8/16/24/48 GB host (CI has no GPU).
 
 ## 8. Definition of done for this plan
 
@@ -137,6 +171,7 @@ Hard dependencies:
 
 ## Related
 
+- [[../research/model-landscape-2026-11]] — latest models, licenses, hardware, workflows
 - [[implementation-plan-2026-11.md]] — current status table
 - [[../systems/github-issues-triage-2026-11.md]] — issue-by-issue evidence
 - [[../systems/memory-management-audit-2026-11.md]] — CUDA/M5 context

@@ -73,6 +73,12 @@ navigate, then drills into pages.
   warm-up/streaming, eval, memory discipline, cloud budget/profiles), and the
   remaining caveats.
 
+## Research
+- [research/model-landscape-2026-11](research/model-landscape-2026-11.md) —
+  November 2026 model/workflow scan: LTX-2.5, Wan 2.2, HunyuanVideo 1.5,
+  MiniMax H3, Qwen-Image 2.1, Qwen3-TTS, SeedVR2, ComfyUI, and OTIO; licenses,
+  VRAM floors, and the decisions that re-sequence the roadmap.
+
 ## Models
 - [models/ltx-2](models/ltx-2.md) — LTX-2 19B dual-stream transformer: the three
   pipelines (ti2vid, ic_lora, keyframe), two-stage generation, checkpoints,

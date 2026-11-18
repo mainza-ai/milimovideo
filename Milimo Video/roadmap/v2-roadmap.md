@@ -1,7 +1,7 @@
 ---
 type: roadmap
 created: 2026-10-09
-updated: 2026-10-09
+updated: 2026-11-17
 tags: v2 roadmap planning upgrade
 sources:
   - wiki/research/video-models-2026.md
@@ -16,6 +16,7 @@ related:
   - ../research/world-models-3d-camera-2026.md
   - ../research/inference-infra-2026.md
   - ../research/frontend-ux-workflows-2026.md
+  - ../research/model-landscape-2026-11.md
 ---
 
 # Milimo Video v2 — Design Roadmap

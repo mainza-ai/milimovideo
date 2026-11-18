@@ -1520,3 +1520,23 @@ wiki.
   pipeline; the 5.7 GB Q4_K_M artifact is available but needs a 0.37.dev pipeline
   or an in-house dequant loader.
 - Tests: 181 backend, 79 Vitest, 21 Playwright.
+
+## [2026-11-17] research | model and workflow landscape, plan re-sequence
+
+Searched current releases and production workflows and filed
+[[research/model-landscape-2026-11]].
+
+- **LTX-2.5** (Aug 11, 2026; 22B, Gemma 4, native audio) has an official diffusers
+  pipeline with `enable_model_cpu_offload()` and `vae.enable_tiling()`; support is
+  not in a diffusers release yet (install from main). This is the real #6 path, not
+  a vendored-pipeline patch.
+- **Wan 2.2** is Apache 2.0 with a 5B TI2V model (~24 GB official, ~8 GB ComfyUI
+  offload) and A14B/S2V/Animate variants; Wan 2.5+ is closed.
+- **License constraints**: HunyuanVideo 1.5 excludes EU/UK/KR; MiniMax H3 excludes
+  US/EU/UK/KR; Qwen-Image 2.1 is research-only. They cannot be bundled defaults.
+- **Commodity lanes**: Qwen3-TTS and SeedVR2 are Apache 2.0; OTIO/FCPXML/Resolve
+  XML and ComfyUI are the workflow interfaces the community uses.
+- Re-sequenced [[roadmap/open-work-resolution-2026-11]]: P1 is now LTX-2.5
+  diffusers/offload, Wan 2.2 5B, quantized Flux, CUDA validation, then packaging;
+  P2 starts with OTIO/ComfyUI interop and the audio/upscale/Wan-family lanes.
+  Updated [[roadmap/implementation-plan-2026-11]], the index, and README.

@@ -248,6 +248,11 @@ Do not claim these are done:
   Any change that loads a model must call `memory_manager.admit_job` /
   `prepare_for` and include external engines in the budget. See
   `Milimo Video/systems/memory-management-audit-2026-11.md`.
+- Model lane: the current video engine is LTX-2 19B. LTX-2.5 (diffusers CPU
+  offload/VAE tiling) and Wan 2.2 TI2V-5B (Apache 2.0, low VRAM) are the planned
+  upgrades; Z-Image Turbo / Qwen-Image-Edit-2511 are the image-lane candidates.
+  HunyuanVideo 1.5, MiniMax H3, and Qwen-Image 2.1 are license-restricted and must
+  not be bundled. See `Milimo Video/research/model-landscape-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.
 - Visual baselines are platform-tolerant but still local-generated.
 

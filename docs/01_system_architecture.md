@@ -163,6 +163,12 @@ CSS-based NLE — no canvas rendering. Uses absolute positioning for performance
 ### B. The Generation Pipeline (Backend)
 Handles video, image, chained, and inpainting generation.
 
+> **Model roadmap (2026-11):** the current video engine is LTX-2 19B. LTX-2.5
+> (22B, native audio, diffusers CPU offload/VAE tiling, official 32 GB floor) and
+> Wan 2.2 TI2V-5B (Apache 2.0, low-VRAM CUDA) are the planned engines; Z-Image
+> Turbo and Qwen-Image-Edit-2511 are the image candidates. See
+> `Milimo Video/research/model-landscape-2026-11.md`.
+
 | Component | Role |
 |---|---|
 | `model_engine.py` | `ModelManager` singleton — loads/manages LTX-2 pipelines. Auto-selects checkpoint (full > FP8). |

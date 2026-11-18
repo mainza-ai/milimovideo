@@ -166,7 +166,7 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 | **Studio frontend** | React 19.2, TypeScript, Vite, Zustand document/editor/job/agent stores, TanStack Query, zod contracts |
 | **Legacy frontend** | React + Vite NLE at `/`, separate timeline store, frozen fallback |
 | **Backend** | FastAPI (Python 3.12 in the checked-in venv), SQLModel/SQLAlchemy + SQLite, Alembic, SSE via `sse-starlette` |
-| **Video AI** | LTX-2 19B — `ti2vid`, `ic_lora`, `keyframe`, chained generation |
+| **Video AI** | LTX-2 19B — `ti2vid`, `ic_lora`, `keyframe`, chained generation. LTX-2.5 / Wan 2.2 TI2V-5B are the next engines (see roadmap) |
 | **Image AI** | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint inpainting |
 | **Segmentation** | SAM 3 microservice (port 8001) — text/box/click masks and video tracking |
 | **Prompt AI** | Local-first role plane — Gemma 3 in-process, Ollama, oMLX, Strata, LM Studio, vLLM/llama.cpp; optional cloud behind a daily budget, eval gate, and air-gap |
@@ -232,6 +232,9 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
   [SAM 3 Bible](docs/sam3-bible.md)
 - [Implementation plan](Milimo%20Video/roadmap/implementation-plan-2026-11.md) —
   scoped v1 status, remaining/deferred items, verification matrix.
+- [Model landscape (2026-11)](Milimo%20Video/research/model-landscape-2026-11.md) —
+  LTX-2.5, Wan 2.2, image/audio/upscale models, licenses, VRAM, ComfyUI/OTIO
+  workflows, and the adopted/rejected decisions.
 - [LLM local-first plan](Milimo%20Video/systems/llm-local-first-next-2026-11.md) —
   live measurements, findings, and the implemented L5–L9 plane.
 
@@ -392,8 +395,10 @@ dev_diary/         Build log and social notes
   Strata has no unload endpoint; a cancelled job keeps its pipeline until the idle
   TTL; only the MPS decode path is tiled; memory waits are bounded at 20 retries.
 - **16 GB CUDA**: LTX-2 FP8 is estimated at 40 GB. The job is refused before load;
-  CPU offload is not implemented and no quantized Flux 2 checkpoint is shipped yet.
-  See the [issue triage](Milimo%20Video/systems/github-issues-triage-2026-11.md).
+  CPU offload is not implemented in the vendored pipeline and no quantized Flux 2
+  checkpoint is shipped yet. LTX-2.5's diffusers path (CPU offload/VAE tiling) and
+  Wan 2.2 TI2V-5B are the planned low-VRAM paths. See the
+  [model landscape](Milimo%20Video/research/model-landscape-2026-11.md).
 - **Model efficiency (M5)**: SAM is lazy and `backend/benchmark_models.py` records
   per-lane baselines, but quantized/distilled checkpoints and text-encoder
   alternatives need model artifacts that are not vendored.

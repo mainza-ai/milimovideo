@@ -70,6 +70,17 @@ single-engineer guidance.
 - **LLM L4 governance** — token/cost telemetry, cloud budget guard, eval gate, and
   staged profiles are built in the typed `LLMSettings` v3 document; remaining
   caveats are listed in [[../systems/llm-local-first-next-2026-11]].
+- **Model landscape (2026-11)** — the video engine is still LTX-2 19B. LTX-2.5
+  (22B, native audio, diffusers CPU-offload path) is the next engine; Wan 2.2
+  TI2V-5B (Apache 2.0) is the low-VRAM CUDA option. Image: Z-Image Turbo
+  (Apache 2.0) for fast drafts and Qwen-Image-Edit-2511 (Apache 2.0) for editing.
+  HunyuanVideo 1.5, MiniMax H3, and Qwen-Image 2.1 are license-restricted and
+  must stay optional. See [[../research/model-landscape-2026-11]].
+- **Workflow interop** — OTIO/FCPXML/Resolve XML export and a ComfyUI bridge are
+  higher priority than cloning the last NLE features; the community finishing
+  pattern is generator → NLE handoff.
+- **Audio/upscale lanes** — LTX-2.5 audio, Qwen3-TTS (Apache 2.0), Wan 2.2 S2V,
+  and SeedVR2 (Apache 2.0) are candidates for optional stages.
 - **Phase 6 v2 lane** — eval harness, model swaps, MLX/FP8 lanes, and the agent
   crew remain a separate model-artifact program.
 - **Scoped-v1 gaps** — no transitions/LUT/titles/A2 track, lexical rather than
