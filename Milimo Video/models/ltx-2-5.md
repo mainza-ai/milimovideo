@@ -16,12 +16,14 @@ Community license, so Milimo implements the pipeline but does not ship the model
 | `tasks/ltx25.py` | Queued video job with admission, progress, MP4 encode, audio mux, poster, asset/shot ingestion |
 | `pipeline_override=ltx25` | Explicit per-shot selection in Generate → Advanced → Pipeline |
 | Manifest | `ltx25-diffusers` (gated, recommended) |
-| Memory | 64 GB Apple / 40 GB CUDA base, plus frames/resolution workspace |
+| Memory | 64 GB Apple / 40 GB CUDA base, plus frames/resolution workspace; local run peaked at ~52 GB |
+| Dependencies | `diffusers==0.40.0`, `transformers==5.23.0`, `huggingface-hub==1.33.0` |
 
 The adapter runs the prompt-enhancement pass before the model loads and uses the
 normal `job.*` event plane. Frame counts are `8k+1` and both dimensions are
-multiples of 32. The native audio track is muxed into the MP4 when the pipeline
-returns one.
+multiples of 32. The native audio track is written at 48 kHz and muxed into the
+MP4 when the pipeline returns one. A cold load takes about 57 seconds on the
+128 GB reference machine.
 
 ## Install
 
@@ -34,7 +36,8 @@ returns one.
 export MILIMO_LTX25_MODEL=/path/to/ltx-2.5-diffusers
 ```
 
-4. Select **LTX-2.5** in Generate → Advanced → Pipeline.
+4. Select **LTX-2.5** in Generate → Advanced → Pipeline. See the
+   [User Guide](../../docs/user_guide.md) for the Studio path.
 
 CUDA can use `MILIMO_LTX25_OFFLOAD=0` when the full model fits; offload is on by
 default.
@@ -52,7 +55,7 @@ default.
 
 - Gated weights and license acceptance are required.
 - Native audio sample rate/layout depends on the released checkpoint; the adapter
-  defaults to 24 kHz and a single channel layout, and the audio mux is skipped if
+  defaults to 48 kHz and a single channel layout, and the audio mux is skipped if
   the pipeline returns no audio.
 - No chained multi-chunk path for LTX-2.5 yet; it runs as a single generation.
 - CUDA 32 GB validation still needs the target machine. The Apple Silicon run used

@@ -63,6 +63,12 @@ LTX-2 as the stable baseline, Wan 2.2 5B for low-VRAM video, Flux 2 Q4_K_M for
 low-VRAM image, and SAM 3 / Depth Anything when those features are needed. Setup
 marks recommended entries and explains the tradeoff.
 
+**LTX-2.5 setup:** `hf auth login`, accept the
+[community license](https://huggingface.co/Lightricks/LTX-2.5-Diffusers), download
+the diffusers directory in Setup (or set `MILIMO_LTX25_MODEL`), then choose
+**LTX-2.5** in Advanced → Pipeline. It needs `diffusers==0.40.0` and
+`transformers==5.23.0`; a local MPS run produced video plus 48 kHz native audio.
+
 ## Architecture
 
 | Layer | Technology |

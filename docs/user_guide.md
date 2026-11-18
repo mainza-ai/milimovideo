@@ -231,7 +231,9 @@ The `ltx25` pipeline runs the official `Lightricks/LTX-2.5-Diffusers` directory
 with native audio, CPU offload, and VAE tiling. Weights are gated: accept the
 community license on Hugging Face, download the diffusers directory in Setup (or
 set `MILIMO_LTX25_MODEL`), then choose **LTX-2.5** in Advanced → Pipeline. It is a
-single-shot engine; the chained multi-chunk path is LTX-2 only.
+single-shot engine; the chained multi-chunk path is LTX-2 only. Local MPS
+verification produced video + 48 kHz audio; see
+`Milimo Video/models/ltx-2-5.md`.
 
 ### ComfyUI workflows
 

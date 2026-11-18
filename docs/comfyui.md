@@ -1,7 +1,8 @@
 # Using the ComfyUI Bridge
 
 ComfyUI is an **optional** local engine. Milimo Video does not ship, start, or
-require it. Core generation (LTX-2, Wan, Flux, SAM, render, OTIO) works without it.
+require it. Core generation (LTX-2, LTX-2.5, Wan, Flux, SAM, render, OTIO) works
+without it.
 The bridge exists so an API-format ComfyUI workflow can run through Milimo's queue,
 show the same progress UI, and land its outputs in the current project.
 
