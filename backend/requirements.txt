@@ -39,4 +39,4 @@ httpx>=0.27
 websockets>=12
 ruff>=0.6
 
-cryptography>=42.0
+cryptography>=50.0.2
