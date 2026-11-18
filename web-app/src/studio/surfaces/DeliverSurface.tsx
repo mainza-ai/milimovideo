@@ -4,7 +4,7 @@ import { useStudioDocumentStore } from '../state/documentStore';
 import {
     useStudioCancelJob, useStudioCreateRender, useStudioProject, useStudioRenders,
 } from '../data/useStudioData';
-import { getAssetUrl } from '../../config';
+import { apiFetch, getAssetUrl } from '../../config';
 import { useMediaPreview } from '../state/mediaPreviewStore';
 import { MediaThumb } from '../components/MediaThumb';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
@@ -26,10 +26,12 @@ export function DeliverSurface() {
     const openMediaPreview = useMediaPreview((state) => state.open);
     const setProject = useStudioDocumentStore((state) => state.setProject);
     const saveProject = useStudioDocumentStore((state) => state.saveProject);
+    const addToast = useStudioDocumentStore((state) => state.addToast);
     const [preset, setPreset] = useState<typeof PRESETS[number]['id']>(
         (PRESETS.find((item) => item.id === project.renderPreset)?.id || 'project'),
     );
     const [busy, setBusy] = useState(false);
+    const [otioBusy, setOtioBusy] = useState(false);
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
     const totalDuration = Math.max(0.1, ...layout.map((clip) => clip.end));
     const [rangeStart, setRangeStart] = useState(0);
@@ -104,6 +106,35 @@ export function DeliverSurface() {
                         />
                         Burn captions
                     </label>
+                    <button
+                        type="button"
+                        className="st-button"
+                        disabled={otioBusy}
+                        title="Export the computed cut for Resolve, Premiere, or Final Cut"
+                        onClick={() => {
+                            setOtioBusy(true);
+                            void apiFetch(`/projects/${project.id}/otio`)
+                                .then(async (response) => {
+                                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                    const blob = await response.blob();
+                                    const url = URL.createObjectURL(blob);
+                                    const anchor = document.createElement('a');
+                                    anchor.href = url;
+                                    anchor.download = `${project.name || 'milimo'}.otio`;
+                                    anchor.click();
+                                    URL.revokeObjectURL(url);
+                                    addToast('OTIO timeline exported', 'success');
+                                })
+                                .catch((error) => addToast(
+                                    error instanceof Error ? error.message : 'OTIO export failed',
+                                    'error',
+                                ))
+                                .finally(() => setOtioBusy(false));
+                        }}
+                    >
+                        {otioBusy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                        Export OTIO
+                    </button>
                     <button type="button" className="st-button" data-variant="primary" disabled={busy} onClick={() => void start()}>
                         {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                         {busy ? 'Queueing…' : 'Create export'}

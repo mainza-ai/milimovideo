@@ -145,8 +145,49 @@ class FluxInpainter:
         # State tracking for toggles
         self.using_native_ae = False
         self.last_ae_enable_request = True # Default to True (Native)
+        # Quantized GGUF path (issue #2); None/False uses the full checkpoint.
+        self.gguf = None
+        self.quantized = False
+
+    def _unload_gguf(self):
+        if self.gguf is not None:
+            self.gguf.unload()
+            self.gguf = None
+        self.quantized = False
+        self.model_loaded = False
 
     def load_model(self, enable_ae=True):
+        gguf_path = getattr(config, "FLUX_GGUF_PATH", "")
+        if gguf_path and os.path.exists(gguf_path):
+            if self.quantized and self.gguf is not None:
+                return
+            if self.model_loaded:
+                self._unload_gguf()
+            from memory_manager import memory_manager
+
+            cost = 38.0 if self.device == "mps" else 24.0
+            memory_manager.prepare_for("image", model_id="flux2-q4km", cost_gb=cost)
+            from models.flux_gguf import FluxGGUF
+
+            try:
+                self.gguf = FluxGGUF(
+                    os.path.join(config.PROJECT_ROOT, "backend", "models", "flux2"),
+                    gguf_path,
+                    self.device,
+                    offload=bool(getattr(config, "FLUX_GGUF_OFFLOAD", True)),
+                )
+            except Exception:
+                memory_manager.release("image")
+                raise
+            self.quantized = True
+            self.model_loaded = True
+            logger.info("Flux 2 using quantized GGUF: %s", gguf_path)
+            return
+
+        if self.quantized:
+            # Env was cleared or the file disappeared; return to the full model.
+            self._unload_gguf()
+
         # Check if we need to reload due to AE toggle change
         if self.model_loaded:
             if self.using_native_ae != enable_ae:
@@ -499,6 +540,28 @@ class FluxInpainter:
         # Ensure correct model state
         self.load_model(enable_ae=enable_ae)
 
+        if self.quantized:
+            if ip_adapter_images:
+                raise RuntimeError(
+                    "Quantized Flux (GGUF) does not support IP-Adapter/reference images yet. "
+                    "Unset MILIMO_FLUX_GGUF or remove the references."
+                )
+            if negative_prompt:
+                logger.warning("Quantized Flux ignores negative_prompt; use the full checkpoint for True CFG.")
+            logger.info(
+                "Generating image with quantized Flux 2. Prompt: %s, Steps: %s, Seed: %s",
+                prompt, num_inference_steps, seed,
+            )
+            return self.gguf.generate(
+                prompt=prompt,
+                width=width,
+                height=height,
+                guidance=guidance,
+                num_inference_steps=num_inference_steps,
+                seed=seed,
+                callback=callback,
+            )
+
         # Cancellation Check
         if callback: callback(-1, num_inference_steps)
 
@@ -642,6 +705,7 @@ class FluxInpainter:
             raise e
 
     def unload(self):
+        self._unload_gguf()
         self.model = None
         self.ae = None
         self.text_encoder = None
@@ -675,6 +739,12 @@ class FluxInpainter:
         """
         if not self.model_loaded:
             self.load_model()
+
+        if self.quantized:
+            raise RuntimeError(
+                "Quantized Flux (GGUF) does not support inpainting yet. "
+                "Unset MILIMO_FLUX_GGUF for RePaint/inpainting."
+            )
             
         logger.info(f"Starting Inpainting. Prompt: {prompt}")
         

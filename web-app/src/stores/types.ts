@@ -35,7 +35,7 @@ export interface Shot {
     cfgScale: number;
     enhancePrompt: boolean;
     upscale: boolean;
-    pipelineOverride: 'auto' | 'ti2vid' | 'ic_lora' | 'keyframe';
+    pipelineOverride: 'auto' | 'ti2vid' | 'ic_lora' | 'keyframe' | 'wan';
     autoContinue?: boolean;
     progress?: number;
 

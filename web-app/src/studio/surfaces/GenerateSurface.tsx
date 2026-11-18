@@ -759,6 +759,7 @@ export function GenerateSurface() {
                                         <option value="ti2vid">ti2vid</option>
                                         <option value="ic_lora">ic_lora</option>
                                         <option value="keyframe">keyframe</option>
+                                        <option value="wan">wan 2.2 (5B)</option>
                                     </select>
                                 </label>
                             </div>

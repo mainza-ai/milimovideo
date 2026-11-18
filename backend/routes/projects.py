@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Response
 from typing import List, Optional
 from sqlmodel import Session, select, SQLModel
 from database import get_session, Project, Shot, Scene
@@ -836,6 +836,32 @@ async def render_project(
         project_id, render_id, fps, width, height, settings, track_states, source_path,
     )
     return {"job_id": render_id, "status": "rendering"}
+
+
+@router.get("/projects/{project_id}/otio")
+def export_project_otio(
+    project_id: str,
+    fps: Optional[int] = None,
+    session: Session = Depends(get_session),
+):
+    """Export the computed cut as an OpenTimelineIO timeline for Resolve/Premiere/FCP."""
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    shots = session.exec(
+        select(Shot)
+        .where(Shot.project_id == project_id)
+        .order_by(Shot.sequence_index.is_(None), Shot.sequence_index, Shot.created_at, Shot.id)
+    ).all()
+    from utils.otio_export import otio_json
+
+    content = otio_json(project, shots, fps=fps or project.fps)
+    safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in (project.name or "milimo"))
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{safe[:64]}.otio"'},
+    )
 
 
 async def _render_background(

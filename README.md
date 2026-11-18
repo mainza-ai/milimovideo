@@ -58,6 +58,7 @@ a backend supervisor.
 - Deliver writes the computed cut with V1/V2 compositing, embedded audio + A1 mix,
   trims, speed, fades, keyframes, captions, render range, and persisted encoding
   settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
+  **Export OTIO** hands the computed V1/V2/A1 cut to Resolve, Premiere, or Final Cut.
 - Shorts builds scored candidate windows from a transcript or shot text, supports
   editable in/out ranges, and exports 9:16, 1:1, and 4:5 crops from the cut or an
   uploaded source.
@@ -166,7 +167,7 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 | **Studio frontend** | React 19.2, TypeScript, Vite, Zustand document/editor/job/agent stores, TanStack Query, zod contracts |
 | **Legacy frontend** | React + Vite NLE at `/`, separate timeline store, frozen fallback |
 | **Backend** | FastAPI (Python 3.12 in the checked-in venv), SQLModel/SQLAlchemy + SQLite, Alembic, SSE via `sse-starlette` |
-| **Video AI** | LTX-2 19B — `ti2vid`, `ic_lora`, `keyframe`, chained generation. LTX-2.5 / Wan 2.2 TI2V-5B are the next engines (see roadmap) |
+| **Video AI** | LTX-2 19B (`ti2vid`, `ic_lora`, `keyframe`, chained) + **Wan 2.2 TI2V-5B** (experimental low-VRAM lane). LTX-2.5 is the next upgrade |
 | **Image AI** | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint inpainting |
 | **Segmentation** | SAM 3 microservice (port 8001) — text/box/click masks and video tracking |
 | **Prompt AI** | Local-first role plane — Gemma 3 in-process, Ollama, oMLX, Strata, LM Studio, vLLM/llama.cpp; optional cloud behind a daily budget, eval gate, and air-gap |
@@ -295,6 +296,9 @@ Memory and scheduling environment:
 - `MILIMO_MEMORY_TTL_{VIDEO,IMAGE,LLM,SAM,DEPTH}` and `MILIMO_MEMORY_KEEP_WARM`
   tune idle eviction.
 - `MILIMO_RELOAD=1` enables Uvicorn reload for development.
+- `MILIMO_FLUX_GGUF=/path/to/flux-2-klein-9b-Q4_K_M.gguf` switches the image lane
+  to the quantized transformer (`MILIMO_FLUX_GGUF_OFFLOAD=1` offloads on CUDA).
+- `MILIMO_WAN_MODEL=/path/to/wan2.2-ti2v-5b` overrides the Wan 2.2 model directory.
 - `MILIMO_JOB_WEBHOOK` (+ `MILIMO_JOB_WEBHOOK_TOKEN`) posts terminal jobs to a
   local automation endpoint; off by default.
 
@@ -350,7 +354,7 @@ masking/tracking toggles. New work belongs in Studio.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                    # 181 tests
+./milimov/bin/python -m pytest                    # 190 tests
 ./milimov/bin/python -m ruff check backend        # correctness rules
 ./milimov/bin/python backend/verify_setup.py      # 0 failures expected
 
@@ -363,7 +367,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 181 backend tests, 79 Vitest tests, and 21 Playwright
+The last verified run was 190 backend tests, 79 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual
@@ -394,11 +398,12 @@ dev_diary/         Build log and social notes
 - **Memory**: the cost registry is a measured estimate, not a per-model profile;
   Strata has no unload endpoint; a cancelled job keeps its pipeline until the idle
   TTL; only the MPS decode path is tiled; memory waits are bounded at 20 retries.
-- **16 GB CUDA**: LTX-2 FP8 is estimated at 40 GB. The job is refused before load;
-  CPU offload is not implemented in the vendored pipeline and no quantized Flux 2
-  checkpoint is shipped yet. LTX-2.5's diffusers path (CPU offload/VAE tiling) and
-  Wan 2.2 TI2V-5B are the planned low-VRAM paths. See the
-  [model landscape](Milimo%20Video/research/model-landscape-2026-11.md).
+- **16 GB CUDA**: LTX-2 FP8 is estimated at 40 GB and is refused before load;
+  LTX-2.5's diffusers CPU-offload path is not integrated yet. Use the Wan 2.2 5B
+  pipeline for low-VRAM video, or set `MILIMO_FLUX_GGUF` for image generation.
+  Wan on MPS is verified; CUDA validation is still required. Quantized Flux does
+  not support IP-Adapter/inpainting, and Wan's image-to-video path is not wired.
+  See the [model landscape](Milimo%20Video/research/model-landscape-2026-11.md).
 - **Model efficiency (M5)**: SAM is lazy and `backend/benchmark_models.py` records
   per-lane baselines, but quantized/distilled checkpoints and text-encoder
   alternatives need model artifacts that are not vendored.

@@ -72,7 +72,9 @@ single-engineer guidance.
   caveats are listed in [[../systems/llm-local-first-next-2026-11]].
 - **Model landscape (2026-11)** — the video engine is still LTX-2 19B. LTX-2.5
   (22B, native audio, diffusers CPU-offload path) is the next engine; Wan 2.2
-  TI2V-5B (Apache 2.0) is the low-VRAM CUDA option. Image: Z-Image Turbo
+  TI2V-5B (Apache 2.0) is integrated as the low-VRAM lane (MPS verified; CUDA
+  validation pending). Flux 2 Q4_K_M GGUF is integrated for low-VRAM images; OTIO
+  export is in Deliver. Image: Z-Image Turbo
   (Apache 2.0) for fast drafts and Qwen-Image-Edit-2511 (Apache 2.0) for editing.
   HunyuanVideo 1.5, MiniMax H3, and Qwen-Image 2.1 are license-restricted and
   must stay optional. See [[../research/model-landscape-2026-11]].

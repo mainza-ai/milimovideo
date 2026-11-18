@@ -1540,3 +1540,23 @@ Searched current releases and production workflows and filed
   diffusers/offload, Wan 2.2 5B, quantized Flux, CUDA validation, then packaging;
   P2 starts with OTIO/ComfyUI interop and the audio/upscale/Wan-family lanes.
   Updated [[roadmap/implementation-plan-2026-11]], the index, and README.
+
+## [2026-11-18] implement | OTIO export, Wan 2.2, and quantized Flux
+
+Executed the code-completable P1/P2 items.
+
+- **OTIO export**: `utils/otio_export.py`, `GET /projects/{id}/otio`, Deliver
+  "Export OTIO" button. V1 magnetic, free V2/A1 with gaps, trims, speed as
+  LinearTimeWarp, MissingReference for offline media. Tests cover tracks, ranges,
+  gaps, and missing media. Live endpoint returned a valid OTIO timeline.
+- **Wan 2.2 TI2V-5B**: `models/wan_wrapper.py`, `tasks/wan.py`, manifest/root
+  snapshot download support, `pipeline_override=wan` branch/UI, Wan costs. Real
+  MPS generation: 17 frames 256×256 in 11.4 s after a 22.7 s load; a queued API
+  shot completed with an H.264 MP4 + thumbnail (40 steps).
+- **Quantized Flux**: diffusers 0.37.1 + gguf; `models/flux_gguf.py`,
+  `MILIMO_FLUX_GGUF`, manifest Q4_K_M entry, GGUF guards for IP-Adapter/inpaint.
+  Real MPS generation 256×256 verified (non-black, 6k colors); app-level path
+  verified.
+- Tests: 190 backend (OTIO 2, GGUF 2, Wan 5), 79 Vitest, 21 Playwright.
+- Caveats: CUDA validation for Wan/GGUF, LTX-2.5 diffusers, image-to-video for
+  Wan, XML/OTIO import, and the sidecar/cutover remain.

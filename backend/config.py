@@ -75,6 +75,17 @@ MEMORY_KEEP_WARM = os.environ.get("MILIMO_MEMORY_KEEP_WARM", "0") == "1"
 MEMORY_UNKNOWN_ENGINE_GB = float(os.environ.get("MILIMO_MEMORY_UNKNOWN_ENGINE_GB", "24"))
 MEMORY_MONITOR_INTERVAL_SEC = float(os.environ.get("MILIMO_MEMORY_MONITOR_INTERVAL", "15"))
 
+# Wan 2.2 TI2V-5B (Apache 2.0): separate low-VRAM video engine.
+WAN_MODEL_PATH = os.environ.get(
+    "MILIMO_WAN_MODEL",
+    os.path.join(BACKEND_DIR, "models", "wan2.2-ti2v-5b"),
+)
+
+# Quantized FLUX.2 Klein GGUF path (issue #2). Empty = full-precision path.
+FLUX_GGUF_PATH = os.environ.get("MILIMO_FLUX_GGUF", "").strip()
+# On CUDA, offload components between steps for 12–24 GB cards.
+FLUX_GGUF_OFFLOAD = os.environ.get("MILIMO_FLUX_GGUF_OFFLOAD", "1") == "1"
+
 # Optional terminal-job webhook for local automations (off by default).
 JOB_WEBHOOK_URL = os.environ.get("MILIMO_JOB_WEBHOOK", "").strip()
 JOB_WEBHOOK_TOKEN = os.environ.get("MILIMO_JOB_WEBHOOK_TOKEN", "").strip()

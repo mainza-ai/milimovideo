@@ -98,8 +98,8 @@ SQLAlchemy `<2.1` pin. Pin now, migrate deliberately.
 | Step | Change | Acceptance |
 |---|---|---|
 | P1-1 | **Adopt the diffusers LTX-2.5 engine.** Spike `LTX-2.5-Diffusers` / diffusers `main` with `LTX2Pipeline`, `enable_model_cpu_offload()`, `vae.enable_tiling()`, and int8/W4A8 quants; map it behind the current task interface, keep the vendored LTX-2 engine as a fallback. | 32 GB CUDA runs bf16/FP8 with offload/tiling; 16 GB int8 is validated as an explicit experimental target, not promised; Mac falls back cleanly. This is the supported resolution for #6. |
-| P1-2 | **Add Wan 2.2 TI2V-5B as the low-VRAM CUDA engine.** Diffusers adapter, Apache 2.0 license gate, registry/manifest, costs, UI, 720p/24 baseline. | 8–24 GB CUDA generates 720p; preflight covers it; it does not disturb LTX memory accounting. |
-| P1-3 | **Quantized Flux 2 (#2).** Upgrade diffusers to a Klein-capable release (0.37.1+), add GGUF manifest/registry entries, `Flux2KleinPipeline` + `GGUFQuantizationConfig`, and a quantized/offloaded Qwen3 text encoder. | Q4_K_M image generation on 12–16 GB; quality/time compared with `backend/benchmark_models.py`. |
+| P1-2 | **Add Wan 2.2 TI2V-5B as the low-VRAM CUDA engine.** Diffusers adapter, Apache 2.0 license gate, registry/manifest, costs, UI, 720p/24 baseline. | **MVP delivered** — queue + `pipeline_override=wan`, manifest/download, costs, UI, real 17f/256 MPS generation + 40-step API run. CUDA 8–24 GB validation still required; image-to-video not wired. |
+| P1-3 | **Quantized Flux 2 (#2).** Upgrade diffusers to a Klein-capable release (0.37.1+), add GGUF manifest/registry entries, `Flux2KleinPipeline` + `GGUFQuantizationConfig`, and a quantized/offloaded Qwen3 text encoder. | **MVP delivered** — diffusers 0.37.1, Q4_K_M manifest, `MILIMO_FLUX_GGUF`, MPS 256² generation verified. IP-Adapter/inpaint remain full-checkpoint; CUDA offload and 12–16 GB validation pending. |
 | P1-4 | CUDA regression checklist: no_grad encode, VRAM admission, FP8/quant selection, 8/16/24/48 GB behavior; calibrate the manifest estimates. | Manual run recorded on a CUDA host; estimates within 10%. |
 | P1-5 | Bundle the backend: PyInstaller/Nuitka one-folder with Torch or an embedded runtime; Tauri sidecar; first-run model download; macOS notarization and Windows build in CI. | A clean machine launches Studio with no Python/venv. |
 | P1-6 | Legacy cutover: after two clean packaged releases, remove `/` or freeze it behind a plugin; update docs/flags/e2e. | Studio is the only route; rollback documented. |
@@ -113,7 +113,7 @@ is the supported upgrade.
 
 | Item | Work | Acceptance |
 |---|---|---|
-| **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | A Resolve/Premiere timeline opens with correct cuts, trims, and audio; round-trip preserves V1/V2/A1 |
+| **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | **MVP delivered** — `/projects/{id}/otio` + Deliver button; tests for V1/V2/A1, trims, gaps, MissingReference. Speed uses LinearTimeWarp; XML/imports remain. |
 | **ComfyUI bridge** | Import/export a ComfyUI workflow, submit it through the queue, ingest outputs and provenance | An LTX-2.5/Wan workflow runs from Studio and its output becomes a take |
 | NLE completeness | Transitions, LUTs, titles, A2 track (after the OTIO handoff) | Export pixels match the timeline; UI round-trips |
 | Embedding search | Local embedding model via the LLM plane, index, ranked results with lexical fallback | Semantic shot search works offline |

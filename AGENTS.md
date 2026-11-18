@@ -172,6 +172,9 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
   fades/solo, caption lane + SRT/VTT import, motion keyframes, render range,
   timeline table + keyboard edit, object tracking, local depth overlay, blocking
   lens, lazy 3D previz.
+- Generate engines: LTX-2 19B (auto/ti2vid/ic_lora/keyframe) and **Wan 2.2 5B**
+  (`pipeline_override=wan`, low-VRAM text-to-video); optional Flux 2 Q4_K_M GGUF
+  via `MILIMO_FLUX_GGUF`.
 - Generate: ingredients/@mentions, advanced params, persistent seed lock,
   preview frame with start/end conditioning, batch queue and matrix, queue
   position/estimate/cancel/pause, immutable takes/favorites, inpaint, editable
@@ -180,7 +183,8 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
   deterministic plan previews, undoable apply, recipes, `@Agent` handoff.
 - Library/Deliver: direct uploads, assets, master-reference CRUD (trigger,
   image, description), takes, ranked local search, presets, pad/crop reframing,
-  caption toggle/preview, persisted encoding controls, render history/cancel.
+  caption toggle/preview, persisted encoding controls, render history/cancel,
+  **OTIO export** of the computed V1/V2/A1 cut.
 - Media viewer: one global image/video/audio/text preview used by Library, Story,
   Generate, Edit, Inspector, and Review; legacy localhost URLs are rewritten to
   the current API origin with bearer-token support. Video uploads get real poster
@@ -214,7 +218,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 181 backend tests, 79 Vitest tests, and 21 Playwright tests, plus
+baseline is 190 backend tests, 79 Vitest tests, and 21 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -248,9 +252,11 @@ Do not claim these are done:
   Any change that loads a model must call `memory_manager.admit_job` /
   `prepare_for` and include external engines in the budget. See
   `Milimo Video/systems/memory-management-audit-2026-11.md`.
-- Model lane: the current video engine is LTX-2 19B. LTX-2.5 (diffusers CPU
-  offload/VAE tiling) and Wan 2.2 TI2V-5B (Apache 2.0, low VRAM) are the planned
-  upgrades; Z-Image Turbo / Qwen-Image-Edit-2511 are the image-lane candidates.
+- Model lane: LTX-2 19B is the primary video engine; **Wan 2.2 TI2V-5B** is
+  integrated as the experimental low-VRAM lane; **LTX-2.5** (diffusers CPU
+  offload/VAE tiling) is the next upgrade. Flux 2 Q4_K_M GGUF is integrated for
+  low-VRAM images; Z-Image Turbo / Qwen-Image-Edit-2511 are the image-lane
+  candidates.
   HunyuanVideo 1.5, MiniMax H3, and Qwen-Image 2.1 are license-restricted and must
   not be bundled. See `Milimo Video/research/model-landscape-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.

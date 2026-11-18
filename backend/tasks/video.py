@@ -793,6 +793,16 @@ async def generate_video_task(job_id: str, params: dict):
             logger.info(f"Job {job_id} was cancelled before starting execution.")
             return
 
+    if (
+        str(params.get("pipeline_override") or "").lower() == "wan"
+        or str(params.get("pipeline_type") or "").lower() == "wan"
+        or str(params.get("engine") or "").lower() == "wan"
+    ):
+        from tasks.wan import generate_wan_video_task
+
+        await generate_wan_video_task(job_id, params)
+        return
+
     logger.info(f"Starting generation for job {job_id}")
     active_jobs[job_id] = {
         "cancelled": False,

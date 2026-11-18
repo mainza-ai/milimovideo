@@ -204,6 +204,9 @@ when the count is invalid. The lens copies/saves a reproducible recipe as JSON a
 - **Queue pending** batches all shots without completed takes.
 - **Batch matrix** shows status/progress and per-shot generate/cancel.
 - **Active queue** shows running/queued jobs, position, estimate, and cancel.
+- **Pipeline** in Advanced parameters selects `auto`/LTX or **wan 2.2 (5B)**. Wan
+  is a separate low-VRAM text-to-video engine; it does not use the LTX chained or
+  audio path.
 - Only one heavy GPU job runs at a time; interactive video/image work is dispatched
   before bulk thumbnails/elements and background parsing.
 - **Memory preflight** runs before the request. If the shot cannot fit:
@@ -388,7 +391,10 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
   releases waiting durable jobs.
 - Pipeline readiness with missing counts.
 - Base model table: real status, size, VRAM estimate, Activate/Unload or Download;
-  active downloads expose **Cancel download**.
+  active downloads expose **Cancel download**. The table includes Wan 2.2 TI2V-5B
+  and the Flux 2 Q4_K_M GGUF entry.
+- Quantized Flux is activated with `MILIMO_FLUX_GGUF=/path/to.gguf`; it supports
+  text-to-image, not IP-Adapter or inpainting.
 - LoRA table: real downloaded/active state, activation, and strength.
 - Depth Anything V2 Small is optional; download it here before using the Depth overlay.
 - Project integrity: **Scan project** reports missing media, orphan shots/scenes,

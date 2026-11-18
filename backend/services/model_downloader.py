@@ -386,8 +386,10 @@ class ModelDownloader:
 
         hf_info = model.huggingface
         repo_id = hf_info["repo"]
-        subdir = hf_info["subdir"]
-        target_dir = os.path.dirname(model.absolute_path)
+        subdir = hf_info.get("subdir", "")
+        # A root snapshot (subdir == "") installs into the model path itself;
+        # subdirectory entries install beside it.
+        target_dir = model.absolute_path if subdir == "" else os.path.dirname(model.absolute_path)
 
         logger.info(f"Downloading {repo_id}/{subdir}/ → {target_dir}")
 

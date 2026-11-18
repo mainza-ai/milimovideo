@@ -600,6 +600,58 @@
       "license": "non-commercial"
     },
     {
+      "id": "wan2.2-ti2v-5b",
+      "name": "Wan 2.2 TI2V-5B",
+      "family": "wan2.2",
+      "role": "checkpoint",
+      "type": "base",
+      "pipeline": "video",
+      "pipeline_tag": "text-to-video",
+      "required": false,
+      "size_bytes": null,
+      "relative_path": "backend/models/wan2.2-ti2v-5b",
+      "huggingface": {
+        "repo": "Wan-AI/Wan2.2-TI2V-5B-Diffusers",
+        "subdir": ""
+      },
+      "device_compatibility": ["cuda", "mps", "cpu"],
+      "description": "Apache-2.0 5B TI2V model (720p/24, diffusers). Low-VRAM CUDA lane; choose pipeline 'wan 2.2 (5B)' on a shot.",
+      "depends_on": [],
+      "alternatives": [],
+      "requires_base": false,
+      "base_repo_id": null,
+      "vram_estimate_gb": 24,
+      "recommended_dtype": "float16",
+      "gated": false,
+      "license": "apache-2.0"
+    },
+    {
+      "id": "flux2-klein-9b-q4km",
+      "name": "Flux 2 Klein 9B (Q4_K_M GGUF)",
+      "family": "flux2",
+      "role": "checkpoint",
+      "type": "quantized",
+      "pipeline": "image",
+      "pipeline_tag": "text-to-image",
+      "required": false,
+      "size_bytes": 5673900320,
+      "relative_path": "backend/models/flux2/flux-2-klein-9b-Q4_K_M.gguf",
+      "huggingface": {
+        "repo": "unsloth/FLUX.2-klein-9B-GGUF",
+        "filename": "flux-2-klein-9b-Q4_K_M.gguf"
+      },
+      "device_compatibility": ["cuda", "mps", "cpu"],
+      "description": "Q4_K_M GGUF transformer for low-VRAM image generation. Requires the Flux 2 text encoder, tokenizer, and VAE. Set MILIMO_FLUX_GGUF to this file to activate; IP-Adapter/inpaint stay on the full checkpoint.",
+      "depends_on": ["flux2-text-encoder", "flux2-tokenizer", "flux2-ae"],
+      "alternatives": ["flux2-klein-9b"],
+      "requires_base": false,
+      "base_repo_id": null,
+      "vram_estimate_gb": 24,
+      "recommended_dtype": "float16",
+      "gated": false,
+      "license": "non-commercial"
+    },
+    {
       "id": "flux2-ae",
       "name": "Flux 2 Native AutoEncoder",
       "family": "flux2",

@@ -18,6 +18,11 @@ IMAGE_BASE_GB = 36.0        # Flux 2 9B + Qwen3 encoder + AE/CLIP/IP
 # CUDA auto-selects the FP8 LTX checkpoint (manifest: 40 GB) and bf16 Flux 9B.
 VIDEO_BASE_GB_CUDA = 40.0
 IMAGE_BASE_GB_CUDA = 18.0
+# Wan 2.2 TI2V-5B: 5B DiT + UMT5 encoder + high-compression VAE.
+# Measured disk/loading footprint: 5B DiT + UMT5 + VAE (fp16), ~34 GB unified;
+# CUDA fp16 components fit ~18 GB before workspace.
+WAN_BASE_GB = 34.0
+WAN_BASE_GB_CUDA = 18.0
 SAM_BASE_GB = 8.0
 DEPTH_BASE_GB = 0.6
 
@@ -94,6 +99,24 @@ def estimate_llm_gb(model_id: str, params_b: float | None = None, bits: float | 
 def estimate(kind: str, params: Dict[str, Any] | None = None) -> CostBreakdown:
     params = params or {}
     kind = (kind or "video").lower()
+    if kind == "video" and str(params.get("engine") or "").lower() == "wan":
+        base = WAN_BASE_GB_CUDA if _cuda_available() else WAN_BASE_GB
+        frames = int(params.get("num_frames") or 49)
+        width = int(params.get("width") or 480)
+        height = int(params.get("height") or 480)
+        scale = max(0.1, (frames / 49.0) * ((width * height) / float(480 * 480)))
+        workspace = 2.0 + 4.0 * scale
+        total = (base + workspace) * SAFETY_FACTOR
+        return CostBreakdown(
+            kind=kind,
+            base_gb=base,
+            workspace_gb=workspace,
+            total_gb=round(total, 2),
+            frames=frames,
+            width=width,
+            height=height,
+            notes=[f"Wan 2.2 5B, {frames} frames at {width}x{height}"],
+        )
     if kind == "video":
         video_base = base_gb("video")
         frames = int(params.get("num_frames") or 121)
