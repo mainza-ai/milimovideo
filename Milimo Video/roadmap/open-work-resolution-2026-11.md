@@ -35,7 +35,7 @@ a test; "open" means no code or no verified path.
 | Issue #1 (Wan 2.2) | Open | **Feature gap**: a separate model family, not an LTX patch. |
 | PR #7 (`enhance_prompt` tuple) | Open | **Superseded**: both call sites already unpack on `main` (`tasks/image.py:98`, `tasks/video.py:290`). Close with a pointer. |
 | PR #8 (`encode_video` no_grad) | Open | **Still valid**: `media_io.py` has no `torch.no_grad()` around generator consumption; the CUDA inference-tensor crash is real. Rebase, test, merge. |
-| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 181 tests pass locally. |
+| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 190 tests pass locally. |
 | Security alerts | Disabled | `vulnerability-alerts` returns 404; Dependabot/security alerts are not enabled. |
 
 ### Roadmap / AGENTS deferrals
