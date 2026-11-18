@@ -38,8 +38,12 @@ a backend supervisor.
   notes, master-reference cards, review task cards, and board undo.
 - **Generate** — ingredients and `@trigger` mentions, advanced parameters, a
   persistent seed lock, start/end-frame conditioning, preview stills, batch queue
-  and matrix, immutable takes, favorites, inpaint, and a pipeline lens whose
-  reproducible recipe can be exported and imported as JSON.
+  and matrix, immutable takes, favorites, inpaint, a pipeline lens whose
+  reproducible recipe can be exported and imported as JSON, and a **ComfyUI**
+  workflow panel (paste/import API-format JSON, validate, run, cancel).
+- **ComfyUI bridge** — a generic local engine: submit any API-format workflow,
+  stream node/step progress, copy every output into project assets, and attach the
+  result to a shot. Model-free `EmptyImage → SaveImage` smoke graph included.
 - **Edit** — program monitor, compare/wipe, guides, magnetic V1 plus free V2/A1,
   trim/slip/roll/blade/ripple/rate/slide, audio gain/mute/fades/solo, waveform,
   captions with SRT/VTT import and burn-in, motion keyframes, render range, a
@@ -65,7 +69,8 @@ a backend supervisor.
   uploaded source.
 - Setup exposes real device/slot/queue/disk state, queued and cancellable model
   downloads, LoRA activation and strength, an optional local Depth Anything V2
-  model, queue pause/resume, integrity scan/repair, and a job error budget.
+  model, a **ComfyUI bridge** probe with model-cache release, queue
+  pause/resume, integrity scan/repair, and a job error budget.
 
 ### Visual conditioning & character consistency
 
@@ -171,6 +176,7 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 | **Video AI** | LTX-2 19B (`ti2vid`, `ic_lora`, `keyframe`, chained) + **Wan 2.2 TI2V-5B** (experimental low-VRAM lane). LTX-2.5 is the next upgrade |
 | **Image AI** | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint inpainting |
 | **Segmentation** | SAM 3 microservice (port 8001) — text/box/click masks and video tracking |
+| **ComfyUI** | Generic bridge to a local ComfyUI server — API-format workflows, websocket/polling progress, streamed output ingestion, declared `comfy` memory slot |
 | **Prompt AI** | Local-first role plane — Gemma 3 in-process, Ollama, oMLX, Strata, LM Studio, vLLM/llama.cpp; optional cloud behind a daily budget, eval gate, and air-gap |
 | **Processing** | FFmpeg/ffprobe — render, probes, thumbnails, frame extraction, stitching |
 | **Memory & scheduling** | Measured budget/admission, leases + TTL eviction, engine adapters (Ollama/oMLX/Strata), priority queue with same-slot grouping, bounded memory waits |
@@ -179,14 +185,15 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 
 ### Backend surface
 
-- Thirteen routers and 139 operations across 122 paths: projects, jobs, assets,
+- Thirteen routers and 145 operations across 128 paths: projects, jobs, assets,
   storyboard, elements, shots, models, planner, review, share, depth, settings,
-  system memory.
+  system memory, and the ComfyUI bridge.
 - Pydantic write boundaries, generated OpenAPI TypeScript, and zod contract checks.
 - Alembic baseline `0001_baseline` plus `0002_render_settings`,
-  `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`, and
-  `0006_job_progress` (`job.stage`, `started_at`, `memory_json`); legacy DBs are
-  repaired and stamped at head.
+  `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`,
+  `0006_job_progress` (`job.stage`, `started_at`, `memory_json`), and
+  `0007_shot_priority_steps` (`shot.priority`, `shot.num_inference_steps`); legacy
+  DBs are repaired and stamped at head.
 - LLM plane: persisted settings with provider instances and revision CAS,
   capability-aware discovery, role eval, cloud spend ledger, and staged profiles.
 - `QueuedJob` ledger, one global GPU semaphore, priority + same-slot grouping, one
@@ -300,6 +307,10 @@ Memory and scheduling environment:
 - `MILIMO_FLUX_GGUF=/path/to/flux-2-klein-9b-Q4_K_M.gguf` switches the image lane
   to the quantized transformer (`MILIMO_FLUX_GGUF_OFFLOAD=1` offloads on CUDA).
 - `MILIMO_WAN_MODEL=/path/to/wan2.2-ti2v-5b` overrides the Wan 2.2 model directory.
+- `MILIMO_COMFY_URL` (default `http://127.0.0.1:8001`) points at ComfyUI;
+  `MILIMO_COMFY_GB` declares its residency (default 2 GB). Comfy Desktop and SAM
+  both default to 8001, so set the URL if both run.
+- `MILIMO_MEMORY_TTL_COMFY` tunes ComfyUI idle eviction.
 - `MILIMO_JOB_WEBHOOK` (+ `MILIMO_JOB_WEBHOOK_TOKEN`) posts terminal jobs to a
   local automation endpoint; off by default.
 
@@ -355,20 +366,20 @@ masking/tracking toggles. New work belongs in Studio.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                    # 194 tests
+./milimov/bin/python -m pytest                    # 202 tests
 ./milimov/bin/python -m ruff check backend        # correctness rules
 ./milimov/bin/python backend/verify_setup.py      # 0 failures expected
 
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                          # 79 tests
+npm test                                          # 83 tests
 npm run build
 npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 194 backend tests, 79 Vitest tests, and 21 Playwright
+The last verified run was 202 backend tests, 83 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual

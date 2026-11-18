@@ -222,6 +222,32 @@ when the count is invalid. The lens copies/saves a reproducible recipe as JSON a
 - Terminal notifications can be muted for the current project in **Setup →
   Notifications**; toasts, desktop notifications, and sound are separate toggles.
 
+### ComfyUI workflows
+
+ComfyUI is an optional local engine, separate from LTX-2/Flux/Wan. Milimo does not
+edit node graphs; it runs a workflow you export from ComfyUI.
+
+1. In ComfyUI, build the graph and choose **Workflow → Save (API Format)**. The
+   UI-saved JSON (`nodes`/`links`) is rejected; the API format is required.
+2. In **Generate → ComfyUI workflow**, paste the JSON or **Import JSON**. The last
+   workflow is remembered locally. **Smoke test** loads a model-free
+   `EmptyImage → SaveImage` graph that proves the bridge.
+3. **Validate** reports node count, output nodes, and inferred size.
+4. **Run workflow** queues it against the selected shot. Progress streams like any
+   other job (queue position, node execution, sampler steps, saving).
+5. Every output is copied into the project and appears in Library; the primary
+   image/video is attached to the shot. **Cancel** deletes/interrupts the ComfyUI
+   prompt.
+
+Reuse a saved graph with different inputs by editing the JSON, or pass per-node
+`overrides` through the API. **Setup → ComfyUI bridge** shows reachability,
+version, queue depth, free RAM, and **Free cached models** (`/free`).
+
+ComfyUI is admitted as a declared external slot (`MILIMO_COMFY_GB`, default 2 GB)
+and competes for the same GPU queue. Comfy Desktop and SAM both default to port
+8001; if you run both, set `MILIMO_COMFY_URL` to ComfyUI's port (for example
+`http://127.0.0.1:8188`).
+
 ### Preview first
 
 **Preview frame** generates a still with the current prompt and attaches it as
@@ -408,6 +434,9 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 - **Notifications**: in-app toasts, sound cue, desktop notifications (macOS uses
   Notification Center), and per-project mute. Toasts/activity always keep history;
   mute only suppresses the interruption.
+- **ComfyUI bridge**: reachability/version, queue depth, free RAM, **Probe**,
+  **Free cached models** (`/free`), and a link to the ComfyUI UI. ComfyUI is
+  budgeted as a declared external slot (`MILIMO_COMFY_GB`).
 - Error budget: 7-day job counts by status and recent failures.
 
 Activation loads the real model through the loader and respects the one-slot rule.
@@ -540,11 +569,15 @@ Common issues:
   remote unload; a cancelled job keeps its pipeline until the idle TTL; memory
   waits are bounded (20 retries); swap exhaustion can refuse jobs until the machine
   is restarted. See `Milimo Video/systems/memory-management-audit-2026-11.md`.
+- **ComfyUI**: graphs are imported as API-format JSON, not edited in Milimo;
+  residency is a declared `MILIMO_COMFY_GB`, not measured per model; a sub-second
+  graph can finish before the websocket connects, so completion falls back to
+  history polling. Comfy Desktop and SAM both default to port 8001.
 - **Model efficiency (M5)**: SAM is lazy and `backend/benchmark_models.py` records
   per-lane baselines, but quantized/distilled checkpoints and text-encoder
   alternatives need model artifacts that are not vendored.
 - **Notifications**: the legacy `/` editor receives mapped events but has no toast
-  layer or activity center. macOS desktop notifications use `osascript`; a tray
-  icon is not implemented.
+  layer or activity center. macOS desktop notifications use `osascript`; the Tauri
+  shell has a tray icon with show/quit and tooltip progress.
 - Phase 6 v2 artifact work (model swaps, MLX/FP8 lanes, agent crew) is a separate
   program and is not part of scoped v1.

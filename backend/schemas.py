@@ -275,6 +275,25 @@ class GenerateImageRequest(BaseModel):
     enable_ae: bool = True
     enable_true_cfg: bool = False
 
+
+class ComfyWorkflowRequest(BaseModel):
+    """A ComfyUI API-format workflow plus optional per-node input overrides."""
+    workflow: Any
+    overrides: Dict[str, Dict[str, Any]] = {}
+    filename_prefix: Optional[str] = None
+
+
+class ComfyRunRequest(BaseModel):
+    project_id: str
+    shot_id: Optional[str] = None
+    workflow: Any
+    overrides: Dict[str, Dict[str, Any]] = {}
+    filename_prefix: Optional[str] = None
+    prompt: Optional[str] = None
+    estimate_gb: Optional[float] = None
+    estimate_seconds: Optional[float] = None
+    timeout_sec: Optional[float] = None
+
 class BoardNode(BaseModel):
     id: str
     x: float

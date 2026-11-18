@@ -42,6 +42,7 @@ const STAGE_LABELS: Record<string, string> = {
     loading: 'Loading model',
     conditioning: 'Preparing conditioning',
     denoising: 'Generating',
+    executing: 'Executing nodes',
     inpainting: 'Inpainting',
     upscaling: 'Upscaling',
     encoding: 'Encoding',
@@ -114,6 +115,7 @@ function terminalMessage(event: StudioJobEvent): string {
     if (kind === 'element') return 'Element visual ready';
     if (kind === 'ai_parse') return 'Script parse complete';
     if (kind === 'depth') return 'Depth overlay ready';
+    if (kind === 'comfy') return 'ComfyUI workflow complete';
     if (kind === 'inpaint') return 'Inpainted take ready';
     return 'Generation complete';
 }

@@ -72,6 +72,10 @@ navigate, then drills into pages.
   Ollama/oMLX/Strata, findings F1–F11, phases L5–L9 (instances, capability truth,
   warm-up/streaming, eval, memory discipline, cloud budget/profiles), and the
   remaining caveats.
+- [systems/comfyui-bridge](systems/comfyui-bridge.md) — the generic ComfyUI
+  bridge: API-format workflow submission, websocket/polling progress, output
+  streaming into assets and shots, declared external residency, port rules, and
+  the model-free smoke test.
 
 ## Research
 - [research/model-landscape-2026-11](research/model-landscape-2026-11.md) —

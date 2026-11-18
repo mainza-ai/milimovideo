@@ -34,10 +34,13 @@ never sit in memory at once.
 | `llm_http` | Ollama / oMLX / Strata / LM Studio / vLLM | variable; measured 6.3 GB (Llama 3B) and **33 GB** (Strata Qwen3.8) |
 | `sam` | SAM 3 microservice | 3.2 GB weights, ~6–8 GB runtime |
 | `depth` | Depth Anything V2 Small | ~0.5 GB |
+| `comfy` | ComfyUI external process | declared `MILIMO_COMFY_GB` (default 2 GB + 1 GB workspace); `/free` releases its cache |
 
 Rules: `video ↔ image` are mutually exclusive — `prepare_for("video")` unloads Flux
-(and `llm_http`) before LTX-2 loads, and vice versa. Pipeline swaps follow: delete
-reference → `gc.collect()` → empty GPU cache → `prepare_for(slot)` → load.
+(and `llm_http`) before LTX-2 loads, and vice versa. `comfy` conflicts with
+`video`, `image`, and `llm_http`; an idle ComfyUI cache is released with `/free`.
+Pipeline swaps follow: delete reference → `gc.collect()` → empty GPU cache →
+`prepare_for(slot)` → load.
 
 `llm_http` is best-effort: Ollama can be told to unload (`keep_alive: 0`), oMLX
 exposes `/v1/models/{id}/unload`, and Strata currently exposes no unload we can
@@ -72,8 +75,8 @@ Slots are now backed by a measured budget rather than name-only exclusion.
 - **Leases** protect running work: a slot with `leases > 0` is never evicted, and a
   conflicting slot in use refuses the load. Activation/deactivation is refused
   while a job is active.
-- **Idle TTL** (video/image 300 s, LLM 120 s, SAM 600 s, depth 300 s) and pressure
-  events evict idle slots; `keep-warm` pins a slot; leased slots are exempt.
+- **Idle TTL** (video/image 300 s, LLM 120 s, SAM 600 s, depth 300 s, comfy 300 s)
+  and pressure events evict idle slots; `keep-warm` pins a slot; leased slots are exempt.
 - **Engine adapters** measure Ollama (`/api/ps`), oMLX (`/v1/models/status`), and
   use a declared `memory_gb` for Strata/generic engines, with unload where
   supported. Strata is still unloadable only by the user.
@@ -87,7 +90,8 @@ Slots are now backed by a measured budget rather than name-only exclusion.
 
 Remaining caveats: the cost registry is hand-tuned; Strata has no remote unload;
 a cancelled job keeps its pipeline until the TTL; only the MPS decode path is
-tiled. See [[../systems/memory-management-audit-2026-11.md]] for the incident,
+tiled. ComfyUI residency is declared, not measured per model, and shares port
+8001 with SAM by default. See [[../systems/memory-management-audit-2026-11.md]] for the incident,
 measurements, and M0–M5 evidence.
 
 ## Related

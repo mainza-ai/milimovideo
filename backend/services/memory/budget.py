@@ -188,11 +188,13 @@ def pressure() -> str:
 
 def _conflicting(slot: str) -> set[str]:
     if slot == "video":
-        return {"image", "llm_http"}
+        return {"image", "llm_http", "comfy"}
     if slot == "image":
-        return {"video", "llm_http"}
+        return {"video", "llm_http", "comfy"}
     if slot == "llm_http":
-        return set()
+        return {"comfy"}
+    if slot == "comfy":
+        return {"video", "image", "llm_http"}
     return set()
 
 
@@ -204,7 +206,13 @@ def reclaimable(
     include_external: bool = True,
 ) -> tuple[float, list[str]]:
     """Idle/conflicting models that can be unloaded to make room."""
-    target = "video" if kind == "video" else "image" if kind == "image" else "llm_http" if kind == "llm" else kind
+    target = (
+        "video" if kind == "video"
+        else "image" if kind == "image"
+        else "llm_http" if kind == "llm"
+        else "comfy" if kind == "comfy"
+        else kind
+    )
     freed = 0.0
     names: list[str] = []
     for slot, state in slots.items():

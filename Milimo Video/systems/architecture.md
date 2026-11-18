@@ -25,7 +25,8 @@ related:
 
 The split architecture that keeps the UI responsive while GPU-heavy inference runs
 locally: a React Studio shell, a FastAPI backend on port 8000, an optional SAM 3
-microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell.
+microservice on port 8001, an optional ComfyUI server (Comfy Desktop also defaults
+to 8001), and a Tauri desktop wrapper that hosts the same shell.
 
 ## Components
 
@@ -36,13 +37,15 @@ microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell
 - **Legacy frontend** — the original NLE at `/`, using `timelineStore` and 7 slices.
   Frozen except for P0 fixes. `VITE_STUDIO_ENABLED=false` serves it at `/studio`.
 - **Backend (Python / FastAPI, port 8000)** — inference dispatch, project/assets,
-  durable GPU queue, SQLite via SQLModel, Alembic migrations, SSE. **Twelve routers
-  / 133 operations** (verified 2026-11-17): projects, jobs, assets, storyboard,
-  elements, shots, models, planner, review, share, depth, settings.
-- **Task engine** — `tasks/video.py`, `tasks/chained.py`, `tasks/image.py`,
-  `tasks/depth.py`, `tasks/ai_parse.py`; `ModelManager` loads LTX-2; `FluxInpainter`
-  wraps Flux 2; `StoryboardManager` coordinates chunks; managers handle elements,
-  masks, and SAM tracking.
+  durable GPU queue, SQLite via SQLModel, Alembic migrations, SSE. **Thirteen routers
+  / 145 operations** (verified 2026-11-18): projects, jobs, assets, storyboard,
+  elements, shots, models, planner, review, share, depth, settings, comfy.
+- **Task engine** — `tasks/video.py`, `tasks/chained.py`, `tasks/wan.py`,
+  `tasks/image.py`, `tasks/comfy.py`, `tasks/depth.py`, `tasks/ai_parse.py`;
+  `ModelManager` loads LTX-2; `FluxInpainter` wraps Flux 2; `WanEngine` wraps the
+  low-VRAM Wan 2.2 lane; `ComfyClient` runs external ComfyUI workflows;
+  `StoryboardManager` coordinates chunks; managers handle elements, masks, and
+  SAM tracking.
 - **LLM plane** — `services/llm/`: persisted settings with provider **instances**
   (`store.py`, `instances.py`), wire adapters with capability parsing, images, and
   streaming (`providers.py`), role execution with preflight/fallback/cancel
@@ -56,6 +59,10 @@ microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell
   and pressure response; see [[memory-management-audit-2026-11]].
 - **SAM 3 microservice (port 8001)** — health, mask prediction, detection, text
   segmentation, and video tracking sessions. Proxied through the backend.
+- **ComfyUI bridge** — `services/comfy.py`, `tasks/comfy.py`, `routes/comfy.py`:
+  submit API-format workflows, relay websocket/polling progress, stream outputs
+  into project assets and shots. ComfyUI is an external GPU engine with a
+  declared `comfy` memory slot. See [[comfyui-bridge]].
 - **MemoryManager** — mutual exclusion between heavy model slots; see
   [[../concepts/memory-slots.md]].
 - **Desktop (Tauri 2)** — native Open/Save, dialog plugin, backend supervisor,
@@ -70,6 +77,7 @@ microservice on port 8001, and a Tauri desktop wrapper that hosts the same shell
 | Studio read sync | TanStack Query + local hooks | Health, models, review, renders, assets, elements, jobs |
 | Studio job recovery | `GET /status/{job_id}` | Polls in-flight jobs on reconnect/mount; 404 means not running |
 | Backend → SAM 3 | HTTP REST (port 8001) | Segmentation and tracking calls, off the event loop |
+| Backend → ComfyUI | HTTP REST + WebSocket | `/prompt`, `/history`, `/view`, `/queue`, `/free`, `/interrupt`; progress on `/ws` |
 | Worker → LTX-2 / Flux 2 | Direct Python import | One heavy model at a time; MemoryManager gates swaps |
 | Prompt enhancement | `llm.py` → role runtime | `prompt_video`/`prompt_image` resolve to persisted provider/model hops with ordered fallback |
 | LLM settings | `GET/PUT/PATCH /settings/llm` | Redacted snapshot, revision CAS, air-gap patch; writes persist in `app_setting` |

@@ -91,6 +91,10 @@ def get_project_active_jobs(project_id: str, session: Session = Depends(get_sess
         width = int(params.get("width") or 768)
         height = int(params.get("height") or 512)
         workload = max(0.1, (frames / 121) * ((width * height) / (768 * 512)))
+        try:
+            estimate_seconds = max(1.0, float(params.get("estimate_seconds") or (8 + 22 * workload)))
+        except (TypeError, ValueError):
+            estimate_seconds = round(8 + 22 * workload, 1)
         job_row = session.get(Job, queued.job_id)
         project_jobs.append({
             "job_id": queued.job_id,
@@ -103,7 +107,7 @@ def get_project_active_jobs(project_id: str, session: Session = Depends(get_sess
             "status_message": job_row.status_message if job_row else "Queued",
             "position": position,
             "started_at": job_row.started_at if job_row else None,
-            "estimate_seconds": round(8 + 22 * workload, 1),
+            "estimate_seconds": estimate_seconds,
         })
     return project_jobs
 

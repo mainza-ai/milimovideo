@@ -82,6 +82,34 @@ describe('jobBridge', () => {
         expect(toast?.message).toContain('101.0 GB');
     });
 
+    it('labels a ComfyUI completion and attaches the ingested output', () => {
+        registerStudioJob('job-comfy', { shotId: 'shot-9', kind: 'comfy' });
+        const updateShot = vi.fn();
+        useStudioDocumentStore.setState({ updateShot });
+
+        handleStudioJobEvent({
+            event: 'job.completed',
+            job_id: 'job-comfy',
+            kind: 'comfy',
+            url: '/projects/p1/generated/comfy.png',
+            thumbnail_url: '/projects/p1/generated/comfy.png',
+            progress: 100,
+            message: 'ComfyUI workflow complete',
+        });
+
+        expect(useStudioDocumentStore.getState().toasts.at(-1)).toMatchObject({
+            message: 'ComfyUI workflow complete',
+            type: 'success',
+        });
+        expect(updateShot).toHaveBeenCalledWith(
+            'shot-9',
+            expect.objectContaining({
+                isGenerating: false,
+                videoUrl: expect.stringContaining('/projects/p1/generated/comfy.png'),
+            }),
+        );
+    });
+
     it('labels stages for the inline progress bar', () => {
         expect(stageLabel('denoising')).toBe('Generating');
         expect(stageLabel('encoding')).toBe('Encoding');

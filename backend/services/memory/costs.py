@@ -10,6 +10,8 @@ import os
 import re
 from typing import Any, Dict
 
+import config
+
 from .models import CostBreakdown
 
 # Measured on the reference 128 GB Apple Silicon machine.
@@ -60,6 +62,7 @@ def slot_base_gb(slot: str) -> float:
         "image": IMAGE_BASE_GB,
         "sam": SAM_BASE_GB,
         "depth": DEPTH_BASE_GB,
+        "comfy": float(getattr(config, "COMFY_DECLARED_GB", 2.0)),
     }.get(slot, 0.0)
 
 
@@ -160,6 +163,18 @@ def estimate(kind: str, params: Dict[str, Any] | None = None) -> CostBreakdown:
     if kind == "sam":
         total = SAM_BASE_GB * SAFETY_FACTOR
         return CostBreakdown(kind=kind, base_gb=SAM_BASE_GB, workspace_gb=0.0, total_gb=round(total, 2))
+    if kind == "comfy":
+        # ComfyUI is an external process with its own model cache. The declared
+        # residency covers its cache + the workflow workspace; it is user-tunable
+        # because ComfyUI exposes no per-model accounting.
+        declared = float(params.get("estimate_gb") or getattr(config, "COMFY_DECLARED_GB", 2.0))
+        return CostBreakdown(
+            kind=kind,
+            base_gb=declared,
+            workspace_gb=1.0,
+            total_gb=round((declared + 1.0) * SAFETY_FACTOR, 2),
+            notes=["ComfyUI external workflow; declared residency " f"{declared:.1f} GB"],
+        )
     if kind == "depth":
         total = DEPTH_BASE_GB * SAFETY_FACTOR
         return CostBreakdown(kind=kind, base_gb=DEPTH_BASE_GB, workspace_gb=0.0, total_gb=round(total, 2))

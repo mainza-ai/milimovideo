@@ -99,6 +99,11 @@ async def queue_depth_task(job_id: str, params: dict):
     await gpu_job_wrapper(depth_task(job_id, params))
 
 
+async def queue_comfy_task(job_id: str, params: dict):
+    from tasks.comfy import run_comfy_task
+    await gpu_job_wrapper(run_comfy_task(job_id, params))
+
+
 async def queue_element_visual_task(job_id: str, element_id: str, prompt_override=None,
                                     guidance: float = 2.0, enable_ae: bool = False):
     from managers.element_manager import element_manager
@@ -157,6 +162,11 @@ async def enqueue_gpu_job(job_id: str, kind: str, params: dict, **extra) -> str:
     height = int(payload.get("height") or 512)
     workload = max(0.1, (frames / 121.0) * ((width * height) / (768 * 512)))
     estimate_seconds = round(8 + 22 * workload, 1)
+    if payload.get("estimate_seconds"):
+        try:
+            estimate_seconds = max(1.0, float(payload["estimate_seconds"]))
+        except (TypeError, ValueError):
+            pass
     await job_events.queued(
         job_id,
         position=position,
@@ -172,6 +182,7 @@ async def enqueue_gpu_job(job_id: str, kind: str, params: dict, **extra) -> str:
 KIND_PRIORITY = {
     "video": 20,
     "image": 20,
+    "comfy": 20,
     "inpaint": 30,
     "element": 50,
     "ai_parse": 60,
@@ -191,6 +202,8 @@ def job_slot(kind: str) -> str:
         return "depth"
     if kind in ("video", "ai_parse"):
         return "video"
+    if kind == "comfy":
+        return "comfy"
     return "other"
 
 
@@ -436,6 +449,8 @@ async def run_queued_job(queue_id: str) -> None:
             await queue_ai_parse_task(job_id, params)
         elif kind == "depth":
             await queue_depth_task(job_id, params)
+        elif kind == "comfy":
+            await queue_comfy_task(job_id, params)
         else:
             raise ValueError(f"Unknown queued job kind: {kind}")
     except MemoryDeferred as deferred:

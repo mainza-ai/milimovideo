@@ -1579,3 +1579,27 @@ Executed the code-completable P1/P2 items.
 Added `otio-fcpx-xml-adapter` and `?format=fcpxml` to the OTIO endpoint, a Deliver
 **Export FCPXML** button, and a round-trip test that reads the XML back through
 OTIO. Tests: 194 backend, 79 Vitest, 21 Playwright.
+
+## [2026-11-18] implement | ComfyUI bridge
+
+- **Client**: `services/comfy.py` — API-format parsing/validation, per-node
+  overrides, filename prefixes, `/prompt` submit, `/history` polling,
+  `/view` streaming downloads, `/queue`/`/interrupt` cancellation, `/free`
+  model release, and websocket progress (`execution_start`, `executing`,
+  `progress`, `progress_state`, `executed`, terminal) with polling fallback.
+- **Queue/task**: `tasks/comfy.py` + `kind="comfy"`; declared external residency
+  (`MILIMO_COMFY_GB`), `comfy` memory slot, conflict/unload integration; every
+  output streamed into `generated/`, inserted as an `Asset`, and the primary
+  image/video attached to the shot.
+- **API**: `/comfy/{health,validate,run,free}`; generated OpenAPI and TS types.
+- **UI**: Setup ComfyUI bridge probe/free/open; Generate ComfyUI workflow panel
+  with import, model-free smoke graph, validate, run, cancel, and localStorage
+  draft.
+- **Dependencies**: `websockets>=12`.
+- **Tests**: parser/overrides/validation, fake ComfyUI server client, progress
+  mapping, route errors, plus a live end-to-end `EmptyImage → SaveImage` run that
+  asserts the copied file, asset row, shot update, and 100% terminal. Live probe
+  on ComfyUI 0.45.0 (port 8001) completed and produced a PNG.
+- **Docs**: `systems/comfyui-bridge.md`, index, architecture, memory slots,
+  roadmap, README, user guide, AGENTS.
+- Tests: 202 backend, 83 Vitest, 21 Playwright.

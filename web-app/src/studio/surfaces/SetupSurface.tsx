@@ -7,6 +7,7 @@ import {
 } from '../data/useStudioData';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { LLMSettingsPanel } from './LLMSettingsPanel';
+import { ComfyHealthPanel } from '../components/ComfyUIPanel';
 import { MemoryPanel } from '../components/MemoryPanel';
 import { NotificationSettingsPanel } from '../components/NotificationSettingsPanel';
 import { apiUrl } from '../../config';
@@ -199,6 +200,8 @@ export function SetupSurface() {
             </div>
 
             <NotificationSettingsPanel />
+
+            <ComfyHealthPanel />
 
             <LLMSettingsPanel />
 

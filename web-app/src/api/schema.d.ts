@@ -21,6 +21,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/comfy/free": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Comfy Free
+         * @description Ask ComfyUI to unload cached models and release our residency slot.
+         */
+        post: operations["comfy_free_comfy_free_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comfy/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comfy Health
+         * @description Probe the local ComfyUI server without failing the UI when it is down.
+         */
+        get: operations["comfy_health_comfy_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comfy/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Comfy Run
+         * @description Queue a ComfyUI workflow and ingest every output file it writes.
+         */
+        post: operations["comfy_run_comfy_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/comfy/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Comfy Validate
+         * @description Structural validation for the workflow editor; no ComfyUI call.
+         */
+        post: operations["comfy_validate_comfy_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/edit/detect": {
         parameters: {
             query?: never;
@@ -2694,6 +2774,53 @@ export interface components {
              */
             text: string;
         };
+        /** ComfyRunRequest */
+        ComfyRunRequest: {
+            /** Estimate Gb */
+            estimate_gb?: number | null;
+            /** Estimate Seconds */
+            estimate_seconds?: number | null;
+            /** Filename Prefix */
+            filename_prefix?: string | null;
+            /**
+             * Overrides
+             * @default {}
+             */
+            overrides: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Project Id */
+            project_id: string;
+            /** Prompt */
+            prompt?: string | null;
+            /** Shot Id */
+            shot_id?: string | null;
+            /** Timeout Sec */
+            timeout_sec?: number | null;
+            /** Workflow */
+            workflow: unknown;
+        };
+        /**
+         * ComfyWorkflowRequest
+         * @description A ComfyUI API-format workflow plus optional per-node input overrides.
+         */
+        ComfyWorkflowRequest: {
+            /** Filename Prefix */
+            filename_prefix?: string | null;
+            /**
+             * Overrides
+             * @default {}
+             */
+            overrides: {
+                [key: string]: {
+                    [key: string]: unknown;
+                };
+            };
+            /** Workflow */
+            workflow: unknown;
+        };
         /** CommitStoryboardRequest */
         CommitStoryboardRequest: {
             /** Scenes */
@@ -3955,6 +4082,112 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comfy_free_comfy_free_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    comfy_health_comfy_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    comfy_run_comfy_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComfyRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comfy_validate_comfy_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ComfyWorkflowRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

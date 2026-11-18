@@ -175,6 +175,11 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Generate engines: LTX-2 19B (auto/ti2vid/ic_lora/keyframe) and **Wan 2.2 5B**
   (`pipeline_override=wan`, low-VRAM text-to-video); optional Flux 2 Q4_K_M GGUF
   via `MILIMO_FLUX_GGUF`.
+- ComfyUI bridge: `services/comfy.py` + `tasks/comfy.py` submit an API-format
+  workflow to `MILIMO_COMFY_URL`, relay websocket/polling progress, stream every
+  output into project assets, and attach the primary media to the shot. It is
+  queued as kind `comfy` and admitted as a declared external slot
+  (`MILIMO_COMFY_GB`). See `Milimo Video/systems/comfyui-bridge.md`.
 - Generate: ingredients/@mentions, advanced params, persistent seed lock,
   preview frame with start/end conditioning, batch queue and matrix, queue
   position/estimate/cancel/pause, immutable takes/favorites, inpaint, editable
@@ -184,7 +189,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Library/Deliver: direct uploads, assets, master-reference CRUD (trigger,
   image, description), takes, ranked local search, presets, pad/crop reframing,
   caption toggle/preview, persisted encoding controls, render history/cancel,
-  **OTIO export** of the computed V1/V2/A1 cut.
+  OTIO export/import and FCPXML export of the computed V1/V2/A1 cut.
 - Media viewer: one global image/video/audio/text preview used by Library, Story,
   Generate, Edit, Inspector, and Review; legacy localhost URLs are rewritten to
   the current API origin with bearer-token support. Video uploads get real poster
@@ -193,7 +198,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
   9:16/1:1/4:5 export, direct export from uploaded sources, cancel.
 - Setup: device/slots/queue/disk, queue pause/resume, pipeline readiness,
   base/LoRA activation, LoRA strength, resumable/cancellable downloads, depth
-  model, integrity scan/repair, error budget.
+  model, integrity scan/repair, error budget, ComfyUI bridge probe/free.
 - AI & LLM: persisted settings with revision CAS and provider **instances**
   (`ollama`, `openai_compatible@host:port`), capability catalog (context,
   vision, chat, embedding-only), shape-based discovery + attach, verify, warm,
@@ -218,7 +223,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 194 backend tests, 79 Vitest tests, and 21 Playwright tests, plus
+baseline is 202 backend tests, 83 Vitest tests, and 21 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:

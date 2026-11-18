@@ -493,6 +493,131 @@
         "title": "CaptionCue",
         "type": "object"
       },
+      "ComfyRunRequest": {
+        "properties": {
+          "estimate_gb": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Gb"
+          },
+          "estimate_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Seconds"
+          },
+          "filename_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename Prefix"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "default": {},
+            "title": "Overrides",
+            "type": "object"
+          },
+          "project_id": {
+            "title": "Project Id",
+            "type": "string"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt"
+          },
+          "shot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot Id"
+          },
+          "timeout_sec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Sec"
+          },
+          "workflow": {
+            "title": "Workflow"
+          }
+        },
+        "required": [
+          "project_id",
+          "workflow"
+        ],
+        "title": "ComfyRunRequest",
+        "type": "object"
+      },
+      "ComfyWorkflowRequest": {
+        "description": "A ComfyUI API-format workflow plus optional per-node input overrides.",
+        "properties": {
+          "filename_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename Prefix"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "default": {},
+            "title": "Overrides",
+            "type": "object"
+          },
+          "workflow": {
+            "title": "Workflow"
+          }
+        },
+        "required": [
+          "workflow"
+        ],
+        "title": "ComfyWorkflowRequest",
+        "type": "object"
+      },
       "CommitStoryboardRequest": {
         "properties": {
           "scenes": {
@@ -3249,6 +3374,126 @@
         "summary": "Delete Asset",
         "tags": [
           "assets"
+        ]
+      }
+    },
+    "/comfy/free": {
+      "post": {
+        "description": "Ask ComfyUI to unload cached models and release our residency slot.",
+        "operationId": "comfy_free_comfy_free_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Comfy Free",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
+    "/comfy/health": {
+      "get": {
+        "description": "Probe the local ComfyUI server without failing the UI when it is down.",
+        "operationId": "comfy_health_comfy_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Comfy Health",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
+    "/comfy/run": {
+      "post": {
+        "description": "Queue a ComfyUI workflow and ingest every output file it writes.",
+        "operationId": "comfy_run_comfy_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComfyRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Comfy Run",
+        "tags": [
+          "comfy"
+        ]
+      }
+    },
+    "/comfy/validate": {
+      "post": {
+        "description": "Structural validation for the workflow editor; no ComfyUI call.",
+        "operationId": "comfy_validate_comfy_validate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ComfyWorkflowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Comfy Validate",
+        "tags": [
+          "comfy"
         ]
       }
     },

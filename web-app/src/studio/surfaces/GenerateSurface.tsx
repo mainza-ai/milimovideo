@@ -19,6 +19,7 @@ import {
 } from '../data/useStudioData';
 import type { MemoryDowngrade, StudioElement } from '../data/useStudioData';
 import { PipelineLens } from '../components/PipelineLens';
+import { ComfyWorkflowPanel } from '../components/ComfyUIPanel';
 import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
 import { MediaThumb } from '../components/MediaThumb';
@@ -784,6 +785,7 @@ export function GenerateSurface() {
                         </div>
                     </details>
                 </div>
+                <ComfyWorkflowPanel projectId={project.id} shotId={shot.id} />
                 <div className="st-inspector-section">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                         <span className="st-label">Active queue · {activeJobs.length}</span>

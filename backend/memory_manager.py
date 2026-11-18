@@ -47,9 +47,10 @@ class MemoryManager:
     # ── Slot Conflict Rules ──────────────────────────────────────
     # These slots cannot coexist in memory simultaneously.
     CONFLICTS = {
-        "video": {"image", "llm_http"},
-        "image": {"video", "llm_http"},
-        "llm_http": set(),
+        "video": {"image", "llm_http", "comfy"},
+        "image": {"video", "llm_http", "comfy"},
+        "llm_http": {"comfy"},
+        "comfy": {"video", "image", "llm_http"},
         "sam": set(),
         "depth": set(),
     }
@@ -283,6 +284,8 @@ class MemoryManager:
                 self._unload_http_llm()
             elif slot == "sam":
                 self._unload_sam()
+            elif slot == "comfy":
+                self._unload_comfy()
             self._slots.pop(slot, None)
             self._active_slots.discard(slot)
         self._counters["unloads"] += 1
@@ -322,6 +325,22 @@ class MemoryManager:
             logger.info("MemoryManager: SAM unload -> %s", response.status_code)
         except Exception as exc:
             logger.debug("MemoryManager: SAM unload skipped: %s", exc)
+
+    @staticmethod
+    def _unload_comfy() -> None:
+        """Ask ComfyUI to drop cached models; skip while it is executing."""
+        try:
+            from services.comfy import ComfyClient
+
+            with ComfyClient(timeout=3.0) as client:
+                queue = client.queue()
+                if queue.get("queue_running"):
+                    logger.info("MemoryManager: ComfyUI is running; not freeing")
+                    return
+                result = client.free(unload_models=True)
+            logger.info("MemoryManager: ComfyUI free -> %s", result)
+        except Exception as exc:
+            logger.debug("MemoryManager: ComfyUI free skipped: %s", exc)
 
     def _unload_http_llm(self) -> None:
         try:

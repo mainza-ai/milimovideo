@@ -33,6 +33,16 @@ API_PORT = int(os.environ.get("MILIMO_API_PORT", "8000"))
 API_HOST = os.environ.get("MILIMO_HOST", "127.0.0.1")
 SAM_SERVICE_PORT = int(os.environ.get("MILIMO_SAM_PORT", "8001"))
 
+# ComfyUI bridge. Comfy Desktop defaults to 8001, which collides with the
+# optional SAM microservice; set MILIMO_COMFY_URL if both must run.
+COMFY_URL = os.environ.get("MILIMO_COMFY_URL", "http://127.0.0.1:8001").rstrip("/")
+COMFY_TIMEOUT_SEC = float(os.environ.get("MILIMO_COMFY_TIMEOUT", "30"))
+# Wall-clock ceiling for a queued workflow (model downloads excluded).
+COMFY_JOB_TIMEOUT_SEC = float(os.environ.get("MILIMO_COMFY_JOB_TIMEOUT", "3600"))
+# ComfyUI keeps its own models resident and has no per-model accounting. The
+# declared residency is admitted before a workflow and released with /free.
+COMFY_DECLARED_GB = float(os.environ.get("MILIMO_COMFY_GB", "2"))
+
 # Comma-separated allowlist. Empty means the safe local defaults.
 CORS_ORIGINS = [
     origin.strip()
@@ -69,6 +79,7 @@ MEMORY_IDLE_TTL_SEC = {
     "llm_http": int(os.environ.get("MILIMO_MEMORY_TTL_LLM", "120")),
     "sam": int(os.environ.get("MILIMO_MEMORY_TTL_SAM", "600")),
     "depth": int(os.environ.get("MILIMO_MEMORY_TTL_DEPTH", "300")),
+    "comfy": int(os.environ.get("MILIMO_MEMORY_TTL_COMFY", "300")),
 }
 MEMORY_KEEP_WARM = os.environ.get("MILIMO_MEMORY_KEEP_WARM", "0") == "1"
 # Conservative fallback for an engine that reports no resident bytes.
