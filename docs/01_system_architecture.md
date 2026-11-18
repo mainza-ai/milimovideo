@@ -9,7 +9,7 @@ Milimo Video is a local-first, AI-native cinematic studio with a split architect
 - **AI models**: LTX-2 19B (video), Wan 2.2 TI2V-5B (low-VRAM video), Flux 2 (image/inpainting), SAM 3 (segmentation), Depth Anything V2 (optional)
 - **LLM**: local-first provider/role plane — Gemma (in-process), Ollama, oMLX, Strata, LM Studio, OpenAI-compatible; optional cloud behind budget, eval gate, and air-gap
 - **Memory**: central `MemoryManager` budgets bytes, leases slots, and admits before every heavy load
-- **External engines**: optional SAM 3 (port 8001) and optional ComfyUI (port 8001 by default); core generation never requires ComfyUI
+- **External engines**: optional SAM 3 (port 8002) and optional ComfyUI (port 8001); core generation never requires ComfyUI
 
 ## 2. High-Level Architecture Diagram
 
@@ -122,7 +122,7 @@ graph TD
         Comfy --> ComfyWS["/ws progress"]
     end
 
-    subgraph "SAM 3 Microservice (port 8001)"
+    subgraph "SAM 3 Microservice (port 8002)"
         SAM_Svc[FastAPI Server] --> SAM_Model[SAM 3 Model]
         SAM_Svc --> SAM_Health["/health"]
         SAM_Svc --> SAM_Predict["/predict/mask"]
@@ -145,7 +145,7 @@ graph TD
 | **Worker → LTX-2** | Direct Python Import | `ModelManager` loads LTX-2 pipelines into VRAM. One pipeline cached at a time; `memory_manager.admit_job` runs before the load, `prepare_for("video")` unloads Flux first, and a failed load releases the slot. |
 | **Worker → Flux 2** | Direct Python Import | `FluxInpainter` singleton for image gen + inpainting. `MemoryManager.prepare_for("image")` unloads LTX first. |
 | **Prompt Enhancement** | Role runtime (`services/llm`) | `llm.py` maps media kind to `prompt_video`/`prompt_image`; orders provider instances with fallbacks, checks context and budget, and records provenance. HTTP enhancement runs before the video pipeline loads; local models are released afterwards. |
-| **Backend → SAM** | HTTP REST (port 8001) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. The image model is lazy (`/load`/`/unload`); tracking lazy-loads its predictor. |
+| **Backend → SAM** | HTTP REST (port 8002) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. The image model is lazy (`/load`/`/unload`); tracking lazy-loads its predictor. |
 | **Backend → ComfyUI** | HTTP REST + WebSocket | Optional `/comfy/*` bridge submits API-format workflows, relays progress, streams outputs into assets, and calls `/free` for residency. `MILIMO_COMFY_ENABLED=0` removes it. |
 | **Scheduler → memory** | In-process | Measured budget + admission + leases; a transient refusal becomes a bounded `job.waiting`, a permanent one applies a fitting preset before allocation. |
 | **Timeline → Player** | Headless rAF subscription | `PlaybackEngine` drives `currentTime` via `requestAnimationFrame` with cached layout. `CinematicPlayer` subscribes with throttled drift correction (250ms). |
@@ -177,8 +177,8 @@ Handles video, image, chained, and inpainting generation.
 
 > **Model status (2026-11):** LTX-2 19B is the primary video engine; Wan 2.2
 > TI2V-5B is integrated as the low-VRAM lane (MPS verified, CUDA validation
-> pending). LTX-2.5 (22B, native audio, diffusers CPU offload/VAE tiling) is the
-> next upgrade but its weights are gated. Z-Image Turbo and Qwen-Image-Edit-2511
+> pending). LTX-2.5 (22B, native audio, diffusers CPU offload/VAE tiling) has an
+> implemented adapter and per-shot `ltx25` pipeline; its weights are gated. Z-Image Turbo and Qwen-Image-Edit-2511
 > are image candidates. See `Milimo Video/research/model-landscape-2026-11.md`.
 
 | Component | Role |
@@ -256,7 +256,7 @@ Isolated segmentation and tracking service.
 
 | Component | Role |
 |---|---|
-| `sam3/start_sam_server.py` | Optional FastAPI server (port 8001; collides with Comfy Desktop by default). Starts with **no model**; loads `build_sam3_image_model` + `Sam3Processor` on the first image request under a lock. Video predictor lazy-loaded with MPS/CUDA/CPU device auto-detection. |
+| `sam3/start_sam_server.py` | Optional FastAPI server (port 8002; ComfyUI keeps 8001). Starts with **no model**; loads `build_sam3_image_model` + `Sam3Processor` on the first image request under a lock. Video predictor lazy-loaded with MPS/CUDA/CPU device auto-detection. |
 | `GET /health` | Returns `{status, model_loaded, processor_ready, loading, lazy, error}` |
 | `POST /load` / `POST /unload` | Warm or release the image model; `unload` flushes caches |
 | `POST /predict/mask` | Point/box segmentation → binary PNG mask |

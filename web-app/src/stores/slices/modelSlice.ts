@@ -32,6 +32,8 @@ export interface ModelInfo {
     recommended_dtype: string;
     gated: boolean;
     license: string;
+    recommended?: boolean;
+    recommendation?: string;
 }
 
 export interface DownloadProgress {

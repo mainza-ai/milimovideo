@@ -27,3 +27,20 @@ def test_cancel_a_queued_download(app_client):
 def test_cancel_missing_download_returns_404(app_client):
     response = app_client.delete("/models/nope/download")
     assert response.status_code == 404
+
+
+def test_manifest_recommends_the_latest_lanes():
+    import json
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    data = json.loads((root / "backend/models_manifest.json").read_text())
+    rec = data["recommendations"]
+    assert rec["video_primary"] == "ltx25-diffusers"
+    assert rec["video_low_vram"] == "wan2.2-ti2v-5b"
+    assert rec["image_low_vram"] == "flux2-klein-9b-q4km"
+    by_id = {model["id"]: model for model in data["models"]}
+    assert by_id["ltx25-diffusers"]["gated"] is True
+    assert by_id["ltx25-diffusers"]["recommended"] is True
+    assert by_id["wan2.2-ti2v-5b"]["recommended"] is True
+    assert by_id["flux2-klein-9b-q4km"]["recommended"] is True

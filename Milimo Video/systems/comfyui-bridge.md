@@ -101,9 +101,9 @@ as a declared external engine:
 - ComfyUI is included in the single global GPU queue as `kind="comfy"`
   (priority 20, same tier as video/image).
 
-**Port collision:** Comfy Desktop defaults to `8001`, which is also the default
-for the optional SAM 3 microservice. Set `MILIMO_COMFY_URL` (for example
-`http://127.0.0.1:8188`) when both must run. SAM is optional and lazy-loaded.
+**Port collision:** ComfyUI defaults to `8001`; SAM 3 defaults to `8002`, so both can run
+simultaneously. Override with `MILIMO_COMFY_URL` or `MILIMO_SAM_PORT` if needed.
+SAM is optional and lazy-loaded.
 
 ## UI
 

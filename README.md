@@ -32,24 +32,36 @@ frozen fallback during the cutover.
 |---|---|
 | **Story** | Script parsing, scene spine, infinite board, shot list, notes, master references, typed links, review cards, undo |
 | **Generate** | Ingredients and `@trigger` mentions, seed lock, start/end conditioning, preview stills, batch queue/matrix, immutable takes, inpaint, pipeline recipes, optional ComfyUI workflows |
-| **Edit** | Program monitor, compare/wipe, magnetic V1 with crossfades, free V2/A1/A2, trim/slip/roll/blade/ripple/rate/slide, waveforms, captions, keyframes, titles, depth overlay, tracking, blocking, 3D previz |
+| **Edit** | Program monitor, compare/wipe, magnetic V1 with crossfades, free V2/A1/A2, clip thumbnails, trim/slip/roll/blade/ripple/rate/slide, waveforms, captions, keyframes, titles, depth overlay, tracking, blocking, 3D previz |
 | **Review** | Frame comments, approvals, activity, compare, share links, agent plans |
-| **Library** | Uploads, master references, takes, local ranked search, global media preview |
+| **Library** | Uploads, master references, takes, local ranked search, global media preview, per-asset **Delete** (file + poster) |
 | **Deliver** | V1/V2 composite, A1/A2 mix, captions, titles, 3D LUT, encoding controls, render history/cancel, OTIO/FCPXML handoff |
 | **Shorts** | Scored candidate windows, editable ranges, 9:16 / 1:1 / 4:5 export |
 | **Setup** | Device/memory/queue/disk state, model downloads, LoRA activation, depth model, integrity scan, error budget, LLM roles, optional ComfyUI bridge |
+
+### Studio preview
+
+| Story | Edit |
+|---|---|
+| ![Story board](assets/milimo_video_v2_1.png) | ![Edit timeline](assets/milimo_video_v2_2.png) |
 
 ## Engines
 
 | Lane | Engine |
 |---|---|
 | **Video** | LTX-2 19B (`ti2vid`, `ic_lora`, `keyframe`, chained) |
+| **Video upgrade** | LTX-2.5 22B (`pipeline_override=ltx25`, gated diffusers weights; adapter implemented) |
 | **Low-VRAM video** | Wan 2.2 TI2V-5B (`pipeline_override=wan`) |
 | **Image** | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint inpainting, optional Q4_K_M GGUF |
 | **Segmentation** | SAM 3 microservice — text/box/click masks and video tracking |
 | **Depth** | Depth Anything V2 Small (optional, downloaded in Setup) |
 | **Text / LLM** | Gemma 3 in-process, Ollama, oMLX, Strata, LM Studio, vLLM/llama.cpp; optional cloud behind budget, eval gate, and air-gap |
 | **ComfyUI** | Optional external workflow engine; core generation never calls it |
+
+**Recommended downloads:** LTX-2.5 for 32 GB+ (gated; accept the license first),
+LTX-2 as the stable baseline, Wan 2.2 5B for low-VRAM video, Flux 2 Q4_K_M for
+low-VRAM image, and SAM 3 / Depth Anything when those features are needed. Setup
+marks recommended entries and explains the tradeoff.
 
 ## Architecture
 
@@ -106,8 +118,8 @@ export MILIMO_COMFY_GB=2
 # export MILIMO_COMFY_ENABLED=0   # remove the bridge surface entirely
 ```
 
-Comfy Desktop and SAM both default to port 8001; set `MILIMO_COMFY_URL` if both
-must run.
+ComfyUI defaults to `8001`; SAM 3 defaults to `8002`, so they can run together.
+Set `MILIMO_COMFY_URL` or `MILIMO_SAM_PORT` to override either.
 
 ### Environment
 
@@ -119,7 +131,9 @@ must run.
 | `MILIMO_FLUX_GGUF` | Quantized Flux 2 transformer |
 | `MILIMO_FLUX_GGUF_OFFLOAD=1` | Component offload on CUDA |
 | `MILIMO_WAN_MODEL` | Wan 2.2 model directory |
-| `MILIMO_COMFY_ENABLED`, `MILIMO_COMFY_URL`, `MILIMO_COMFY_GB` | Optional bridge |
+| `MILIMO_LTX25_MODEL`, `MILIMO_LTX25_OFFLOAD` | Gated LTX-2.5 diffusers directory and CUDA offload |
+| `MILIMO_SAM_PORT` | SAM 3 port (default `8002`) |
+| `MILIMO_COMFY_ENABLED`, `MILIMO_COMFY_URL`, `MILIMO_COMFY_GB` | Optional bridge (default `8001`) |
 | `MILIMO_SECRET_KEY` | Seal stored LLM API keys (AES-256-GCM) |
 | `MILIMO_LLM_CLOUD=1`, `MILIMO_LLM_RATE_CARD` | Optional cloud lane and price override |
 | `MILIMO_JOB_WEBHOOK` | Terminal-job webhook for local automation |
@@ -128,27 +142,28 @@ must run.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # 214 backend tests
+./milimov/bin/python -m pytest                 # 217 backend tests
 ./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # 0 failures expected
 
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 90 Vitest tests
+npm test                                       # 91 Vitest tests
 npm run build
 npm run check:bundle
 npm run test:e2e                               # 21 Playwright tests
 ```
 
-Last verified: 214 backend, 90 Vitest, 21 Playwright; CI green on `main` and
+Last verified: 217 backend, 91 Vitest, 21 Playwright; CI green on `main` and
 `develop` (backend + frontend). Render changes are checked with real FFmpeg pixels,
 not only filtergraph strings.
 
 ## Documentation
 
 - [User Guide](docs/user_guide.md) — Studio-first manual
-- [Local API](docs/07_api.md) — REST, SSE, preflight, queue, ComfyUI bridge
+- [Local API](docs/07_api.md) — REST, SSE, preflight, queue
+- [ComfyUI bridge](docs/comfyui.md) — optional workflow setup and troubleshooting
 - [System Architecture](docs/01_system_architecture.md)
 - [Data Models](docs/02_data_models.md)
 - [AI Pipelines](docs/03_ai_pipelines.md)
@@ -177,9 +192,9 @@ Milimo Video/      Project wiki
 - **Transitions:** V1 crossfade only; dip/wipe/slide are not implemented.
 - **Search:** ranked lexical matching; no embedding model is bundled.
 - **Shorts:** template packs are not implemented (lens recipe packs are).
-- **CUDA:** no CPU offload; LTX-2 FP8 is refused below its budget. LTX-2.5 and
-  quantized M5 artifacts await gated model artifacts. Wan CUDA 8–24 GB is not yet
-  validated.
+- **CUDA:** LTX-2 has no CPU offload; LTX-2 FP8 is refused below its budget.
+  The LTX-2.5 adapter is implemented, but its gated weights must be accepted and
+  downloaded; CUDA 8–24 GB Wan validation is still pending.
 - **Packaging:** no bundled Python/Torch sidecar binary yet.
 - **Memory:** costs are measured estimates, Strata has no unload endpoint, and a
   cancelled job keeps its pipeline until the idle TTL.

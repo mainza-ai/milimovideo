@@ -46,7 +46,7 @@ cd web-app && npm install && cd ..
 Optional:
 
 ```bash
-./run_sam.sh         # SAM 3 segmentation on port 8001
+./run_sam.sh         # SAM 3 segmentation on port 8002
 ```
 
 `run_backend.sh` runs `verify_setup.py` first and refuses to start with a missing
@@ -205,10 +205,11 @@ apply it.
 - **Queue pending** batches all shots without completed takes.
 - **Batch matrix** shows status/progress and per-shot generate/cancel.
 - **Active queue** shows running/queued jobs, position, estimate, and cancel.
-- **Pipeline** in Advanced parameters selects `auto`/LTX or **wan 2.2 (5B)**. Wan
-  is a separate low-VRAM text-to-video engine; it does not use the LTX chained or
-  audio path. **Steps**, **Priority** (lower = earlier), and **Transition**
-  (V1 crossfade seconds) persist with the shot.
+- **Pipeline** in Advanced parameters selects `auto`/LTX, **wan 2.2 (5B)**, or
+  **LTX-2.5** (gated weights). Wan is a separate low-VRAM text-to-video engine;
+  LTX-2.5 uses the gated diffusers adapter and native audio. **Steps**,
+  **Priority** (lower = earlier), and **Transition** (V1 crossfade seconds)
+  persist with the shot.
 - Only one heavy GPU job runs at a time; interactive video/image work is dispatched
   before bulk thumbnails/elements and background parsing.
 - **Memory preflight** runs before the request. If the shot cannot fit:
@@ -223,6 +224,14 @@ apply it.
   reconciled from `/status`.
 - Terminal notifications can be muted for the current project in **Setup →
   Notifications**; toasts, desktop notifications, and sound are separate toggles.
+
+### LTX-2.5 (gated)
+
+The `ltx25` pipeline runs the official `Lightricks/LTX-2.5-Diffusers` directory
+with native audio, CPU offload, and VAE tiling. Weights are gated: accept the
+community license on Hugging Face, download the diffusers directory in Setup (or
+set `MILIMO_LTX25_MODEL`), then choose **LTX-2.5** in Advanced → Pipeline. It is a
+single-shot engine; the chained multi-chunk path is LTX-2 only.
 
 ### ComfyUI workflows
 
@@ -248,9 +257,10 @@ Reuse a saved graph with different inputs by editing the JSON, or pass per-node
 version, queue depth, free RAM, and **Free cached models** (`/free`).
 
 ComfyUI is admitted as a declared external slot (`MILIMO_COMFY_GB`, default 2 GB)
-and competes for the same GPU queue. Comfy Desktop and SAM both default to port
-8001; if you run both, set `MILIMO_COMFY_URL` to ComfyUI's port (for example
-`http://127.0.0.1:8188`).
+and competes for the same GPU queue. ComfyUI defaults to port 8001 and SAM 3 to
+8002, so both can run. If ComfyUI is elsewhere, set `MILIMO_COMFY_URL` (for
+example `http://127.0.0.1:8188`). See [Using the ComfyUI Bridge](comfyui.md) for
+the full setup and troubleshooting guide.
 
 ### Preview first
 
@@ -294,6 +304,8 @@ Tracks:
 
 - **V1** — magnetic story track. Order is `sequence_index`.
 - **V2** — free overlay track.
+- V1/V2 clips show the shot poster thumbnail behind the title (generated and
+  uploaded videos get poster frames).
 - **A1 / A2** — audio/music tracks, each with mute/solo.
 - **C1** — captions. Titles are project-level overlays, not a track.
 
@@ -377,6 +389,10 @@ Recipes save a plan by name and can be reloaded against the current selection. U
   words. Click a reference image to preview it. **New reference** creates one with a name, type, trigger word, image, and
   description; **Edit** updates it and **Delete** removes it. Trigger words are
   normalized to a single leading `@` and can be mentioned in prompts.
+- **Delete assets** — each Asset card has a **Delete** action. It removes the
+  file and its generated poster, clears any shot that pointed at it, and marks the
+  matching take/job deleted. Confirm the browser prompt to proceed. Master
+  references and takes have their own delete actions.
 - **Takes** — every completed take with shot lineage, seed/model, select action,
   and click-to-preview media.
 - **Search** — local ranked token/prefix search across shots, assets, references,
@@ -430,8 +446,9 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
   releases waiting durable jobs.
 - Pipeline readiness with missing counts.
 - Base model table: real status, size, VRAM estimate, Activate/Unload or Download;
-  active downloads expose **Cancel download**. The table includes Wan 2.2 TI2V-5B
-  and the Flux 2 Q4_K_M GGUF entry.
+  active downloads expose **Cancel download**. **Recommended** entries explain the
+  lane: LTX-2.5 for 32 GB+ (gated), LTX-2 as the stable baseline, Wan 2.2 5B for
+  low-VRAM video, Flux 2 Q4_K_M for low-VRAM image, plus SAM 3 and depth.
 - Quantized Flux is activated with `MILIMO_FLUX_GGUF=/path/to.gguf`; it supports
   text-to-image, not IP-Adapter or inpainting.
 - LoRA table: real downloaded/active state, activation, and strength.
@@ -588,7 +605,7 @@ Common issues:
 - **ComfyUI**: graphs are imported as API-format JSON, not edited in Milimo;
   residency is a declared `MILIMO_COMFY_GB`, not measured per model; a sub-second
   graph can finish before the websocket connects, so completion falls back to
-  history polling. Comfy Desktop and SAM both default to port 8001.
+  history polling. ComfyUI defaults to port 8001 and SAM 3 to port 8002.
 - **Model efficiency (M5)**: SAM is lazy and `backend/benchmark_models.py` records
   per-lane baselines, but quantized/distilled checkpoints and text-encoder
   alternatives need model artifacts that are not vendored.

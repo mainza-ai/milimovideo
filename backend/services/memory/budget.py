@@ -83,7 +83,7 @@ def _sam_gb() -> float:
         import httpx
 
         with httpx.Client(timeout=0.6) as client:
-            response = client.get("http://127.0.0.1:8001/health")
+            response = client.get(f"http://127.0.0.1:{config.SAM_SERVICE_PORT}/health")
         if response.status_code < 400:
             data = response.json()
             value = costs.SAM_BASE_GB if data.get("model_loaded") else 0.5

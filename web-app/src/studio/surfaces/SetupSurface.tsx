@@ -343,7 +343,13 @@ export function SetupSurface() {
                             <tr key={model.id}>
                                 <td>
                                     <strong>{model.name}</strong>
+                                    {model.recommended && (
+                                        <span className="st-chip" data-tone="good" style={{ marginLeft: 6 }}>recommended</span>
+                                    )}
                                     <div style={{ color: 'var(--st-faint)', fontSize: 11 }}>{model.id}{model.required ? ' · required' : ''}</div>
+                                    {model.recommendation && (
+                                        <div style={{ color: 'var(--st-faint)', fontSize: 11 }}>{model.recommendation}</div>
+                                    )}
                                 </td>
                                 <td>{model.pipeline} · {model.family}</td>
                                 <td>

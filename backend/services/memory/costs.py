@@ -25,6 +25,10 @@ IMAGE_BASE_GB_CUDA = 18.0
 # CUDA fp16 components fit ~18 GB before workspace.
 WAN_BASE_GB = 34.0
 WAN_BASE_GB_CUDA = 18.0
+# LTX-2.5 22B + text encoder + VAE/audio VAE. Official floor is 32 GB FP8;
+# bf16 with CPU offload/VAE tiling is the practical Apple/CUDA path.
+LTX25_BASE_GB = 64.0
+LTX25_BASE_GB_CUDA = 40.0
 SAM_BASE_GB = 8.0
 DEPTH_BASE_GB = 0.6
 
@@ -102,6 +106,23 @@ def estimate_llm_gb(model_id: str, params_b: float | None = None, bits: float | 
 def estimate(kind: str, params: Dict[str, Any] | None = None) -> CostBreakdown:
     params = params or {}
     kind = (kind or "video").lower()
+    if kind == "video" and str(params.get("engine") or "").lower() == "ltx25":
+        base = LTX25_BASE_GB_CUDA if _cuda_available() else LTX25_BASE_GB
+        frames = int(params.get("num_frames") or 121)
+        width = int(params.get("width") or 768)
+        height = int(params.get("height") or 512)
+        scale = max(0.1, (frames / 121.0) * ((width * height) / float(768 * 512)))
+        workspace = 4.0 + 10.0 * scale
+        return CostBreakdown(
+            kind=kind,
+            base_gb=base,
+            workspace_gb=workspace,
+            total_gb=round((base + workspace) * SAFETY_FACTOR, 2),
+            frames=frames,
+            width=width,
+            height=height,
+            notes=[f"LTX-2.5 22B, {frames} frames at {width}x{height}"],
+        )
     if kind == "video" and str(params.get("engine") or "").lower() == "wan":
         base = WAN_BASE_GB_CUDA if _cuda_available() else WAN_BASE_GB
         frames = int(params.get("num_frames") or 49)

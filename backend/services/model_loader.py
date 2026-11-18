@@ -325,6 +325,10 @@ class ModelLoaderService:
         if model.family in ("ltx2", "ltx23"):
             from model_engine import manager
             await manager.load_pipeline("ti2vid")
+        elif model.family == "ltx25":
+            # The gated diffusers engine is loaded per generation through the
+            # `ltx25` pipeline; activation only records the selected model.
+            pass
         elif model.family == "flux2":
             import asyncio
             from models.flux_wrapper import flux_inpainter

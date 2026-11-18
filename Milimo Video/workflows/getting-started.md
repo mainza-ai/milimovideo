@@ -42,7 +42,7 @@ From a fresh clone to a running studio generating video, locally.
    Edit depth overlay.
 7. **Launch the services**:
    - `./run_backend.sh` → API on port 8000 (runs `verify_setup.py` first)
-   - `./run_sam.sh` → SAM 3 on port 8001 (optional)
+   - `./run_sam.sh` → SAM 3 on port 8002 (optional)
    - `./run_frontend.sh` → UI on port 5173
 8. **Open** `http://localhost:5173/studio` (Chrome or Safari). Paste a script in
    Story → Script, board it, generate shots in Generate, then cut in Edit.

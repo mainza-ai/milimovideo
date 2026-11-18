@@ -139,7 +139,7 @@ Phase 0 begins.
 | MemoryManager | Mutual-exclusion slots (76/36/49GB) | **Keep design**; refresh budgets with FP8 numbers (video ~40–45GB FP8 on CUDA); add sequential CPU offload as documented escape hatch |
 | MPS law | float32 forcing + CPU VAE decode | **Relax**: bf16 now stable (drop float32 forcing on PyTorch ≥2.10); keep CPU VAE decode default-safe; FP8 stays NVIDIA-only |
 | Model distribution | Manual safetensors downloads | Ship **GGUF + compressed-tensors** artifacts (community + HF-native standards); keep safetensors bf16 |
-| SAM service | Port 8001, PyTorch | Keep; spike sam3.cpp path; add SAM 3D Objects lane |
+| SAM service | Port 8002, PyTorch | Keep; spike sam3.cpp path; add SAM 3D Objects lane |
 | Frontend | React 18, DOM timeline, web-only | **React 19.2+ + React Compiler**; canvas timeline layer + virtualization; **Tauri 2 sidecar** packaging (Electron escape hatch behind `shell-api`) |
 | State | Zustand 7-slice | **Keep**; isolate playhead/transient state into a dedicated hot slice with strict selectors |
 | Agents | None | **Supervisor crew on LangGraph** (Python): Director → Cinematographer → Continuity (CANVAS-like reference store) → Reviewer (VQQA VLM loop); **MCP server** over timeline/storyboard; HITL interrupts before generation spend |

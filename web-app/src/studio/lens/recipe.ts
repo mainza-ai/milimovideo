@@ -1,7 +1,7 @@
 export interface PipelineRecipe {
     prompt: string;
     negativePrompt: string;
-    model: 'auto' | 'ti2vid' | 'ic_lora' | 'keyframe';
+    model: 'auto' | 'ti2vid' | 'ic_lora' | 'keyframe' | 'wan' | 'ltx25';
     seed: number;
     frames: number;
     width: number;
@@ -10,7 +10,7 @@ export interface PipelineRecipe {
     upscale: boolean;
 }
 
-export const PIPELINE_MODELS: PipelineRecipe['model'][] = ['auto', 'ti2vid', 'ic_lora', 'keyframe'];
+export const PIPELINE_MODELS: PipelineRecipe['model'][] = ['auto', 'ti2vid', 'ic_lora', 'keyframe', 'wan', 'ltx25'];
 
 function readNumber(value: unknown, field: string): number {
     const number = typeof value === 'number' ? value : Number(value);

@@ -664,5 +664,5 @@ async def track_stop(session_id: str = Form(...)):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("MILIMO_SAM_PORT", "8002")))
 

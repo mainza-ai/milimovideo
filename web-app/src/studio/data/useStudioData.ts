@@ -38,6 +38,8 @@ export interface StudioModel {
     description?: string;
     requires_base?: boolean;
     device_compatibility?: string[];
+    recommended?: boolean;
+    recommendation?: string;
 }
 
 export interface PipelineReadiness {

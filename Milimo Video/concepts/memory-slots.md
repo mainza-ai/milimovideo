@@ -90,8 +90,8 @@ Slots are now backed by a measured budget rather than name-only exclusion.
 
 Remaining caveats: the cost registry is hand-tuned; Strata has no remote unload;
 a cancelled job keeps its pipeline until the TTL; only the MPS decode path is
-tiled. ComfyUI residency is declared, not measured per model, and shares port
-8001 with SAM by default. See [[../systems/memory-management-audit-2026-11.md]] for the incident,
+tiled. ComfyUI residency is declared, not measured per model, and uses port 8001 by
+default; SAM 3 uses 8002. See [[../systems/memory-management-audit-2026-11.md]] for the incident,
 measurements, and M0–M5 evidence.
 
 ## Related

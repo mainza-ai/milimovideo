@@ -95,6 +95,31 @@ export function LibrarySurface() {
         if (await elementMutations.remove(element)) await refreshElements();
     };
 
+    const deleteAsset = async (asset: StudioAsset) => {
+        if (!window.confirm(`Delete "${asset.filename}"? This removes the file and its poster.`)) return;
+        try {
+            const response = await fetch(apiUrl(`/assets/${asset.id}`), { method: 'DELETE' });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+            const store = useStudioDocumentStore.getState();
+            for (const shot of store.project.shots) {
+                if (shot.videoUrl !== asset.url && shot.thumbnailUrl !== asset.url) continue;
+                store.updateShot(shot.id, {
+                    videoUrl: shot.videoUrl === asset.url ? null : shot.videoUrl,
+                    thumbnailUrl: shot.thumbnailUrl === asset.url ? undefined : shot.thumbnailUrl,
+                });
+            }
+            store.addToast(`Deleted ${asset.filename}`, 'success');
+            await refresh();
+            await refreshTakes();
+        } catch (error) {
+            useStudioDocumentStore.getState().addToast(
+                error instanceof Error ? error.message : 'Delete failed',
+                'error',
+            );
+        }
+    };
+
     const uploadElementImage = async (file: File) => {
         setElementImageBusy(true);
         try {
@@ -262,6 +287,16 @@ export function LibrarySurface() {
                                 <div className="st-take-body">
                                     <strong style={{ color: 'var(--st-text)' }}>{asset.filename}</strong>
                                     <div>{asset.type} · {new Date(asset.created_at * 1000).toLocaleDateString()}</div>
+                                    <button
+                                        type="button"
+                                        className="st-button"
+                                        data-size="sm"
+                                        data-variant="danger"
+                                        onClick={() => void deleteAsset(asset)}
+                                        title="Delete this asset and its file"
+                                    >
+                                        <Trash2 size={11} /> Delete
+                                    </button>
                                 </div>
                             </article>
                         ))}

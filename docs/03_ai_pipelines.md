@@ -336,7 +336,7 @@ flowchart TD
         TEXT_MASK["Text Mask Request"] --> INP_MGR3["InpaintingManager.get_mask_from_text()"]
     end
 
-    subgraph SAM["SAM 3 Microservice :8001"]
+    subgraph SAM["SAM 3 Microservice :8002"]
         INP_MGR -->|"POST multipart"| POINT_EP["/predict/mask"]
         INP_MGR2 -->|"POST multipart"| DETECT_EP["/detect"]
         INP_MGR3 -->|"POST multipart"| SEGTEXT_EP["/segment/text"]
@@ -368,7 +368,7 @@ flowchart TD
 | `/track/stop` | POST | `session_id` | `{status: "closed"}` |
 
 **Server Configuration:**
-- Port: `config.SAM_SERVICE_PORT` (default 8001)
+- Port: `config.SAM_SERVICE_PORT` (default 8002)
 - Model: `backend/models/sam3/sam3.pt` (~3.4GB, auto-downloads from HuggingFace if missing)
 - Device: auto-detected (`cuda` > `mps` > `cpu`)
 - MPS Fallback: `PYTORCH_ENABLE_MPS_FALLBACK=1` (set in `run_sam.sh`) for ops not yet on MPS

@@ -24,7 +24,7 @@ Text-prompted segmentation, click-to-segment, and bidirectional video object tra
 
 ## How It's Wired In
 
-- Runs as an **isolated FastAPI microservice** on port 8001
+- Runs as an **isolated FastAPI microservice** on port 8002
   (`sam3/start_sam_server.py`); the backend talks to it over HTTP. See
   [[../decisions/sam3-microservice.md]] for why.
 - Three predictors: `Sam3Processor` (text/box), `inst_interactive_predictor`

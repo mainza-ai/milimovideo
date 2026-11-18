@@ -321,7 +321,7 @@ class MemoryManager:
             import httpx
 
             with httpx.Client(timeout=5.0) as client:
-                response = client.post("http://127.0.0.1:8001/unload")
+                response = client.post(f"http://127.0.0.1:{config.SAM_SERVICE_PORT}/unload")
             logger.info("MemoryManager: SAM unload -> %s", response.status_code)
         except Exception as exc:
             logger.debug("MemoryManager: SAM unload skipped: %s", exc)

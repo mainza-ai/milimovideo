@@ -23,7 +23,7 @@ LTX-2 and Flux 2 under strict memory-slot discipline.
 
 ## Decision
 
-Run SAM 3 as its own FastAPI service on port 8001 (`sam3/start_sam_server.py`),
+Run SAM 3 as its own FastAPI service on port 8002 (`sam3/start_sam_server.py`),
 started via `./run_sam.sh`. The backend talks to it over HTTP (`InpaintingManager`,
 `TrackingManager` as clients). Segmentation/tracking is optional — the studio
 generates video fine with the SAM service down.

@@ -83,7 +83,7 @@ web-app/               React 19.2 + Vite frontend (port 5173).
   scripts/             API generation and bundle-budget checks.
   openapi.json         Exported FastAPI schema; generated TS in src/api/.
   .env.example         API/studio rollback flags.
-sam3/                  Optional SAM 3 microservice (port 8001).
+sam3/                  Optional SAM 3 microservice (port 8002).
 tests/                 Backend pytest suite.
 run_backend.sh         Verify + start backend.
 run_frontend.sh        Start Vite.
@@ -229,7 +229,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 214 backend tests, 90 Vitest tests, and 21 Playwright tests, plus
+baseline is 217 backend tests, 91 Vitest tests, and 21 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -264,11 +264,11 @@ Do not claim these are done:
   Any change that loads a model must call `memory_manager.admit_job` /
   `prepare_for` and include external engines in the budget. See
   `Milimo Video/systems/memory-management-audit-2026-11.md`.
-- Model lane: LTX-2 19B is the primary video engine; **Wan 2.2 TI2V-5B** is
-  integrated as the experimental low-VRAM lane; **LTX-2.5** (diffusers CPU
-  offload/VAE tiling) is the next upgrade. Flux 2 Q4_K_M GGUF is integrated for
-  low-VRAM images; Z-Image Turbo / Qwen-Image-Edit-2511 are the image-lane
-  candidates.
+- Model lane: LTX-2 19B is the stable video engine; **Wan 2.2 TI2V-5B** is the
+  low-VRAM lane; **LTX-2.5** (`pipeline_override=ltx25`) has an implemented
+  diffusers adapter with CPU offload/VAE tiling, but its community weights are
+  gated and not bundled. Flux 2 Q4_K_M GGUF is integrated for low-VRAM images;
+  Z-Image Turbo / Qwen-Image-Edit-2511 are the image-lane candidates.
   HunyuanVideo 1.5, MiniMax H3, and Qwen-Image 2.1 are license-restricted and must
   not be bundled. See `Milimo Video/research/model-landscape-2026-11.md`.
 - Phase 6 v2 work (eval harness, model swaps, MLX/FP8, agent crew) is separate.

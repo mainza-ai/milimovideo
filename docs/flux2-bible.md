@@ -330,7 +330,7 @@ Flux 2 natively uses **Guided Distillation** (a single scalar `guidance` vector)
 
 **Orchestration** (`backend/managers/inpainting_manager.py`):
 1.  User clicks on the UI → Frontend sends points to Backend.
-2.  `InpaintingManager.get_mask_from_sam()` → `POST http://localhost:8001/predict/mask` (SAM 3 microservice).
+2.  `InpaintingManager.get_mask_from_sam()` → `POST http://localhost:8002/predict/mask` (SAM 3 microservice).
 3.  Received PNG mask saved to filesystem.
 4.  `InpaintingManager.process_inpaint()` → `flux_inpainter.inpaint(image, mask, prompt, guidance=2.0, enable_ae=True, enable_true_cfg=False)`.
 5.  Result saved to `projects/{id}/generated/inpaint_{job_id}.jpg`.

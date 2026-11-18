@@ -508,7 +508,7 @@ Be fair to the build — these are not small things:
 - **The storyboard engine is the durable IP.** Regex parsing, element matching
   with provenance, concept-art thumbnails, and shot preparation are a coherent
   workflow; they need correctness fixes, not a redesign.
-- **SAM 3 isolation holds.** Port 8001 as a separate service is still the right
+- **SAM 3 isolation holds.** Port 8002 as a separate service is still the right
   call; the proxy surface is small and replaceable.
 - **Safari media serving exists for a reason.** Range requests are implemented;
   they just need safe path handling and streaming.

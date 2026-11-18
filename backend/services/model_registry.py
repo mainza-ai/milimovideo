@@ -64,6 +64,8 @@ class ModelInfo:
     recommended_dtype: str = "bfloat16"          # bfloat16 | float32 | float8_e4m3fn
     gated: bool = False                          # True if HF repo requires auth
     license: str = ""                            # License identifier
+    recommended: bool = False                    # Show the recommended badge first
+    recommendation: str = ""                     # Why this download is suggested
 
     # Runtime state
     status: ModelStatus = ModelStatus.NOT_DOWNLOADED
@@ -187,6 +189,8 @@ class ModelRegistry:
                 recommended_dtype=entry.get("recommended_dtype", "bfloat16"),
                 gated=entry.get("gated", False),
                 license=entry.get("license", ""),
+                recommended=entry.get("recommended", False),
+                recommendation=entry.get("recommendation", ""),
             )
 
             # Check device compatibility
@@ -226,7 +230,7 @@ class ModelRegistry:
 
             if "video" in active_slots:
                 for m in self._models.values():
-                    if m.family in ("ltx2", "ltx23") and m.status == ModelStatus.DOWNLOADED:
+                    if m.family in ("ltx2", "ltx23", "ltx25") and m.status == ModelStatus.DOWNLOADED:
                         m.status = ModelStatus.ACTIVE
 
             if "image" in active_slots:

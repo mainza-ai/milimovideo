@@ -62,6 +62,14 @@ export const computeTimelineLayout = (project: any): TimelineClip[] => {
     return clips;
 };
 
+/** Poster image for a timeline clip; stills fall back to the media itself. */
+export const timelineThumbnail = (shot: any): string | null => {
+    if (!shot) return null;
+    if (shot.thumbnailUrl) return shot.thumbnailUrl;
+    const media = shot.videoUrl || '';
+    return /\.(png|jpe?g|webp|gif|avif)$/i.test(media) ? media : null;
+};
+
 /**
  * Calculates the total duration of the project based on the computed layout.
  */

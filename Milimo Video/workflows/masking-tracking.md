@@ -23,7 +23,7 @@ per-frame work.
 
 ## Prerequisites
 
-- SAM 3 microservice running (`./run_sam.sh`, port 8001) — start it before the
+- SAM 3 microservice running (`./run_sam.sh`, port 8002) — start it before the
   backend, or calls fail with "Connection Refused".
 - A frame selected in Studio **Edit** (or the legacy editor). The frontend captures
   it locally; the Studio buttons are **Edit frame**, **Track**, and **Depth**.

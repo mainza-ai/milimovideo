@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeTimelineLayout } from './timelineUtils';
+import { computeTimelineLayout, timelineThumbnail } from './timelineUtils';
 
 function project(shots: Array<Record<string, unknown>>) {
     return { fps: 25, shots };
@@ -44,5 +44,13 @@ describe('computeTimelineLayout transitions', () => {
         const layout = computeTimelineLayout(project([shot('a', { transitionIn: 10 })]));
         expect(layout[0].start).toBe(0);
         expect(layout[0].end).toBe(1);
+    });
+});
+
+describe('timelineThumbnail', () => {
+    it('prefers the poster and falls back to still media', () => {
+        expect(timelineThumbnail({ thumbnailUrl: '/thumb.jpg', videoUrl: '/clip.mp4' })).toBe('/thumb.jpg');
+        expect(timelineThumbnail({ videoUrl: '/still.png' })).toBe('/still.png');
+        expect(timelineThumbnail({ videoUrl: '/clip.mp4' })).toBeNull();
     });
 });

@@ -205,10 +205,18 @@ Set `MILIMO_COMFY_URL` if ComfyUI is not on `http://127.0.0.1:8001`, and
 `.3dl`/`.dat`/`.m3d` URL), `start_frame`/`end_frame`, `fit`, and encoding fields.
 Project `titles` are a list of `{text,start_frame,end_frame,x,y,size,color,box}` and
 are burned in after the LUT, before captions. Shot `transition_in` is a V1
-crossfade duration in frames. `GET /projects/{id}/otio?format=otio|fcpxml` exports
+crossfade duration in frames. Set `pipeline_override: "ltx25"` for the gated
+LTX-2.5 diffusers engine (default path `backend/models/ltx-2.5-diffusers`). `GET /projects/{id}/otio?format=otio|fcpxml` exports
 the V1/V2/A1/A2 cut; `POST /projects/{id}/otio/import` accepts OTIO or FCPXML.
 
-## 10. Automation guardrails
+## 10. Delete assets
+
+Library cards expose **Delete**, which calls `DELETE /assets/{asset_id}`. The
+endpoint removes the asset file and poster, clears shot `video_url`/`thumbnail_url`
+references, and marks matching jobs deleted. `DELETE /upload/{filename}` remains
+for legacy filename-based callers.
+
+## 11. Automation guardrails
 
 - The API is local-first. Cloud providers remain off unless `MILIMO_LLM_CLOUD=1`
   and air-gap is off; a batch cannot silently spend money.
@@ -222,5 +230,6 @@ the V1/V2/A1/A2 cut; `POST /projects/{id}/otio/import` accepts OTIO or FCPXML.
 ## Related
 
 - `docs/01_system_architecture.md` — routers and execution flow
+- `docs/comfyui.md` — optional ComfyUI bridge setup and troubleshooting
 - `Milimo Video/systems/sse-eventing.md` — event envelope and replay
 - `Milimo Video/systems/memory-management-audit-2026-11.md` — budget/admission

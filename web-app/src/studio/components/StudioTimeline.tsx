@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStudioDocumentStore, type CaptionCue, type Shot } from '../state/documentStore';
-import { computeTimelineLayout, type TimelineClip } from '../../utils/timelineUtils';
+import { computeTimelineLayout, timelineThumbnail, type TimelineClip } from '../../utils/timelineUtils';
 import { useStudioEditor } from '../state/editorStore';
 import { formatDuration } from '../data/useStudioData';
 import { bladeSourceFrame, rollCut, slipShot, trimShot } from '../timeline/ops';
@@ -735,6 +735,7 @@ export function StudioTimeline() {
                                     const durationSeconds = durationFrames / fps;
                                     const left = clip.start * timelineZoom;
                                     const clippedWidth = Math.max(8, durationSeconds * timelineZoom);
+                                    const thumbUrl = timelineThumbnail(clip.shot);
                                     return (
                                         <div
                                             key={clip.id}
@@ -768,6 +769,13 @@ export function StudioTimeline() {
                                             }}
                                             title={`${clip.shot.action || clip.shot.prompt || 'Shot'} · ${durationFrames}f · in ${trimIn} / out ${trimOut}`}
                                         >
+                                            {track.id < 2 && thumbUrl && (
+                                                <span
+                                                    className="st-timeline-thumb"
+                                                    aria-hidden="true"
+                                                    style={{ backgroundImage: `url("${getAssetUrl(thumbUrl)}")` }}
+                                                />
+                                            )}
                                             {track.id >= 2 && clip.shot.videoUrl && (
                                                 <span className="st-waveform-wrap">
                                                     <Waveform url={clip.shot.videoUrl} height={22} />

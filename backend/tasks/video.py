@@ -793,6 +793,24 @@ async def generate_video_task(job_id: str, params: dict):
             logger.info(f"Job {job_id} was cancelled before starting execution.")
             return
 
+    ltx25 = any(
+        str(params.get(key) or "").lower() == "ltx25"
+        for key in ("pipeline_override", "pipeline_type", "engine")
+    )
+    if ltx25:
+        try:
+            _preenhance_http(
+                job_id,
+                params,
+                lambda: active_jobs.get(job_id, {}).get("cancelled", False),
+            )
+        except Exception as exc:
+            logger.warning("LTX-2.5 pre-pipeline enhancement failed: %s", exc)
+        from tasks.ltx25 import generate_ltx25_video_task
+
+        await generate_ltx25_video_task(job_id, params)
+        return
+
     if (
         str(params.get("pipeline_override") or "").lower() == "wan"
         or str(params.get("pipeline_type") or "").lower() == "wan"

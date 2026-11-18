@@ -87,10 +87,12 @@ navigate, then drills into pages.
 - [models/ltx-2](models/ltx-2.md) — LTX-2 19B dual-stream transformer: the three
   pipelines (ti2vid, ic_lora, keyframe), two-stage generation, checkpoints,
   pipeline internals and gotchas.
+- [models/ltx-2-5](models/ltx-2-5.md) — LTX-2.5 22B: gated diffusers adapter, native
+  synchronized audio, CPU offload/VAE tiling, and the `ltx25` pipeline.
 - [models/flux-2](models/flux-2.md) — Flux 2 Klein 9B: image synthesis, IP-Adapter
   reference conditioning, RePaint inpainting, True CFG, AE hot-swap, init/loading
   and denoise-loop internals.
-- [models/sam-3](models/sam-3.md) — SAM 3 microservice (port 8001): text/box/click
+- [models/sam-3](models/sam-3.md) — SAM 3 microservice (port 8002): text/box/click
   segmentation, detection, bidirectional video object tracking; startup sequence,
   predictor internals, proxy routes, MPS port notes.
 
@@ -127,7 +129,7 @@ navigate, then drills into pages.
 
 ## Decisions
 - [decisions/sam3-microservice](decisions/sam3-microservice.md) — why SAM 3 runs
-  as an isolated microservice on port 8001 instead of inside the backend.
+  as an isolated microservice on port 8002 instead of inside the backend.
 - [decisions/cloud-engines](decisions/cloud-engines.md) — PROPOSAL: optional
   per-engine cloud fallbacks (Veo/Imagen/Gemini) that bypass the local GPU path;
   not implemented.

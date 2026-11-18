@@ -37,6 +37,8 @@ DOM timeline as the frozen fallback.
 ## Tracks
 
 - **V1** — magnetic story track. Order is `sequence_index`; `start_frame` is ignored.
+- V1/V2 clips show the shot poster behind the title; uploaded and generated videos
+  get poster frames.
 - **V2** — free overlay track with alpha compositing.
 - **A1 / A2** — free audio/music tracks, each with mute/solo and OTIO export.
 - **C1** — caption lane backed by project caption cues.

@@ -7,7 +7,7 @@
 
 Milimo Video is a **local-first, AI-native cinematic studio** combining a React/Zustand frontend with a Python/FastAPI backend. The system orchestrates three AI models — **LTX-2** (video generation), **Flux 2** (image generation/inpainting), and **SAM 3** (segmentation) — through a multi-track Non-Linear Editor (NLE) interface.
 
-The codebase spans **~60 source files** across two primary subsystems: a 28-file Python backend and a 35+ file TypeScript/React frontend, connected via REST endpoints and Server-Sent Events (SSE). A third subsystem — the SAM 3 microservice — runs independently on port 8001.
+The codebase spans **~60 source files** across two primary subsystems: a 28-file Python backend and a 35+ file TypeScript/React frontend, connected via REST endpoints and Server-Sent Events (SSE). A third subsystem — the SAM 3 microservice — runs independently on port 8002.
 
 ## Documentation Artifacts
 
@@ -52,7 +52,7 @@ emits exactly once.
 Scripts are parsed into `Scene` → `Shot` hierarchies via two paths: **`ScriptParser`** (regex-based screenwriting format) for instant structured parsing, or **`ai_parse_script()`** (the `script_parse` role: a local HTTP model by default, Gemma when assigned) for intelligent free-form text analysis with cinematic shot type suggestions. The storyboard supports AI concept art thumbnails (Flux 2, 512×320), batch video generation, drag-to-reorder shots, scene name editing, and Push to Timeline to commit scenes/shots directly into the NLE.
 
 ### 6. SAM 3 as Isolated Microservice
-SAM 3 runs on port 8001 as a standalone FastAPI server (`sam3/start_sam_server.py`). It starts with no model: the first segmentation request lazy-loads `Sam3Processor`/the image model under a lock (`/load` warms, `/unload` releases), while video tracking lazy-loads `Sam3VideoPredictor` with MPS/CUDA/CPU auto-detection. The main backend communicates with it via HTTP POST through `InpaintingManager` and `TrackingManager`. Inpaint jobs are persisted as `Job` DB records for status polling via `/status/{job_id}`.
+SAM 3 runs on port 8002 as a standalone FastAPI server (`sam3/start_sam_server.py`). It starts with no model: the first segmentation request lazy-loads `Sam3Processor`/the image model under a lock (`/load` warms, `/unload` releases), while video tracking lazy-loads `Sam3VideoPredictor` with MPS/CUDA/CPU auto-detection. The main backend communicates with it via HTTP POST through `InpaintingManager` and `TrackingManager`. Inpaint jobs are persisted as `Job` DB records for status polling via `/status/{job_id}`.
 
 ### 7. MPS-First Development
 The codebase is designed to run on Apple Silicon (MPS) with CUDA as the primary target. Both LTX-2 and Flux 2 wrappers include device-specific hacks:
@@ -95,7 +95,7 @@ Prompt enhancement and script parsing are roles in a persisted plane
 | **Real-time** | Server-Sent Events (SSE via `sse-starlette`) |
 | **Video AI** | LTX-2 (19B Dual-Stream Transformer, three pipelines + chained gen) |
 | **Image AI** | Flux 2 Klein 9B (FluxInpainter with IP-Adapter, True CFG, RePaint inpainting) |
-| **Segmentation AI** | SAM 3 (microservice on port 8001, `Sam3Processor` + `inst_interactive_predictor` + `Sam3VideoPredictor` with MPS/CUDA/CPU device support) |
+| **Segmentation AI** | SAM 3 (microservice on port 8002, `Sam3Processor` + `inst_interactive_predictor` + `Sam3VideoPredictor` with MPS/CUDA/CPU device support) |
 | **Prompt Enhancement** | Local-first role plane: Gemma (in-process), Ollama, oMLX, Strata, LM Studio, OpenAI-compatible; optional cloud |
 | **Memory Management** | Central `MemoryManager` — slot-based mutual exclusion for GPU models |
 | **Video Processing** | FFmpeg (thumbnails, frame extraction, encoding, overlap trimming, concat) |
@@ -126,7 +126,7 @@ models/flux_wrapper.py
 
 ### SAM 3 Microservice (`sam3/`) — 1 entry point
 ```
-start_sam_server.py    # FastAPI on port 8001 (lazy model; health/load/unload/predict/detect/segment/track)
+start_sam_server.py    # FastAPI on port 8002 (lazy model; health/load/unload/predict/detect/segment/track)
 sam3/                  # SAM 3 package (build_sam3_image_model, Sam3Processor, Sam3VideoPredictor)
 ```
 

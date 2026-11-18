@@ -152,7 +152,7 @@ sequenceDiagram
     participant UI as Frontend
     participant API as FastAPI
     participant InpMgr as InpaintingManager
-    participant SAM as SAM 3 :8001
+    participant SAM as SAM 3 :8002
     participant Flux as FluxInpainter
 
     Note over SAM: Sam3Processor + inst_interactive_predictor

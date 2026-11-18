@@ -16,16 +16,27 @@
         "repo": "Lightricks/LTX-2",
         "filename": "ltx-2-19b-distilled.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Primary video generation checkpoint — 19B parameters, distilled for 8-step inference.",
-      "depends_on": ["ltx2-distilled-lora", "ltx2-gemma3"],
-      "alternatives": ["ltx2-distilled-fp8"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Primary video generation checkpoint \u2014 19B parameters, distilled for 8-step inference.",
+      "depends_on": [
+        "ltx2-distilled-lora",
+        "ltx2-gemma3"
+      ],
+      "alternatives": [
+        "ltx2-distilled-fp8"
+      ],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 76,
       "recommended_dtype": "bfloat16",
       "gated": false,
-      "license": "lightricks-ltx"
+      "license": "lightricks-ltx",
+      "recommended": true,
+      "recommendation": "Stable local baseline; use LTX-2.5 on 32 GB+ when weights are available."
     },
     {
       "id": "ltx2-distilled-fp8",
@@ -42,10 +53,17 @@
         "repo": "Lightricks/LTX-2",
         "filename": "ltx-2-19b-distilled-fp8.safetensors"
       },
-      "device_compatibility": ["cuda"],
-      "description": "FP8 quantized variant — 37% smaller but CUDA only.",
-      "depends_on": ["ltx2-distilled-lora", "ltx2-gemma3"],
-      "alternatives": ["ltx2-base"],
+      "device_compatibility": [
+        "cuda"
+      ],
+      "description": "FP8 quantized variant \u2014 37% smaller but CUDA only.",
+      "depends_on": [
+        "ltx2-distilled-lora",
+        "ltx2-gemma3"
+      ],
+      "alternatives": [
+        "ltx2-base"
+      ],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 40,
@@ -68,7 +86,11 @@
         "repo": "Lightricks/LTX-2",
         "filename": "ltx-2-19b-distilled-lora-384.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "Companion LoRA required by all LTX-2 pipelines.",
       "depends_on": [],
       "alternatives": [],
@@ -81,7 +103,7 @@
     },
     {
       "id": "ltx2-spatial-upscaler",
-      "name": "LTX-2 Spatial Upscaler 2×",
+      "name": "LTX-2 Spatial Upscaler 2\u00d7",
       "family": "ltx2",
       "role": "upscaler",
       "type": "base",
@@ -94,8 +116,12 @@
         "repo": "Lightricks/LTX-2",
         "filename": "ltx-2-spatial-upscaler-x2-1.0.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Stage 2 spatial upsampler — doubles resolution.",
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Stage 2 spatial upsampler \u2014 doubles resolution.",
       "depends_on": [],
       "alternatives": [],
       "requires_base": false,
@@ -107,7 +133,7 @@
     },
     {
       "id": "ltx2-temporal-upscaler",
-      "name": "LTX-2 Temporal Upscaler 2×",
+      "name": "LTX-2 Temporal Upscaler 2\u00d7",
       "family": "ltx2",
       "role": "upscaler",
       "type": "base",
@@ -120,8 +146,12 @@
         "repo": "Lightricks/LTX-2",
         "filename": "ltx-2-temporal-upscaler-x2-1.0.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Optional temporal upsampler — doubles frame count.",
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Optional temporal upsampler \u2014 doubles frame count.",
       "depends_on": [],
       "alternatives": [],
       "requires_base": false,
@@ -146,8 +176,12 @@
         "repo": "Lightricks/LTX-2",
         "subdir": "text_encoders/gemma3"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Text encoder for LTX-2 — also used for prompt enhancement.",
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Text encoder for LTX-2 \u2014 also used for prompt enhancement.",
       "depends_on": [],
       "alternatives": [],
       "requires_base": false,
@@ -172,9 +206,15 @@
         "repo": "Lightricks/LTX-2-19b-IC-LoRA-Union-Control",
         "filename": "ltx-2-19b-ic-lora-union-control.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Union control IC-LoRA — canny, depth, pose in one adapter.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Union control IC-LoRA \u2014 canny, depth, pose in one adapter.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -198,9 +238,15 @@
         "repo": "Lightricks/LTX-2-19b-IC-LoRA-Detailer",
         "filename": "ltx-2-19b-ic-lora-detailer.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Detailer IC-LoRA — enhances video quality and fine details.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Detailer IC-LoRA \u2014 enhances video quality and fine details.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -224,9 +270,15 @@
         "repo": "Lightricks/LTX-2-19b-IC-LoRA-Canny-Control",
         "filename": "ltx-2-19b-ic-lora-canny-control.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "Canny edge control IC-LoRA for structure-guided generation.",
-      "depends_on": ["ltx2-base"],
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -250,9 +302,15 @@
         "repo": "Lightricks/LTX-2-19b-IC-LoRA-Depth-Control",
         "filename": "ltx-2-19b-ic-lora-depth-control.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "Depth map control IC-LoRA for 3D-aware generation.",
-      "depends_on": ["ltx2-base"],
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -276,9 +334,15 @@
         "repo": "Lightricks/LTX-2-19b-IC-LoRA-Pose-Control",
         "filename": "ltx-2-19b-ic-lora-pose-control.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "Pose control IC-LoRA for character motion guidance.",
-      "depends_on": ["ltx2-base"],
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -302,9 +366,15 @@
         "repo": "Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-In",
         "filename": "ltx-2-19b-lora-camera-dolly-in.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Camera LoRA — smooth forward dolly motion.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Camera LoRA \u2014 smooth forward dolly motion.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -328,9 +398,15 @@
         "repo": "Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Out",
         "filename": "ltx-2-19b-lora-camera-dolly-out.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Camera LoRA — smooth backward dolly motion.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Camera LoRA \u2014 smooth backward dolly motion.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -354,9 +430,15 @@
         "repo": "Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Left",
         "filename": "ltx-2-19b-lora-camera-dolly-left.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Camera LoRA — lateral tracking left.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Camera LoRA \u2014 lateral tracking left.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -380,9 +462,15 @@
         "repo": "Lightricks/LTX-2-19b-LoRA-Camera-Control-Dolly-Right",
         "filename": "ltx-2-19b-lora-camera-dolly-right.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Camera LoRA — lateral tracking right.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Camera LoRA \u2014 lateral tracking right.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -406,9 +494,15 @@
         "repo": "Lightricks/LTX-2-19b-LoRA-Camera-Control-Jib-Down",
         "filename": "ltx-2-19b-lora-camera-jib-down.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Camera LoRA — vertical jib/crane downward motion.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Camera LoRA \u2014 vertical jib/crane downward motion.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -432,9 +526,15 @@
         "repo": "Lightricks/LTX-2-19b-LoRA-Camera-Control-Jib-Up",
         "filename": "ltx-2-19b-lora-camera-jib-up.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Camera LoRA — vertical jib/crane upward motion.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Camera LoRA \u2014 vertical jib/crane upward motion.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -458,9 +558,15 @@
         "repo": "Lightricks/LTX-2-19b-LoRA-Camera-Control-Static",
         "filename": "ltx-2-19b-lora-camera-static.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Camera LoRA — locks camera for static tripod framing.",
-      "depends_on": ["ltx2-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Camera LoRA \u2014 locks camera for static tripod framing.",
+      "depends_on": [
+        "ltx2-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx2-base",
@@ -484,16 +590,24 @@
         "repo": "Lightricks/LTX-2.3",
         "filename": "ltx-2.3.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "LTX-2.3 base — next-gen video generation from Lightricks.",
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "LTX-2.3 base \u2014 next-gen video generation from Lightricks.",
       "depends_on": [],
-      "alternatives": ["ltx23-fp8"],
+      "alternatives": [
+        "ltx23-fp8"
+      ],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 76,
       "recommended_dtype": "bfloat16",
       "gated": false,
-      "license": "lightricks-ltx"
+      "license": "lightricks-ltx",
+      "recommended": false,
+      "recommendation": "Fallback generation; LTX-2.5 is the primary upgrade target."
     },
     {
       "id": "ltx23-fp8",
@@ -510,16 +624,22 @@
         "repo": "Lightricks/LTX-2.3-fp8",
         "filename": "ltx-2.3-fp8.safetensors"
       },
-      "device_compatibility": ["cuda"],
-      "description": "LTX-2.3 FP8 quantized — CUDA only, lower VRAM.",
+      "device_compatibility": [
+        "cuda"
+      ],
+      "description": "LTX-2.3 FP8 quantized \u2014 CUDA only, lower VRAM.",
       "depends_on": [],
-      "alternatives": ["ltx23-base"],
+      "alternatives": [
+        "ltx23-base"
+      ],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 40,
       "recommended_dtype": "float8_e4m3fn",
       "gated": false,
-      "license": "lightricks-ltx"
+      "license": "lightricks-ltx",
+      "recommended": false,
+      "recommendation": "CUDA fallback for 40 GB+; use LTX-2.5 FP8 when available."
     },
     {
       "id": "ltx23-ic-lora-union",
@@ -536,9 +656,15 @@
         "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Union-Control",
         "filename": "ltx-2.3-22b-ic-lora-union-control.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "LTX-2.3 union control IC-LoRA — canny, depth, pose.",
-      "depends_on": ["ltx23-base"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "LTX-2.3 union control IC-LoRA \u2014 canny, depth, pose.",
+      "depends_on": [
+        "ltx23-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx23-base",
@@ -562,9 +688,15 @@
         "repo": "Lightricks/LTX-2.3-22b-IC-LoRA-Motion-Track-Control",
         "filename": "ltx-2.3-22b-ic-lora-motion-track-control.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "LTX-2.3 motion track control IC-LoRA.",
-      "depends_on": ["ltx23-base"],
+      "depends_on": [
+        "ltx23-base"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "ltx23-base",
@@ -572,6 +704,41 @@
       "recommended_dtype": "bfloat16",
       "gated": false,
       "license": "lightricks-ltx"
+    },
+    {
+      "id": "ltx25-diffusers",
+      "name": "LTX-2.5 (Diffusers)",
+      "family": "ltx25",
+      "role": "checkpoint",
+      "type": "base",
+      "pipeline": "video",
+      "pipeline_tag": "text-to-video",
+      "required": false,
+      "size_bytes": null,
+      "relative_path": "backend/models/ltx-2.5-diffusers",
+      "huggingface": {
+        "repo": "Lightricks/LTX-2.5-Diffusers",
+        "subdir": ""
+      },
+      "device_compatibility": [
+        "cuda",
+        "mps",
+        "cpu"
+      ],
+      "description": "LTX-2.5 22B diffusers pipeline with native synchronized audio, prompt/keyframe camera control, and CPU-offload/VAE tiling. Gated community weights; download requires a Hugging Face token accepted for the repo.",
+      "depends_on": [],
+      "alternatives": [
+        "ltx2-base",
+        "ltx23-base"
+      ],
+      "requires_base": false,
+      "base_repo_id": null,
+      "vram_estimate_gb": 40,
+      "recommended_dtype": "bfloat16",
+      "gated": true,
+      "license": "lightricks-ltx-2.5-community",
+      "recommended": true,
+      "recommendation": "Primary video upgrade for 32 GB+; gated weights and diffusers path. CPU offload/VAE tiling are implemented in the adapter."
     },
     {
       "id": "flux2-klein-9b",
@@ -588,16 +755,24 @@
         "repo": "black-forest-labs/FLUX.2-klein-9B",
         "filename": "flux-2-klein-9b.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Primary image generation — 9B flow transformer for text-to-image and inpainting.",
-      "depends_on": ["flux2-text-encoder"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Primary image generation \u2014 9B flow transformer for text-to-image and inpainting.",
+      "depends_on": [
+        "flux2-text-encoder"
+      ],
       "alternatives": [],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 18,
       "recommended_dtype": "bfloat16",
       "gated": false,
-      "license": "non-commercial"
+      "license": "non-commercial",
+      "recommended": true,
+      "recommendation": "Full-quality image lane with IP-Adapter and inpainting."
     },
     {
       "id": "wan2.2-ti2v-5b",
@@ -614,7 +789,11 @@
         "repo": "Wan-AI/Wan2.2-TI2V-5B-Diffusers",
         "subdir": ""
       },
-      "device_compatibility": ["cuda", "mps", "cpu"],
+      "device_compatibility": [
+        "cuda",
+        "mps",
+        "cpu"
+      ],
       "description": "Apache-2.0 5B TI2V model (720p/24, diffusers). Low-VRAM CUDA lane; choose pipeline 'wan 2.2 (5B)' on a shot.",
       "depends_on": [],
       "alternatives": [],
@@ -623,7 +802,9 @@
       "vram_estimate_gb": 24,
       "recommended_dtype": "float16",
       "gated": false,
-      "license": "apache-2.0"
+      "license": "apache-2.0",
+      "recommended": true,
+      "recommendation": "Recommended low-VRAM video lane; Apache 2.0."
     },
     {
       "id": "flux2-klein-9b-q4km",
@@ -640,16 +821,28 @@
         "repo": "unsloth/FLUX.2-klein-9B-GGUF",
         "filename": "flux-2-klein-9b-Q4_K_M.gguf"
       },
-      "device_compatibility": ["cuda", "mps", "cpu"],
+      "device_compatibility": [
+        "cuda",
+        "mps",
+        "cpu"
+      ],
       "description": "Q4_K_M GGUF transformer for low-VRAM image generation. Requires the Flux 2 text encoder, tokenizer, and VAE. Set MILIMO_FLUX_GGUF to this file to activate; IP-Adapter/inpaint stay on the full checkpoint.",
-      "depends_on": ["flux2-text-encoder", "flux2-tokenizer", "flux2-ae"],
-      "alternatives": ["flux2-klein-9b"],
+      "depends_on": [
+        "flux2-text-encoder",
+        "flux2-tokenizer",
+        "flux2-ae"
+      ],
+      "alternatives": [
+        "flux2-klein-9b"
+      ],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 24,
       "recommended_dtype": "float16",
       "gated": false,
-      "license": "non-commercial"
+      "license": "non-commercial",
+      "recommended": true,
+      "recommendation": "Recommended low-VRAM image lane; Q4_K_M GGUF."
     },
     {
       "id": "flux2-ae",
@@ -666,10 +859,16 @@
         "repo": "black-forest-labs/FLUX.2-dev",
         "filename": "ae.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Native FLUX.2 AE — enables reference image conditioning. Lives in the gated FLUX.2-dev repo (accept its license / set HF_TOKEN). Falls back to the 9B diffusers VAE if missing.",
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Native FLUX.2 AE \u2014 enables reference image conditioning. Lives in the gated FLUX.2-dev repo (accept its license / set HF_TOKEN). Falls back to the 9B diffusers VAE if missing.",
       "depends_on": [],
-      "alternatives": ["flux2-vae-diffusers"],
+      "alternatives": [
+        "flux2-vae-diffusers"
+      ],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 0.5,
@@ -692,10 +891,16 @@
         "repo": "black-forest-labs/FLUX.2-klein-9B",
         "subdir": "vae"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "Diffusers-format VAE fallback.",
       "depends_on": [],
-      "alternatives": ["flux2-ae"],
+      "alternatives": [
+        "flux2-ae"
+      ],
       "requires_base": false,
       "base_repo_id": null,
       "vram_estimate_gb": 0.5,
@@ -718,7 +923,11 @@
         "repo": "black-forest-labs/FLUX.2-klein-9B",
         "subdir": "text_encoder"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "Qwen 3 8B text encoder for Flux 2 prompt processing.",
       "depends_on": [],
       "alternatives": [],
@@ -744,7 +953,11 @@
         "repo": "black-forest-labs/FLUX.2-klein-9B",
         "subdir": "tokenizer"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "Tokenizer for the Qwen 3 text encoder.",
       "depends_on": [],
       "alternatives": [],
@@ -770,9 +983,15 @@
         "repo": "XLabs-AI/flux-ip-adapter",
         "filename": "ip_adapter.safetensors"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "Visual conditioning adapter — CLIP ViT-L encodes reference images.",
-      "depends_on": ["flux2-klein-9b"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "Visual conditioning adapter \u2014 CLIP ViT-L encodes reference images.",
+      "depends_on": [
+        "flux2-klein-9b"
+      ],
       "alternatives": [],
       "requires_base": true,
       "base_repo_id": "flux2-klein-9b",
@@ -796,8 +1015,12 @@
         "repo": "facebook/sam3",
         "filename": "sam3.pt"
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
-      "description": "SAM 3 — object segmentation, text-based masking, and video tracking.",
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
+      "description": "SAM 3 \u2014 object segmentation, text-based masking, and video tracking.",
       "depends_on": [],
       "alternatives": [],
       "requires_base": false,
@@ -805,7 +1028,9 @@
       "vram_estimate_gb": 3.5,
       "recommended_dtype": "float32",
       "gated": false,
-      "license": "apache-2.0"
+      "license": "apache-2.0",
+      "recommended": true,
+      "recommendation": "Recommended segmentation/tracking model; SAM 3 service runs on 8002."
     },
     {
       "id": "depth-anything-v2-small",
@@ -822,7 +1047,11 @@
         "repo": "depth-anything/Depth-Anything-V2-Small-hf",
         "subdir": ""
       },
-      "device_compatibility": ["mps", "cuda", "cpu"],
+      "device_compatibility": [
+        "mps",
+        "cuda",
+        "cpu"
+      ],
       "description": "Monocular depth estimation used for stage depth overlays.",
       "depends_on": [],
       "alternatives": [],
@@ -831,7 +1060,19 @@
       "vram_estimate_gb": 2.0,
       "recommended_dtype": "float32",
       "gated": false,
-      "license": "apache-2.0"
+      "license": "apache-2.0",
+      "recommended": true,
+      "recommendation": "Optional depth overlay; small and fast."
     }
-  ]
+  ],
+  "recommendations": {
+    "video_primary": "ltx25-diffusers",
+    "video_stable": "ltx2-base",
+    "video_low_vram": "wan2.2-ti2v-5b",
+    "image_quality": "flux2-klein-9b",
+    "image_low_vram": "flux2-klein-9b-q4km",
+    "segmentation": "sam3-checkpoint",
+    "depth": "depth-anything-v2-small",
+    "note": "LTX-2.5 is the primary 32 GB+ upgrade but is gated; LTX-2 remains the stable local baseline. Wan 2.2 5B and Flux 2 Q4_K_M are the low-VRAM lanes."
+  }
 }

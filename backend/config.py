@@ -31,7 +31,8 @@ LTX_IP_ADAPTER_PATH = os.path.join(MODELS_DIR, "ltx-ip-adapter.safetensors")   #
 API_PORT = int(os.environ.get("MILIMO_API_PORT", "8000"))
 # Local-first default. Set MILIMO_HOST=0.0.0.0 only with MILIMO_API_TOKEN.
 API_HOST = os.environ.get("MILIMO_HOST", "127.0.0.1")
-SAM_SERVICE_PORT = int(os.environ.get("MILIMO_SAM_PORT", "8001"))
+# SAM defaults to 8002 because Comfy Desktop owns 8001 on many installs.
+SAM_SERVICE_PORT = int(os.environ.get("MILIMO_SAM_PORT", "8002"))
 
 # ComfyUI bridge. Optional external engine: core generation never calls it.
 # Set MILIMO_COMFY_ENABLED=0 to remove the bridge surface entirely.
@@ -91,6 +92,13 @@ MEMORY_KEEP_WARM = os.environ.get("MILIMO_MEMORY_KEEP_WARM", "0") == "1"
 # Conservative fallback for an engine that reports no resident bytes.
 MEMORY_UNKNOWN_ENGINE_GB = float(os.environ.get("MILIMO_MEMORY_UNKNOWN_ENGINE_GB", "24"))
 MEMORY_MONITOR_INTERVAL_SEC = float(os.environ.get("MILIMO_MEMORY_MONITOR_INTERVAL", "15"))
+
+# LTX-2.5 (gated community weights): official diffusers directory.
+LTX25_MODEL_PATH = os.environ.get(
+    "MILIMO_LTX25_MODEL",
+    os.path.join(BACKEND_DIR, "models", "ltx-2.5-diffusers"),
+)
+LTX25_OFFLOAD = os.environ.get("MILIMO_LTX25_OFFLOAD", "1") == "1"
 
 # Wan 2.2 TI2V-5B (Apache 2.0): separate low-VRAM video engine.
 WAN_MODEL_PATH = os.environ.get(

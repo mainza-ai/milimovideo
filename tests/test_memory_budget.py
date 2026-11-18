@@ -577,7 +577,7 @@ def test_unload_sam_posts_to_the_lazy_service(monkeypatch):
 
     monkeypatch.setattr(httpx, "Client", lambda **kwargs: _Client())
     MemoryManager._unload_sam()
-    assert calls == ["http://127.0.0.1:8001/unload"]
+    assert calls == ["http://127.0.0.1:8002/unload"]
 
 
 def test_active_slot_reports_through_status(manager):

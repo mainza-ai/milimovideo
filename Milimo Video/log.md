@@ -1602,7 +1602,7 @@ OTIO. Tests: 194 backend, 79 Vitest, 21 Playwright.
   on ComfyUI 0.45.0 (port 8001) completed and produced a PNG.
 - **Docs**: `systems/comfyui-bridge.md`, index, architecture, memory slots,
   roadmap, README, user guide, AGENTS.
-- Tests: 206 backend, 90 Vitest, 21 Playwright.
+- Tests: 206 backend, 91 Vitest, 21 Playwright.
 
 ## [2026-11-18] implement | FCPXML import
 
@@ -1627,7 +1627,7 @@ trims, and project media URLs. Resolve XML remains (no adapter).
   URL both served `/health`, created/loaded projects, and passed memory preflight.
   A real FFmpeg render through a red/blue swap LUT asserted the blue channel; a
   missing LUT returns 404.
-- Tests: 206 backend, 90 Vitest, 21 Playwright.
+- Tests: 206 backend, 91 Vitest, 21 Playwright.
 
 ## [2026-11-18] implement | titles, A2, and V1 crossfades
 
@@ -1640,7 +1640,7 @@ trims, and project media URLs. Resolve XML remains (no adapter).
 - **V1 crossfade**: `shot.transition_in` (Alembic 0010), shared overlap clamp in
   the timeline layout, render, and OTIO metadata; incoming alpha ramps 0→1 over
   the previous clip. Real pixel test asserts a red/blue midpoint mix.
-- Tests: 214 backend, 90 Vitest, 21 Playwright.
+- Tests: 217 backend, 91 Vitest, 21 Playwright.
 
 ## [2026-11-18] implement | lens recipe packs
 
@@ -1670,3 +1670,21 @@ quick start, optional ComfyUI, verification, limitations). Updated the system
 architecture, data-model, execution-flow, API, user-guide, overview, and timeline
 pages for Wan 2.2, optional ComfyUI, LUT, titles, A2, crossfades, OTIO/FCPXML,
 lens packs, and the current 214/90/21 test baseline.
+
+## [2026-11-18] implement | SAM 8002, LTX-2.5, thumbnails, asset delete, model recommendations
+
+- **SAM** now defaults to **8002** (`MILIMO_SAM_PORT`), freeing 8001 for ComfyUI.
+  Updated clients, memory sampler/unload, `run_sam.sh`, and docs. Live `/sam/health`
+  reports online on 8002.
+- **LTX-2.5** adapter (`models/ltx25_wrapper.py`, `tasks/ltx25.py`) uses diffusers
+  `LTX2Pipeline`, CPU offload/VAE tiling, native audio, `pipeline_override=ltx25`,
+  manifest/memory/UI wiring. Gated weights are not bundled; tests use a fake pipe.
+- **Edit thumbnails**: V1/V2 timeline clips render the shot poster behind the title;
+  stills fall back to the media URL.
+- **Asset deletion**: Library cards expose Delete; the endpoint removes the file and
+  poster, clears shot pointers, and marks jobs deleted. Live upload/delete verified.
+- **Model recommendations**: manifest flags LTX-2.5, LTX-2, Wan 2.2, Flux 2 Q4,
+  SAM 3, and Depth; Setup/Model Library show Recommended and rationale.
+- **Docs**: detailed ComfyUI bridge guide, README screenshots, SAM port, LTX-2.5
+  page, delete instructions, and current model lanes.
+- Tests: 217 backend, 91 Vitest, 21 Playwright.

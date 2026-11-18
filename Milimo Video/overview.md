@@ -35,6 +35,7 @@ a backend supervisor.
 |---|---|
 | **LTX-2 19B** | Dual-stream transformer for cinematic video generation (text-to-video, image-to-video, keyframe interpolation) |
 | **Wan 2.2 TI2V-5B** | Apache 2.0 low-VRAM text-to-video lane (`pipeline_override=wan`) |
+| **LTX-2.5 22B** | Gated diffusers upgrade (`pipeline_override=ltx25`) with native audio, CPU offload, and VAE tiling |
 | **Flux 2 Klein 9B** | High-fidelity image synthesis with IP-Adapter reference conditioning and RePaint inpainting; optional Q4_K_M GGUF |
 | **ComfyUI (optional)** | External API-format workflows; never required by core generation |
 | **SAM 3** | Text-prompted segmentation, click-to-segment, and video object tracking (standalone microservice) |
@@ -88,7 +89,7 @@ The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
 - the finishing pass: project 3D LUT, burned-in titles, A2 audio, V1 crossfades,
   OTIO/FCPXML import/export, lens recipe packs, and an optional ComfyUI bridge.
 
-Verification: **214 backend tests, 90 Vitest tests, 21 Playwright tests**, clean
+Verification: **217 backend tests, 91 Vitest tests, 21 Playwright tests**, clean
 ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
 failures.
 

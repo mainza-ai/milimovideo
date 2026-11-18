@@ -164,7 +164,7 @@ export function ComfyHealthPanel() {
             <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 11 }}>
                 ComfyUI runs as a separate GPU process. Its declared residency is admitted before a workflow,
                 it is charged to the same queue, and <code>/free</code> releases its cache. Comfy Desktop and
-                the optional SAM service both default to port 8001; set <code>MILIMO_COMFY_URL</code> if both run.
+                SAM defaults to port 8002, so both can run; set <code>MILIMO_COMFY_URL</code> or <code>MILIMO_SAM_PORT</code> to override.
             </p>
         </div>
     );

@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 CURATED_AUTHORS = {
     "ltx2": ["Lightricks"],
     "ltx23": ["Lightricks"],
+    "ltx25": ["Lightricks"],
     "flux2": ["black-forest-labs"],
     "sam3": ["facebook"],
 }
@@ -26,6 +27,7 @@ CURATED_AUTHORS = {
 FAMILY_PIPELINE_TAGS = {
     "ltx2": ["image-to-video", "text-to-video"],
     "ltx23": ["image-to-video", "text-to-video"],
+    "ltx25": ["image-to-video", "text-to-video"],
     "flux2": ["text-to-image"],
     "sam3": ["image-segmentation"],
 }

@@ -11,7 +11,7 @@ SAM 3 extends its predecessor (SAM 2) with:
 - **Instance-Level Interactivity**: Built-in predictor for interactive point/click segmentation.
 - **Multi-Object Detection**: Detect all instances of a concept with per-object confidence scoring.
 
-Milimo integrates SAM 3 as a **standalone microservice** running on port 8001, supporting three distinct workflows: text-based detection, click-to-segment, and video tracking.
+Milimo integrates SAM 3 as a **standalone microservice** running on port 8002, supporting three distinct workflows: text-based detection, click-to-segment, and video tracking.
 
 ## 2. System Architecture Overview
 
@@ -68,11 +68,11 @@ SAM 3 runs as a separate FastAPI server, isolated from the main Milimo backend:
 ┌──────────────────────────────────────────────────────────┐
 │ Milimo Backend (port 8000)                                │
 │   ├─ InpaintingManager (text masks, point masks)          │
-│   │   └─ HTTP POST → localhost:8001                       │
+│   │   └─ HTTP POST → localhost:8002                       │
 │   └─ TrackingManager (video tracking sessions)            │
-│       └─ HTTP POST → localhost:8001                       │
+│       └─ HTTP POST → localhost:8002                       │
 ├──────────────────────────────────────────────────────────┤
-│ SAM 3 Microservice (port 8001)                            │
+│ SAM 3 Microservice (port 8002)                            │
 │   ├─ /health            → Status check                    │
 │   ├─ /predict/mask      → Point/box segmentation          │
 │   ├─ /detect            → Text-prompted multi-object      │
@@ -202,7 +202,7 @@ All SAM-related edit routes are **multipart file-upload proxies** — they accep
 
 #### `MaskingCanvas.tsx` — 4-Mode Masking Tool
 
-Accepts a `videoRef` prop from `CinematicPlayer` for cross-origin-safe frame capture. Uses `captureFrameBlob()` helper to draw the current video/image frame onto a temporary canvas and export as JPEG. All SAM calls are routed through the backend proxy (`/edit/detect`, `/edit/segment`) rather than directly to `:8001`. The text prompt input includes SAM3-specific guidance (e.g., "Describe object to mask with SAM3").
+Accepts a `videoRef` prop from `CinematicPlayer` for cross-origin-safe frame capture. Uses `captureFrameBlob()` helper to draw the current video/image frame onto a temporary canvas and export as JPEG. All SAM calls are routed through the backend proxy (`/edit/detect`, `/edit/segment`) rather than directly to `:8002`. The text prompt input includes SAM3-specific guidance (e.g., "Describe object to mask with SAM3").
 
 | Tool | Description |
 |---|---|
@@ -273,7 +273,7 @@ Video Object Tracking:
 |---|---|---|
 | Checkpoint | `backend/models/sam3/sam3.pt` (~3.4GB) | SAM 3 model weights |
 | Safetensors | `backend/models/sam3/model.safetensors` (~3.4GB) | Alternative weight format |
-| Port | `config.SAM_SERVICE_PORT` (default `8001`) | Microservice port |
+| Port | `config.SAM_SERVICE_PORT` (default `8002`) | Microservice port |
 | Device | Auto-detected: `cuda` > `mps` > `cpu` | Inference device |
 | MPS Fallback | `PYTORCH_ENABLE_MPS_FALLBACK=1` (set in `run_sam.sh`) | CPU fallback for unsupported MPS ops |
 | HF Auto-Download | `facebook/sam3` on HuggingFace | Fallback if local checkpoint missing |
@@ -350,7 +350,7 @@ The frontend routes all SAM requests through the Milimo backend proxy (`:8000/ed
 ## 6. Debugging & Maintenance Guide
 
 - **Model Not Loading**: Check that `backend/models/sam3/sam3.pt` exists. If missing, the server auto-downloads from HuggingFace (requires `huggingface_hub` installed and internet access).
-- **Connection Refused**: Ensure the SAM server is running on port 8001 before starting the main backend. Start with `./run_sam.sh`.
+- **Connection Refused**: Ensure the SAM server is running on port 8002 before starting the main backend. Start with `./run_sam.sh`.
 - **Text Detection Returns Empty**: Lower the confidence threshold (default 0.5). Verify the text prompt matches visible objects in the image.
 - **Mask Quality Issues**: Try adding background points (`label=0`) to exclude regions. Use the text tool for complex/ambiguous segmentation.
 - **Video Tracking Memory**: The video predictor is lazy-loaded on first `/track/start` call. On shared-GPU systems, this may compete with the image model for VRAM.

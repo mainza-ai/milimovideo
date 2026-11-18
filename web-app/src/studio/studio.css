@@ -1848,6 +1848,21 @@
     background: rgba(61, 220, 151, 0.16);
 }
 
+.st-timeline-clip[data-track="3"] {
+    border-color: rgba(43, 196, 180, 0.45);
+    background: rgba(43, 196, 180, 0.16);
+}
+
+.st-timeline-thumb {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.55;
+    pointer-events: none;
+    z-index: 0;
+}
+
 .st-timeline-clip[data-selected="true"] {
     border-color: var(--st-text);
     box-shadow: 0 0 0 1px var(--st-text);
@@ -1896,6 +1911,8 @@
 
 .st-timeline-clip-meta {
     color: rgba(255, 255, 255, 0.55);
+    position: relative;
+    z-index: 1;
 }
 
 .st-caption-editor {

@@ -782,6 +782,7 @@ export function GenerateSurface() {
                                         <option value="ic_lora">ic_lora</option>
                                         <option value="keyframe">keyframe</option>
                                         <option value="wan">wan 2.2 (5B)</option>
+                                        <option value="ltx25">LTX-2.5</option>
                                     </select>
                                 </label>
                             </div>

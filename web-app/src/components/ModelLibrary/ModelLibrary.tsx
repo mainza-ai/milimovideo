@@ -69,7 +69,10 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, progress, onDownload, onCa
             {/* Header */}
             <div className="model-card__header">
                 <div className="model-card__name">{model.name}</div>
-                {model.required && <span className="model-card__badge model-card__badge--required">Required</span>}
+                <div style={{ display: 'flex', gap: 4 }}>
+                    {model.recommended && <span className="model-card__badge model-card__badge--required">Recommended</span>}
+                    {model.required && <span className="model-card__badge model-card__badge--required">Required</span>}
+                </div>
             </div>
 
             {/* Meta Row */}
@@ -95,6 +98,9 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, progress, onDownload, onCa
 
             {/* Description */}
             <p className="model-card__desc">{model.description}</p>
+            {model.recommendation && (
+                <p className="model-card__desc" style={{ opacity: 0.8 }}>{model.recommendation}</p>
+            )}
 
             {/* Progress Bar (downloading state) */}
             {isDownloading && progress && (
@@ -203,9 +209,11 @@ export const ModelLibrary: React.FC = () => {
     }, []);
 
     // Filter models
-    const filteredModels = filter === 'all'
+    const filteredModels = (filter === 'all'
         ? models
-        : models.filter(m => m.pipeline === filter);
+        : models.filter(m => m.pipeline === filter))
+        .slice()
+        .sort((a, b) => Number(!!b.recommended) - Number(!!a.recommended) || a.name.localeCompare(b.name));
 
     // Group by family
     const families: Record<string, ModelInfo[]> = {};
@@ -227,8 +235,11 @@ export const ModelLibrary: React.FC = () => {
     const FAMILY_LABELS: Record<string, string> = {
         ltx2: 'LTX-2 Video Generation',
         ltx23: 'LTX-2.3 Video Generation',
+        ltx25: 'LTX-2.5 Video Generation',
+        'wan2.2': 'Wan 2.2 Video Generation',
         flux2: 'Flux 2 Image Generation',
         sam3: 'SAM 3 Segmentation',
+        depth: 'Depth Anything',
     };
 
     return (
