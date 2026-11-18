@@ -1,4 +1,4 @@
-fastapi>=0.115
+fastapi==0.128.0
 uvicorn>=0.30
 python-multipart>=0.0.9
 requests>=2.31
@@ -26,6 +26,7 @@ scikit-image
 # stores datetime.utcnow() values. Migrate to aware datetimes before lifting.
 sqlmodel==0.0.31
 sqlalchemy>=2.0.14,<2.1
+pydantic==2.12.5
 sse-starlette>=2.1
 alembic>=1.13
 pytest>=8.0
