@@ -138,3 +138,19 @@ ComfyUI is an external GPU process. Milimo:
 - [User Guide](user_guide.md) — Studio-first walkthrough
 - [Local API](07_api.md) — job, SSE, and ComfyUI endpoints
 - `Milimo Video/systems/comfyui-bridge.md` — implementation and internal contract
+
+## 8. Current frontend limits
+
+The shipped panel is a paste-JSON runner, not a workflow editor. It does not yet:
+
+- bind shot prompt/seed/resolution/model fields to node inputs;
+- upload project images into ComfyUI's input directory for `LoadImage`;
+- validate node classes/models against the live `/object_info`;
+- save named workflows per project (one browser draft only);
+- choose a primary output from a multi-output result set;
+- show inline node/step progress or recover the job after reload;
+- edit the Comfy URL/residency/token in Setup (environment variables only).
+
+The 2026-11 audit, severity register, and phased C0–C5 plan are in
+`Milimo Video/systems/comfyui-frontend-audit-2026-11.md` and
+`Milimo Video/roadmap/comfyui-frontend-plan-2026-11.md`.

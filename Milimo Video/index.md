@@ -76,6 +76,9 @@ navigate, then drills into pages.
   bridge: API-format workflow submission, websocket/polling progress, output
   streaming into assets and shots, declared external residency, port rules, and
   the model-free smoke test.
+- [systems/comfyui-frontend-audit-2026-11](systems/comfyui-frontend-audit-2026-11.md) —
+  the 2026-11 ComfyUI frontend audit: capability matrix, C-01…C-24 gap register,
+  live validation evidence, and recommended bindings/media/library/results work.
 
 ## Research
 - [research/model-landscape-2026-11](research/model-landscape-2026-11.md) —
@@ -164,6 +167,9 @@ navigate, then drills into pages.
   the current open-work inventory and P0–P3 resolution plan: red CI dependency
   pin, PR #7/#8, issue triage, CUDA/quantized work, sidecar packaging, legacy
   cutover, and product gaps with acceptance criteria.
+- [roadmap/comfyui-frontend-plan-2026-11](roadmap/comfyui-frontend-plan-2026-11.md) —
+  the phased ComfyUI frontend plan (C0 trust → C1 binding/media → C2 library →
+  C3 results/batch → C4 remote → C5 polish), with acceptance criteria.
 - [roadmap/implementation-plan-2026-11](roadmap/implementation-plan-2026-11.md) —
   the sequenced fix-and-ship plan. Scoped P0–P5, F0–F5, and F6 are complete; the page
   lists remaining/deferred work (bundled sidecar, legacy cutover, Phase 6 v2 lane,

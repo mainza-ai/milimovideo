@@ -419,8 +419,8 @@ Audit, reproduction evidence, gap register N-01…N-28, and the event catalog:
 **Delivered:** N0–N5. Live probes recorded `queued → started → loading →
 conditioning → denoising`, a paused `queued → waiting → cancelled`, and a
 `Last-Event-ID` replay. Remaining caveats: the legacy `/` editor has no toast layer;
-macOS notifications use `osascript`; a tray icon and per-job priority override are
-open. See [[../systems/job-notifications-audit-2026-11]].
+macOS notifications use `osascript`. The tray icon and per-job priority override are
+implemented. See [[../systems/job-notifications-audit-2026-11]].
 
 ## Memory & Model Residency (Done — M0–M5 code side)
 
@@ -441,6 +441,20 @@ refused with a 93-frame/upscale-off preset; a 121f denoise cancelled at progress
 without OOM; `/system/memory` exposed the measured budget and counters. The M5
 artifact swaps remain a model program, not app code. See
 [[../systems/memory-management-audit-2026-11]].
+
+## ComfyUI Frontend Track (Planned)
+
+The bridge backend is shipped; the frontend is a paste-JSON runner. The 2026-11
+audit and phased plan are:
+
+- [[../systems/comfyui-frontend-audit-2026-11]] — C-01…C-24 gap register and live
+  evidence (unknown nodes pass structural validation; 2,082 Comfy nodes and 11
+  templates are not surfaced).
+- [[comfyui-frontend-plan-2026-11]] — **C0** live preflight/recovery, **C1**
+  shot bindings + project-media upload, **C2** workflow library/templates,
+  **C3** result selection/provenance/batch, **C4** remote config, **C5** polish/E2E.
+
+Recommended next release: **C0 + C1**. ComfyUI remains optional throughout.
 
 ## Quality Gates
 

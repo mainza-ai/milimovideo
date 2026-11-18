@@ -184,7 +184,10 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
   workflow to `MILIMO_COMFY_URL`, relay websocket/polling progress, stream every
   output into project assets, and attach the primary media to the shot. It is
   queued as kind `comfy` and admitted as a declared external slot
-  (`MILIMO_COMFY_GB`). See `Milimo Video/systems/comfyui-bridge.md`.
+  (`MILIMO_COMFY_GB`). See `Milimo Video/systems/comfyui-bridge.md`. The frontend
+  is currently a paste-JSON runner; the gap register and C0–C5 plan are in
+  `systems/comfyui-frontend-audit-2026-11.md` and
+  `roadmap/comfyui-frontend-plan-2026-11.md`.
 - Generate: ingredients/@mentions, advanced params, persistent seed lock,
   preview frame with start/end conditioning, batch queue and matrix, queue
   position/estimate/cancel/pause, immutable takes/favorites, inpaint, editable

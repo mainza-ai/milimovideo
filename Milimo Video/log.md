@@ -1703,3 +1703,16 @@ path disables that flag. Real run: 9 frames at 256², 1 step, seed 42, `a slow
 cinematic dolly-in...`; output was video with native 48 kHz audio. The queued
 `pipeline_override=ltx25` API path completed, attached the shot, wrote a poster,
 and `ffprobe` showed both video and audio streams. Tests: 218 backend.
+
+## [2026-11-18] audit | ComfyUI frontend integration
+
+Filed [[systems/comfyui-frontend-audit-2026-11]] and the phased
+[[roadmap/comfyui-frontend-plan-2026-11]] (C0 trust/recovery → C1 binding/media
+→ C2 library/templates → C3 results/batch → C4 remote/config → C5 polish).
+
+Findings: the backend bridge is solid; the frontend is a paste-JSON runner. Live
+evidence: `/comfy/validate` accepts an unknown `class_type`; ComfyUI exposes 2,082
+node definitions and 11 workflow templates that the UI does not use. P1 gaps:
+no shot/node bindings, no project-media upload, structural-only validation, global
+localStorage draft, no output selection, no job recovery after reload. Updated the
+P2 roadmap row, implementation plan, ComfyUI docs, and index.

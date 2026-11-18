@@ -141,3 +141,9 @@ Observed live: ComfyUI 0.45.0, 2082 nodes, no checkpoints; the model-free
   polling heartbeat still reports completion.
 - Outputs are copied, not linked. Deleting the project copy does not delete the
   ComfyUI output directory.
+
+## Frontend status
+
+The bridge API is ahead of the panel: the current UI is a paste-JSON runner. See
+[[comfyui-frontend-audit-2026-11]] for the C-01…C-24 gap register and
+[[../roadmap/comfyui-frontend-plan-2026-11]] for the C0–C5 plan.
