@@ -46,6 +46,7 @@ class ShotConfig(BaseModel):
     num_frames: int = 121
     fps: int = 25
     num_inference_steps: int = 40
+    priority: int = 50
     cfg_scale: float = 2.0
     enhance_prompt: bool = True
     upscale: bool = True
@@ -93,6 +94,8 @@ class ShotState(BaseModel):
     seed: int = 42
     seed_locked: bool = True
     num_frames: int = 121
+    num_inference_steps: int = 40
+    priority: int = 50
     fps: Optional[int] = None
     cfg_scale: float = 2.0
     negative_prompt: Optional[str] = ""

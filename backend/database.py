@@ -82,6 +82,8 @@ class Shot(SQLModel, table=True):
     num_frames: int = 121
     fps: int = 25
     cfg_scale: float = 1.0
+    num_inference_steps: int = 40
+    priority: int = 50
     enhance_prompt: bool = True
     upscale: bool = False
     pipeline_override: str = "auto"
@@ -259,6 +261,8 @@ def _add_missing_columns() -> None:
             "audio_fade_in": "FLOAT NOT NULL DEFAULT 0",
             "audio_fade_out": "FLOAT NOT NULL DEFAULT 0",
             "seed_locked": "BOOLEAN NOT NULL DEFAULT 1",
+            "num_inference_steps": "INTEGER NOT NULL DEFAULT 40",
+            "priority": "INTEGER NOT NULL DEFAULT 50",
         },
         "asset": {
             "thumbnail_url": "TEXT",

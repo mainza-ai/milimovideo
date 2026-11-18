@@ -1560,3 +1560,16 @@ Executed the code-completable P1/P2 items.
 - Tests: 190 backend (OTIO 2, GGUF 2, Wan 5), 79 Vitest, 21 Playwright.
 - Caveats: CUDA validation for Wan/GGUF, LTX-2.5 diffusers, image-to-video for
   Wan, XML/OTIO import, and the sidecar/cutover remain.
+
+## [2026-11-18] implement | OTIO import, shot priority/steps, and desktop tray
+
+- **OTIO import**: `utils/otio_import.py` + `POST /projects/{id}/otio/import`,
+  Deliver **Import OTIO**. Rebuilds V1/V2/A1, trims, speed, and project media URLs;
+  round-trip test. Alembic `0007_shot_priority_steps` adds `shot.priority` and
+  `shot.num_inference_steps`.
+- **Per-shot priority/steps**: persisted in the shot document, shown in Advanced,
+  copied into queue params; `row_priority` lets an explicit priority override the
+  kind default. Tests for persistence and queue order.
+- **Tauri tray**: tray icon with show/quit, tooltip command wired to the activity
+  center; `cargo check` clean.
+- Tests: 193 backend, 79 Vitest, 21 Playwright.

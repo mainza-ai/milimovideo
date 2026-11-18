@@ -201,6 +201,17 @@ def _row_params(row) -> dict:
         return {}
 
 
+def row_priority(row) -> int:
+    """Explicit per-job priority (0 highest, 100 lowest), else the kind default."""
+    try:
+        value = _row_params(row).get("priority")
+        if value is not None:
+            return max(0, min(100, int(value)))
+    except (TypeError, ValueError):
+        pass
+    return job_priority(row.kind)
+
+
 def row_not_before(row) -> float:
     try:
         return float(_row_params(row).get("_memory_not_before") or 0.0)
@@ -228,7 +239,7 @@ def _queue_head(session, active_slots: set[str] | None = None):
     return min(
         rows,
         key=lambda row: (
-            job_priority(row.kind),
+            row_priority(row),
             0 if job_slot(row.kind) in active else 1,
             row.created_at,
             row.id,

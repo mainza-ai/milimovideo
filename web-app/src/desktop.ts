@@ -47,6 +47,12 @@ export async function setDesktopBadge(label: string | null, count: number): Prom
     }).catch(() => undefined);
 }
 
+export async function setDesktopTrayTooltip(tooltip: string): Promise<void> {
+    const api = tauri();
+    if (!api?.core) return;
+    await api.core.invoke('set_tray_tooltip', { tooltip }).catch(() => undefined);
+}
+
 export async function setDesktopTitle(title: string): Promise<void> {
     const api = tauri();
     if (!api?.core) return;

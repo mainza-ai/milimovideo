@@ -35,7 +35,7 @@ a test; "open" means no code or no verified path.
 | Issue #1 (Wan 2.2) | Open | **Feature gap**: a separate model family, not an LTX patch. |
 | PR #7 (`enhance_prompt` tuple) | Open | **Superseded**: both call sites already unpack on `main` (`tasks/image.py:98`, `tasks/video.py:290`). Close with a pointer. |
 | PR #8 (`encode_video` no_grad) | Open | **Still valid**: `media_io.py` has no `torch.no_grad()` around generator consumption; the CUDA inference-tensor crash is real. Rebase, test, merge. |
-| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 190 tests pass locally. |
+| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 193 tests pass locally. |
 | Security alerts | Disabled | `vulnerability-alerts` returns 404; Dependabot/security alerts are not enabled. |
 
 ### Roadmap / AGENTS deferrals
@@ -113,7 +113,7 @@ is the supported upgrade.
 
 | Item | Work | Acceptance |
 |---|---|---|
-| **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | **MVP delivered** — `/projects/{id}/otio` + Deliver button; tests for V1/V2/A1, trims, gaps, MissingReference. Speed uses LinearTimeWarp; XML/imports remain. |
+| **OTIO/XML finishing handoff** | OTIO export first, then FCPXML/Resolve XML; import for round-trips | **Delivered for OTIO** — export + import endpoints and Deliver buttons, V1/V2/A1, trims, gaps, MissingReference, round-trip test. FCPXML/Resolve XML remains. |
 | **ComfyUI bridge** | Import/export a ComfyUI workflow, submit it through the queue, ingest outputs and provenance | An LTX-2.5/Wan workflow runs from Studio and its output becomes a take |
 | NLE completeness | Transitions, LUTs, titles, A2 track (after the OTIO handoff) | Export pixels match the timeline; UI round-trips |
 | Embedding search | Local embedding model via the LLM plane, index, ranked results with lexical fallback | Semantic shot search works offline |
@@ -125,7 +125,7 @@ is the supported upgrade.
 | Optional external engines | License-gated HunyuanVideo 1.5, MiniMax H3, Qwen-Image 2.1; user-supplied only | Clear license acknowledgement; never bundled or default |
 | M5 artifacts | Distilled/quantized LTX, MLX/FP8 lanes, quality/memory/time matrix | A chosen artifact is measurably better on the reference machine |
 | LLM caveats | Socket abort for non-stream HTTP; pre-load chunk-0 enhancement; Strata context; legacy popover parity | Cancellation is immediate; chunk 0 never overlaps the LTX load |
-| Small polish | Per-job priority override; macOS tray icon; legacy notification parity | Settings persist; no regressions |
+| Small polish | **Per-job priority + steps** persisted and used by the queue; **macOS tray icon** with show/quit and tooltip progress | Delivered; legacy notification parity remains |
 
 ## 6. P3 — Quality and operations
 

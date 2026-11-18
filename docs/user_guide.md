@@ -206,7 +206,7 @@ when the count is invalid. The lens copies/saves a reproducible recipe as JSON a
 - **Active queue** shows running/queued jobs, position, estimate, and cancel.
 - **Pipeline** in Advanced parameters selects `auto`/LTX or **wan 2.2 (5B)**. Wan
   is a separate low-VRAM text-to-video engine; it does not use the LTX chained or
-  audio path.
+  audio path. **Steps** and **Priority** (lower = earlier) persist with the shot.
 - Only one heavy GPU job runs at a time; interactive video/image work is dispatched
   before bulk thumbnails/elements and background parsing.
 - **Memory preflight** runs before the request. If the shot cannot fit:

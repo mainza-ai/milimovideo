@@ -28,6 +28,8 @@ export interface Shot {
     width: number;
     height: number;
     numFrames: number;
+    numInferenceSteps?: number;
+    priority?: number;
     fps?: number; // Optional override, defaults to project FPS
     timeline: ConditioningItem[];
 

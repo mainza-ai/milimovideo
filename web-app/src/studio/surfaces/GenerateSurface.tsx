@@ -753,6 +753,14 @@ export function GenerateSurface() {
                                     <input className="st-input" type="number" step={0.1} value={shot.cfgScale} onChange={(event) => updateShot(shot.id, { cfgScale: Number(event.target.value) })} />
                                 </label>
                                 <label>
+                                    <span className="st-label">Steps</span>
+                                    <input className="st-input" type="number" min={1} max={100} value={shot.numInferenceSteps ?? 40} onChange={(event) => updateShot(shot.id, { numInferenceSteps: Number(event.target.value) })} />
+                                </label>
+                                <label>
+                                    <span className="st-label" title="Lower runs earlier; 0 is highest">Priority</span>
+                                    <input className="st-input" type="number" min={0} max={100} value={shot.priority ?? 50} onChange={(event) => updateShot(shot.id, { priority: Number(event.target.value) })} />
+                                </label>
+                                <label>
                                     <span className="st-label">Pipeline</span>
                                     <select className="st-select" value={shot.pipelineOverride || 'auto'} onChange={(event) => updateShot(shot.id, { pipelineOverride: event.target.value as typeof shot.pipelineOverride })}>
                                         <option value="auto">auto</option>

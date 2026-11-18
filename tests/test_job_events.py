@@ -208,6 +208,24 @@ def test_queue_priority_orders_interactive_before_bulk(app_client):
     assert job_utils.job_priority("element") < job_utils.job_priority("ai_parse")
 
 
+def test_explicit_priority_overrides_the_kind_default(app_client):
+    from sqlmodel import Session, select
+
+    import job_utils
+    from database import QueuedJob, engine
+
+    with Session(engine) as session:
+        for row in session.exec(select(QueuedJob).where(QueuedJob.status == "queued")).all():
+            session.delete(row)
+        session.commit()
+        session.add(QueuedJob(job_id="bulk-urgent", kind="ai_parse", params_json='{"priority": 0}', status="queued"))
+        session.add(QueuedJob(job_id="video-normal", kind="video", params_json="{}", status="queued"))
+        session.commit()
+        assert job_utils._queue_head(session).job_id == "bulk-urgent"
+        assert job_utils.row_priority(session.exec(select(QueuedJob).where(QueuedJob.job_id == "bulk-urgent")).first()) == 0
+        assert job_utils.row_priority(session.exec(select(QueuedJob).where(QueuedJob.job_id == "video-normal")).first()) == 20
+
+
 def test_queue_head_prefers_the_slot_already_resident(app_client):
     from sqlmodel import Session, select
 

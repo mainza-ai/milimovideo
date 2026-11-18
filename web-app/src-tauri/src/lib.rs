@@ -123,10 +123,58 @@ fn start_backend(app: tauri::AppHandle) -> Result<String, String> {
     Err("Could not find run_backend.sh. Start the backend manually or set MILIMO_REPO_ROOT.".into())
 }
 
+#[tauri::command]
+fn set_tray_tooltip(app: tauri::AppHandle, tooltip: String) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        tray.set_tooltip(Some(&tooltip)).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            use tauri::menu::{Menu, MenuItem};
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+            use tauri::Manager;
+
+            let show = MenuItem::with_id(app, "show", "Show Milimo Video", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let mut builder = TrayIconBuilder::with_id("main-tray")
+                .menu(&menu)
+                .tooltip("Milimo Video")
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                builder = builder.icon(icon.clone());
+            }
+            builder.build(app)?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             save_text_file,
             read_text_file,
@@ -134,6 +182,7 @@ pub fn run() {
             notify,
             set_window_title,
             set_badge,
+            set_tray_tooltip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Milimo Video");

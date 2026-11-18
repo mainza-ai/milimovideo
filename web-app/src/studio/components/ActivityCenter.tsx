@@ -4,7 +4,7 @@ import { apiUrl } from '../../config';
 import { useStudioJobs } from '../state/jobStore';
 import { stageLabel } from '../events/jobBridge';
 import { useStudioDocumentStore } from '../state/documentStore';
-import { isDesktop, setDesktopBadge, setDesktopTitle } from '../../desktop';
+import { isDesktop, setDesktopBadge, setDesktopTitle, setDesktopTrayTooltip } from '../../desktop';
 
 function formatEta(seconds?: number | null): string {
     if (!seconds || seconds <= 0) return '';
@@ -31,6 +31,7 @@ export function ActivityCenter() {
         document.title = title;
         if (isDesktop()) {
             void setDesktopTitle(title);
+            void setDesktopTrayTooltip(title);
             void setDesktopBadge(
                 current && busy ? `${Math.max(0, Math.min(100, current.progress ?? 0))}%` : null,
                 current && busy ? Math.max(1, active.length) : 0,
@@ -40,6 +41,7 @@ export function ActivityCenter() {
             document.title = 'Milimo Video';
             if (isDesktop()) {
                 void setDesktopTitle('Milimo Video');
+                void setDesktopTrayTooltip('Milimo Video');
                 void setDesktopBadge(null, 0);
             }
         };

@@ -260,6 +260,8 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     height: s.height,
                     fps: s.fps,
                     numFrames: s.num_frames,
+                    numInferenceSteps: s.num_inference_steps ?? 40,
+                    priority: s.priority ?? 50,
                     cfgScale: s.cfg_scale,
                     enhancePrompt: s.enhance_prompt ?? true,
                     upscale: s.upscale,

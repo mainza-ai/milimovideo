@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, Film, Loader2, Send } from 'lucide-react';
 import { useStudioDocumentStore } from '../state/documentStore';
 import {
@@ -32,6 +32,8 @@ export function DeliverSurface() {
     );
     const [busy, setBusy] = useState(false);
     const [otioBusy, setOtioBusy] = useState(false);
+    const [otioImportBusy, setOtioImportBusy] = useState(false);
+    const otioInputRef = useRef<HTMLInputElement>(null);
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
     const totalDuration = Math.max(0.1, ...layout.map((clip) => clip.end));
     const [rangeStart, setRangeStart] = useState(0);
@@ -106,6 +108,47 @@ export function DeliverSurface() {
                         />
                         Burn captions
                     </label>
+                    <input
+                        ref={otioInputRef}
+                        type="file"
+                        accept=".otio,.json,application/json"
+                        style={{ display: 'none' }}
+                        aria-label="Import OTIO file"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = '';
+                            if (!file) return;
+                            setOtioImportBusy(true);
+                            const form = new FormData();
+                            form.append('file', file);
+                            void apiFetch(`/projects/${project.id}/otio/import`, {
+                                method: 'POST',
+                                body: form,
+                            })
+                                .then(async (response) => {
+                                    const data = await response.json().catch(() => ({}));
+                                    if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+                                    const shots = Array.isArray(data.shots) ? data.shots : [];
+                                    setProject({ ...project, fps: data.fps || project.fps, shots });
+                                    addToast(`Imported ${shots.length} shot(s) from OTIO`, 'success');
+                                })
+                                .catch((error) => addToast(
+                                    error instanceof Error ? error.message : 'OTIO import failed',
+                                    'error',
+                                ))
+                                .finally(() => setOtioImportBusy(false));
+                        }}
+                    />
+                    <button
+                        type="button"
+                        className="st-button"
+                        disabled={otioImportBusy}
+                        title="Import an OTIO timeline as shots"
+                        onClick={() => otioInputRef.current?.click()}
+                    >
+                        {otioImportBusy ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                        Import OTIO
+                    </button>
                     <button
                         type="button"
                         className="st-button"

@@ -357,6 +357,20 @@
         "title": "Body_detect_objects_edit_detect_post",
         "type": "object"
       },
+      "Body_import_project_otio_projects__project_id__otio_import_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_project_otio_projects__project_id__otio_import_post",
+        "type": "object"
+      },
       "Body_segment_by_text_edit_segment_text_post": {
         "properties": {
           "confidence": {
@@ -2326,6 +2340,11 @@
             "default": "auto",
             "title": "Pipeline Override"
           },
+          "priority": {
+            "default": 50,
+            "title": "Priority",
+            "type": "integer"
+          },
           "prompt": {
             "title": "Prompt",
             "type": "string"
@@ -2572,6 +2591,11 @@
             "title": "Num Frames",
             "type": "integer"
           },
+          "num_inference_steps": {
+            "default": 40,
+            "title": "Num Inference Steps",
+            "type": "integer"
+          },
           "pipeline_override": {
             "anyOf": [
               {
@@ -2583,6 +2607,11 @@
             ],
             "default": "auto",
             "title": "Pipeline Override"
+          },
+          "priority": {
+            "default": 50,
+            "title": "Priority",
+            "type": "integer"
           },
           "project_id": {
             "anyOf": [
@@ -5527,6 +5556,57 @@
           }
         },
         "summary": "Export Project Otio",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{project_id}/otio/import": {
+      "post": {
+        "description": "Parse an OTIO timeline into shots; the client applies it as one edit.",
+        "operationId": "import_project_otio_projects__project_id__otio_import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "title": "Project Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_project_otio_projects__project_id__otio_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Project Otio",
         "tags": [
           "projects"
         ]

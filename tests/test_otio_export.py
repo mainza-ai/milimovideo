@@ -100,6 +100,53 @@ def test_otio_export_keeps_v1_v2_a1_and_trims(app_client, project):
     assert timeline.metadata["milimo"]["duration_frames"] == 170
 
 
+def test_otio_round_trip_reconstructs_tracks_and_trims(app_client, project):
+    pid = project["id"]
+    generated = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], pid, "generated")
+    os.makedirs(generated, exist_ok=True)
+    for shot_id in ("rt-v1-a", "rt-v1-b", "rt-v2-a", "rt-a1-a"):
+        with open(os.path.join(generated, f"{shot_id}.mp4"), "wb") as handle:
+            handle.write(b"placeholder")
+
+    state = {
+        "id": pid,
+        "name": "Round Trip",
+        "fps": 25,
+        "seed": 42,
+        "scenes": [],
+        "revision": project.get("revision", 0),
+        "shots": [
+            _shot(pid, "rt-v1-a", 0, frames=100),
+            _shot(pid, "rt-v1-b", 1, frames=80, trim_in=10, trim_out=20, speed=2.0),
+            _shot(pid, "rt-v2-a", 2, track=1, frames=50, start=120),
+            _shot(pid, "rt-a1-a", 3, track=2, frames=60, start=40),
+        ],
+    }
+    assert app_client.put(f"/projects/{pid}", json=state).status_code == 200
+    exported = app_client.get(f"/projects/{pid}/otio")
+    assert exported.status_code == 200
+
+    imported = app_client.post(
+        f"/projects/{pid}/otio/import",
+        files={"file": ("cut.otio", exported.content, "application/json")},
+    )
+    assert imported.status_code == 200, imported.text
+    data = imported.json()
+    assert data["fps"] == 25
+    shots = data["shots"]
+    assert len(shots) == 4
+    v1 = [shot for shot in shots if shot["track_index"] == 0]
+    assert [shot["num_frames"] for shot in v1] == [100, 80]
+    assert v1[1]["trim_in"] == 10
+    assert v1[1]["trim_out"] == 20
+    assert v1[1]["speed"] == 2.0
+    v2 = next(shot for shot in shots if shot["track_index"] == 1)
+    assert v2["start_frame"] == 120
+    a1 = next(shot for shot in shots if shot["track_index"] == 2)
+    assert a1["start_frame"] == 40
+    assert all(shot["video_url"].startswith(f"/projects/{pid}/") for shot in shots)
+
+
 def test_otio_export_uses_missing_reference_for_offline_media(app_client, project):
     pid = project["id"]
     state = {

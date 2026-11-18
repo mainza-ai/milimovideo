@@ -991,6 +991,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/projects/{project_id}/otio/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Project Otio
+         * @description Parse an OTIO timeline into shots; the client applies it as one edit.
+         */
+        post: operations["import_project_otio_projects__project_id__otio_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/projects/{project_id}/plan": {
         parameters: {
             query?: never;
@@ -2596,6 +2616,14 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** Body_import_project_otio_projects__project_id__otio_import_post */
+        Body_import_project_otio_projects__project_id__otio_import_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_segment_by_text_edit_segment_text_post */
         Body_segment_by_text_edit_segment_text_post: {
             /**
@@ -3534,6 +3562,11 @@ export interface components {
              * @default auto
              */
             pipeline_override: string | null;
+            /**
+             * Priority
+             * @default 50
+             */
+            priority: number;
             /** Prompt */
             prompt: string;
             /** Scene Id */
@@ -3646,10 +3679,20 @@ export interface components {
              */
             num_frames: number;
             /**
+             * Num Inference Steps
+             * @default 40
+             */
+            num_inference_steps: number;
+            /**
              * Pipeline Override
              * @default auto
              */
             pipeline_override: string | null;
+            /**
+             * Priority
+             * @default 50
+             */
+            priority: number;
             /** Project Id */
             project_id?: string | null;
             /**
@@ -5671,6 +5714,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_project_otio_projects__project_id__otio_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_project_otio_projects__project_id__otio_import_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

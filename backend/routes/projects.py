@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Response
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Response, UploadFile, File
 from typing import List, Optional
 from sqlmodel import Session, select, SQLModel
 from database import get_session, Project, Shot, Scene
@@ -120,6 +120,8 @@ def _shot_dict(shot: Shot) -> dict:
         "num_frames": shot.num_frames,
         "fps": shot.fps,
         "cfg_scale": shot.cfg_scale,
+        "num_inference_steps": shot.num_inference_steps,
+        "priority": shot.priority,
         "negative_prompt": shot.negative_prompt,
         "enhance_prompt": shot.enhance_prompt,
         "upscale": shot.upscale,
@@ -836,6 +838,27 @@ async def render_project(
         project_id, render_id, fps, width, height, settings, track_states, source_path,
     )
     return {"job_id": render_id, "status": "rendering"}
+
+
+@router.post("/projects/{project_id}/otio/import")
+async def import_project_otio(
+    project_id: str,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+):
+    """Parse an OTIO timeline into shots; the client applies it as one edit."""
+    project = session.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="Empty OTIO file")
+    from utils.otio_import import shots_from_otio
+
+    try:
+        return shots_from_otio(project_id, payload)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid OTIO timeline: {exc}") from exc
 
 
 @router.get("/projects/{project_id}/otio")
