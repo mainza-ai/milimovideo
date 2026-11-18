@@ -190,7 +190,14 @@ def encode_video(
     if isinstance(video, torch.Tensor):
         video = iter([video])
 
-    first_chunk = next(video)
+    # Wrap all generator consumption in no_grad: the video generator may have been
+    # created inside torch.inference_mode() (via @smart_inference_mode on the pipeline),
+    # making the latent tensors inference tensors. When next() is called here — outside
+    # that context — the VAE forward pass runs with autograd active, which cannot save
+    # inference tensors for backward. torch.no_grad() prevents autograd tracking and
+    # avoids the "Inference tensors cannot be saved for backward" error on CUDA.
+    with torch.no_grad():
+        first_chunk = next(video)
 
     _, height, width, _ = first_chunk.shape
 
@@ -199,10 +206,10 @@ def encode_video(
     stream.width = width
     stream.height = height
     stream.pix_fmt = "yuv420p"
-    
+
     # Optimization for single-frame (Image Generation) or static video
-    # Although encode_single_frame handles pure images, sometimes the pipeline 
-    # runs a 1-frame "video" job. 
+    # Although encode_single_frame handles pure images, sometimes the pipeline
+    # runs a 1-frame "video" job.
     if video_chunks_number == 1 and fps <= 1:
         stream.options = {"crf": "18", "preset": "veryslow"} # High quality for single image
     else:
@@ -220,12 +227,13 @@ def encode_video(
         yield first_chunk
         yield from tiles_generator
 
-    for video_chunk in tqdm(all_tiles(first_chunk, video), total=video_chunks_number):
-        video_chunk_cpu = video_chunk.to("cpu").numpy()
-        for frame_array in video_chunk_cpu:
-            frame = av.VideoFrame.from_ndarray(frame_array, format="rgb24")
-            for packet in stream.encode(frame):
-                container.mux(packet)
+    with torch.no_grad():
+        for video_chunk in tqdm(all_tiles(first_chunk, video), total=video_chunks_number):
+            video_chunk_cpu = video_chunk.detach().to("cpu").numpy()
+            for frame_array in video_chunk_cpu:
+                frame = av.VideoFrame.from_ndarray(frame_array, format="rgb24")
+                for packet in stream.encode(frame):
+                    container.mux(packet)
 
     # Flush encoder
     for packet in stream.encode():
