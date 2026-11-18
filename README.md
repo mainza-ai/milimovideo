@@ -347,7 +347,7 @@ masking/tracking toggles. New work belongs in Studio.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                    # 180 tests
+./milimov/bin/python -m pytest                    # 181 tests
 ./milimov/bin/python -m ruff check backend        # correctness rules
 ./milimov/bin/python backend/verify_setup.py      # 0 failures expected
 
@@ -360,7 +360,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 180 backend tests, 79 Vitest tests, and 21 Playwright
+The last verified run was 181 backend tests, 79 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual

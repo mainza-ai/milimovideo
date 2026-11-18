@@ -1425,7 +1425,7 @@ Counts: 172 backend, 79 Vitest, 21 Playwright.
 - **Dock badge**: Tauri `set_badge` uses `set_badge_label` (macOS) and
   `set_badge_count`; the activity center shows the progress percent and active
   count, cleared on idle. `cargo check` clean.
-- Tests: 180 backend, 79 Vitest, 21 Playwright.
+- Tests: 181 backend, 79 Vitest, 21 Playwright.
 
 ## [2026-11-17] docs | sync wiki, technical docs, and README with M0–M5 / N0–N5
 
@@ -1498,3 +1498,25 @@ Filed [[roadmap/open-work-resolution-2026-11]] with P0 (green CI, PRs, issue
 triage, two clean releases), P1 (CUDA/quantized, sidecar, cutover), P2 (product
 gaps), P3 (quality/ops), dependencies, and definition of done. Indexed in the
 wiki.
+
+## [2026-11-17] execute | P0 of the open-work plan
+
+- **CI root cause fixed.** Pinned SQLModel 0.0.31 + SQLAlchemy <2.1, the flux2
+  vendor pins (safetensors/transformers/einops/accelerate), and FastAPI/Pydantic
+  for stable OpenAPI. Added `pip check`. CI backend and frontend are green on
+  `main` and `develop` at 6a36cc8.
+- **PR #8 applied** (merge 28729c5): `encode_video` consumes the lazy generator
+  under `torch.no_grad()` and detaches before CPU. Added
+  `tests/test_encode_video.py`, which fails if frames are consumed with autograd.
+- **PR #7 closed** as superseded.
+- **Issues triaged**: #4 and #3 closed with evidence; #6/#2/#1 replied to and
+  labeled, #6 kept open for CPU offload/16 GB support.
+- **Dependabot/security**: grouped weekly config committed; vulnerability alerts
+  enabled.
+- **P1-1 decision**: CPU offload is not a config flag in the vendored LTX
+  pipelines; the 19B FP8 transformer still exceeds 16 GB. Quantized checkpoints
+  or a larger GPU are the path.
+- **P1-2 status**: diffusers 0.36 has GGUF quantization but no Klein/Qwen3
+  pipeline; the 5.7 GB Q4_K_M artifact is available but needs a 0.37.dev pipeline
+  or an in-house dequant loader.
+- Tests: 181 backend, 79 Vitest, 21 Playwright.

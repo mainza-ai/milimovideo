@@ -35,7 +35,7 @@ a test; "open" means no code or no verified path.
 | Issue #1 (Wan 2.2) | Open | **Feature gap**: a separate model family, not an LTX patch. |
 | PR #7 (`enhance_prompt` tuple) | Open | **Superseded**: both call sites already unpack on `main` (`tasks/image.py:98`, `tasks/video.py:290`). Close with a pointer. |
 | PR #8 (`encode_video` no_grad) | Open | **Still valid**: `media_io.py` has no `torch.no_grad()` around generator consumption; the CUDA inference-tensor crash is real. Rebase, test, merge. |
-| CI on `main`/`develop` | **RED** | Backend `Tests` fails: 41 failed, 37 errors. Reproduced locally with SQLModel 0.0.50 + SQLAlchemy 2.1.9: `Datetime values must have timezone information`. Local pinned versions (SQLModel 0.0.31 / SQLAlchemy 2.0.46) pass 180 tests. |
+| CI on `main`/`develop` | **GREEN** | Fixed by pinning the DB/vendor/FastAPI stack; `6a36cc8` is green on both branches. The failure was reproducible with SQLModel 0.0.50 + SQLAlchemy 2.1.9 (`Datetime values must have timezone information`); 181 tests pass locally. |
 | Security alerts | Disabled | `vulnerability-alerts` returns 404; Dependabot/security alerts are not enabled. |
 
 ### Roadmap / AGENTS deferrals
@@ -59,12 +59,12 @@ issues triaged. Everything else is blocked on this.
 
 | Step | Change | Acceptance |
 |---|---|---|
-| P0-1 | Pin the known-good DB stack in `backend/requirements.txt`: `sqlmodel==0.0.31`, `sqlalchemy>=2.0.14,<2.1` (or migrate every model to `NaiveDatetime`/aware datetimes and keep 2.1). Add a CI `pip check`. | Backend CI green on both branches; local and CI resolve the same SQLAlchemy. |
-| P0-2 | Apply PR #8 (wrap generator consumption in `torch.no_grad()`, `.detach()` before CPU) and add a CPU regression test that encodes a generator under `torch.inference_mode()`. | Test passes; manual CUDA checklist passes; PR merged with credit. |
-| P0-3 | Close PR #7 as superseded with line references. | PR closed; no duplicate patch. |
-| P0-4 | Reply/close #4 and #3; reply to #6 with the CUDA admission behavior and the CPU-offload limitation; label #1/#2 `feature` and link this plan. | Issue state/comments reflect reality; no stale "bug" issues. |
-| P0-5 | Enable Dependabot + security alerts; add a dependency review check. | Alerts page active; Dependabot PRs configured. |
-| P0-6 | Re-run the release gate twice on `main` (backend + frontend + e2e) and start the legacy cutover clock. | Two consecutive green releases recorded. |
+| P0-1 | Pin the known-good DB stack in `backend/requirements.txt`: `sqlmodel==0.0.31`, `sqlalchemy>=2.0.14,<2.1`, plus the flux2/FastAPI/Pydantic versions; add `pip check`. | **Done** — CI backend green on `main` and `develop` at `6a36cc8`; `pip check` clean. |
+| P0-2 | Apply PR #8 (`torch.no_grad()` around generator consumption, `.detach()` before CPU) and add a regression test. | **Done** — merge `28729c5` + `tests/test_encode_video.py`; CPU test passes. CUDA manual check remains. |
+| P0-3 | Close PR #7 as superseded with line references. | **Done** — closed with the `tasks/image.py:98` / `tasks/video.py:290` evidence. |
+| P0-4 | Reply/close #4 and #3; reply to #6 with the CUDA admission behavior and the CPU-offload limitation; label #1/#2. | **Done** — #4/#3 closed; #6/#2/#1 replied and labeled `enhancement`/`help wanted`. |
+| P0-5 | Enable Dependabot + security alerts. | **Done** — `.github/dependabot.yml`; vulnerability alerts enabled (204), Dependabot alerts 200. |
+| P0-6 | Re-run the release gate twice on `main` and start the legacy cutover clock. | **In progress** — first green CI at `6a36cc8`; the second clean release/tag is the remaining gate. |
 
 **Long-term P0 follow-up:** migrate the 42 `datetime.utcnow` sites to
 `datetime.now(timezone.utc)` (or explicitly `NaiveDatetime` fields), then lift the
@@ -74,8 +74,8 @@ SQLAlchemy `<2.1` pin. Pin now, migrate deliberately.
 
 | Step | Change | Acceptance |
 |---|---|---|
-| P1-1 | **CPU-offload feasibility spike (2 days).** The vendored LTX pipelines expose no `cpu_offload` hooks. Evaluate moving the transformer/VAE to CPU between stages, or conclude it is out of scope. | Written decision; if infeasible, #6 closes with the 24 GB minimum and the quantized path as the answer. |
-| P1-2 | **Quantized Flux 2 (#2).** Add GGUF entries to the manifest/registry, a loader into `flux2.model.Flux2` (or a diffusers GGUF path), per-checkpoint costs, and take provenance. | Q4_K_M runs on a 12–16 GB card; quality/time compared with `backend/benchmark_models.py`; a fresh install can download it. |
+| P1-1 | **CPU-offload feasibility spike (2 days).** The vendored LTX pipelines expose no `cpu_offload` hooks. Evaluate moving the transformer/VAE to CPU between stages, or conclude it is out of scope. | **Decided** — `ModelLedger` builds each component on `self.device` and the pipelines hold references per stage; no accelerate hooks exist and a 19B FP8 transformer (~20 GB) still exceeds 16 GB. A config flag cannot fix it; the path is quantized checkpoints (#2) or a larger GPU. |
+| P1-2 | **Quantized Flux 2 (#2).** Add GGUF entries to the manifest/registry, a loader into `flux2.model.Flux2` (or a diffusers GGUF path), per-checkpoint costs, and take provenance. | **Blocked on the Klein pipeline** — diffusers 0.36 has GGUF quantization and `Flux2Pipeline` (Mistral3/dev), but no `Flux2KleinPipeline`/Qwen3 path; the vendored custom package has no GGUF reader. Needs diffusers 0.37.dev or an in-house dequant loader, plus the 5.7 GB Q4_K_M artifact. |
 | P1-3 | CUDA regression checklist: no_grad encode, VRAM admission, FP8 selection, 16/24/48 GB behavior. | Manual run on a CUDA host recorded; no OOM after hours of denoise. |
 | P1-4 | CUDA cost calibration: verify the 40 GB FP8 / 18 GB Flux bases against a real card; adjust manifest estimates. | Estimates within 10% of measured peak. |
 

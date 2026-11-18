@@ -101,7 +101,7 @@ regression, and the durable ledger are adopted.
 **Verification commands**
 
 ```bash
-./milimov/bin/python -m pytest        # 180 passed
+./milimov/bin/python -m pytest        # 181 passed
 ./milimov/bin/python backend/verify_setup.py  # 0 failures
 cd web-app && npx tsc -b && npm run lint && npm test && npm run build  # 78 Vitest
 cd web-app && npm run test:e2e        # 21 Playwright tests
