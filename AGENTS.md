@@ -197,7 +197,8 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Library/Deliver: project-scoped uploads with missing-file repair and stable-id
   relink, bulk asset/take delete, direct uploads, master-reference CRUD (trigger,
   image, description), takes, ranked local search, presets, pad/crop reframing,
-  titles (previewed in Edit), 3D LUT (WebGL preview for `.cube`), caption
+  titles (previewed in Edit), 3D LUT (export; the browser `.cube` preview is
+  currently blocked by cross-origin video taint — see F8-01), caption
   toggle/preview, persisted encoding controls, render history/cancel, OTIO
   export/import and FCPXML export of the computed V1/V2/A1/A2 cut.
 - Truthful shell state: one save vocabulary (`Saved`/`Unsaved`/`Saving…`/

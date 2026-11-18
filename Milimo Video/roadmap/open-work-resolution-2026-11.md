@@ -55,9 +55,13 @@ a test; "open" means no code or no verified path.
 - One perf spec is flaky under load (500-card pan threshold).
 - **F7 whole-frontend UX** — **done 2026-11-18**: truthful save/shot status,
   project-scoped Library with relink/repair and bulk actions, one right rail per
-  surface, mobile Story drawer, five-track timeline, title/LUT preview, and the
+  surface, mobile Story drawer, five-track timeline, title preview, and the
   surface matrix gate. See [[../systems/frontend-ux-audit-2026-11-18]] and
   [[frontend-ux-plan-2026-11-18]].
+- **F8 caveat resolution** — audited 2026-11-18 but **not implemented**: LUT
+  preview CORS block, relink provenance/old files, sticky conflict and undo
+  truth, GET→PUT 500, mobile Edit timeline, drawer semantics. See
+  [[../systems/f7-caveats-audit-2026-11-18]] and [[f7-caveats-plan-2026-11-18]].
 
 ## 2. Market scan (2026-11-17)
 

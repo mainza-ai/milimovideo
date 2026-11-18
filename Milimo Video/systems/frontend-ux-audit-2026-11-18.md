@@ -70,7 +70,7 @@ trail; this table is the fix record.
 | F7-08 | Inspector defaults closed on Library/Deliver/Setup/Shorts and remembers per surface | `DEFAULT_INSPECTOR_BY_SURFACE` |
 | F7-09 | Five tracks fit 900px; `Tracks 5/5` visibility menu; visible scroll on short viewports | live: scrollHeight === clientHeight 299 |
 | F7-10 | Title form grouped; add action on its own row; color swatch instead of raw bar | Deliver screenshot/JSX |
-| F7-11 | Titles and `.cube` LUT preview in the Edit stage (WebGL); export-only fallback badge | live: `.st-title-cue` + `.st-lut-canvas` |
+| F7-11 | Titles preview in the Edit stage; LUT canvas attempted for `.cube` with an export-only badge | **Corrected 2026-11-18:** canvas exists but WebGL upload is blocked by cross-origin taint. See [[f7-caveats-audit-2026-11-18]] F8-01 |
 | F7-12 | Command dock is collapsible; mobile status strip keeps device/queue/save only | `CommandDock.tsx`, mobile CSS |
 | F7-13 | Asset/take selection, bulk delete, context actions, middle ellipsis | Library surface |
 | F7-14 | ComfyUI panel split into Run job / Bindings / Outputs tabs | `ComfyUIPanel.tsx` |
@@ -85,6 +85,10 @@ trail; this table is the fix record.
 
 Verification: 225 backend tests, 102 Vitest, 27 Playwright, axe clean on all
 eight surfaces at 1440 and 390, ruff/tsc/ESLint clean.
+
+Follow-up: the caveat audit [[f7-caveats-audit-2026-11-18]] re-tested the LUT,
+relink, save-state, contract, and mobile paths and filed `F8-01…F8-18` with the
+resolution plan [[../roadmap/f7-caveats-plan-2026-11-18]].
 
 ## P1 findings
 

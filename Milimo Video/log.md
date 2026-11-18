@@ -1782,3 +1782,26 @@ Executed all seven phases from [[roadmap/frontend-ux-plan-2026-11-18]].
 
 Verification: 225 backend, 102 Vitest, 27 Playwright, axe clean on all eight
 surfaces at 1440 and 390, ruff/tsc/ESLint clean, build + bundle budget green.
+
+## [2026-11-18] audit | F7 caveats and F8 plan
+
+Re-tested the caveats reported at F7 close with a live quadrant-video probe,
+`.cube`/`.3dl` LUTs, a take job, a real relink, a contract round-trip, and
+390×844 measurements.
+
+- **Corrected claim:** the LUT preview is not merely `.cube`-only. `texImage2D`
+  rejects the cross-origin video (`crossOrigin` missing), so the canvas is present
+  but unusable. A same-origin prototype proved `crossOrigin="anonymous"` fixes it;
+  the API already sends ACAO.
+- **Relink:** shot URL rewrites work, but the take Job keeps the old URL, the old
+  file is orphaned, `/uploads` lists it as a second card, and selected/favorite
+  take ids plus project LUT/workflow refs are not migrated.
+- **State:** an edit overwrites `Save conflict`; undo after save still says
+  `Saved`; reloading a `generating` shot shows `Pending` with no spinner.
+- **Contract:** `GET /projects/{id}` → `PUT` the same body returns 500 because
+  `created_at` is an ISO string and SQLModel expects a datetime.
+- **Mobile:** Edit timeline is 121px at 390 (C1 at y=885), and the Story drawer
+  has no dialog role, aria-modal, focus trap, or Escape close.
+- Filed 18 findings (`F8-01…F8-18`) and the F8 plan:
+  [[systems/f7-caveats-audit-2026-11-18]] and
+  [[roadmap/f7-caveats-plan-2026-11-18]]. No code fixes shipped in this pass.
