@@ -133,8 +133,9 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
   `TimelineItem`, `RenderSettings`, `BoardLayoutPayload`, review/share/plan/depth
   payloads.
 - Alembic baseline (`0001_baseline`) plus `0002_render_settings`,
-  `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`, and
-  `0006_job_progress` (`Job.stage`, `started_at`, `memory_json`), with startup
+  `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`,
+  `0006_job_progress` (`Job.stage`, `started_at`, `memory_json`),
+  `0007_shot_priority_steps`, and `0008_project_render_lut`, with startup
   upgrade; legacy DBs are repaired and stamped. Do not add schema columns without
   a migration and migration test.
 - Generated OpenAPI client types: `npm run gen:api`; CI checks drift.
@@ -159,8 +160,9 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 The export is the computed cut: magnetic V1 from `sequence_index`, free V2/A1,
 track mute/hidden, embedded audio + A1 mix (`amix duration=longest`), gain/mute,
 fades, solo, speed (`setpts`/`atempo`), trim, opacity/scale/pan/volume keyframes,
-caption ASS burn-in, render range, persisted CRF/encoder-speed/audio-bitrate,
-optional loudness normalization, and presets. Exports can be cancelled from
+a project 3D LUT (`lut3d`) before captions, caption ASS burn-in, render range,
+persisted CRF/encoder-speed/audio-bitrate, optional loudness normalization, and
+presets. Exports can be cancelled from
 Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 
 ### Studio capabilities
@@ -175,7 +177,8 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Generate engines: LTX-2 19B (auto/ti2vid/ic_lora/keyframe) and **Wan 2.2 5B**
   (`pipeline_override=wan`, low-VRAM text-to-video); optional Flux 2 Q4_K_M GGUF
   via `MILIMO_FLUX_GGUF`.
-- ComfyUI bridge: `services/comfy.py` + `tasks/comfy.py` submit an API-format
+- ComfyUI bridge (optional, `MILIMO_COMFY_ENABLED=0` disables): `services/comfy.py`
+  + `tasks/comfy.py` submit an API-format
   workflow to `MILIMO_COMFY_URL`, relay websocket/polling progress, stream every
   output into project assets, and attach the primary media to the shot. It is
   queued as kind `comfy` and admitted as a declared external slot
@@ -223,7 +226,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 203 backend tests, 83 Vitest tests, and 21 Playwright tests, plus
+baseline is 206 backend tests, 87 Vitest tests, and 21 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -231,8 +234,8 @@ Do not claim these are done:
 - No bundled Python/Torch sidecar binary (the native shell can launch one, but none
   is built).
 - Legacy `/` cutover is gated on the documented two-clean-release window.
-- Scoped-v1 gaps: no transitions/LUT/titles/A2 track, lexical rather than
-  embedding search, and no shorts/lens template packs.
+- Scoped-v1 gaps: no transitions/titles/A2 track; 3D LUT grading is supported.
+  Search is lexical rather than embedding search, and no shorts/lens template packs.
 - LLM caveats: non-stream HTTP cancellation is timeout-bounded (not a socket
   abort), chained chunk-0 enhancement still follows the pipeline load, Strata
   exposes no context window, cloud prices are reference data overrideable with

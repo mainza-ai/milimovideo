@@ -106,6 +106,7 @@ def build_complex_filtergraph(
     audio_bitrate: str = "192k",
     audio_normalize: bool = False,
     captions_path: Optional[str] = None,
+    lut_path: Optional[str] = None,
     start_seconds: float = 0.0,
     duration_seconds: Optional[float] = None,
     fit: str = "pad",
@@ -303,6 +304,18 @@ def build_complex_filtergraph(
         current_bg = next_bg
 
     final_video_label = current_bg
+    if lut_path:
+        escaped = (
+            str(lut_path)
+            .replace("\\", "\\\\")
+            .replace(":", "\\:")
+            .replace("'", "\\'")
+        )
+        filter_chains.append(
+            f"{final_video_label}lut3d=file='{escaped}':interp=trilinear[v_lut]"
+        )
+        final_video_label = "[v_lut]"
+
     if captions_path:
         escaped = (
             str(captions_path)

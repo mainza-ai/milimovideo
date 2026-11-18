@@ -224,8 +224,10 @@ when the count is invalid. The lens copies/saves a reproducible recipe as JSON a
 
 ### ComfyUI workflows
 
-ComfyUI is an optional local engine, separate from LTX-2/Flux/Wan. Milimo does not
-edit node graphs; it runs a workflow you export from ComfyUI.
+ComfyUI is an optional local engine, separate from LTX-2/Flux/Wan. Core
+generation never calls it; `MILIMO_COMFY_ENABLED=0` removes the panels and API
+surface, and the Generate panel stays hidden while ComfyUI is offline. Milimo
+does not edit node graphs; it runs a workflow you export from ComfyUI.
 
 1. In ComfyUI, build the graph and choose **Workflow → Save (API Format)**. The
    UI-saved JSON (`nodes`/`links`) is rejected; the API format is required.
@@ -384,7 +386,9 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 - **Render range**: in/out seconds; full-cut reset.
 - **Fit** chooses letterbox (**Pad**) or center-crop (**Crop**) for a different output aspect.
 - **Encoding** sets CRF (quality/size), encoder speed, audio bitrate, and optional
-  loudness normalization. These values persist with the project.
+  loudness normalization. **Add 3D LUT** loads a `.cube`/`.3dl`/`.dat`/`.m3d` file
+  and applies it to the V1/V2 composite before captions. These values persist
+  with the project.
 - **Burn captions** toggles ASS burn-in.
 - **Create export** queues a real FFmpeg render through the job ledger.
 - Render history shows status, progress, errors, an output link, and **Cancel** for
@@ -437,7 +441,7 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
 - **Notifications**: in-app toasts, sound cue, desktop notifications (macOS uses
   Notification Center), and per-project mute. Toasts/activity always keep history;
   mute only suppresses the interruption.
-- **ComfyUI bridge**: reachability/version, queue depth, free RAM, **Probe**,
+- **ComfyUI bridge (optional)**: reachability/version, queue depth, free RAM, **Probe**,
   **Free cached models** (`/free`), and a link to the ComfyUI UI. ComfyUI is
   budgeted as a declared external slot (`MILIMO_COMFY_GB`).
 - Error budget: 7-day job counts by status and recent failures.
@@ -565,7 +569,8 @@ Common issues:
   Chromium and may differ on a desktop compositor.
 - Shorts and lenses are scoped F5: candidate ranges are editable and recipes
   import/export, but there are no template packs.
-- Scoped v1 cut: no transitions, LUTs, titles, or A2 track; search is ranked
+- Scoped v1 cut: no transitions, titles, or A2 track; 3D LUT grading is
+  supported. Search is ranked
   lexical matching, not embeddings.
 - The depth model is downloaded separately; it is not shipped with the repo.
 - **Memory**: costs are a measured estimate, not a per-model profile; Strata has no

@@ -329,6 +329,8 @@ class MemoryManager:
     @staticmethod
     def _unload_comfy() -> None:
         """Ask ComfyUI to drop cached models; skip while it is executing."""
+        if not config.COMFY_ENABLED:
+            return
         try:
             from services.comfy import ComfyClient
 

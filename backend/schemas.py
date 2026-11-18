@@ -142,6 +142,7 @@ class ProjectState(BaseModel):
     render_speed: str = "fast"
     render_audio_bitrate: str = "192k"
     render_audio_normalize: bool = False
+    render_lut: Optional[str] = None
     script_content: Optional[str] = None
     resolution_w: int = 768
     resolution_h: int = 512
@@ -346,6 +347,7 @@ class RenderSettings(BaseModel):
     preset: str = "fast"
     audio_bitrate: str = "192k"
     audio_normalize: bool = False
+    lut: Optional[str] = None
 
 
 class RenderRequest(BaseModel):

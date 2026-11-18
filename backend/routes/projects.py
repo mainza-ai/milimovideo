@@ -250,6 +250,7 @@ def get_project(project_id: str, session: Session = Depends(get_session)):
         render_speed=project.render_speed or "fast",
         render_audio_bitrate=project.render_audio_bitrate or "192k",
         render_audio_normalize=bool(project.render_audio_normalize),
+        render_lut=project.render_lut,
         script_content=project.script_content,
         resolution_w=project.resolution_w,
         resolution_h=project.resolution_h,
@@ -331,6 +332,7 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
     } else "fast"
     db_project.render_audio_bitrate = state.render_audio_bitrate
     db_project.render_audio_normalize = bool(state.render_audio_normalize)
+    db_project.render_lut = state.render_lut
     db_project.script_content = state.script_content
     
     db_project.updated_at = datetime.utcnow()
@@ -808,6 +810,15 @@ async def render_project(
     settings = (req.settings if req else RenderSettings()) or RenderSettings()
     track_states = (req.track_states if req else {}) or {}
     source_path = req.source_path if req else None
+    if settings.lut:
+        from file_utils import resolve_path
+
+        resolved_lut = resolve_path(settings.lut)
+        if not resolved_lut or not os.path.exists(resolved_lut):
+            raise HTTPException(status_code=404, detail="LUT file not found")
+        if os.path.splitext(resolved_lut)[1].lower() not in {".cube", ".3dl", ".dat", ".m3d"}:
+            raise HTTPException(status_code=400, detail="LUT must be .cube, .3dl, .dat, or .m3d")
+        settings.lut = resolved_lut
     if source_path:
         from file_utils import resolve_path
         resolved_source = resolve_path(source_path)
@@ -1097,6 +1108,7 @@ async def _render_background(
                 audio_bitrate=settings.audio_bitrate,
                 audio_normalize=settings.audio_normalize,
                 captions_path=captions_path,
+                lut_path=settings.lut,
                 start_seconds=range_start / max(1, fps),
                 duration_seconds=range_duration,
                 fit=settings.fit,

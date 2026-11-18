@@ -36,6 +36,7 @@ class Project(SQLModel, table=True):
     render_speed: str = "fast"
     render_audio_bitrate: str = "192k"
     render_audio_normalize: bool = False
+    render_lut: Optional[str] = None  # project-relative .cube/.3dl URL applied to the final grade
     storyboard_archive: Optional[str] = None  # last pre-commit snapshot
 
     shots: List["Shot"] = Relationship(back_populates="project", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
@@ -247,6 +248,7 @@ def _add_missing_columns() -> None:
             "render_speed": "TEXT NOT NULL DEFAULT 'fast'",
             "render_audio_bitrate": "TEXT NOT NULL DEFAULT '192k'",
             "render_audio_normalize": "BOOLEAN NOT NULL DEFAULT 0",
+            "render_lut": "TEXT",
             "storyboard_archive": "TEXT",
         },
         "shot": {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Film, Loader2, Send } from 'lucide-react';
+import { Download, Film, Loader2, Send, Trash2, Upload } from 'lucide-react';
 import { useStudioDocumentStore } from '../state/documentStore';
 import {
     useStudioCancelJob, useStudioCreateRender, useStudioProject, useStudioRenders,
@@ -8,6 +8,7 @@ import { apiFetch, getAssetUrl } from '../../config';
 import { useMediaPreview } from '../state/mediaPreviewStore';
 import { MediaThumb } from '../components/MediaThumb';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
+import { uploadProjectLut } from '../data/lut';
 
 const PRESETS = [
     { id: 'project', label: 'Project', width: null, height: null },
@@ -34,6 +35,8 @@ export function DeliverSurface() {
     const [otioBusy, setOtioBusy] = useState(false);
     const [otioImportBusy, setOtioImportBusy] = useState(false);
     const otioInputRef = useRef<HTMLInputElement>(null);
+    const lutInputRef = useRef<HTMLInputElement>(null);
+    const [lutBusy, setLutBusy] = useState(false);
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
     const totalDuration = Math.max(0.1, ...layout.map((clip) => clip.end));
     const [rangeStart, setRangeStart] = useState(0);
@@ -60,6 +63,20 @@ export function DeliverSurface() {
         void saveProject();
     };
 
+    const uploadLut = async (file: File) => {
+        setLutBusy(true);
+        try {
+            const data = await uploadProjectLut(project.id, file);
+            setProject({ ...project, renderLut: data.url });
+            void saveProject();
+            addToast(`LUT loaded · ${file.name}`, 'success');
+        } catch (error) {
+            addToast(error instanceof Error ? error.message : 'LUT upload failed', 'error');
+        } finally {
+            setLutBusy(false);
+        }
+    };
+
     const cancelRender = async (renderId: string) => {
         if (await cancelJob(renderId, `Render ${renderId}`)) await refresh();
     };
@@ -79,6 +96,7 @@ export function DeliverSurface() {
                 preset: speed,
                 audio_bitrate: audioBitrate,
                 audio_normalize: audioNormalize,
+                lut: project.renderLut,
             });
             await refresh();
         } finally {
@@ -299,8 +317,53 @@ export function DeliverSurface() {
                         </label>
                     </div>
                 </div>
+                <div className="st-button-row" style={{ marginTop: 10 }}>
+                    <input
+                        ref={lutInputRef}
+                        type="file"
+                        accept=".cube,.3dl,.dat,.m3d"
+                        style={{ display: 'none' }}
+                        aria-label="Upload 3D LUT"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = '';
+                            if (file) void uploadLut(file);
+                        }}
+                    />
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        disabled={lutBusy}
+                        onClick={() => lutInputRef.current?.click()}
+                    >
+                        {lutBusy ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                        {project.renderLut ? 'Replace LUT' : 'Add 3D LUT'}
+                    </button>
+                    {project.renderLut && (
+                        <>
+                            <span className="st-chip" title={project.renderLut}>
+                                {(project.renderLut.split('/').pop() || 'lut').slice(0, 40)}
+                            </span>
+                            <button
+                                type="button"
+                                className="st-button"
+                                data-size="sm"
+                                data-variant="ghost"
+                                onClick={() => {
+                                    setProject({ ...project, renderLut: undefined });
+                                    void saveProject();
+                                    addToast('LUT removed', 'info');
+                                }}
+                            >
+                                <Trash2 size={12} /> Remove
+                            </button>
+                        </>
+                    )}
+                </div>
                 <p className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11, marginTop: 8 }}>
                     Values persist with the project. Normalization applies a single-pass loudnorm at -16 LUFS.
+                    A 3D LUT (`.cube`, `.3dl`, `.dat`, `.m3d`) is applied to the V1/V2 composite before captions.
                 </p>
             </div>
 

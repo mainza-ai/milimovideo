@@ -102,9 +102,20 @@ The legacy `/` timeline remains a 3-track DOM editor with its own store and expo
 modal. It is frozen except for P0 fixes. Do not add new features to it; Studio is the
 current shell.
 
+## Grading
+
+A project can carry one 3D LUT (`project.render_lut`), uploaded into
+`projects/<id>/assets/lut/` as `.cube`, `.3dl`, `.dat`, or `.m3d`. Deliver resolves
+the URL, validates the file, and passes it to the render graph; FFmpeg applies
+`lut3d=...:interp=trilinear` to the V1/V2 composite before caption burn-in. The LUT
+is persisted with the project and included in the render job settings. A real
+pixel test renders a red clip through a red/blue swap LUT and asserts the blue
+channel dominates.
+
 ## Known scoped gaps
 
-- No transitions, LUTs, or title clips.
+- No transitions or title clips. A project 3D LUT is applied to the final V1/V2
+  composite before captions.
 - No A2 track.
 - No canvas media layer; clips are DOM elements with culling.
 - Proxies and media relink are not implemented.

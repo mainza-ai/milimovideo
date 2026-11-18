@@ -1861,6 +1861,17 @@
             "title": "Render Crf",
             "type": "integer"
           },
+          "render_lut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render Lut"
+          },
           "render_preset": {
             "anyOf": [
               {
@@ -2043,6 +2054,17 @@
               }
             ],
             "title": "Height"
+          },
+          "lut": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lut"
           },
           "preset": {
             "default": "fast",
@@ -3399,7 +3421,7 @@
     },
     "/comfy/health": {
       "get": {
-        "description": "Probe the local ComfyUI server without failing the UI when it is down.",
+        "description": "Probe the optional ComfyUI server without failing the UI when it is absent.",
         "operationId": "comfy_health_comfy_health_get",
         "responses": {
           "200": {

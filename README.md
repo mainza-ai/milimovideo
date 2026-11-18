@@ -41,7 +41,7 @@ a backend supervisor.
   and matrix, immutable takes, favorites, inpaint, a pipeline lens whose
   reproducible recipe can be exported and imported as JSON, and a **ComfyUI**
   workflow panel (paste/import API-format JSON, validate, run, cancel).
-- **ComfyUI bridge** — a generic local engine: submit any API-format workflow,
+- **ComfyUI bridge (optional)** — a generic local engine: submit any API-format workflow,
   stream node/step progress, copy every output into project assets, and attach the
   result to a shot. Model-free `EmptyImage → SaveImage` smoke graph included.
 - **Edit** — program monitor, compare/wipe, guides, magnetic V1 plus free V2/A1,
@@ -60,8 +60,8 @@ a backend supervisor.
   playback, full-size image display, download, and text/caption rendering.
 - Video cards use generated poster frames and play a muted preview on hover.
 - Deliver writes the computed cut with V1/V2 compositing, embedded audio + A1 mix,
-  trims, speed, fades, keyframes, captions, render range, and persisted encoding
-  settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
+  trims, speed, fades, keyframes, a project 3D LUT, captions, render range, and
+  persisted encoding settings (CRF, encoder speed, audio bitrate, optional loudness normalization).
   **Export OTIO** (or **FCPXML**) hands the computed V1/V2/A1 cut to Resolve,
   Premiere, or Final Cut; **Import OTIO/FCPXML** reconstructs V1/V2/A1 shots.
 - Shorts builds scored candidate windows from a transcript or shot text, supports
@@ -176,7 +176,7 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 | **Video AI** | LTX-2 19B (`ti2vid`, `ic_lora`, `keyframe`, chained) + **Wan 2.2 TI2V-5B** (experimental low-VRAM lane). LTX-2.5 is the next upgrade |
 | **Image AI** | Flux 2 Klein 9B — IP-Adapter, True CFG, RePaint inpainting |
 | **Segmentation** | SAM 3 microservice (port 8001) — text/box/click masks and video tracking |
-| **ComfyUI** | Generic bridge to a local ComfyUI server — API-format workflows, websocket/polling progress, streamed output ingestion, declared `comfy` memory slot |
+| **ComfyUI (optional)** | Generic bridge to a local ComfyUI server — API-format workflows, websocket/polling progress, streamed output ingestion, declared `comfy` memory slot. Core generation never calls it; disable with `MILIMO_COMFY_ENABLED=0` |
 | **Prompt AI** | Local-first role plane — Gemma 3 in-process, Ollama, oMLX, Strata, LM Studio, vLLM/llama.cpp; optional cloud behind a daily budget, eval gate, and air-gap |
 | **Processing** | FFmpeg/ffprobe — render, probes, thumbnails, frame extraction, stitching |
 | **Memory & scheduling** | Measured budget/admission, leases + TTL eviction, engine adapters (Ollama/oMLX/Strata), priority queue with same-slot grouping, bounded memory waits |
@@ -192,8 +192,9 @@ oMLX, Strata, LM Studio, vLLM, and llama.cpp can run at once.
 - Alembic baseline `0001_baseline` plus `0002_render_settings`,
   `0003_seed_lock`, `0004_asset_thumbnail`, `0005_app_settings`,
   `0006_job_progress` (`job.stage`, `started_at`, `memory_json`), and
-  `0007_shot_priority_steps` (`shot.priority`, `shot.num_inference_steps`); legacy
-  DBs are repaired and stamped at head.
+  `0007_shot_priority_steps` (`shot.priority`, `shot.num_inference_steps`), and
+  `0008_project_render_lut` (`project.render_lut`); legacy DBs are repaired and
+  stamped at head.
 - LLM plane: persisted settings with provider instances and revision CAS,
   capability-aware discovery, role eval, cloud spend ledger, and staged profiles.
 - `QueuedJob` ledger, one global GPU semaphore, priority + same-slot grouping, one
@@ -307,6 +308,8 @@ Memory and scheduling environment:
 - `MILIMO_FLUX_GGUF=/path/to/flux-2-klein-9b-Q4_K_M.gguf` switches the image lane
   to the quantized transformer (`MILIMO_FLUX_GGUF_OFFLOAD=1` offloads on CUDA).
 - `MILIMO_WAN_MODEL=/path/to/wan2.2-ti2v-5b` overrides the Wan 2.2 model directory.
+- `MILIMO_COMFY_ENABLED=0` removes the optional ComfyUI bridge; core generation
+  uses LTX-2/Wan/Flux without it.
 - `MILIMO_COMFY_URL` (default `http://127.0.0.1:8001`) points at ComfyUI;
   `MILIMO_COMFY_GB` declares its residency (default 2 GB). Comfy Desktop and SAM
   both default to 8001, so set the URL if both run.
@@ -379,7 +382,7 @@ npm run check:bundle                              # JS budget
 npm run test:e2e                                  # 21 Playwright tests
 ```
 
-The last verified run was 203 backend tests, 83 Vitest tests, and 21 Playwright
+The last verified run was 206 backend tests, 87 Vitest tests, and 21 Playwright
 tests, including all-surface axe, CRUD, export, reference CRUD, review-agent,
 LLM settings (stream/eval/profile), responsive layout/overflow, perf, memory
 budget/admission/lease/eviction, typed job events/replay/terminal-once, and visual
@@ -404,7 +407,8 @@ dev_diary/         Build log and social notes
 - **No bundled Python runtime.** The desktop shell can start a sidecar binary if
   present, but packaging Python/Torch is not built.
 - **Legacy `/` remains** until the documented two-clean-release cutover window.
-- **Scoped v1 cut:** no transitions, LUTs, titles, or A2 track; search is ranked
+- **Scoped v1 cut:** no transitions, titles, or A2 track; 3D LUT grading and
+  captions are supported. Search is ranked
   lexical matching, not embeddings; Shorts/lenses have no template packs.
 - **Depth model** is downloaded separately and is not shipped in the repo.
 - **Memory**: the cost registry is a measured estimate, not a per-model profile;

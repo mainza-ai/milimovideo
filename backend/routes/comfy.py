@@ -27,11 +27,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["comfy"])
 
 
+def _require_enabled() -> None:
+    if not config.COMFY_ENABLED:
+        raise HTTPException(
+            status_code=409,
+            detail="ComfyUI bridge is disabled (MILIMO_COMFY_ENABLED=0)",
+        )
+
+
 @router.get("/comfy/health")
 def comfy_health():
-    """Probe the local ComfyUI server without failing the UI when it is down."""
+    """Probe the optional ComfyUI server without failing the UI when it is absent."""
+    if not config.COMFY_ENABLED:
+        return {
+            "enabled": False,
+            "reachable": False,
+            "url": config.COMFY_URL,
+            "error": "ComfyUI bridge disabled (MILIMO_COMFY_ENABLED=0)",
+        }
     with ComfyClient() as client:
-        return client.health()
+        return {"enabled": True, **client.health()}
 
 
 @router.post("/comfy/validate")
@@ -41,12 +56,17 @@ def comfy_validate(req: ComfyWorkflowRequest):
         workflow = apply_overrides(parse_workflow(req.workflow), req.overrides)
     except ComfyError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"ok": True, **validate_workflow(workflow)}
+    return {
+        "ok": True,
+        "enabled": config.COMFY_ENABLED,
+        **validate_workflow(workflow),
+    }
 
 
 @router.post("/comfy/free")
 def comfy_free(session: Session = Depends(get_session)):
     """Ask ComfyUI to unload cached models and release our residency slot."""
+    _require_enabled()
     from memory_manager import memory_manager
 
     slot = (memory_manager.status().get("slots") or {}).get("comfy") or {}
@@ -72,6 +92,7 @@ async def comfy_run(
     session: Session = Depends(get_session),
 ):
     """Queue a ComfyUI workflow and ingest every output file it writes."""
+    _require_enabled()
     project = session.get(Project, req.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")

@@ -50,7 +50,7 @@ export interface paths {
         };
         /**
          * Comfy Health
-         * @description Probe the local ComfyUI server without failing the UI when it is down.
+         * @description Probe the optional ComfyUI server without failing the UI when it is absent.
          */
         get: operations["comfy_health_comfy_health_get"];
         put?: never;
@@ -3408,6 +3408,8 @@ export interface components {
              * @default 18
              */
             render_crf: number;
+            /** Render Lut */
+            render_lut?: string | null;
             /** Render Preset */
             render_preset?: string | null;
             /**
@@ -3497,6 +3499,8 @@ export interface components {
             fps?: number | null;
             /** Height */
             height?: number | null;
+            /** Lut */
+            lut?: string | null;
             /**
              * Preset
              * @default fast

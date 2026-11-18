@@ -1144,6 +1144,7 @@ export function useStudioCreateRender(projectId: string) {
         preset?: string;
         audio_bitrate?: string;
         audio_normalize?: boolean;
+        lut?: string;
     }) => {
         const { source_path, ...renderSettings } = settings;
         const response = await fetch(apiUrl(`/projects/${projectId}/render`), {

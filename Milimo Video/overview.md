@@ -83,14 +83,15 @@ The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
   emitter, Studio toasts/activity/inline progress, resync/watchdog, desktop
   notifications, dock badge, webhook, and per-project mute.
 
-Verification: **203 backend tests, 83 Vitest tests, 21 Playwright tests**, clean
+Verification: **206 backend tests, 87 Vitest tests, 21 Playwright tests**, clean
 ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
 failures.
 
 Remaining/deferred work is explicit in
 [[roadmap/implementation-plan-2026-11.md]]: bundled Python sidecar runtime, legacy
-cutover, Phase 6 v2 model-artifact lane, and scoped-v1 gaps (transitions/LUT/
-titles/A2, embedding search, shorts/lens template packs). LLM caveats are listed in
+cutover, Phase 6 v2 model-artifact lane, and scoped-v1 gaps (transitions/titles/
+A2, embedding search, shorts/lens template packs). 3D LUT grading is delivered.
+LLM caveats are listed in
 [[systems/llm-local-first-next-2026-11.md]]. Visual baselines are local and
 platform-tolerant.
 

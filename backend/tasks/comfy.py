@@ -131,6 +131,8 @@ def _asset_rows(project_id: str, job_id: str, records: list[dict], params: dict)
 
 
 async def run_comfy_task(job_id: str, params: dict) -> None:
+    if not config.COMFY_ENABLED:
+        raise ComfyError("ComfyUI bridge is disabled (MILIMO_COMFY_ENABLED=0)")
     project_id = params.get("project_id")
     shot_id = params.get("shot_id")
     if not project_id:

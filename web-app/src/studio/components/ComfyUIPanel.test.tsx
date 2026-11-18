@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { ComfyWorkflowPanel } from './ComfyUIPanel';
+import { ComfyHealthPanel, ComfyWorkflowPanel } from './ComfyUIPanel';
 import { useStudioJobs } from '../state/jobStore';
 import { useStudioDocumentStore } from '../state/documentStore';
 
@@ -16,6 +16,7 @@ function bodyOf(init?: RequestInit): Record<string, unknown> {
 }
 
 const HEALTH = {
+    enabled: true,
     reachable: true,
     url: 'http://127.0.0.1:8001',
     version: '0.45.0',
@@ -25,13 +26,17 @@ const HEALTH = {
     ram_total_gb: 128,
 };
 
-function stubFetch(options: { reachable?: boolean } = {}) {
+function stubFetch(options: { reachable?: boolean; enabled?: boolean } = {}) {
     const calls: Array<{ url: string; init?: RequestInit }> = [];
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         calls.push({ url, init });
         if (url.includes('/comfy/health')) {
-            return json({ ...HEALTH, reachable: options.reachable !== false });
+            return json({
+                ...HEALTH,
+                enabled: options.enabled !== false,
+                reachable: options.enabled !== false && options.reachable !== false,
+            });
         }
         if (url.includes('/comfy/validate')) {
             return json({
@@ -68,6 +73,7 @@ describe('ComfyWorkflowPanel', () => {
         const calls = stubFetch();
         render(<ComfyWorkflowPanel projectId="proj-1" shotId="shot-1" />);
 
+        await screen.findByText('Validate');
         fireEvent.click(screen.getByText('Validate'));
         await waitFor(() => expect(screen.getByText('2 nodes')).toBeTruthy());
         expect(calls.some((call) => call.url.includes('/comfy/validate'))).toBe(true);
@@ -93,18 +99,26 @@ describe('ComfyWorkflowPanel', () => {
         expect(window.localStorage.getItem('milimo-comfy-workflow')).toContain('EmptyImage');
     });
 
-    it('disables running when ComfyUI is offline', async () => {
+    it('hides the Generate panel while ComfyUI is offline', async () => {
         stubFetch({ reachable: false });
-        render(<ComfyWorkflowPanel projectId="proj-1" shotId={null} />);
+        const { container } = render(<ComfyWorkflowPanel projectId="proj-1" shotId={null} />);
 
-        await waitFor(() => expect(screen.getByText('offline')).toBeTruthy());
-        const run = screen.getByText('Run workflow').closest('button');
-        expect(run?.disabled).toBe(true);
+        await waitFor(() => expect(container.textContent).not.toContain('ComfyUI workflow'));
+        expect(useStudioJobs.getState().activeJobs).toHaveLength(0);
+    });
+
+    it('disappears entirely when the bridge is disabled', async () => {
+        stubFetch({ enabled: false });
+        const { container } = render(<ComfyWorkflowPanel projectId="proj-1" />);
+
+        await waitFor(() => expect(container.textContent).not.toContain('ComfyUI workflow'));
+        expect(useStudioJobs.getState().activeJobs).toHaveLength(0);
     });
 
     it('reports invalid JSON without calling the backend', async () => {
         const calls = stubFetch();
         render(<ComfyWorkflowPanel projectId="proj-1" />);
+        await screen.findByLabelText('ComfyUI API workflow JSON');
         fireEvent.change(screen.getByLabelText('ComfyUI API workflow JSON'), {
             target: { value: '{not json' },
         });
@@ -113,5 +127,28 @@ describe('ComfyWorkflowPanel', () => {
             useStudioDocumentStore.getState().toasts.some((toast) => /Invalid JSON/.test(toast.message)),
         ).toBe(true));
         expect(calls.some((call) => call.url.includes('/comfy/validate'))).toBe(false);
+    });
+});
+
+
+describe('ComfyHealthPanel', () => {
+    beforeEach(() => {
+        useStudioDocumentStore.setState({ toasts: [] });
+    });
+
+    afterEach(() => {
+        cleanup();
+        vi.unstubAllGlobals();
+    });
+
+    it('shows a disabled state without probing or freeing', async () => {
+        const calls = stubFetch({ enabled: false });
+        render(<ComfyHealthPanel />);
+
+        await waitFor(() => expect(screen.getByText('disabled')).toBeTruthy());
+        expect(screen.getByText(/optional and switched off/i)).toBeTruthy();
+        expect(screen.queryByText('Free cached models')).toBeNull();
+        expect(screen.queryByText('Probe')).toBeNull();
+        expect(calls.some((call) => call.url.includes('/comfy/free'))).toBe(false);
     });
 });

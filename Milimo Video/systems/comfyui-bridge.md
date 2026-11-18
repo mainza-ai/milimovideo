@@ -1,7 +1,25 @@
 # ComfyUI bridge
 
-**Status:** implemented and live-verified against ComfyUI 0.45.0 on
-`http://127.0.0.1:8001` with a model-free `EmptyImage → SaveImage` graph.
+**Status:** implemented as an **optional** engine and live-verified against
+ComfyUI 0.45.0 on `http://127.0.0.1:8001` with a model-free
+`EmptyImage → SaveImage` graph.
+
+## Optionality contract
+
+ComfyUI is not a dependency. Milimo's core path (studio boot, projects, shots,
+LTX-2/Wan/Flux generation, memory admission, render, OTIO/FCPXML) never imports
+`services.comfy` or contacts `COMFY_URL`. The bridge is only reachable through
+`/comfy/*` and the two Studio panels.
+
+- `MILIMO_COMFY_ENABLED=0` makes `/comfy/health` return `enabled: false` without a
+  network probe, rejects `/comfy/run` and `/comfy/free` with 409, hides the
+  Generate workflow panel, and shows a disabled card in Setup.
+- With the flag on but ComfyUI stopped, the backend returns
+  `reachable: false`; core jobs still run and `verify_setup` reports a note, not a
+  failure or warning. The Generate workflow panel stays hidden until ComfyUI is
+  reachable, so an unused bridge leaves no dead UI.
+- The live end-to-end test is skipped when ComfyUI is offline; CI uses a fake
+  server for the client contract.
 
 ## What it is
 

@@ -143,6 +143,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 render_speed: project.renderSpeed ?? 'fast',
                 render_audio_bitrate: project.renderAudioBitrate ?? '192k',
                 render_audio_normalize: project.renderAudioNormalize ?? false,
+                render_lut: project.renderLut ?? null,
                 captions: (project.captions || []).map(cue => ({
                     id: cue.id,
                     start_frame: cue.startFrame,
@@ -309,6 +310,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 renderSpeed: data.render_speed || 'fast',
                 renderAudioBitrate: data.render_audio_bitrate || '192k',
                 renderAudioNormalize: data.render_audio_normalize ?? false,
+                renderLut: data.render_lut || undefined,
                 captions: (data.captions || []).map((cue: any) => ({
                     id: cue.id || uuidv4(),
                     startFrame: cue.start_frame ?? 0,

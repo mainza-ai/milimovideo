@@ -64,7 +64,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 def upload_file(
     file: UploadFile = File(...), 
     project_id: Optional[str] = Form(None),
-    type: Optional[str] = Form("general"), # general, element, reference
+    type: Optional[str] = Form("general"), # general, element, reference, lut
     session: Session = Depends(get_session)
 ):
     upload_target_dir = UPLOAD_DIR
@@ -81,6 +81,8 @@ def upload_file(
             upload_target_dir = os.path.join(project_dir, "assets", "elements")
         elif type == "reference":
             upload_target_dir = os.path.join(project_dir, "assets", "references")
+        elif type == "lut":
+            upload_target_dir = os.path.join(project_dir, "assets", "lut")
         else:
              upload_target_dir = os.path.join(project_dir, "assets", "general")
         
@@ -139,6 +141,7 @@ def upload_file(
         folder_name = "general"
         if type == "element": folder_name = "elements"
         if type == "reference": folder_name = "references"
+        if type == "lut": folder_name = "lut"
         access_url = f"/projects/{project_id}/assets/{folder_name}/{filename}"
     else:
         access_url = f"/uploads/{filename}"
@@ -147,11 +150,13 @@ def upload_file(
     audio_extensions = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
     caption_extensions = {".srt", ".vtt"}
     text_extensions = {".json", ".txt", ".md"}
+    lut_extensions = {".cube", ".3dl", ".dat", ".m3d"}
     asset_type = (
         "image" if extension in image_extensions
         else "audio" if extension in audio_extensions
         else "caption" if extension in caption_extensions
         else "text" if extension in text_extensions
+        else "lut" if extension in lut_extensions
         else "video"
     )
     thumbnail_url = None

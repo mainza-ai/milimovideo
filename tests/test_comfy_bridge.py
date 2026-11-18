@@ -302,3 +302,36 @@ def test_comfy_is_a_declared_external_slot():
         params_json = '{"priority": 7}'
 
     assert row_priority(Row()) == 7
+
+
+def test_comfy_is_optional_and_can_be_disabled(app_client, project, monkeypatch):
+    """Core Milimo routes must work with the bridge switched off."""
+    import config
+
+    monkeypatch.setattr(config, "COMFY_ENABLED", False)
+
+    health = app_client.get("/comfy/health")
+    assert health.status_code == 200
+    assert health.json()["enabled"] is False
+    assert health.json()["reachable"] is False
+    assert "disabled" in health.json()["error"].lower()
+
+    run = app_client.post("/comfy/run", json={
+        "project_id": project["id"],
+        "workflow": EMPTY_IMAGE_WORKFLOW,
+    })
+    assert run.status_code == 409
+    assert "MILIMO_COMFY_ENABLED=0" in run.json()["detail"]
+
+    validated = app_client.post("/comfy/validate", json={"workflow": EMPTY_IMAGE_WORKFLOW})
+    assert validated.status_code == 200
+    assert validated.json()["enabled"] is False
+    assert validated.json()["output_nodes"] == ["2"]
+
+    # The rest of the studio is independent of ComfyUI.
+    assert app_client.get("/health").status_code == 200
+    assert app_client.get(f"/projects/{project['id']}").status_code == 200
+    preflight = app_client.post("/system/memory/preflight", json={
+        "kind": "image", "params": {"width": 512, "height": 512},
+    })
+    assert preflight.status_code == 200

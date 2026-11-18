@@ -33,8 +33,11 @@ API_PORT = int(os.environ.get("MILIMO_API_PORT", "8000"))
 API_HOST = os.environ.get("MILIMO_HOST", "127.0.0.1")
 SAM_SERVICE_PORT = int(os.environ.get("MILIMO_SAM_PORT", "8001"))
 
-# ComfyUI bridge. Comfy Desktop defaults to 8001, which collides with the
-# optional SAM microservice; set MILIMO_COMFY_URL if both must run.
+# ComfyUI bridge. Optional external engine: core generation never calls it.
+# Set MILIMO_COMFY_ENABLED=0 to remove the bridge surface entirely.
+COMFY_ENABLED = os.environ.get("MILIMO_COMFY_ENABLED", "1").strip().lower() not in {
+    "0", "false", "no", "off",
+}
 COMFY_URL = os.environ.get("MILIMO_COMFY_URL", "http://127.0.0.1:8001").rstrip("/")
 COMFY_TIMEOUT_SEC = float(os.environ.get("MILIMO_COMFY_TIMEOUT", "30"))
 # Wall-clock ceiling for a queued workflow (model downloads excluded).
@@ -109,6 +112,7 @@ ALLOWED_UPLOAD_EXTENSIONS = {
     ".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi",
     ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac",
     ".srt", ".vtt", ".json", ".txt", ".md",
+    ".cube", ".3dl", ".dat", ".m3d",
 }
 
 # Database

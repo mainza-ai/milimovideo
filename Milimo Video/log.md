@@ -1602,7 +1602,7 @@ OTIO. Tests: 194 backend, 79 Vitest, 21 Playwright.
   on ComfyUI 0.45.0 (port 8001) completed and produced a PNG.
 - **Docs**: `systems/comfyui-bridge.md`, index, architecture, memory slots,
   roadmap, README, user guide, AGENTS.
-- Tests: 203 backend, 83 Vitest, 21 Playwright.
+- Tests: 206 backend, 87 Vitest, 21 Playwright.
 
 ## [2026-11-18] implement | FCPXML import
 
@@ -1610,3 +1610,21 @@ The OTIO import route auto-detects XML and reads it with the `fcpx_xml` adapter,
 so a Final Cut/Premiere round-trip returns shots too. Deliver labels the action
 **Import OTIO/FCPXML**; a two-clip round-trip test asserts fps, frame counts,
 trims, and project media URLs. Resolve XML remains (no adapter).
+
+## [2026-11-18] implement | ComfyUI optionality and project LUT grading
+
+- **ComfyUI is explicitly optional.** `MILIMO_COMFY_ENABLED=0` short-circuits
+  `/comfy/health` (`enabled:false`, no network probe), rejects `/comfy/run` and
+  `/comfy/free` with 409, hides the Generate workflow panel, and shows a disabled
+  card in Setup. The Generate panel also stays hidden while ComfyUI is offline.
+  Core boot, projects, memory preflight, generation, render, and interchange never
+  touch `services.comfy`. `verify_setup` reports an offline/disabled bridge as a
+  note, not a warning.
+- **LUT grading.** Project `render_lut` (Alembic 0008), `.cube`/`.3dl`/`.dat`/`.m3d`
+  uploads under `assets/lut/`, Deliver add/replace/remove, and
+  `lut3d=...:interp=trilinear` on the V1/V2 composite before captions.
+- **Verification.** Live servers with the bridge disabled and with an unreachable
+  URL both served `/health`, created/loaded projects, and passed memory preflight.
+  A real FFmpeg render through a red/blue swap LUT asserted the blue channel; a
+  missing LUT returns 404.
+- Tests: 206 backend, 87 Vitest, 21 Playwright.

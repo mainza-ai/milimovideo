@@ -160,6 +160,7 @@ export interface Project {
     renderSpeed?: string;
     renderAudioBitrate?: string;
     renderAudioNormalize?: boolean;
+    renderLut?: string;
 }
 
 export interface ProjectSlice {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    CheckCircle2, ExternalLink, Loader2, Play, RefreshCw, TriangleAlert, Upload, Workflow,
+    CheckCircle2, ExternalLink, Loader2, Play, PowerOff, RefreshCw, TriangleAlert, Upload, Workflow,
 } from 'lucide-react';
 import { apiFetch, apiUrl } from '../../config';
 import { useStudioDocumentStore } from '../state/documentStore';
@@ -8,6 +8,7 @@ import { useStudioJobs } from '../state/jobStore';
 import { registerStudioJob } from '../events/jobBridge';
 
 export interface ComfyHealth {
+    enabled?: boolean;
     reachable: boolean;
     url?: string;
     version?: string | null;
@@ -66,6 +67,13 @@ function ComfyStatus({ health }: { health: ComfyHealth | null }) {
     if (!health) {
         return <span className="st-status-pill" data-tone="warn"><Loader2 size={10} className="animate-spin" /> checking</span>;
     }
+    if (health.enabled === false) {
+        return (
+            <span className="st-status-pill" data-tone="warn" title="MILIMO_COMFY_ENABLED=0">
+                <PowerOff size={10} /> disabled
+            </span>
+        );
+    }
     if (!health.reachable) {
         return (
             <span className="st-status-pill" data-tone="bad" title={health.error || ''}>
@@ -109,40 +117,50 @@ export function ComfyHealthPanel() {
                 </h3>
                 <div className="st-button-row">
                     <ComfyStatus health={health} />
-                    <button type="button" className="st-button" data-size="sm" disabled={loading} onClick={() => void refresh()}>
-                        <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Probe
-                    </button>
+                    {health?.enabled !== false && (
+                        <button type="button" className="st-button" data-size="sm" disabled={loading} onClick={() => void refresh()}>
+                            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Probe
+                        </button>
+                    )}
                 </div>
             </div>
             <dl className="st-meta-grid" style={{ marginTop: 8 }}>
                 <dt>URL</dt><dd className="st-mono">{health?.url || '—'}</dd>
                 <dt>Queue</dt>
-                <dd>{health?.reachable ? `${health.queue_running ?? 0} running · ${health.queue_pending ?? 0} pending` : '—'}</dd>
+                <dd>{health?.enabled !== false && health?.reachable ? `${health.queue_running ?? 0} running · ${health.queue_pending ?? 0} pending` : '—'}</dd>
                 <dt>Free RAM</dt>
-                <dd>{health?.reachable && health.ram_free_gb != null ? `${health.ram_free_gb.toFixed(1)} / ${(health.ram_total_gb || 0).toFixed(1)} GB` : '—'}</dd>
+                <dd>{health?.enabled !== false && health?.reachable && health.ram_free_gb != null ? `${health.ram_free_gb.toFixed(1)} / ${(health.ram_total_gb || 0).toFixed(1)} GB` : '—'}</dd>
             </dl>
-            {health && !health.reachable && (
+            {health?.enabled === false && (
+                <p className="st-value" style={{ marginTop: 6, color: 'var(--st-muted)', fontSize: 11 }}>
+                    The ComfyUI bridge is optional and switched off. Core generation does not use it.
+                    Remove <code>MILIMO_COMFY_ENABLED=0</code> to enable the workflow panel.
+                </p>
+            )}
+            {health && health.enabled !== false && !health.reachable && (
                 <p className="st-value" style={{ marginTop: 6, color: 'var(--st-muted)', fontSize: 11 }}>
                     {health.error || 'ComfyUI did not answer.'} Start Comfy Desktop or set <code>MILIMO_COMFY_URL</code>.
                 </p>
             )}
-            <div className="st-button-row" style={{ marginTop: 8 }}>
-                <button
-                    type="button"
-                    className="st-button"
-                    data-size="sm"
-                    disabled={freeing || !health?.reachable}
-                    onClick={() => void free()}
-                >
-                    {freeing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                    Free cached models
-                </button>
-                {health?.url && (
-                    <a className="st-button" data-size="sm" href={health.url} target="_blank" rel="noreferrer">
-                        <ExternalLink size={12} /> Open ComfyUI
-                    </a>
-                )}
-            </div>
+            {health?.enabled !== false && (
+                <div className="st-button-row" style={{ marginTop: 8 }}>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        disabled={freeing || !health?.reachable}
+                        onClick={() => void free()}
+                    >
+                        {freeing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        Free cached models
+                    </button>
+                    {health?.url && (
+                        <a className="st-button" data-size="sm" href={health.url} target="_blank" rel="noreferrer">
+                            <ExternalLink size={12} /> Open ComfyUI
+                        </a>
+                    )}
+                </div>
+            )}
             <p className="st-value" style={{ marginTop: 8, color: 'var(--st-faint)', fontSize: 11 }}>
                 ComfyUI runs as a separate GPU process. Its declared residency is admitted before a workflow,
                 it is charged to the same queue, and <code>/free</code> releases its cache. Comfy Desktop and
@@ -270,6 +288,11 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
         reader.readAsText(file);
     };
 
+    // The bridge is optional: with MILIMO_COMFY_ENABLED=0 the surface disappears,
+    // and while ComfyUI is offline the Generate rail stays clean (Setup still
+    // documents the optional engine).
+    if (!health || health.enabled === false || !health.reachable) return null;
+
     return (
         <details className="st-panel" style={{ marginTop: 14 }} data-testid="comfy-workflow">
             <summary className="st-panel-title" style={{ cursor: 'pointer', margin: 0 }}>
@@ -329,7 +352,7 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
                     className="st-button"
                     data-size="sm"
                     data-variant="primary"
-                    disabled={busy !== null || health?.reachable === false}
+                    disabled={busy !== null}
                     onClick={() => void run()}
                 >
                     {busy === 'run' ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}

@@ -432,3 +432,74 @@ def test_render_api_matches_computed_timeline(app_client, project):
     assert {s["codec_type"] for s in data["streams"]} == {"video", "audio"}
     audio = next(s for s in data["streams"] if s["codec_type"] == "audio")
     assert int(audio["bit_rate"]) > 180000
+
+
+def test_render_applies_a_project_lut(app_client, project):
+    pid = project["id"]
+    generated = Path(config.PROJECTS_DIR) / pid / "generated"
+    _make_clip(generated / "lut-red.mp4", "red")
+
+    # 2x2x2 LUT that swaps red and blue (identity otherwise).
+    cube = "\n".join([
+        'TITLE "swap-rb"',
+        "LUT_3D_SIZE 2",
+        "0.0 0.0 0.0",
+        "0.0 0.0 1.0",
+        "0.0 1.0 0.0",
+        "0.0 1.0 1.0",
+        "1.0 0.0 0.0",
+        "1.0 0.0 1.0",
+        "1.0 1.0 0.0",
+        "1.0 1.0 1.0",
+        "",
+    ]).encode()
+    upload = app_client.post(
+        "/upload",
+        files={"file": ("swap.cube", cube, "text/plain")},
+        data={"project_id": pid, "type": "lut"},
+    )
+    assert upload.status_code == 200, upload.text
+    uploaded = upload.json()
+    assert uploaded["type"] == "lut"
+    assert uploaded["url"].startswith(f"/projects/{pid}/assets/lut/")
+
+    shot = {
+        "id": "lut-red", "prompt": "red", "negative_prompt": "", "seed": 42,
+        "width": 320, "height": 180, "fps": 25, "num_frames": 25,
+        "cfg_scale": 1.0, "enhance_prompt": False, "upscale": False,
+        "pipeline_override": "auto", "track_index": 0, "start_frame": 0,
+        "trim_in": 0, "trim_out": 0, "timeline": [],
+        "video_url": f"/projects/{pid}/generated/lut-red.mp4",
+        "status": "completed", "sequence_index": 0,
+    }
+    payload = {
+        "id": pid, "name": "LUT Render", "fps": 25, "seed": 42,
+        "resolution_w": 320, "resolution_h": 180, "revision": project.get("revision", 0),
+        "shots": [shot], "scenes": [], "render_lut": uploaded["url"],
+    }
+    assert app_client.put(f"/projects/{pid}", json=payload).status_code == 200
+    loaded = app_client.get(f"/projects/{pid}").json()
+    assert loaded["render_lut"] == uploaded["url"]
+
+    response = app_client.post(f"/projects/{pid}/render", json={
+        "settings": {
+            "width": 320, "height": 180, "fps": 25,
+            "lut": loaded["render_lut"],
+        },
+        "track_states": {},
+    })
+    assert response.status_code == 200, response.text
+    render_id = response.json()["job_id"]
+    status = app_client.get(f"/status/{render_id}").json()
+    assert status["status"] == "completed", status
+
+    red, green, blue = _average_rgb(generated / f"{render_id}.mp4", 0.25)
+    assert blue > red + 30, (red, green, blue)
+
+
+def test_render_rejects_a_missing_lut(app_client, project):
+    response = app_client.post(f"/projects/{project['id']}/render", json={
+        "settings": {"lut": "/projects/missing/assets/lut/nope.cube"},
+        "track_states": {},
+    })
+    assert response.status_code == 404

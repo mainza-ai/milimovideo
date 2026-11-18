@@ -522,7 +522,7 @@ Be fair to the build — these are not small things:
 | Take/version history per shot | **Fixed (v1)** | Immutable takes, select/favorite, compare, lineage |
 | Persistent/resumable job queue | **Fixed** | `QueuedJob`, startup recovery, one retry, pause/resume |
 | Render presets (codec, bitrate, resolution, fps, audio normalize) | **Fixed (v1)** | Resolution/fps presets, CRF, encoder speed, audio bitrate, loudnorm; codec remains H.264 |
-| Transitions, fades, speed, LUT, titles/subtitles | **Partial** | Fades, speed, captions; transitions/LUT/titles remain |
+| Transitions, fades, speed, LUT, titles/subtitles | **Partial** | Fades, speed, captions, project 3D LUT; transitions/titles remain |
 | Audio from V1/V2 clips, gain, fades, ducking | **Fixed (v1)** | Embedded audio + A1 mix, gain/mute/fades/solo; no ducking |
 | Project bundle import/export, media relink, proxies | **Missing** | Projects remain non-portable; integrity repair clears broken pointers |
 | Real model activation + warmup + OOM fallback | **Fixed** | Real activation through loader, preflight, one OOM retry |
