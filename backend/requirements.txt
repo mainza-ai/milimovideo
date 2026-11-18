@@ -1,7 +1,7 @@
 fastapi==0.128.0
 uvicorn>=0.30
 python-multipart>=0.0.9
-requests>=2.31
+requests>=2.34.2
 huggingface_hub>=0.24
 # hf_transfer is optional; enable it with MILIMO_HF_TRANSFER=1.
 torch==2.10.0
