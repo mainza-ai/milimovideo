@@ -15,11 +15,14 @@ export function StorySurface() {
     })));
     const {
         selectedSceneId, selectScene, spineCollapsed, setSpineCollapsed,
+        mobileSpineOpen, setMobileSpineOpen,
     } = useStudioEditor(useShallow((state) => ({
         selectedSceneId: state.selectedSceneId,
         selectScene: state.selectScene,
         spineCollapsed: state.spineCollapsed,
         setSpineCollapsed: state.setSpineCollapsed,
+        mobileSpineOpen: state.mobileSpineOpen,
+        setMobileSpineOpen: state.setMobileSpineOpen,
     })));
     const { elements } = useStudioElements(project.id);
     const [query, setQuery] = useState('');
@@ -63,7 +66,11 @@ export function StorySurface() {
                     </button>
                 </aside>
             ) : (
-            <aside className="st-spine" aria-label="Story spine">
+            <aside
+                className="st-spine"
+                aria-label="Story spine"
+                data-mobile-open={mobileSpineOpen}
+            >
                 <div className="st-spine-head">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
                         <div className="st-spine-title" style={{ marginBottom: 0 }}>Story spine</div>
@@ -72,7 +79,10 @@ export function StorySurface() {
                             className="st-icon-button"
                             aria-label="Hide story spine"
                             title="Hide story spine"
-                            onClick={() => setSpineCollapsed(true)}
+                            onClick={() => {
+                            setSpineCollapsed(true);
+                            setMobileSpineOpen(false);
+                        }}
                         >
                             <ChevronLeft size={15} />
                         </button>
@@ -116,6 +126,7 @@ export function StorySurface() {
                                     onClick={() => {
                                         selectShot(shot.id);
                                         setCurrentTime(0);
+                                        setMobileSpineOpen(false);
                                     }}
                                 >
                                     <span className="st-spine-shot-index st-mono">{project.shots.indexOf(shot) + 1}</span>
@@ -167,6 +178,14 @@ export function StorySurface() {
                     </div>
                 </div>
             </aside>
+            )}
+            {mobileSpineOpen && (
+                <button
+                    type="button"
+                    className="st-mobile-backdrop"
+                    aria-label="Close story spine"
+                    onClick={() => setMobileSpineOpen(false)}
+                />
             )}
             <BoardCanvas />
         </div>

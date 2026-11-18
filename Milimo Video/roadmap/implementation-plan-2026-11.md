@@ -61,7 +61,7 @@ single-engineer guidance.
 | Memory & model residency | **Done — M0–M5 code side, 2026-11-17** | measured budget/admission, leases + TTL eviction, engine adapters, priority/same-slot queue, bounded memory waits, downgrade ladder, metrics, sampler, MPS cap, SAM lazy load, and the model-lane benchmark. See [[../systems/memory-management-audit-2026-11]] |
 | Job notification plane | **Done — N0–N5, 2026-11-17** | typed `job.*` envelope/replay, single terminal emitter, Studio toasts/activity/inline progress, resync/watchdog, per-surface handlers, metrics, history retry, ETA, desktop notifications, dock badge, webhook, per-project mute. See [[../systems/job-notifications-audit-2026-11]] |
 | LLM configuration plane | **Done — L0–L3, 2026-11-17** | persisted `app_setting` document with revision CAS, six providers, six roles with fallback, discovery/verify/model catalog, sealed keys, air-gap + cloud opt-in, Studio AI & LLM panel, legacy popover compatibility; L4 governance deferred. See [[../systems/llm-settings-audit-2026-11]] |
-| Front-end F7 UX audit | **Audited, planned — 2026-11-18** | eight surfaces at 1440×900 and 390×844, axe clean, 24 findings (`F7-01…F7-24`) and a seven-phase plan. See [[../systems/frontend-ux-audit-2026-11-18]] and [[frontend-ux-plan-2026-11-18]] |
+| Front-end F7 UX | **Done — 2026-11-18** | truthful save/shot status, project-scoped Library with relink/repair, one rail per surface, mobile Story drawer, five-track timeline, title/LUT preview, warning/copy semantics, and a surface matrix gate. See [[../systems/frontend-ux-audit-2026-11-18]] and [[frontend-ux-plan-2026-11-18]] |
 
 **Still open / deferred:**
 
@@ -90,10 +90,10 @@ single-engineer guidance.
   embedding search, and no shorts/lens template packs.
 - **F6 chrome stabilization** — completed 2026-11-17. The audit and resolution
   evidence live in [[../systems/studio-ux-audit-2026-11]].
-- **F7 whole-frontend UX** — audited and planned 2026-11-18, **not implemented**.
-  Truthful save/shot status, project-scoped Library, one rail per surface, a real
-  mobile shell, timeline/preview parity, warning/copy semantics, and a surface
-  matrix gate. See [[../systems/frontend-ux-audit-2026-11-18]] and
+- **F7 whole-frontend UX** — completed 2026-11-18. Truthful save/shot status,
+  project-scoped Library with relink/repair, one rail per surface, mobile Story
+  drawer, five-track timeline, title/LUT preview, and the surface matrix gate.
+  See [[../systems/frontend-ux-audit-2026-11-18]] and
   [[frontend-ux-plan-2026-11-18]].
 - **Memory M0/M1/M3/M4** — completed 2026-11-17: measured budget, admission,
   leases/TTL eviction, pressure monitor, sampler, engine adapters, Setup panel,

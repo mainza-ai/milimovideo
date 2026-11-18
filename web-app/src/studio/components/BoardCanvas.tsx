@@ -11,6 +11,7 @@ import { saveTextFile } from '../../desktop';
 import {
     useStudioEditor, type BoardArea, type BoardPosition, type LinkKind,
 } from '../state/editorStore';
+import { shotStatusLabel } from '../../stores/saveStatus';
 import { ShotCard } from './ShotCard';
 import { cullCards } from '../board/culling';
 import { startBoardCollab, type BoardCollab } from '../collab/boardSync';
@@ -1510,7 +1511,7 @@ export function BoardCanvas() {
                                         </select>
                                     </td>
                                     <td className="st-mono">{shot.numFrames}</td>
-                                    <td>{shot.status || 'pending'}</td>
+                                    <td>{shotStatusLabel(shot.status)}</td>
                                     <td>{shot.videoUrl ? 'selected' : '—'}</td>
                                 </tr>
                             ))}

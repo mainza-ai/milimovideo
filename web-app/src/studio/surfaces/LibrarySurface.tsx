@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import {
     CheckCircle2, FileText, Film, Image as ImageIcon, Library, Pencil, Plus, RefreshCw, Search,
-    Trash2, Upload, Video, X,
+    Trash2, TriangleAlert, Upload, Video, X,
 } from 'lucide-react';
 import { rankSearch, type SearchRecord } from '../search/localSearch';
 import { useStudioEditor } from '../state/editorStore';
@@ -36,6 +36,15 @@ function assetKind(asset: StudioAsset): 'image' | 'video' | 'audio' | 'text' {
     return asset.type === 'video' || asset.type === 'image' || asset.type === 'audio' ? asset.type : 'text';
 }
 
+function middleEllipsis(value: string, max = 42): string {
+    if (value.length <= max) return value;
+    const dot = value.lastIndexOf('.');
+    const ext = dot > 0 && value.length - dot <= 8 ? value.slice(dot) : '';
+    const head = Math.ceil((max - ext.length - 1) / 2);
+    const tail = Math.floor((max - ext.length - 1) / 2);
+    return `${value.slice(0, head)}…${value.slice(value.length - ext.length - tail)}`;
+}
+
 const EMPTY_DRAFT: ElementDraft = {
     name: '',
     type: 'character',
@@ -53,7 +62,7 @@ export function LibrarySurface() {
     const [draft, setDraft] = useState<ElementDraft | null>(null);
     const [savingElement, setSavingElement] = useState(false);
     const [elementImageBusy, setElementImageBusy] = useState(false);
-    const { assets, loading, refresh } = useStudioAssets();
+    const { assets, loading, refresh } = useStudioAssets(project.id);
     const { takes, loading: takesLoading, refresh: refreshTakes } = useStudioProjectTakes(project.id);
     const selectTake = useStudioSelectTake();
     const uploadAsset = useStudioUploadAsset(project.id);
@@ -61,6 +70,13 @@ export function LibrarySurface() {
     const [uploading, setUploading] = useState(false);
     const [tab, setTab] = useState<'assets' | 'references' | 'takes' | 'search'>('assets');
     const [query, setQuery] = useState('');
+    const [missingOnly, setMissingOnly] = useState(false);
+    const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+    const [bulkBusy, setBulkBusy] = useState(false);
+    const [relinkTarget, setRelinkTarget] = useState<StudioAsset | null>(null);
+    const [selectedTakeIds, setSelectedTakeIds] = useState<Set<string>>(new Set());
+    const relinkRef = useRef<HTMLInputElement>(null);
+    const missingCount = assets.filter((asset) => asset.missing).length;
 
     const openElementEditor = (element?: StudioElement) => {
         setEditingElement(element ?? null);
@@ -141,8 +157,118 @@ export function LibrarySurface() {
 
     const filteredAssets = useMemo(() => {
         const q = query.trim().toLowerCase();
-        return q ? assets.filter((asset) => asset.filename.toLowerCase().includes(q)) : assets;
-    }, [assets, query]);
+        return assets.filter((asset) => {
+            if (missingOnly && !asset.missing) return false;
+            return q ? asset.filename.toLowerCase().includes(q) : true;
+        });
+    }, [assets, missingOnly, query]);
+
+    const toggleAsset = (assetId: string) => {
+        setSelectedAssetIds((current) => {
+            const next = new Set(current);
+            if (next.has(assetId)) next.delete(assetId);
+            else next.add(assetId);
+            return next;
+        });
+    };
+
+    const deleteAssetIds = async (ids: string[]) => {
+        if (ids.length === 0) return;
+        setBulkBusy(true);
+        let removed = 0;
+        const deletedUrls = new Set(assets.filter((asset) => ids.includes(asset.id)).map((asset) => asset.url));
+        try {
+            for (const id of ids) {
+                const response = await fetch(apiUrl(`/assets/${id}`), { method: 'DELETE' });
+                if (response.ok) removed += 1;
+            }
+            const store = useStudioDocumentStore.getState();
+            for (const shot of store.project.shots) {
+                if (shot.videoUrl && deletedUrls.has(shot.videoUrl)) {
+                    store.updateShot(shot.id, { videoUrl: null });
+                }
+                if (shot.thumbnailUrl && deletedUrls.has(shot.thumbnailUrl)) {
+                    store.updateShot(shot.id, { thumbnailUrl: undefined });
+                }
+            }
+            await refresh();
+            await refreshTakes();
+            setSelectedAssetIds(new Set());
+            store.addToast(`Deleted ${removed} media item${removed === 1 ? '' : 's'}`, removed ? 'success' : 'error');
+        } finally {
+            setBulkBusy(false);
+        }
+    };
+
+    const relinkAsset = async (target: StudioAsset, file: File) => {
+        setBulkBusy(true);
+        try {
+            const form = new FormData();
+            form.append('file', file);
+            const response = await fetch(apiUrl(`/assets/${target.id}/replace`), { method: 'POST', body: form });
+            const data = await response.json().catch(() => ({}));
+            const store = useStudioDocumentStore.getState();
+            if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+            const previous = target.url;
+            if (previous && data.url && previous !== data.url) {
+                for (const shot of store.project.shots) {
+                    if (shot.videoUrl === previous) store.updateShot(shot.id, { videoUrl: data.url });
+                    if (shot.thumbnailUrl === previous) store.updateShot(shot.id, { thumbnailUrl: data.url });
+                }
+            }
+            await Promise.all([refresh(), refreshTakes()]);
+            store.addToast(`Relinked ${target.filename}`, 'success');
+        } catch (error) {
+            useStudioDocumentStore.getState().addToast(
+                error instanceof Error ? error.message : 'Relink failed',
+                'error',
+            );
+        } finally {
+            setBulkBusy(false);
+            setRelinkTarget(null);
+        }
+    };
+
+    const toggleTake = (jobId: string) => {
+        setSelectedTakeIds((current) => {
+            const next = new Set(current);
+            if (next.has(jobId)) next.delete(jobId);
+            else next.add(jobId);
+            return next;
+        });
+    };
+
+    const deleteTakeIds = async (ids: string[]) => {
+        if (ids.length === 0) return;
+        setBulkBusy(true);
+        let removed = 0;
+        try {
+            for (const id of ids) {
+                const response = await fetch(apiUrl(`/assets/${id}`), { method: 'DELETE' });
+                if (response.ok) removed += 1;
+            }
+            await Promise.all([refresh(), refreshTakes()]);
+            setSelectedTakeIds(new Set());
+            useStudioDocumentStore.getState().addToast(
+                `Deleted ${removed} take${removed === 1 ? '' : 's'}`,
+                removed ? 'success' : 'error',
+            );
+        } finally {
+            setBulkBusy(false);
+        }
+    };
+
+    const repairMedia = async () => {
+        await Promise.all([refresh(), refreshTakes()]);
+        const store = useStudioDocumentStore.getState();
+        const total = assets.filter((asset) => asset.missing).length;
+        store.addToast(
+            total === 0
+                ? 'All media files are present'
+                : `${total} media card${total === 1 ? '' : 's'} point at missing files`,
+            total === 0 ? 'success' : 'info',
+        );
+    };
     const filteredElements = useMemo(() => {
         const q = query.trim().toLowerCase();
         return q ? elements.filter((element) => `${element.name} ${element.trigger_word} ${element.description}`.toLowerCase().includes(q)) : elements;
@@ -186,6 +312,18 @@ export function LibrarySurface() {
 
     return (
         <div className="st-page">
+            <input
+                ref={relinkRef}
+                type="file"
+                accept="image/*,video/*,audio/*,.srt,.vtt"
+                style={{ display: 'none' }}
+                aria-label="Relink media file"
+                onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (file && relinkTarget) await relinkAsset(relinkTarget, file);
+                }}
+            />
             <div className="st-page-head">
                 <div>
                     <h2 className="st-page-title">Library</h2>
@@ -225,9 +363,10 @@ export function LibrarySurface() {
                         type="button"
                         className="st-button"
                         data-size="sm"
-                        onClick={() => void Promise.all([refresh(), refreshTakes()])}
+                        onClick={() => void repairMedia()}
+                        title="Re-check every media path and report missing files"
                     >
-                        <RefreshCw size={12} className={loading || takesLoading ? 'animate-spin' : ''} /> Refresh
+                        <RefreshCw size={12} className={loading || takesLoading ? 'animate-spin' : ''} /> Refresh &amp; repair
                     </button>
                 </div>
             </div>
@@ -252,7 +391,43 @@ export function LibrarySurface() {
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                 />
+                <button
+                    type="button"
+                    className="st-button"
+                    data-size="sm"
+                    data-variant={missingOnly ? 'primary' : 'ghost'}
+                    aria-pressed={missingOnly}
+                    onClick={() => setMissingOnly(!missingOnly)}
+                    title="Show only cards whose files are missing"
+                >
+                    <TriangleAlert size={12} /> Missing ({missingCount})
+                </button>
             </div>
+
+            {selectedAssetIds.size > 0 && (
+                <div className="st-bulk-bar" role="region" aria-label="Selected media actions">
+                    <strong>{selectedAssetIds.size} selected</strong>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant="danger"
+                        disabled={bulkBusy}
+                        onClick={() => void deleteAssetIds([...selectedAssetIds])}
+                    >
+                        <Trash2 size={12} /> Delete selected
+                    </button>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant="ghost"
+                        onClick={() => setSelectedAssetIds(new Set())}
+                    >
+                        Clear
+                    </button>
+                </div>
+            )}
 
             {tab === 'assets' ? (
                 filteredAssets.length === 0 ? (
@@ -260,11 +435,12 @@ export function LibrarySurface() {
                 ) : (
                     <div className="st-grid">
                         {filteredAssets.map((asset) => (
-                            <article className="st-take" key={asset.id}>
+                            <article className="st-take" key={asset.id} data-selected={selectedAssetIds.has(asset.id)}>
                                 <button
                                     type="button"
                                     className="st-take-media st-media-open"
                                     aria-label={`Preview ${asset.filename}`}
+                                    title={asset.filename}
                                     onClick={() => openMediaPreview({
                                         url: getAssetUrl(asset.url) || asset.url,
                                         title: asset.filename,
@@ -272,7 +448,9 @@ export function LibrarySurface() {
                                         kind: assetKind(asset),
                                     })}
                                 >
-                                    {assetKind(asset) === 'video' || assetKind(asset) === 'image' ? (
+                                    {asset.missing ? (
+                                        <div className="st-stage-empty"><TriangleAlert size={16} /><span>File missing</span></div>
+                                    ) : assetKind(asset) === 'video' || assetKind(asset) === 'image' ? (
                                         <MediaThumb
                                             src={asset.url}
                                             poster={asset.thumbnail}
@@ -284,18 +462,44 @@ export function LibrarySurface() {
                                         <div className="st-stage-empty"><FileText size={14} /><span>{assetKind(asset)}</span></div>
                                     )}
                                 </button>
+                                <label className="st-asset-select">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedAssetIds.has(asset.id)}
+                                        onChange={() => toggleAsset(asset.id)}
+                                        aria-label={`Select ${asset.filename}`}
+                                    />
+                                </label>
                                 <div className="st-take-body">
-                                    <strong style={{ color: 'var(--st-text)' }}>{asset.filename}</strong>
-                                    <div>{asset.type} · {new Date(asset.created_at * 1000).toLocaleDateString()}</div>
+                                    <strong className="st-filename" title={asset.filename}>{middleEllipsis(asset.filename)}</strong>
+                                    <div className="st-filename" title={`${asset.type} · ${new Date(asset.created_at * 1000).toLocaleString()}`}>
+                                        {asset.missing ? 'missing file' : asset.type} · {new Date(asset.created_at * 1000).toLocaleDateString()}
+                                    </div>
+                                    {asset.missing && (
+                                        <button
+                                            type="button"
+                                            className="st-button"
+                                            data-size="sm"
+                                            disabled={bulkBusy}
+                                            onClick={() => {
+                                                setRelinkTarget(asset);
+                                                relinkRef.current?.click();
+                                            }}
+                                            title="Choose a replacement file for this asset"
+                                        >
+                                            <Upload size={11} /> Relink file
+                                        </button>
+                                    )}
                                     <button
                                         type="button"
-                                        className="st-button"
+                                        className="st-button st-asset-delete"
                                         data-size="sm"
-                                        data-variant="danger"
+                                        data-variant="ghost"
                                         onClick={() => void deleteAsset(asset)}
-                                        title="Delete this asset and its file"
+                                        title={`Delete ${asset.filename} and its file`}
+                                        aria-label={`Delete ${asset.filename}`}
                                     >
-                                        <Trash2 size={11} /> Delete
+                                        <Trash2 size={11} />
                                     </button>
                                 </div>
                             </article>
@@ -374,7 +578,32 @@ export function LibrarySurface() {
                     </div>
                 </div>
             ) : tab === 'takes' ? (
-                filteredTakes.length === 0 ? (
+                <>
+                {selectedTakeIds.size > 0 && (
+                    <div className="st-bulk-bar" role="region" aria-label="Selected take actions">
+                        <strong>{selectedTakeIds.size} selected</strong>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="danger"
+                            disabled={bulkBusy}
+                            onClick={() => void deleteTakeIds([...selectedTakeIds])}
+                        >
+                            <Trash2 size={12} /> Delete selected takes
+                        </button>
+                        <button
+                            type="button"
+                            className="st-button"
+                            data-size="sm"
+                            data-variant="ghost"
+                            onClick={() => setSelectedTakeIds(new Set())}
+                        >
+                            Clear
+                        </button>
+                    </div>
+                )}
+                {filteredTakes.length === 0 ? (
                     <div className="st-empty">
                         <strong>No completed takes</strong>
                         <span>Generate a shot; completed jobs appear here with seed, model, and shot lineage.</span>
@@ -384,7 +613,12 @@ export function LibrarySurface() {
                         {filteredTakes.map((take) => {
                             const shot = project.shots.find((item) => item.id === take.shot_id);
                             return (
-                                <article className="st-take" key={take.job_id} style={{ borderColor: take.selected ? 'var(--st-accent)' : undefined }}>
+                                <article
+                                    className="st-take"
+                                    key={take.job_id}
+                                    data-selected={selectedTakeIds.has(take.job_id)}
+                                    style={{ borderColor: take.selected ? 'var(--st-accent)' : undefined }}
+                                >
                                     <button
                                         type="button"
                                         className="st-take-media st-media-open"
@@ -401,6 +635,14 @@ export function LibrarySurface() {
                                             alt={take.shot_label || take.job_id}
                                         />
                                     </button>
+                                    <label className="st-asset-select">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedTakeIds.has(take.job_id)}
+                                            onChange={() => toggleTake(take.job_id)}
+                                            aria-label={`Select take ${take.job_id.slice(0, 12)}`}
+                                        />
+                                    </label>
                                     <div className="st-take-body">
                                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}>
                                             <strong style={{ color: 'var(--st-text)' }}>
@@ -432,6 +674,8 @@ export function LibrarySurface() {
                         })}
                     </div>
                 )
+                }
+                </>
             ) : (
                 <>
                     <div className="st-button-row" style={{ marginBottom: 12 }}>

@@ -24,7 +24,18 @@ one right rail per surface, a real mobile mode, and readable warnings**. Priorit
 order: **truth → media trust → density → mobile → timeline/preview → language →
 verification**. Each phase lands with tests before the next begins.
 
-Status: **planned, not started**. No F7 code has shipped as of 2026-11-18.
+Status: **implemented — 2026-11-18**. All seven phases landed; evidence is in
+[[../systems/frontend-ux-audit-2026-11-18]] and the verification gate below.
+
+| Phase | Status | What shipped |
+|---|---|---|
+| **F7-0** | ✅ | One save vocabulary (`Saved`/`Unsaved`/`Saving…`/`Save conflict`/`Save failed`), truthful tone, shot status hydration, runtime fields no longer dirty the document |
+| **F7-1** | ✅ | `/uploads?project_id=`, `missing` flags, missing filter, refresh/repair, stable-id relink endpoint, bulk delete for assets and takes, error thumbnails |
+| **F7-2** | ✅ | Per-surface rail memory, Generate params and Inspector are mutually exclusive, ComfyUI Run/Bindings/Outputs tabs, 28px+ hit targets |
+| **F7-3** | ✅ | 56px mobile rail, full-width Story board (334px at 390), spine drawer, collapsible command dock, compact mobile status strip |
+| **F7-4** | ✅ | Five tracks fit 900px, track visibility menu, title and WebGL LUT preview in Edit, grouped title form with swatch |
+| **F7-5** | ✅ | Readable memory warnings, neutral tone for zero states, pluralization/vocabulary pass, middle ellipsis, styled color/range controls |
+| **F7-6** | ✅ | `e2e/ux-matrix.spec.ts`, project-scope backend tests, save-status Vitest, regenerated OpenAPI |
 
 ## Findings → phases
 

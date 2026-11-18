@@ -63,7 +63,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
     saveStatus: 'idle',
     saveError: null,
 
-    setProject: (p) => set({ project: p }),
+    setProject: (p) => set({ project: p, saveStatus: 'dirty' }),
 
     triggerAssetRefresh: () => set(state => ({ assetRefreshVersion: state.assetRefreshVersion + 1 })),
 
@@ -239,7 +239,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 revision: typeof data.revision === "number" ? data.revision : 0,
             };
 
-            set({ project: newProject, selectedShotId: null });
+            set({ project: newProject, selectedShotId: null, saveStatus: 'saved', saveError: null });
             addToast("New project created", "success");
         } catch (e) {
             console.error(e);
@@ -298,6 +298,12 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                     action: s.action,
                     dialogue: s.dialogue,
                     character: s.character,
+                    status: s.status === 'generating' ? 'pending' : (s.status || (s.video_url ? 'completed' : 'pending')),
+                    isGenerating: false,
+                    progress: undefined,
+                    stage: undefined,
+                    statusMessage: undefined,
+                    etaSeconds: undefined,
                     timeline: (typeof s.timeline === "string"
                         ? (() => { try { return JSON.parse(s.timeline || "[]"); } catch { return []; } })()
                         : (s.timeline || [])
@@ -353,7 +359,7 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
             set({
                 project: loadedProject,
                 selectedShotId: loadedProject.shots[0]?.id || null,
-                saveStatus: 'idle',
+                saveStatus: 'saved',
                 saveError: null,
             });
             saveLastProjectId(id);  // Remember last opened project

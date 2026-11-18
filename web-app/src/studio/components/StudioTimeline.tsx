@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Captions, Music, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal,
+    Captions, Eye, EyeOff, Music, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal,
     UnfoldHorizontal, Upload,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -64,7 +64,7 @@ export function StudioTimeline() {
         toggleTrackMute: state.toggleTrackMute,
         toggleTrackSolo: state.toggleTrackSolo,
     })));
-    const { timelineZoom, setTimelineZoom } = useStudioEditor();
+    const { timelineZoom, setTimelineZoom, hiddenTracks, toggleTrackVisibility } = useStudioEditor();
     const [tool, setTool] = useState<Tool>('select');
     const [preview, setPreview] = useState<Preview | null>(null);
     const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
@@ -73,9 +73,10 @@ export function StudioTimeline() {
     const [tableView, setTableView] = useState(false);
     const [scrollLeft, setScrollLeft] = useState(0);
     const [viewportWidth, setViewportWidth] = useState(900);
+    const [trackMenuOpen, setTrackMenuOpen] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const captionFileRef = useRef<HTMLInputElement>(null);
-    const { assets } = useStudioAssets();
+    const { assets } = useStudioAssets(project.id);
     const audioAssets = useMemo(() => assets.filter((asset) => asset.type === 'audio'), [assets]);
     const gesture = useRef<Gesture | null>(null);
     const fps = project.fps || 25;
@@ -454,6 +455,43 @@ export function StudioTimeline() {
                 <span style={{ color: 'var(--st-faint)', fontSize: 11 }}>
                     B blade · R ripple · [ ] slide
                 </span>
+                <div style={{ position: 'relative' }}>
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant={trackMenuOpen ? 'primary' : 'ghost'}
+                        aria-expanded={trackMenuOpen}
+                        aria-haspopup="true"
+                        onClick={() => setTrackMenuOpen(!trackMenuOpen)}
+                        title="Choose which tracks are visible"
+                    >
+                        <Eye size={12} /> Tracks {5 - hiddenTracks.length}/5
+                    </button>
+                    {trackMenuOpen && (
+                        <div className="st-track-menu" role="menu" aria-label="Visible tracks">
+                            {[...TRACKS, { id: 4, label: 'C1', tone: 'var(--st-captions)' }].map((track) => {
+                                const visible = !hiddenTracks.includes(track.id);
+                                return (
+                                    <button
+                                        key={track.id}
+                                        type="button"
+                                        role="menuitemcheckbox"
+                                        aria-checked={visible}
+                                        className="st-track-menu-row"
+                                        onClick={() => toggleTrackVisibility(track.id)}
+                                    >
+                                        {visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                        <span style={{ color: track.tone }}>{track.label}</span>
+                                        <span style={{ marginLeft: 'auto', color: 'var(--st-faint)', fontSize: 11 }}>
+                                            {visible ? 'visible' : 'hidden'}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
                 <button
                     type="button"
                     className="st-button"
@@ -685,7 +723,7 @@ export function StudioTimeline() {
                         ))}
                     </div>
 
-                    {TRACKS.map((track) => (
+                    {TRACKS.filter((track) => !hiddenTracks.includes(track.id)).map((track) => (
                         <div className="st-timeline-track" key={track.id}>
                             <div className="st-timeline-label">
                                 <strong style={{ color: track.tone }}>{track.label}</strong>
@@ -806,6 +844,7 @@ export function StudioTimeline() {
                         </div>
                     ))}
 
+                    {!hiddenTracks.includes(4) && (
                     <div className="st-timeline-track">
                         <div className="st-timeline-label">
                             <strong style={{ color: 'var(--st-captions)' }}>C1</strong>
@@ -821,8 +860,8 @@ export function StudioTimeline() {
                                     style={{
                                         left: (cue.startFrame / fps) * timelineZoom,
                                         width: Math.max(10, ((cue.endFrame - cue.startFrame) / fps) * timelineZoom),
-                                        top: 14,
-                                        bottom: 14,
+                                        top: 8,
+                                        bottom: 8,
                                     }}
                                     onClick={(event) => {
                                         event.stopPropagation();
@@ -841,6 +880,7 @@ export function StudioTimeline() {
                             )}
                         </div>
                     </div>
+                    )}
 
                     <Playhead timelineZoom={timelineZoom} />
                 </div>

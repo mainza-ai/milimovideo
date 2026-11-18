@@ -28,7 +28,7 @@ export function ShortsSurface() {
     const cancelJob = useStudioCancelJob();
     const openMediaPreview = useMediaPreview((state) => state.open);
     const { renders, refresh } = useStudioRenders(project.id);
-    const { assets } = useStudioAssets();
+    const { assets } = useStudioAssets(project.id);
     const videoAssets = useMemo(() => assets.filter((asset) => asset.type === 'video'), [assets]);
     const [sourceUrl, setSourceUrl] = useState('');
     const fileRef = useRef<HTMLInputElement>(null);
@@ -129,7 +129,7 @@ export function ShortsSurface() {
                 <div>
                     <h2 className="st-page-title">Shorts</h2>
                     <p className="st-page-subtitle">
-                        Source cut {totalDuration.toFixed(1)}s · {candidates.length} candidate windows.
+                        Source cut {totalDuration.toFixed(1)}s · {candidates.length} candidate {candidates.length === 1 ? 'window' : 'windows'}.
                         Transcript cues stay local; the render burns only the selected range.
                     </p>
                 </div>

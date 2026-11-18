@@ -12,6 +12,7 @@ import { PlaybackEngine } from '../components/PlaybackEngine';
 import { StudioTimeline } from '../components/StudioTimeline';
 import { BlockingLens } from '../components/BlockingLens';
 import { TrackingPanel } from '../../components/Editor/TrackingPanel';
+import { LutPreview } from '../components/LutPreview';
 
 const Previz3D = lazy(() => import('../components/Previz3D'));
 import { formatDuration, useAssetUrl, useStudioTakes } from '../data/useStudioData';
@@ -39,6 +40,8 @@ export function EditSurface() {
     const [blockingOpen, setBlockingOpen] = useState(false);
     const [previzOpen, setPrevizOpen] = useState(false);
     const [trackingOpen, setTrackingOpen] = useState(false);
+    const [lutPreviewFailed, setLutPreviewFailed] = useState(false);
+    const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
     const [maskPrompt, setMaskPrompt] = useState('');
     const [inpaintPrompt, setInpaintPrompt] = useState('');
     const [inpaintStatus, setInpaintStatus] = useState<string | null>(null);
@@ -292,7 +295,16 @@ export function EditSurface() {
                             {isImage ? (
                                 <img src={mediaUrl} alt="" />
                             ) : (
-                                <video ref={videoRef} src={mediaUrl} muted playsInline preload="metadata" />
+                                <video
+                                    ref={(element) => {
+                                        videoRef.current = element;
+                                        setVideoElement(element);
+                                    }}
+                                    src={mediaUrl}
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                />
                             )}
                         </div>
                     ) : (
@@ -343,6 +355,21 @@ export function EditSurface() {
                         </div>
                     )}
 
+                    {mediaUrl && !isImage && project.renderLut && (
+                        <LutPreview
+                            video={videoElement}
+                            lutUrl={project.renderLut}
+                            onError={() => setLutPreviewFailed(true)}
+                        />
+                    )}
+
+                    <TitleOverlay
+                        titles={project.titles || []}
+                        fps={fps}
+                        stageWidth={stageSize.width}
+                        projectWidth={project.resolutionW}
+                    />
+
                     <CaptionOverlay
                         captions={project.captions || []}
                         fps={fps}
@@ -357,6 +384,17 @@ export function EditSurface() {
                         <span className="st-status-pill">V{active?.track === 1 ? 2 : 1}</span>
                         <span className="st-status-pill">{project.resolutionW}×{project.resolutionH}</span>
                         <span className="st-status-pill">{fps} fps</span>
+                        {(project.renderLut || (project.titles || []).length > 0) && (
+                            <span
+                                className="st-status-pill"
+                                data-tone={project.renderLut && lutPreviewFailed ? 'warn' : undefined}
+                                title={project.renderLut && lutPreviewFailed
+                                    ? 'This LUT format is export-only in the browser preview'
+                                    : 'Titles and LUT are previewed here; export stays authoritative'}
+                            >
+                                {project.renderLut && lutPreviewFailed ? 'LUT on export' : 'preview'}
+                            </span>
+                        )}
                         {(['grid', 'safe', 'thirds'] as const).map((guide) => (
                             <button
                                 key={guide}
@@ -573,7 +611,7 @@ export function EditSurface() {
                 >
                     {depthBusy ? 'Depth…' : 'Depth'}
                 </button>
-                <span className="st-status-pill st-transport-audio"><Volume2 size={11} /> embedded audio mixed</span>
+                <span className="st-status-pill st-transport-audio"><Volume2 size={11} /> embedded audio · A1/A2 mix</span>
                 <button type="button" className="st-icon-button" aria-label="Fullscreen (F2)">
                     <Maximize size={14} />
                 </button>
@@ -599,6 +637,53 @@ export function EditSurface() {
                     />
                 </Suspense>
             )}
+        </div>
+    );
+}
+
+function TitleOverlay({
+    titles,
+    fps,
+    stageWidth,
+    projectWidth,
+}: {
+    titles: Array<{
+        id: string;
+        text: string;
+        startFrame: number;
+        endFrame: number;
+        x?: number;
+        y?: number;
+        size?: number;
+        color?: string;
+        box?: boolean;
+    }>;
+    fps: number;
+    stageWidth: number;
+    projectWidth: number;
+}) {
+    const currentTime = useStudioDocumentStore((state) => state.currentTime);
+    const frame = Math.round(currentTime * fps);
+    const active = titles.filter((title) => frame >= title.startFrame && frame < title.endFrame);
+    if (active.length === 0 || stageWidth <= 0) return null;
+    const scale = stageWidth / Math.max(1, projectWidth);
+    return (
+        <div className="st-title-layer" aria-live="off">
+            {active.map((title) => (
+                <span
+                    key={title.id}
+                    className="st-title-cue"
+                    data-box={title.box || undefined}
+                    style={{
+                        left: `${Math.max(0, Math.min(1, title.x ?? 0.5)) * 100}%`,
+                        top: `${Math.max(0, Math.min(1, title.y ?? 0.5)) * 100}%`,
+                        color: title.color || '#ffffff',
+                        fontSize: `clamp(10px, ${Math.max(10, (title.size ?? 48) * scale)}px, 96px)`,
+                    }}
+                >
+                    {title.text}
+                </span>
+            ))}
         </div>
     );
 }

@@ -371,6 +371,20 @@
         "title": "Body_import_project_otio_projects__project_id__otio_import_post",
         "type": "object"
       },
+      "Body_replace_asset_file_assets__asset_id__replace_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_replace_asset_file_assets__asset_id__replace_post",
+        "type": "object"
+      },
       "Body_segment_by_text_edit_segment_text_post": {
         "properties": {
           "confidence": {
@@ -3621,6 +3635,57 @@
           }
         },
         "summary": "Delete Asset",
+        "tags": [
+          "assets"
+        ]
+      }
+    },
+    "/assets/{asset_id}/replace": {
+      "post": {
+        "description": "Relink a missing Library asset by replacing its file and URL.\n\nThe asset id is stable, so shots that point at the old URL are rewritten to\nthe new one. Nothing is deleted implicitly: a caller that wants the record\ngone still uses DELETE.",
+        "operationId": "replace_asset_file_assets__asset_id__replace_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "asset_id",
+            "required": true,
+            "schema": {
+              "title": "Asset Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_replace_asset_file_assets__asset_id__replace_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replace Asset File",
         "tags": [
           "assets"
         ]
@@ -9886,8 +9951,26 @@
     },
     "/uploads": {
       "get": {
-        "description": "Returns a combined list of Assets (Uploaded) and Completed Jobs (Generated)\nfrom the SQLite database, deduplicated by URL.",
+        "description": "Returns a combined list of Assets (Uploaded) and Completed Jobs (Generated)\nfrom the SQLite database, deduplicated by URL.\n\nPass `project_id` to scope the result to one project. Omitting it keeps the\nlegacy global view for callers that explicitly want every project.",
         "operationId": "list_uploads_uploads_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -9896,6 +9979,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "List Uploads",

@@ -50,7 +50,13 @@ export function MemoryPanel() {
                     Memory budget
                 </h3>
                 <div className="st-button-row">
-                    <span className="st-status-pill" data-tone={status ? (status.pressure === 'normal' ? 'good' : 'warn') : undefined}>
+                    <span
+                        className="st-status-pill"
+                        data-tone={status
+                            ? (status.pressure !== 'normal' || status.notes.length > 0 || status.swap_percent >= 90 ? 'warn' : 'good')
+                            : undefined}
+                        title={status?.notes.join(' · ') || undefined}
+                    >
                         {status ? STAGE_LABEL[status.pressure] || status.pressure : 'unknown'}
                     </span>
                     {status?.used_gb ? (
@@ -116,11 +122,12 @@ export function MemoryPanel() {
                     )}
 
                     {status.notes.length > 0 && (
-                        <div className="st-button-row" style={{ marginTop: 8 }}>
+                        <div className="st-warning-list" role="status">
                             {status.notes.map((note) => (
-                                <span className="st-chip" key={note} data-tone="warn">
-                                    <TriangleAlert size={10} /> {note}
-                                </span>
+                                <div className="st-warning-note" key={note} data-tone="warn" title={note}>
+                                    <TriangleAlert size={11} />
+                                    <span>{note}</span>
+                                </div>
                             ))}
                         </div>
                     )}

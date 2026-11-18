@@ -53,11 +53,11 @@ a test; "open" means no code or no verified path.
 - Per-job priority override; desktop tray icon; legacy notification surface.
 - Visual baselines are local/platform-tolerant.
 - One perf spec is flaky under load (500-card pan threshold).
-- **F7 whole-frontend UX** — audited 2026-11-18 but **not implemented**: truthful
-  save/shot status after reload, project-scoped Library, one right rail per
-  surface, a usable mobile Story shell, timeline reachability, title/LUT preview
-  parity, and warning/copy semantics. See
-  [[../systems/frontend-ux-audit-2026-11-18]] and [[frontend-ux-plan-2026-11-18]].
+- **F7 whole-frontend UX** — **done 2026-11-18**: truthful save/shot status,
+  project-scoped Library with relink/repair and bulk actions, one right rail per
+  surface, mobile Story drawer, five-track timeline, title/LUT preview, and the
+  surface matrix gate. See [[../systems/frontend-ux-audit-2026-11-18]] and
+  [[frontend-ux-plan-2026-11-18]].
 
 ## 2. Market scan (2026-11-17)
 

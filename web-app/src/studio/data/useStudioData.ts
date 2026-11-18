@@ -119,6 +119,7 @@ export interface StudioAsset {
     filename: string;
     type: string;
     thumbnail?: string | null;
+    missing?: boolean;
     created_at: number;
 }
 
@@ -350,13 +351,14 @@ export function useStudioUploadAsset(projectId: string) {
     }, [addToast, projectId]);
 }
 
-export function useStudioAssets() {
+export function useStudioAssets(projectId?: string) {
     const [assets, setAssets] = useState<StudioAsset[]>([]);
     const [loading, setLoading] = useState(true);
     const refresh = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await fetch(apiUrl('/uploads'));
+            const query = projectId ? `?project_id=${encodeURIComponent(projectId)}` : '';
+            const response = await fetch(apiUrl(`/uploads${query}`));
             const data = response.ok ? await response.json() : [];
             setAssets(Array.isArray(data) ? data : []);
         } catch {
@@ -364,7 +366,7 @@ export function useStudioAssets() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [projectId]);
     useEffect(() => { void refresh(); }, [refresh]);
     useEffect(() => {
         const handler = () => { void refresh(); };

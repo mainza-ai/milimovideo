@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { ArrowUp, Check, CornerDownLeft, Loader2, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, CornerDownLeft, Loader2, Sparkles, TriangleAlert, X } from 'lucide-react';
 import type { Shot } from '../state/documentStore';
 import { apiUrl } from '../../config';
 import { PlanResponseSchema } from '../../api/contracts';
@@ -60,6 +60,7 @@ export function CommandDock() {
         commandOpen, setCommandOpen, commandMode, setCommandMode,
         setBoardQuery, setSurface, commandDraft, setCommandDraft,
         recipes, saveRecipe, deleteRecipe,
+        commandDockCollapsed, setCommandDockCollapsed,
     } = useStudioEditor(useShallow((state) => ({
         commandOpen: state.commandOpen,
         setCommandOpen: state.setCommandOpen,
@@ -72,6 +73,8 @@ export function CommandDock() {
         recipes: state.recipes,
         saveRecipe: state.saveRecipe,
         deleteRecipe: state.deleteRecipe,
+        commandDockCollapsed: state.commandDockCollapsed,
+        setCommandDockCollapsed: state.setCommandDockCollapsed,
     })));
     const [value, setValue] = useState('');
     const [plan, setPlan] = useState<Plan | null>(null);
@@ -97,6 +100,25 @@ export function CommandDock() {
                 <div className="st-command-main">
                     <button type="button" className="st-button" data-variant="primary" onClick={() => setCommandOpen(true)}>
                         <Sparkles size={13} /> Open command dock
+                    </button>
+                    <span className="st-command-hint">⌘J</span>
+                </div>
+            </div>
+        );
+    }
+
+    if (commandDockCollapsed) {
+        return (
+            <div className="st-command-dock" data-collapsed="true">
+                <div className="st-command-main">
+                    <button
+                        type="button"
+                        className="st-button"
+                        data-size="sm"
+                        data-variant="ghost"
+                        onClick={() => setCommandDockCollapsed(false)}
+                    >
+                        <ChevronDown size={13} style={{ transform: 'rotate(180deg)' }} /> Show command dock
                     </button>
                     <span className="st-command-hint">⌘J</span>
                 </div>
@@ -226,6 +248,15 @@ export function CommandDock() {
                 ))}
                 {elements.length > 0 && <span className="st-context-chip">{elements.length} master refs</span>}
                 <span className="st-context-chip" style={{ marginLeft: 'auto' }}>plan is local · nothing runs before approval</span>
+                <button
+                    type="button"
+                    className="st-icon-button"
+                    aria-label="Minimize command dock"
+                    title="Minimize command dock"
+                    onClick={() => setCommandDockCollapsed(true)}
+                >
+                    <ChevronDown size={13} />
+                </button>
             </div>
 
             {recipes.length > 0 && (

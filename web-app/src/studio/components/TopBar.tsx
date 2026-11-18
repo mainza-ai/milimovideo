@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-    CheckCircle2, ChevronDown, FolderOpen, MessageSquare, MonitorPlay,
+    CheckCircle2, ChevronDown, FolderOpen, MessageSquare, MonitorPlay, PanelLeft,
     Plus, Redo2, Save, Share2, TriangleAlert, Undo2,
 } from 'lucide-react';
 import { useStore } from 'zustand';
@@ -10,6 +10,7 @@ import { isDesktop, startDesktopBackend } from '../../desktop';
 import { useStudioData, useStudioReview } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
 import { useStudioDocumentStore } from '../state/documentStore';
+import { saveStatusLabel, saveStatusTone } from '../../stores/saveStatus';
 import { ActivityCenter } from './ActivityCenter';
 
 const SURFACES: Array<{ id: StudioSurface; label: string }> = [
@@ -35,6 +36,7 @@ export function TopBar() {
         })),
     );
     const { saveStatus, saveError, saveProject } = useStudioDocumentStore();
+    const setMobileSpineOpen = useStudioEditor((state) => state.setMobileSpineOpen);
     const addToast = useStudioDocumentStore((state) => state.addToast);
     const loadProject = useStudioDocumentStore((state) => state.loadProject);
     const createNewProject = useStudioDocumentStore((state) => state.createNewProject);
@@ -50,12 +52,8 @@ export function TopBar() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const canRedo = useStore(temporalStore, (state: any) => state.futureStates.length > 0);
 
-    const saveLabel = saveStatus === 'saving' ? 'Saving…'
-        : saveStatus === 'conflict' ? 'Conflict'
-            : saveStatus === 'error' ? 'Save failed'
-                : saveStatus === 'saved' ? 'Saved' : 'Unsaved';
-    const saveTone = saveStatus === 'error' || saveStatus === 'conflict' ? 'bad'
-        : saveStatus === 'saving' ? 'warn' : 'good';
+    const saveLabel = saveStatusLabel(saveStatus);
+    const saveTone = saveStatusTone(saveStatus);
 
     const createShareLink = async () => {
         const response = await fetch(apiUrl(`/projects/${project.id}/share`), { method: 'POST' });
@@ -99,6 +97,17 @@ export function TopBar() {
             <div className="st-brand">
                 <img src="/logo.png" alt="" />
                 <span className="st-brand-name">Milimo</span>
+                {activeSurface === 'story' && (
+                    <button
+                        type="button"
+                        className="st-icon-button st-story-drawer-toggle"
+                        aria-label="Show shot list"
+                        title="Show shot list"
+                        onClick={() => setMobileSpineOpen(true)}
+                    >
+                        <PanelLeft size={15} />
+                    </button>
+                )}
                 <div className="st-project-switcher">
                     <input
                         className="st-project-name"

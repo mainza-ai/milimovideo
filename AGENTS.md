@@ -194,11 +194,16 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
   pipeline lens with recipe import/export and apply-to-shot.
 - Review/agent: frame comments/approvals, activity, needs-you pill, share links,
   deterministic plan previews, undoable apply, recipes, `@Agent` handoff.
-- Library/Deliver: direct uploads, assets, master-reference CRUD (trigger,
+- Library/Deliver: project-scoped uploads with missing-file repair and stable-id
+  relink, bulk asset/take delete, direct uploads, master-reference CRUD (trigger,
   image, description), takes, ranked local search, presets, pad/crop reframing,
-  titles, 3D LUT, caption toggle/preview, persisted encoding controls, render
-  history/cancel, OTIO export/import and FCPXML export of the computed
-  V1/V2/A1/A2 cut.
+  titles (previewed in Edit), 3D LUT (WebGL preview for `.cube`), caption
+  toggle/preview, persisted encoding controls, render history/cancel, OTIO
+  export/import and FCPXML export of the computed V1/V2/A1/A2 cut.
+- Truthful shell state: one save vocabulary (`Saved`/`Unsaved`/`Saving…`/
+  conflict/failed) with dirty tracking that ignores job progress; shot status and
+  take state hydrate after reload. Per-surface inspector policy, `Tracks 5/5`
+  visibility, and a mobile Story spine drawer with a full-width board.
 - Media viewer: one global image/video/audio/text preview used by Library, Story,
   Generate, Edit, Inspector, and Review; legacy localhost URLs are rewritten to
   the current API origin with bearer-token support. Video uploads get real poster
@@ -232,7 +237,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 222 backend tests, 95 Vitest tests, and 22 Playwright tests, plus
+baseline is 225 backend tests, 102 Vitest tests, and 27 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -324,16 +329,16 @@ Run from the repo root unless noted:
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # 82 backend tests
+./milimov/bin/python -m pytest                 # 225 backend tests
 ./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # env/model/ffmpeg/disk
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 95 Vitest tests
+npm test                                       # 102 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 22 Playwright tests
+npm run test:e2e                               # 27 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```

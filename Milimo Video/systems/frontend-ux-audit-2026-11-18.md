@@ -53,6 +53,39 @@ warnings that are truncated.
 - Mobile Setup is readable as a single column; mobile Generate/Edit keep the
   primary action visible.
 
+## Resolution — 2026-11-18
+
+The F7 plan was executed the same day. The findings below remain as the audit
+trail; this table is the fix record.
+
+| Finding | Resolution | Evidence |
+|---|---|---|
+| F7-01 | Shared save vocabulary and tone; load sets `Saved`, edits set `Unsaved`; runtime job fields do not dirty | `stores/saveStatus.ts`, `saveStatus.test.ts`, save pill/footer agree |
+| F7-02 | Shot `status`, take state, and progress hydrate from `/projects/{id}`; completed probe shots render `Done` | live probe: 7/7 completed, `6 of 6 shots have takes` |
+| F7-03 | `/uploads?project_id=` filters assets and jobs; `missing` flag returned | `test_uploads_project_scope.py`; probe Library shows 1 scoped asset, not 92 |
+| F7-04 | Mobile rail 56px, Story spine is a drawer, board 334px at 390 | `ux-matrix.spec.ts` mobile board ≥320 |
+| F7-05 | Memory notes render as wrapping `st-warning-note` rows with title; chip max-width no longer applies | `MemoryPanel.tsx`, `.st-warning-note` |
+| F7-06 | Generate params rail hides when Inspector opens; per-surface rail defaults/memory | live: stage 784 default, 744 with Inspector, params hidden |
+| F7-07 | `MediaThumb` renders an explicit “Media unavailable” placeholder | Vitest/E2E media paths |
+| F7-08 | Inspector defaults closed on Library/Deliver/Setup/Shorts and remembers per surface | `DEFAULT_INSPECTOR_BY_SURFACE` |
+| F7-09 | Five tracks fit 900px; `Tracks 5/5` visibility menu; visible scroll on short viewports | live: scrollHeight === clientHeight 299 |
+| F7-10 | Title form grouped; add action on its own row; color swatch instead of raw bar | Deliver screenshot/JSX |
+| F7-11 | Titles and `.cube` LUT preview in the Edit stage (WebGL); export-only fallback badge | live: `.st-title-cue` + `.st-lut-canvas` |
+| F7-12 | Command dock is collapsible; mobile status strip keeps device/queue/save only | `CommandDock.tsx`, mobile CSS |
+| F7-13 | Asset/take selection, bulk delete, context actions, middle ellipsis | Library surface |
+| F7-14 | ComfyUI panel split into Run job / Bindings / Outputs tabs | `ComfyUIPanel.tsx` |
+| F7-15 | Story quick actions raised to 36px (≈31px at 0.85 camera) | live control-floor check |
+| F7-16/17/19 | Neutral zero states, pluralization, Pending/Running/Done/Failed vocabulary | `shotStatusLabel`, copy pass |
+| F7-18 | Middle ellipsis with full-name tooltip | `middleEllipsis` in Library |
+| F7-20 | Warning notes wrap and expose the full text via title | CSS + MemoryPanel |
+| F7-21 | Status strip prioritizes device/queue/save on mobile | responsive CSS |
+| F7-22 | Color/range inputs styled to the dark tokens | `.st-color-field`, accent-color |
+| F7-23 | Empty/missing/error media states share one placeholder | `MediaThumb` |
+| F7-24 | Pressure tone turns warning when notes or swap ≥90% exist | MemoryPanel |
+
+Verification: 225 backend tests, 102 Vitest, 27 Playwright, axe clean on all
+eight surfaces at 1440 and 390, ruff/tsc/ESLint clean.
+
 ## P1 findings
 
 | ID | Finding | Evidence | Impact |

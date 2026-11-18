@@ -17,6 +17,7 @@ import {
     useStudioSelection,
     useStudioTakes,
 } from '../data/useStudioData';
+import { shotStatusLabel } from '../../stores/saveStatus';
 import type { MemoryDowngrade, StudioElement } from '../data/useStudioData';
 import { PipelineLens } from '../components/PipelineLens';
 import { ComfyWorkflowPanel } from '../components/ComfyUIPanel';
@@ -24,6 +25,7 @@ import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
 import { MediaThumb } from '../components/MediaThumb';
 import { stageLabel } from '../events/jobBridge';
+import { shotHasTake } from '../../stores/saveStatus';
 
 export function GenerateSurface() {
     const project = useStudioDocumentStore((state) => state.project);
@@ -46,6 +48,7 @@ export function GenerateSurface() {
     const setGenerateRailCollapsed = useStudioEditor((state) => state.setGenerateRailCollapsed);
     const generateParamsCollapsed = useStudioEditor((state) => state.generateParamsCollapsed);
     const setGenerateParamsCollapsed = useStudioEditor((state) => state.setGenerateParamsCollapsed);
+    const inspectorOpen = useStudioEditor((state) => state.inspectorOpen);
     const [promptDraft, setPromptDraft] = useState<string | null>(null);
     const [batchBusy, setBatchBusy] = useState(false);
     const [preview, setPreview] = useState<{ url: string | null; status: string; path?: string } | null>(null);
@@ -55,6 +58,7 @@ export function GenerateSurface() {
     const [queueBusy, setQueueBusy] = useState(false);
 
     const videoShots = project.shots.filter((item) => item.trackIndex !== 2);
+    const takeCount = videoShots.filter((item) => shotHasTake(item)).length;
     const selectedVideoShot = videoShots.find((item) => item.id === selectedShotId);
     const shot = selectedVideoShot || videoShots[0] || null;
     useEffect(() => { setPromptDraft(null); }, [shot?.id]);
@@ -205,7 +209,7 @@ export function GenerateSurface() {
 
     const queueReadyShots = async () => {
         const shotIds = videoShots
-            .filter((item) => item.status !== 'completed' && (item.prompt || item.action))
+            .filter((item) => !shotHasTake(item) && (item.prompt || item.action))
             .map((item) => item.id);
         if (shotIds.length === 0) {
             useStudioDocumentStore.getState().addToast('No pending shots to queue', 'info');
@@ -238,12 +242,13 @@ export function GenerateSurface() {
             className="st-shot-workspace"
             data-rail={generateRailCollapsed ? 'collapsed' : 'open'}
             data-params={generateParamsCollapsed ? 'collapsed' : 'open'}
+            data-inspector={inspectorOpen ? 'open' : 'closed'}
         >
             <aside className="st-shot-rail">
                 <div className="st-spine-head">
                     <div className="st-spine-title">Shot queue</div>
                     <div className="st-value" style={{ color: 'var(--st-muted)', fontSize: 11 }}>
-                        {videoShots.filter((item) => item.status === 'completed').length}/{videoShots.length} with takes
+                        {takeCount} of {videoShots.length} {videoShots.length === 1 ? 'shot has a take' : 'shots have takes'}
                     </div>
                 </div>
                 <div className="st-spine-list">
@@ -622,7 +627,7 @@ export function GenerateSurface() {
                                 >
                                     <td className="st-mono">{index + 1}</td>
                                     <td>{item.action || item.prompt || 'Untitled'}</td>
-                                    <td>{item.status || 'pending'}</td>
+                                    <td>{shotStatusLabel(item.status)}</td>
                                     <td className="st-mono">{item.progress != null ? `${item.progress}%` : '—'}</td>
                                     <td onClick={(event) => event.stopPropagation()}>
                                         <div className="st-button-row">
@@ -707,7 +712,7 @@ export function GenerateSurface() {
                         <dt>Seed</dt><dd>{shot.seed}</dd>
                         <dt>Frames</dt><dd>{shot.numFrames}</dd>
                         <dt>Resolution</dt><dd>{shot.width}×{shot.height}</dd>
-                        <dt>Status</dt><dd>{shot.status || 'pending'}</dd>
+                        <dt>Status</dt><dd>{shotStatusLabel(shot.status)}</dd>
                     </dl>
                     <details className="st-advanced">
                         <summary>Advanced parameters</summary>

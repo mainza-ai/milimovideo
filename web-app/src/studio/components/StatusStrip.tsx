@@ -2,6 +2,7 @@ import { useStudioData } from '../data/useStudioData';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { useStudioJobs } from '../state/jobStore';
 import { stageLabel } from '../events/jobBridge';
+import { saveStatusLabel, saveStatusTone } from '../../stores/saveStatus';
 
 function formatBytes(bytes: number | null | undefined): string {
     if (!bytes || bytes <= 0) return '—';
@@ -27,8 +28,10 @@ export function StatusStrip() {
                 <span><strong>Queue</strong> {health?.gpu?.queued ?? 0}</span>
             )}
             <span><strong>Disk</strong> {formatBytes(health?.disk_free_bytes)}</span>
-            <span><strong>Save</strong> {saveStatus}</span>
-            <span style={{ marginLeft: 'auto' }}>Studio · <strong>local-first</strong></span>
+            <span className="st-status-save" data-tone={saveStatusTone(saveStatus)}>
+                <strong>Save</strong> {saveStatusLabel(saveStatus)}
+            </span>
+            <span className="st-status-brand" style={{ marginLeft: 'auto' }}>Studio · <strong>local-first</strong></span>
         </footer>
     );
 }

@@ -447,7 +447,7 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
         state.project.shots.find((item) => item.id === shotId) || null,
     );
     const { health } = useComfyHealth();
-    const { assets } = useStudioAssets();
+    const { assets } = useStudioAssets(projectId);
     const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(projectId);
     const openMediaPreview = useMediaPreview((state) => state.open);
     const [text, setText] = useState(() => {
@@ -473,6 +473,7 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
     const [estimateSeconds, setEstimateSeconds] = useState(60);
     const [batchBusy, setBatchBusy] = useState(false);
     const [batchShots, setBatchShots] = useState<string[]>([]);
+    const [panelTab, setPanelTab] = useState<'run' | 'bindings' | 'outputs'>('run');
     const fileInput = useRef<HTMLInputElement>(null);
     const packInput = useRef<HTMLInputElement>(null);
     const loadedWorkflow = useRef(false);
@@ -983,6 +984,23 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
             <summary className="st-panel-title" style={{ cursor: 'pointer', margin: 0 }}>
                 ComfyUI workflow
             </summary>
+            <div className="st-tabbar" role="tablist" aria-label="ComfyUI panel sections">
+                {(['run', 'bindings', 'outputs'] as const).map((tab) => (
+                    <button
+                        key={tab}
+                        type="button"
+                        role="tab"
+                        className="st-tab"
+                        aria-selected={panelTab === tab}
+                        data-active={panelTab === tab}
+                        onClick={() => setPanelTab(tab)}
+                    >
+                        {tab === 'run' ? 'Run job' : tab === 'bindings' ? 'Bindings' : `Outputs${outputs.length ? ` (${outputs.length})` : ''}`}
+                    </button>
+                ))}
+            </div>
+            {panelTab === 'run' && (
+            <>
             <div className="st-button-row" style={{ marginTop: 8, flexWrap: 'wrap' }}>
                 <ComfyStatus health={health} />
                 {health.compatible === false && (
@@ -1203,6 +1221,10 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
                 </div>
             )}
 
+            </>
+            )}
+            {panelTab === 'bindings' && (
+            <>
             {parsed.workflow && (
                 <details style={{ marginTop: 10 }} open>
                     <summary className="st-label" style={{ cursor: 'pointer' }}>Shot bindings</summary>
@@ -1364,6 +1386,10 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
                 </details>
             )}
 
+            </>
+            )}
+            {panelTab === 'outputs' && (
+            <>
             {outputs.length > 0 && (
                 <div style={{ marginTop: 10 }}>
                     <span className="st-label">Latest outputs · {outputs.length}</span>
@@ -1403,6 +1429,14 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
                         })}
                     </div>
                 </div>
+            )}
+            {outputs.length === 0 && (
+                <div className="st-empty" style={{ minHeight: 100 }}>
+                    <strong>No outputs yet</strong>
+                    <span>Run the workflow; every output streams into the project.</span>
+                </div>
+            )}
+            </>
             )}
         </details>
     );

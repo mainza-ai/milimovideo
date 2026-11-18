@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Play } from 'lucide-react';
+import { ImageOff, Play } from 'lucide-react';
 import { getAssetUrl } from '../../config';
 
 interface Props {
@@ -15,7 +15,8 @@ function isVideo(url: string): boolean {
 
 /**
  * Video posters + muted hover playback for Library/Story/Generate/Review cards.
- * The parent click still opens the global media viewer.
+ * The parent click still opens the global media viewer. A failed video or image
+ * becomes an explicit placeholder instead of the browser's broken-image icon.
  */
 export function MediaThumb({ src, poster, alt = '', hovered }: Props) {
     const [localHover, setLocalHover] = useState(false);
@@ -24,19 +25,30 @@ export function MediaThumb({ src, poster, alt = '', hovered }: Props) {
     const video = !!src && isVideo(src);
     const active = hovered ?? localHover;
 
+    useEffect(() => { setFailed(false); }, [src, poster]);
+
     useEffect(() => {
         const element = videoRef.current;
-        if (!element || !video) return;
+        if (!element || !video || failed) return;
         if (active) {
             element.play().catch(() => { /* autoplay can be denied; poster remains */ });
         } else {
             element.pause();
             try { element.currentTime = 0; } catch { /* metadata may not be ready */ }
         }
-    }, [active, video]);
+    }, [active, video, failed]);
 
     if (!src && !poster) {
         return <div className="st-media-thumb st-media-thumb-empty" role="img" aria-label={alt || 'No media'} />;
+    }
+
+    if (failed) {
+        return (
+            <div className="st-media-thumb st-media-thumb-empty" role="img" aria-label={`${alt || 'Media'} unavailable`}>
+                <ImageOff size={16} />
+                <span>Media unavailable</span>
+            </div>
+        );
     }
 
     return (
@@ -46,7 +58,7 @@ export function MediaThumb({ src, poster, alt = '', hovered }: Props) {
             onPointerLeave={() => setLocalHover(false)}
             data-hover={active || undefined}
         >
-            {video && !failed ? (
+            {video ? (
                 <video
                     ref={videoRef}
                     src={getAssetUrl(src)}
@@ -59,7 +71,12 @@ export function MediaThumb({ src, poster, alt = '', hovered }: Props) {
                     onError={() => setFailed(true)}
                 />
             ) : (
-                <img src={getAssetUrl(poster || src)} alt={alt} loading="lazy" onError={() => setFailed(true)} />
+                <img
+                    src={getAssetUrl(poster || src)}
+                    alt={alt}
+                    loading="lazy"
+                    onError={() => setFailed(true)}
+                />
             )}
             {video && <span className="st-media-thumb-play" aria-hidden="true"><Play size={12} /></span>}
         </div>

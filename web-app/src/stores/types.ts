@@ -185,7 +185,7 @@ export interface ProjectSlice {
     assetRefreshVersion: number;
     triggerAssetRefresh: () => void;
 
-    saveStatus: 'idle' | 'saving' | 'saved' | 'error' | 'conflict';
+    saveStatus: 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict';
     saveError: string | null;
 
     // Async

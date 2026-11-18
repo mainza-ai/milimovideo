@@ -9,6 +9,7 @@ import { MotionPanel } from './MotionPanel';
 import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
 import { MediaThumb } from './MediaThumb';
+import { shotStatusLabel } from '../../stores/saveStatus';
 import {
     useStudioCancel,
     useStudioElements,
@@ -432,7 +433,7 @@ export function Inspector() {
                                     Compare takes, comment at the current frame, and approve the selected version in Review.
                                 </div>
                                 <dl className="st-meta-grid" style={{ marginTop: 10 }}>
-                                    <dt>Status</dt><dd>{shot.status || 'pending'}</dd>
+                                    <dt>Status</dt><dd>{shotStatusLabel(shot.status)}</dd>
                                     <dt>Last job</dt><dd className="st-mono">{shot.lastJobId || '—'}</dd>
                                 </dl>
                             </div>

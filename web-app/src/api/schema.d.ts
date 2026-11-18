@@ -21,6 +21,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/assets/{asset_id}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace Asset File
+         * @description Relink a missing Library asset by replacing its file and URL.
+         *
+         *     The asset id is stable, so shots that point at the old URL are rewritten to
+         *     the new one. Nothing is deleted implicitly: a caller that wants the record
+         *     gone still uses DELETE.
+         */
+        post: operations["replace_asset_file_assets__asset_id__replace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/comfy/catalog": {
         parameters: {
             query?: never;
@@ -2637,6 +2661,9 @@ export interface paths {
          * List Uploads
          * @description Returns a combined list of Assets (Uploaded) and Completed Jobs (Generated)
          *     from the SQLite database, deduplicated by URL.
+         *
+         *     Pass `project_id` to scope the result to one project. Omitting it keeps the
+         *     legacy global view for callers that explicitly want every project.
          */
         get: operations["list_uploads_uploads_get"];
         put?: never;
@@ -2837,6 +2864,14 @@ export interface components {
         };
         /** Body_import_project_otio_projects__project_id__otio_import_post */
         Body_import_project_otio_projects__project_id__otio_import_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
+        /** Body_replace_asset_file_assets__asset_id__replace_post */
+        Body_replace_asset_file_assets__asset_id__replace_post: {
             /**
              * File
              * Format: binary
@@ -4345,6 +4380,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_asset_file_assets__asset_id__replace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_asset_file_assets__asset_id__replace_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -9073,7 +9143,9 @@ export interface operations {
     };
     list_uploads_uploads_get: {
         parameters: {
-            query?: never;
+            query?: {
+                project_id?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -9087,6 +9159,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

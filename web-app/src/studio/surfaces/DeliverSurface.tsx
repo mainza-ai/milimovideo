@@ -453,16 +453,23 @@ export function DeliverSurface() {
                     </label>
                     <label>
                         <span className="st-label">Color</span>
-                        <input
-                            className="st-input"
-                            type="color"
-                            value={titleColor}
-                            onChange={(event) => setTitleColor(event.target.value)}
-                        />
+                        <span className="st-color-field">
+                            <input
+                                className="st-color-input"
+                                type="color"
+                                value={titleColor}
+                                aria-label="Title color"
+                                onChange={(event) => setTitleColor(event.target.value)}
+                            />
+                            <span className="st-mono">{titleColor.toUpperCase()}</span>
+                        </span>
                     </label>
+                </div>
+                <div className="st-button-row" style={{ marginTop: 8 }}>
                     <button
                         type="button"
                         className="st-button"
+                        data-variant="primary"
                         data-size="sm"
                         disabled={!titleText.trim()}
                         onClick={() => {
@@ -492,8 +499,11 @@ export function DeliverSurface() {
                             addToast('Title added', 'success');
                         }}
                     >
-                        <Plus size={12} /> Add title
+                        <Plus size={12} /> Add title at playhead range
                     </button>
+                    <span className="st-value" style={{ color: 'var(--st-faint)', fontSize: 11 }}>
+                        Titles render in the Edit preview and the final export.
+                    </span>
                 </div>
             </div>
 

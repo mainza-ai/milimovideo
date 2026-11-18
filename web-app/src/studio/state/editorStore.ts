@@ -2,6 +2,19 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type StudioSurface = 'story' | 'generate' | 'edit' | 'review' | 'library' | 'deliver' | 'shorts' | 'setup';
+
+/** One primary right rail per surface. Generate defaults closed because its
+ * shot-params rail already carries the same prompt/seed/frames controls. */
+export const DEFAULT_INSPECTOR_BY_SURFACE: Record<StudioSurface, boolean> = {
+    story: true,
+    generate: false,
+    edit: true,
+    review: true,
+    library: false,
+    deliver: false,
+    shorts: false,
+    setup: false,
+};
 export type StoryView = 'board' | 'list' | 'script';
 
 export interface Camera {
@@ -88,6 +101,10 @@ interface EditorState {
     timelineHeight: number;
     inspectorOpen: boolean;
     inspectorWidth: number;
+    railBySurface: Record<StudioSurface, boolean>;
+    mobileSpineOpen: boolean;
+    hiddenTracks: number[];
+    commandDockCollapsed: boolean;
     commandOpen: boolean;
     commandMode: 'ask' | 'direct' | 'generate' | 'find';
     commandDraft: string;
@@ -138,6 +155,9 @@ interface EditorState {
     setTimelineHeight: (height: number) => void;
     setInspectorOpen: (open: boolean) => void;
     setInspectorWidth: (width: number) => void;
+    setMobileSpineOpen: (open: boolean) => void;
+    toggleTrackVisibility: (trackId: number) => void;
+    setCommandDockCollapsed: (collapsed: boolean) => void;
     setCommandOpen: (open: boolean) => void;
     setCommandMode: (mode: EditorState['commandMode']) => void;
     setCommandDraft: (draft: string) => void;
@@ -198,8 +218,12 @@ export const useStudioEditor = create<EditorState>()(
             boardFollowSelection: true,
             timelineZoom: 48,
             timelineHeight: 330,
-            inspectorOpen: true,
+            inspectorOpen: DEFAULT_INSPECTOR_BY_SURFACE.story,
             inspectorWidth: 360,
+            railBySurface: { ...DEFAULT_INSPECTOR_BY_SURFACE },
+            mobileSpineOpen: false,
+            hiddenTracks: [],
+            commandDockCollapsed: false,
             commandOpen: false,
             commandMode: 'direct',
             commandDraft: '',
@@ -209,7 +233,10 @@ export const useStudioEditor = create<EditorState>()(
             density: 'comfortable',
             recipes: [],
             focusMode: 'none',
-            setSurface: (activeSurface) => set({ activeSurface }),
+            setSurface: (activeSurface) => set((state) => ({
+                activeSurface,
+                inspectorOpen: state.railBySurface[activeSurface] ?? DEFAULT_INSPECTOR_BY_SURFACE[activeSurface],
+            })),
             setStoryView: (storyView) => set({ storyView }),
             selectShot: (selectedShotId) => set({
                 selectedShotId,
@@ -345,8 +372,18 @@ export const useStudioEditor = create<EditorState>()(
             setFollowSelection: (boardFollowSelection) => set({ boardFollowSelection }),
             setTimelineZoom: (timelineZoom) => set({ timelineZoom: Math.max(8, Math.min(240, timelineZoom)) }),
             setTimelineHeight: (timelineHeight) => set({ timelineHeight: Math.max(180, Math.min(620, timelineHeight)) }),
-            setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
+            setInspectorOpen: (inspectorOpen) => set((state) => ({
+                inspectorOpen,
+                railBySurface: { ...state.railBySurface, [state.activeSurface]: inspectorOpen },
+            })),
             setInspectorWidth: (inspectorWidth) => set({ inspectorWidth: Math.max(300, Math.min(560, inspectorWidth)) }),
+            setMobileSpineOpen: (mobileSpineOpen) => set({ mobileSpineOpen }),
+            toggleTrackVisibility: (trackId) => set((state) => ({
+                hiddenTracks: state.hiddenTracks.includes(trackId)
+                    ? state.hiddenTracks.filter((id) => id !== trackId)
+                    : [...state.hiddenTracks, trackId],
+            })),
+            setCommandDockCollapsed: (commandDockCollapsed) => set({ commandDockCollapsed }),
             setCommandOpen: (commandOpen) => set({ commandOpen }),
             setCommandMode: (commandMode) => set({ commandMode }),
             setCommandDraft: (commandDraft) => set({ commandDraft }),
@@ -410,6 +447,10 @@ export const useStudioEditor = create<EditorState>()(
                 timelineHeight: state.timelineHeight,
                 inspectorOpen: state.inspectorOpen,
                 inspectorWidth: state.inspectorWidth,
+                railBySurface: state.railBySurface,
+                mobileSpineOpen: state.mobileSpineOpen,
+                hiddenTracks: state.hiddenTracks,
+                commandDockCollapsed: state.commandDockCollapsed,
                 commandOpen: state.commandOpen,
                 commandMode: state.commandMode,
                 spineCollapsed: state.spineCollapsed,

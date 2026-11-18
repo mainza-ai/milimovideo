@@ -14,6 +14,7 @@ import {
     useStudioSelection,
     useStudioTakes,
 } from '../data/useStudioData';
+import { shotStatusLabel } from '../../stores/saveStatus';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
 
 export function ReviewSurface() {
@@ -112,7 +113,10 @@ export function ReviewSurface() {
                     <span className="st-status-pill">
                         <MessageSquare size={11} /> {review.summary.open} open · {review.summary.comments} total
                     </span>
-                    <span className="st-status-pill" data-tone={review.summary.changes_requested > 0 ? 'warn' : 'good'}>
+                    <span
+                        className="st-status-pill"
+                        data-tone={review.summary.changes_requested > 0 ? 'warn' : review.summary.approved > 0 ? 'good' : undefined}
+                    >
                         <CheckCircle2 size={11} /> {review.summary.approved} approved
                     </span>
                 </div>
@@ -235,7 +239,7 @@ export function ReviewSurface() {
                                 </div>
                                 <div className="st-take-body">
                                     <strong style={{ color: 'var(--st-text)' }}>{index + 1}. {clip.shot.action || clip.shot.prompt || 'Shot'}</strong>
-                                    <div>{clip.shot.status || 'pending'} · {clip.shot.numFrames}f</div>
+                                    <div>{shotStatusLabel(clip.shot.status)} · {clip.shot.numFrames}f</div>
                                     {review.approvals.find((item) => item.shot_id === clip.id) && (
                                         <div style={{ color: review.approvals.find((item) => item.shot_id === clip.id)?.status === 'approved' ? 'var(--st-success)' : 'var(--st-warning)' }}>
                                             {review.approvals.find((item) => item.shot_id === clip.id)?.status.replace('_', ' ')}

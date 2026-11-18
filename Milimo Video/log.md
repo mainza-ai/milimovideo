@@ -1758,3 +1758,27 @@ and source review.
   “superseded by” note on the 2026-11-17 chrome audit.
 - **Not implemented:** this pass is audit/report/plan only. F7 code changes start
   with F7-0.
+
+## [2026-11-18] implement | F7 whole-frontend UX plan
+
+Executed all seven phases from [[roadmap/frontend-ux-plan-2026-11-18]].
+
+- **F7-0:** shared save vocabulary/tone, dirty tracking that ignores runtime job
+  fields, and shot status/take hydration from `/projects/{id}`.
+- **F7-1:** `/uploads?project_id=`, `missing` flags, missing filter, refresh and
+  repair, a stable-id `/assets/{id}/replace` relink endpoint that rewrites shot
+  URLs, bulk asset/take delete, and explicit error thumbnails.
+- **F7-2:** per-surface inspector defaults/memory; Generate params and Inspector
+  are mutually exclusive; ComfyUI Run job/Bindings/Outputs tabs; 28px+ targets.
+- **F7-3:** 56px mobile rail, 334px Story board at 390, spine drawer, collapsible
+  command dock, compact mobile status strip.
+- **F7-4:** five tracks fit 900px, `Tracks 5/5` visibility menu, title overlay and
+  WebGL `.cube` LUT preview in Edit, grouped title form with a color swatch.
+- **F7-5:** readable memory warnings, neutral zero states, pluralization and
+  Pending/Running/Done/Failed vocabulary, middle ellipsis, styled color/range
+  controls.
+- **F7-6:** `e2e/ux-matrix.spec.ts`, project-scope/relink backend tests,
+  save-status Vitest, regenerated OpenAPI.
+
+Verification: 225 backend, 102 Vitest, 27 Playwright, axe clean on all eight
+surfaces at 1440 and 390, ruff/tsc/ESLint clean, build + bundle budget green.

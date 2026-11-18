@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../../config';
 import type { TimelineState, ShotSlice, Shot } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { getAssetUrl } from '../../config';
+import { isDocumentChange } from '../saveStatus';
 
 const DEFAULT_NEGATIVE_PROMPT = "low quality, worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless";
 
@@ -47,7 +48,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                 ...state.project,
                 shots: [...state.project.shots, newShot]
             },
-            selectedShotId: newShot.id
+            selectedShotId: newShot.id,
+            saveStatus: 'dirty'
         };
     }),
 
@@ -55,7 +57,9 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
         project: {
             ...state.project,
             shots: state.project.shots.map(s => s.id === id ? { ...s, ...updates } : s)
-        }
+        },
+        // Job progress, status, and ETA updates are runtime state, not edits.
+        saveStatus: isDocumentChange(updates) ? 'dirty' : state.saveStatus
     })),
 
     patchShot: async (id, updates) => {
@@ -206,7 +210,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             project: {
                 ...state.project,
                 shots
-            }
+            },
+            saveStatus: 'dirty'
         };
     }),
 
@@ -215,7 +220,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
             ...state.project,
             shots: state.project.shots.filter(s => s.id !== id)
         },
-        selectedShotId: state.selectedShotId === id ? null : state.selectedShotId
+        selectedShotId: state.selectedShotId === id ? null : state.selectedShotId,
+        saveStatus: 'dirty'
     })),
 
     moveShotToValues: async (id, trackIndex, startFrame) => {
@@ -241,7 +247,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                     timeline: [...s.timeline, { ...item, id: uuidv4() }]
                 };
             })
-        }
+        },
+        saveStatus: 'dirty'
     })),
 
     updateConditioning: (shotId, itemId, updates) => set((state) => ({
@@ -254,7 +261,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                     timeline: s.timeline.map(ti => ti.id === itemId ? { ...ti, ...updates } : ti)
                 };
             })
-        }
+        },
+        saveStatus: 'dirty'
     })),
 
     removeConditioning: (shotId, itemId) => set((state) => ({
@@ -267,7 +275,8 @@ export const createShotSlice: StateCreator<TimelineState, [], [], ShotSlice> = (
                     timeline: s.timeline.filter(ti => ti.id !== itemId)
                 };
             })
-        }
+        },
+        saveStatus: 'dirty'
     })),
 
     generateShot: async (shotId: string, forceNewSeed = false) => {

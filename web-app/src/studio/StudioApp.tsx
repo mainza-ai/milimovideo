@@ -43,12 +43,11 @@ export function StudioApp() {
 
 function StudioShell() {
     const {
-        activeSurface, setSurface, inspectorOpen, setInspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode, density,
+        activeSurface, setSurface, inspectorOpen, focusMode, commandOpen, setCommandOpen, setFocusMode, density,
     } = useStudioEditor(useShallow((state) => ({
         activeSurface: state.activeSurface,
         setSurface: state.setSurface,
         inspectorOpen: state.inspectorOpen,
-        setInspectorOpen: state.setInspectorOpen,
         focusMode: state.focusMode,
         commandOpen: state.commandOpen,
         setCommandOpen: state.setCommandOpen,
@@ -58,12 +57,13 @@ function StudioShell() {
 
     useEffect(() => {
         const closeNarrowInspector = () => {
-            if (window.innerWidth < 1180) setInspectorOpen(false);
+            // Transient close only: keep the per-surface rail preference.
+            if (window.innerWidth < 1180) useStudioEditor.setState({ inspectorOpen: false });
         };
         closeNarrowInspector();
         window.addEventListener('resize', closeNarrowInspector);
         return () => window.removeEventListener('resize', closeNarrowInspector);
-    }, [setInspectorOpen]);
+    }, []);
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const project = useStudioProject();

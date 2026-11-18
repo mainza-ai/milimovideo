@@ -254,10 +254,16 @@ async def get_shot_last_frame(job_id: str, session: Session = Depends(get_sessio
 
 
 @router.get("/uploads")
-async def list_uploads(session: Session = Depends(get_session)):
+async def list_uploads(
+    project_id: Optional[str] = None,
+    session: Session = Depends(get_session),
+):
     """
     Returns a combined list of Assets (Uploaded) and Completed Jobs (Generated)
     from the SQLite database, deduplicated by URL.
+
+    Pass `project_id` to scope the result to one project. Omitting it keeps the
+    legacy global view for callers that explicitly want every project.
     """
     from database import Asset, Job
     from sqlmodel import select
@@ -266,7 +272,10 @@ async def list_uploads(session: Session = Depends(get_session)):
     seen_urls = set()  # Track URLs to avoid duplicates
 
     # 1. Get Assets (Uploaded + Generated Images) - these take priority
-    assets = session.exec(select(Asset).order_by(Asset.created_at.desc())).all()
+    asset_query = select(Asset)
+    if project_id:
+        asset_query = asset_query.where(Asset.project_id == project_id)
+    assets = session.exec(asset_query.order_by(Asset.created_at.desc())).all()
     for a in assets:
         if a.url in seen_urls:
             continue
@@ -287,11 +296,15 @@ async def list_uploads(session: Session = Depends(get_session)):
             "type": a.type,
             "filename": a.filename,
             "thumbnail": thumb,
+            "missing": not bool(source_path and os.path.exists(source_path)),
             "created_at": a.created_at.timestamp()
         })
 
     # 2. Get Completed Jobs (Generated Videos) - skip if URL already seen
-    jobs = session.exec(select(Job).where(Job.status == "completed").order_by(Job.created_at.desc())).all()
+    job_query = select(Job).where(Job.status == "completed")
+    if project_id:
+        job_query = job_query.where(Job.project_id == project_id)
+    jobs = session.exec(job_query.order_by(Job.created_at.desc())).all()
 
 
     for j in jobs:
@@ -339,6 +352,7 @@ async def list_uploads(session: Session = Depends(get_session)):
                             thumb_url = "/".join(parts)
                     except: pass
 
+        job_path = resolve_path(j.output_path)
         files.append({
             "id": j.id,
             "url": video_url,
@@ -346,12 +360,127 @@ async def list_uploads(session: Session = Depends(get_session)):
             "type": "video" if filename.endswith(".mp4") else "image",
             "filename": filename,
             "thumbnail": thumb_url,
+            "missing": not bool(job_path and os.path.exists(job_path)),
             "created_at": j.created_at.timestamp()
         })
 
     # Sort combined by time
     files.sort(key=lambda x: x["created_at"], reverse=True)
     return files
+
+@router.post("/assets/{asset_id}/replace")
+def replace_asset_file(
+    asset_id: str,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+):
+    """Relink a missing Library asset by replacing its file and URL.
+
+    The asset id is stable, so shots that point at the old URL are rewritten to
+    the new one. Nothing is deleted implicitly: a caller that wants the record
+    gone still uses DELETE.
+    """
+    from database import Asset, Shot
+    from datetime import datetime, timezone
+    from sqlmodel import select
+
+    asset = session.get(Asset, asset_id)
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    original_name = Path(file.filename or "upload").name
+    original_name = re.sub(r"[\x00-\x1f]", "", original_name).strip()
+    if not original_name or original_name in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Invalid upload filename")
+    extension = Path(original_name).suffix.lower()
+    if extension not in config.ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=415, detail=f"Unsupported file type '{extension or 'none'}'")
+
+    folder = os.path.dirname(asset.path) if asset.path else UPLOAD_DIR
+    os.makedirs(folder, exist_ok=True)
+    stem = Path(original_name).stem[:120]
+    filename = f"{uuid.uuid4().hex[:8]}_{stem}{extension}"
+    file_path = os.path.join(folder, filename)
+    temp_path = f"{file_path}.part"
+    written = 0
+    try:
+        with open(temp_path, "wb") as buffer:
+            while True:
+                chunk = file.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                written += len(chunk)
+                if written > config.MAX_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail=f"Upload exceeds {config.MAX_UPLOAD_MB} MB limit")
+                buffer.write(chunk)
+        os.replace(temp_path, file_path)
+    except Exception:
+        for path in (temp_path, file_path):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass
+        raise
+    finally:
+        file.file.close()
+
+    image_extensions = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"}
+    audio_extensions = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
+    caption_extensions = {".srt", ".vtt"}
+    text_extensions = {".json", ".txt", ".md"}
+    lut_extensions = {".cube", ".3dl", ".dat", ".m3d"}
+    asset.type = (
+        "image" if extension in image_extensions
+        else "audio" if extension in audio_extensions
+        else "caption" if extension in caption_extensions
+        else "text" if extension in text_extensions
+        else "lut" if extension in lut_extensions
+        else "video"
+    )
+    old_url = asset.url
+    if asset.project_id:
+        try:
+            folder_name = os.path.basename(folder)
+            asset.url = f"/projects/{asset.project_id}/assets/{folder_name}/{filename}"
+        except Exception:
+            asset.url = f"/uploads/{filename}"
+    else:
+        asset.url = f"/uploads/{filename}"
+    asset.path = file_path
+    asset.filename = filename
+    asset.created_at = datetime.now(timezone.utc)
+    if asset.type == "video":
+        thumb_path, thumb_url = _thumbnail_target(asset.project_id, filename)
+        asset.thumbnail_url = thumb_url if _make_video_thumbnail(file_path, thumb_path) else None
+    else:
+        asset.thumbnail_url = None
+
+    if old_url and old_url != asset.url:
+        shots = session.exec(
+            select(Shot).where((Shot.video_url == old_url) | (Shot.thumbnail_url == old_url))
+        ).all()
+        for shot in shots:
+            if shot.video_url == old_url:
+                shot.video_url = asset.url
+            if shot.thumbnail_url == old_url:
+                shot.thumbnail_url = asset.url
+            session.add(shot)
+
+    session.add(asset)
+    session.commit()
+    session.refresh(asset)
+    return {
+        "id": asset.id,
+        "url": asset.url,
+        "path": asset.path,
+        "filename": asset.filename,
+        "type": asset.type,
+        "thumbnail": asset.thumbnail_url,
+        "missing": False,
+        "created_at": asset.created_at.timestamp(),
+    }
+
 
 @router.delete("/assets/{asset_id}")
 async def delete_asset(asset_id: str, session: Session = Depends(get_session)):
