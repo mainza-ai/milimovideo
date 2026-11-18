@@ -1475,3 +1475,26 @@ checked against `main` rather than assumed current.
 
 New page: [[systems/github-issues-triage-2026-11]]. Tests: 36 memory (incl. CUDA/
 AE), full suite re-run.
+
+## [2026-11-17] investigate | open-work inventory and resolution plan
+
+Audited GitHub issues/PRs, CI, the roadmap deferrals, AGENTS gaps, and code
+markers against `main`.
+
+Findings:
+- **CI is red on main/develop.** Backend tests fail with SQLAlchemy 2.1's
+  timezone-aware datetime enforcement; reproduced in a clean venv with
+  SQLModel 0.0.50 + SQLAlchemy 2.1.9. Local SQLModel 0.0.31 / SQLAlchemy 2.0.46
+  passes 180 tests. Root cause is the unpinned `sqlmodel` in requirements.
+- **PR #7 is superseded** (both `enhance_prompt` call sites already unpack).
+- **PR #8 is still valid** (`encode_video` lacks `torch.no_grad()`; CUDA
+  inference-tensor crash).
+- **Issues:** #4 fixed, #3 documented, #6 mitigated (no CPU offload), #1/#2 are
+  real feature gaps.
+- **Deferred:** bundled sidecar, legacy cutover, NLE/search/pack gaps, M5
+  artifacts, Wan, LLM caveats, per-job priority, tray icon, perf flake.
+
+Filed [[roadmap/open-work-resolution-2026-11]] with P0 (green CI, PRs, issue
+triage, two clean releases), P1 (CUDA/quantized, sidecar, cutover), P2 (product
+gaps), P3 (quality/ops), dependencies, and definition of done. Indexed in the
+wiki.

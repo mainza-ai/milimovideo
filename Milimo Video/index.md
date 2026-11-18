@@ -148,6 +148,10 @@ navigate, then drills into pages.
   principles, per-slot model recommendations, architecture deltas, UI/UX direction,
   phased plan (Phase 0 verify → Phase 1 models → Phase 2 architecture → Phase 3
   UX), risks, and open questions for Mainza. Phase 1+ now gated by the 2026-11 audit.
+- [roadmap/open-work-resolution-2026-11](roadmap/open-work-resolution-2026-11.md) —
+  the current open-work inventory and P0–P3 resolution plan: red CI dependency
+  pin, PR #7/#8, issue triage, CUDA/quantized work, sidecar packaging, legacy
+  cutover, and product gaps with acceptance criteria.
 - [roadmap/implementation-plan-2026-11](roadmap/implementation-plan-2026-11.md) —
   the sequenced fix-and-ship plan. Scoped P0–P5, F0–F5, and F6 are complete; the page
   lists remaining/deferred work (bundled sidecar, legacy cutover, Phase 6 v2 lane,
