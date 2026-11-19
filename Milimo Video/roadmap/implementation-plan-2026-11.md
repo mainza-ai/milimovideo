@@ -101,6 +101,12 @@ single-engineer guidance.
   conflict/undo truth, LUT preview truth, relink provenance, mobile Edit/drawer.
   See [[../systems/f7-caveats-audit-2026-11-18]] and
   [[f7-caveats-plan-2026-11-18]].
+- **Memory M0–M5** — audited and planned 2026-11-18, **not implemented**:
+  truthful cap/allocator telemetry, measured profiles, streaming loader,
+  VAE/MLX/residency, runtime pressure guard, child/external budgets, browser
+  persistence, project-scoped agentic memory/context, security/eval. See
+  [[../systems/memory-management-audit-2026-11-18]] and
+  [[memory-management-plan-2026-11-18]].
 - **Performance P0–P6** — audited and planned 2026-11-18, **not implemented**:
   measured generation/render benchmarks, distilled schedule, preadv loader,
   VAE/MLX memory work, VideoToolbox/proxies, frontend idle work, SQLite WAL, and

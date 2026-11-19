@@ -58,6 +58,11 @@ navigate, then drills into pages.
   GET→PUT 500 on `created_at`, 121px mobile Edit timeline, drawer semantics, and
   18 findings (`F8-01…F8-18`). **All F8 findings are fixed**; resolution evidence
   is on the audit page.
+- [systems/memory-management-audit-2026-11-18](systems/memory-management-audit-2026-11-18.md) —
+  2026-11 memory audit: live M3 Max snapshot, MPS/MLX allocator research, agentic
+  memory/context research, and 20 findings (`MEM-01…MEM-20`). Headline: the
+  reported ceiling is **17.3 GB above the real process cap**, active jobs are
+  observed but not guarded, and agentic memory is effectively absent.
 - [systems/performance-audit-2026-11-18](systems/performance-audit-2026-11-18.md) —
   2026-11 performance audit: local M3 Max benchmarks, 2026 research on LTX/MLX,
   MPS, VideoToolbox, SQLite/WAL, React/WebCodecs, and 22 findings
@@ -204,6 +209,10 @@ navigate, then drills into pages.
   the F8 caveat plan: F8-0 contract round-trip → F8-1 save/shot truth → F8-2 LUT
   preview truth → F8-3 relink/repair provenance → F8-4 mobile Edit/drawer →
   F8-5 verification. **Implemented 2026-11-18; caveats re-audited in F9.**
+- [roadmap/memory-management-plan-2026-11-18](roadmap/memory-management-plan-2026-11-18.md) —
+  the M0–M5 memory plan: truth/allocator stats → calibration/loader/residency/MLX
+  → runtime guard/children → browser/document → agentic memory/context → eval and
+  security. Extends performance P2. **Planned, not started.**
 - [roadmap/performance-plan-2026-11-18](roadmap/performance-plan-2026-11-18.md) —
   the P0–P6 performance plan: measurement lab → distilled schedule/loader/prompt
   cache → memory/VAE/MLX/machine tiers → VideoToolbox/proxies → frontend runtime

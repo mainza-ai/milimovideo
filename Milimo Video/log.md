@@ -1897,3 +1897,26 @@ FFmpeg VideoToolbox, SQLite WAL, React Compiler, WebCodecs, FastAPI).
 - Filed 22 findings (`PERF-01…PERF-22`) and P0–P6 plan:
   [[systems/performance-audit-2026-11-18]] and
   [[roadmap/performance-plan-2026-11-18]]. No code fixes shipped in this pass.
+
+## [2026-11-18] audit | Memory management research and plan
+
+Audited the system/GPU memory plane and agentic memory, with live readings on the
+M3 Max 128 GB machine and 2026 research.
+
+- **Live truth gap:** reported ceiling 115.45 GB vs real process cap **98.13 GB**
+  (0.85 × recommended); physical free 67.9 GB, swap 93.8% used, kernel pressure
+  normal. Default video estimate 95.55 GB is refused today; image 43.05 GB is
+  admitted.
+- **System gaps:** no MPS high/low watermark/allocator telemetry, static cost
+  registry, no active-job pressure guard (15s, evict idle only), 1s sampler blind
+  to system/child/external peaks, full state-dict loader + per-stage transformer
+  rebuild, no MLX cache controls, SAM/Comfy/child budgets approximate.
+- **Browser:** a 500-shot project is 203 KiB JSON; 20 runtime progress updates cost
+  1.86 ms each through persist + zundo + signature serialization.
+- **Agentic:** planner is deterministic; no long-term store/retrieval; 50-plan
+  history is memory-only; context overflow is a hard error; takes/reviews/notes are
+  not retrieved; no scopes/TTL/security/eval.
+- Filed 20 findings (`MEM-01…MEM-20`) and M0–M5 plan:
+  [[systems/memory-management-audit-2026-11-18]] and
+  [[roadmap/memory-management-plan-2026-11-18]]. The plan extends performance P2.
+  No code fixes shipped in this pass.

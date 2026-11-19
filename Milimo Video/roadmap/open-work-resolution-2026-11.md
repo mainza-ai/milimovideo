@@ -62,6 +62,12 @@ a test; "open" means no code or no verified path.
   relink provenance and take repair, sticky conflict and baseline undo truth,
   GET→PUT round-trip, mobile full-screen timeline, dialog drawer. See
   [[../systems/f7-caveats-audit-2026-11-18]] and [[f7-caveats-plan-2026-11-18]].
+- **Memory M0–M5** — audited 2026-11-18 but **not implemented**: cap/process-cap
+  mismatch, no allocator telemetry/runtime guard, static costs, loader/transient
+  memory, no MLX cache, external/child blind spots, browser document
+  serialization, and no agentic memory/context store. See
+  [[../systems/memory-management-audit-2026-11-18]] and
+  [[memory-management-plan-2026-11-18]].
 - **Performance P0–P6** — audited 2026-11-18 but **not implemented**: no measured
   generation baseline; 40-step CFG on a distilled checkpoint; mmap weight loader;
   no MLX/VAE-memory tuning; software-only render encode; eager frontend surfaces;

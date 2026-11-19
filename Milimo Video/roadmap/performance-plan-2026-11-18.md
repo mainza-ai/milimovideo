@@ -18,6 +18,11 @@ related:
 Input: [[../systems/performance-audit-2026-11-18.md]] — 22 findings
 (`PERF-01…PERF-22`) across generation, memory, render, frontend, and storage.
 
+**Memory companion:** [[memory-management-plan-2026-11-18]] (M0–M5) owns the
+memory truth/allocator/runtime-guard/browser/agentic depth. P2 is this plan's
+execution slice for VAE/MLX/machine tiers; M0/M1 feed its measurements, and M4 adds
+agentic memory.
+
 Priority: **measure → generation schedule/loader → memory/MLX → render/proxy →
 frontend idle work → storage/API → gates**.
 
@@ -73,6 +78,7 @@ No optimization without a baseline.
 | Float32 VAE workaround | Re-test black-output fix on torch 2.10; if fp16/bf16 is safe, remove the fp32 penalty; otherwise document why |
 | Residency policy | Keep transformer / unload text tower; measure load vs retain on 128GB |
 | Machine tiers | Replace static 1280×768 cap with a measured ladder (RAM, chip, resolution, steps, estimated wall/peak) |
+| Truthful cap | Reported ceiling equals the real `set_per_process_memory_fraction` cap; M0 owns the test |
 | MLX spike | Optional LTX-2.5 q8 engine (Rapid-MLX/ltx-2-mlx) behind an engine flag; target 768×512×121 at ≤30 GB peak on 64 GB; compare wall/quality |
 | Long clips | Validate 481-frame memory behavior; document limits |
 | Tests | Peak/wall for each tier, VAE quality pair, MLX engine smoke |
