@@ -24,7 +24,7 @@ Priority order: **contract truth → state truth → preview truth → provenanc
 mobile → verification**. The contract and state phases are small and unblock
 trustworthy testing of the rest.
 
-Status: **implemented — 2026-11-18**. Evidence is in
+Status: **implemented — 2026-11-18; caveats re-audited in F9**. Evidence is in
 [[../systems/f7-caveats-audit-2026-11-18]] and the verification gate below.
 
 | Phase | Status | What shipped |
@@ -169,6 +169,13 @@ Total: roughly **3–4 working weeks** for one engineer.
 - No replacement of the Job/take ledger with a new table.
 - No broad mobile redesign beyond Edit timeline and drawer semantics.
 - No changes to render truth, the GPU queue, or memory admission.
+
+## Known caveats carried forward
+
+The F9 audit [[../systems/f9-caveats-audit-2026-11-18]] found stale active-job
+cards, silent LUT source failures, thumbnail/relink cleanup gaps, repair/delete
+state, and mobile transport issues. See the F9 plan
+[[f9-caveats-plan-2026-11-18]].
 
 ## Definition of done
 

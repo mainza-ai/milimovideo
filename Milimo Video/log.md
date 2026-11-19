@@ -1831,3 +1831,26 @@ Executed all six F8 phases from [[roadmap/f7-caveats-plan-2026-11-18]].
 
 Verification: 228 backend, 108 Vitest, 29 Playwright, ruff/tsc/ESLint clean,
 build + bundle green.
+
+## [2026-11-18] audit | F9 caveats and plan
+
+Re-audited the F8 caveats with code review and live probes.
+
+- **Stale jobs:** deleted an active job row and waited 6s — the card stayed
+  `Running` with a spinner; `/active_jobs` was polled 7 times in ~9.5s by duplicate
+  hook owners. `refresh()` never reconciles a vanished shot, and the error path
+  leaves `status: 'generating'`.
+- **LUT:** a valid `.cube` plus a missing media URL produced **no canvas but a
+  `preview` badge** — source failures never call `onError`.
+- **Relink:** a temporary pytest proved `purge_old=true` removes the old video but
+  leaves the old `*_thumb.jpg`. Legacy/empty `asset.path` writes to `uploads/` but
+  records an `/assets/uploads/` project URL.
+- **Repair/delete:** repair clears shot media but leaves selected/favorite/last job
+  ids; deleting the open project leaves the old save baseline and marks the new
+  placeholder dirty.
+- **Preview/mobile:** Compare B is ungraded, preview is 8-bit/1280px, context loss
+  is unhandled, full-screen mobile timeline hides transport, and the drawer leaves
+  TopBar/rail non-inert.
+- Filed 21 findings (`F9-01…F9-21`):
+  [[systems/f9-caveats-audit-2026-11-18]] and
+  [[roadmap/f9-caveats-plan-2026-11-18]]. No code fixes shipped in this pass.
