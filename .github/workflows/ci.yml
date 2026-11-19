@@ -42,7 +42,7 @@ jobs:
         run: pip install ruff
       - name: Lint (correctness rules; legacy style backlog baselined in ruff.toml)
         run: ruff check backend --output-format=github
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -69,7 +69,7 @@ jobs:
         working-directory: web-app
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
