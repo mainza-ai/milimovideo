@@ -101,6 +101,11 @@ single-engineer guidance.
   conflict/undo truth, LUT preview truth, relink provenance, mobile Edit/drawer.
   See [[../systems/f7-caveats-audit-2026-11-18]] and
   [[f7-caveats-plan-2026-11-18]].
+- **Performance P0–P6** — audited and planned 2026-11-18, **not implemented**:
+  measured generation/render benchmarks, distilled schedule, preadv loader,
+  VAE/MLX memory work, VideoToolbox/proxies, frontend idle work, SQLite WAL, and
+  CI gates. See [[../systems/performance-audit-2026-11-18]] and
+  [[performance-plan-2026-11-18]].
 - **F9 caveat resolution** — completed 2026-11-18: one job poller/stale Running
   recovery, relink thumbnail/legacy-path/purge safety, LUT source/context-loss
   truth, delete baseline and overwrite snapshot, mobile transport/dialog.

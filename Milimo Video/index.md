@@ -58,6 +58,11 @@ navigate, then drills into pages.
   GET→PUT 500 on `created_at`, 121px mobile Edit timeline, drawer semantics, and
   18 findings (`F8-01…F8-18`). **All F8 findings are fixed**; resolution evidence
   is on the audit page.
+- [systems/performance-audit-2026-11-18](systems/performance-audit-2026-11-18.md) —
+  2026-11 performance audit: local M3 Max benchmarks, 2026 research on LTX/MLX,
+  MPS, VideoToolbox, SQLite/WAL, React/WebCodecs, and 22 findings
+  (`PERF-01…PERF-22`). Headline: a 40-step CFG schedule drives a distilled
+  checkpoint; the MPS loader still uses slow mmap; VideoToolbox is unused.
 - [systems/f9-caveats-audit-2026-11-18](systems/f9-caveats-audit-2026-11-18.md) —
   caveat audit behind F8: **stale Running cards after job disappearance**, duplicate
   `/active_jobs` pollers, silent LUT source failures, orphaned relink thumbnails,
@@ -199,6 +204,10 @@ navigate, then drills into pages.
   the F8 caveat plan: F8-0 contract round-trip → F8-1 save/shot truth → F8-2 LUT
   preview truth → F8-3 relink/repair provenance → F8-4 mobile Edit/drawer →
   F8-5 verification. **Implemented 2026-11-18; caveats re-audited in F9.**
+- [roadmap/performance-plan-2026-11-18](roadmap/performance-plan-2026-11-18.md) —
+  the P0–P6 performance plan: measurement lab → distilled schedule/loader/prompt
+  cache → memory/VAE/MLX/machine tiers → VideoToolbox/proxies → frontend runtime
+  → SQLite/API → CI gates. **Planned, not started.**
 - [roadmap/f9-caveats-plan-2026-11-18](roadmap/f9-caveats-plan-2026-11-18.md) —
   the F9 caveat plan: F9-0 job truth → F9-1 relink/repair safety → F9-2 preview
   truth → F9-3 save/delete safety → F9-4 mobile transport/dialogs → F9-5 gate.

@@ -240,7 +240,10 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 
 ### Plan status and known gaps
 
-Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
+Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The 2026-11-18
+performance audit is planned, not implemented: see
+`Milimo Video/systems/performance-audit-2026-11-18.md` and
+`Milimo Video/roadmap/performance-plan-2026-11-18.md`. The current green
 baseline is 232 backend tests, 110 Vitest tests, and 32 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 

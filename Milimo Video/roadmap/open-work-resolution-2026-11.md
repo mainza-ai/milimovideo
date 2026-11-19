@@ -62,6 +62,12 @@ a test; "open" means no code or no verified path.
   relink provenance and take repair, sticky conflict and baseline undo truth,
   GET→PUT round-trip, mobile full-screen timeline, dialog drawer. See
   [[../systems/f7-caveats-audit-2026-11-18]] and [[f7-caveats-plan-2026-11-18]].
+- **Performance P0–P6** — audited 2026-11-18 but **not implemented**: no measured
+  generation baseline; 40-step CFG on a distilled checkpoint; mmap weight loader;
+  no MLX/VAE-memory tuning; software-only render encode; eager frontend surfaces;
+  idle RAF; SQLite DELETE/FULL. See
+  [[../systems/performance-audit-2026-11-18]] and
+  [[performance-plan-2026-11-18]].
 - **F9 caveat resolution** — **done 2026-11-18**: single job poller with stale
   recovery, relink thumbnail/legacy-path/purge safety, LUT source/context-loss
   truth, repair/delete lineage, mobile transport and dialogs. See

@@ -1879,3 +1879,21 @@ Executed all six F9 phases from [[roadmap/f9-caveats-plan-2026-11-18]].
 
 Verification: 232 backend, 110 Vitest, 32 Playwright, ruff/tsc/ESLint clean,
 build + bundle green.
+
+## [2026-11-18] audit | Performance research and plan
+
+Benchmarked the local M3 Max 128 GB stack and reviewed 2026 performance sources
+(Lightricks LTX-2 optimization/loader issue, M3 Max MLX speed study, PyTorch MPS,
+FFmpeg VideoToolbox, SQLite WAL, React Compiler, WebCodecs, FastAPI).
+
+- **Local:** 500-card pan 58.0fps; 200-clip scroll 306fps; LUT 27.3fps at
+  1024×576; initial JS 1,684KiB raw/334KiB gzip; 500-shot GET 17.2ms/PUT 71.7ms;
+  10s 1080p x264 0.86s/8.78s CPU vs VideoToolbox 0.99s/1.02s CPU at VMAF 97.3.
+- **Top gaps:** 40-step CFG two-stage on a distilled checkpoint (official 8+4,
+  no CFG); vendored safetensors mmap loader (~2x slower on MPS, fixed upstream
+  with preadv); no MLX/q8 lane (external 26GB peak vs app 86.8GB estimate);
+  float32 VAE/no spatial decode tiles; software-only x264; originals in review;
+  eager surfaces; O(shots) RAF when paused; SQLite DELETE/FULL on 3.45.3.
+- Filed 22 findings (`PERF-01…PERF-22`) and P0–P6 plan:
+  [[systems/performance-audit-2026-11-18]] and
+  [[roadmap/performance-plan-2026-11-18]]. No code fixes shipped in this pass.
