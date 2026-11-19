@@ -28,7 +28,7 @@ DOM timeline as the frozen fallback.
 |---|---|
 | `studio/state/documentStore.ts` | Studio project document, save/revision, document undo |
 | `studio/components/StudioTimeline.tsx` | Tracks, clips, tools, trim gestures, audio picker, caption lane, table view |
-| `studio/components/PlaybackEngine.tsx` | Studio-owned `requestAnimationFrame` clock, separate from the legacy store |
+| `studio/components/PlaybackEngine.tsx` | Studio-owned clock; rAF runs only while playing, with cached clips/track state |
 | `studio/components/Waveform.tsx` | Audio waveform rendering |
 | `studio/components/MotionPanel.tsx` | Keyframe editing for opacity/scale/pan/volume |
 | `studio/utils/timelineUtils.ts` / `timeline/ops.ts` | Shared computed layout and pure edit operations |
@@ -83,7 +83,9 @@ dimensions, pixels, audio presence/bitrate, and filtergraph contents.
 ## Playback
 
 - `PlaybackEngine` owns a studio clock; components subscribe narrowly so scrubbing
-  does not reconcile the whole project tree.
+  does not reconcile the whole project tree. Audio clips and the solo/mute predicate
+  are cached outside the loop, the loop stops when paused, and a paused seek performs
+  one audio tick.
 - Play/pause is global (`Space` opens Edit when needed).
 - Video preview starts muted for Safari autoplay, then unmutes on the first gesture.
 - WaveSurfer supplies waveforms; Safari uses the `MediaElement` backend.
@@ -91,7 +93,8 @@ dimensions, pixels, audio presence/bitrate, and filtergraph contents.
 ## Performance
 
 - 500-card board pan measured ~58 fps headless.
-- 200-clip timeline scroll measured ~275–280 fps headless.
+- 200-clip timeline scroll measured ~275–280 fps headless; Playwright gates both.
+- Initial studio gzip is 134.8 KiB (173.3 KiB with Story) after the route split.
 - Board culling and timeline culling are committed in Playwright perf specs.
 - Avoid per-frame project subscriptions; use narrow selectors and the isolated
   playback clock.

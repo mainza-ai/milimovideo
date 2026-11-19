@@ -60,6 +60,14 @@ banner and inline stage/progress/ETA, and the shell has toasts, an activity cent
 with history/retry, desktop notifications, dock-badge/window-title progress, and
 per-project mute.
 
+The 2026-11-18 performance/memory pass adds: process-cap/allocator/sampler truth
+and recent job peaks in Setup, a browser-memory block (document size, undo
+snapshots, localStorage, webview heap), **Agent memory** browse/search/approve/
+delete/export, Draft/Standard/Final generation presets, proxy-first media preview,
+lazy surfaces (134.8 KiB initial studio gzip), paused-RAF playback, hidden-tab
+polling, and sanitized/debounced document persistence. See
+[[performance-memory-execution-2026-11-18]].
+
 Known scoped gaps: only a V1 crossfade (no dip/wipe/slide), lexical rather than
 embedding search, no shorts template packs (lens packs import), and no bundled
 Python sidecar runtime. Legacy `/` remains until the two-clean-release cutover.

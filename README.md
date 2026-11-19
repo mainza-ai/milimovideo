@@ -31,13 +31,13 @@ frozen fallback during the cutover.
 | Surface | What it does |
 |---|---|
 | **Story** | Script parsing, scene spine, infinite board, shot list, notes, master references, typed links, review cards, undo |
-| **Generate** | Ingredients and `@trigger` mentions, seed lock, start/end conditioning, preview stills, batch queue/matrix, immutable takes, inpaint, pipeline recipes, optional ComfyUI workflows |
+| **Generate** | Ingredients and `@trigger` mentions, seed lock, Draft 8 / Standard 20 / Final 40 presets, cached prompt rewrites, start/end conditioning, preview stills, batch queue/matrix, immutable takes, inpaint, pipeline recipes, optional ComfyUI workflows |
 | **Edit** | Program monitor, compare/wipe, magnetic V1 with crossfades, free V2/A1/A2, clip thumbnails, trim/slip/roll/blade/ripple/rate/slide, waveforms, captions, keyframes, titles, depth overlay, tracking, blocking, 3D previz |
 | **Review** | Frame comments, approvals, activity, compare, share links, agent plans |
-| **Library** | Uploads, master references, takes, local ranked search, global media preview, per-asset **Delete** (file + poster) |
-| **Deliver** | V1/V2 composite, A1/A2 mix, captions, titles, 3D LUT, encoding controls, render history/cancel, OTIO/FCPXML handoff |
+| **Library** | Uploads with background 720p review proxies, master references, takes, local ranked search, proxy-first media preview, per-asset **Delete** (file + poster) |
+| **Deliver** | V1/V2 composite, A1/A2 mix, captions, titles, 3D LUT, encoding controls (software or VideoToolbox), render history/cancel, OTIO/FCPXML handoff |
 | **Shorts** | Scored candidate windows, editable ranges, 9:16 / 1:1 / 4:5 export |
-| **Setup** | Device/memory/queue/disk state, model downloads, LoRA activation, depth model, integrity scan, error budget, LLM roles, optional ComfyUI bridge |
+| **Setup** | Device/process-cap/allocator/sampler/queue/disk state, per-job memory peaks and child RSS, model downloads, LoRA activation, depth model, integrity scan, error budget, LLM roles, project agent memory, optional ComfyUI bridge |
 
 ### Studio preview
 
@@ -74,15 +74,19 @@ the diffusers directory in Setup (or set `MILIMO_LTX25_MODEL`), then choose
 | Layer | Technology |
 |---|---|
 | **Studio** | React 19.2, TypeScript, Vite, Zustand document/editor/job/agent stores, TanStack Query, zod contracts |
-| **Backend** | FastAPI, SQLModel/SQLAlchemy + SQLite, Alembic, SSE, thirteen routers / 145 operations |
-| **Processing** | FFmpeg/ffprobe for render, probes, thumbnails, frame extraction, stitching |
-| **Scheduling** | Measured memory budget, admission, leases, TTL eviction, priority queue with same-slot grouping, one OOM retry |
+| **Backend** | FastAPI, SQLModel/SQLAlchemy + SQLite (WAL), Alembic `0012`, SSE, fifteen routers / 167 operations |
+| **Processing** | FFmpeg/ffprobe for render, probes, thumbnails, 720p proxies, frame extraction, stitching |
+| **Scheduling** | Real process-cap admission, leases, TTL eviction, pressure guard (block/evict/cancel), priority queue with same-slot grouping, one OOM retry |
+| **Memory** | 0.5 s per-stage sampler, allocator current/cache, child-process RSS, per-job traces in `/system/memory` |
+| **Agent memory** | Project-scoped SQLite + FTS5, token-budgeted retrieval with provenance/trust/quarantine, planner RAG |
 | **Events** | Typed `job.*` envelope with `seq`, `Last-Event-ID` replay, single terminal emitter, Studio toasts/activity |
 | **Desktop** | Tauri 2 — native open/save, backend supervisor, window/dock/tray progress, macOS notifications |
 
-Data lives in SQLite and `backend/projects/`. Generated media is served through
-`/projects/...`; uploads are allowlisted and size-capped. The API binds to loopback
-by default and supports an optional bearer token.
+Data lives in SQLite (WAL, `synchronous=NORMAL`, 5 s busy timeout) and
+`backend/projects/`. Generated media is served through `/projects/...`; uploads are
+allowlisted and size-capped, JSON is gzipped, and `/health` is cached with a cheap
+`/health/live` probe. The API binds to loopback by default and supports an optional
+bearer token.
 
 ## Quick start
 
@@ -135,7 +139,12 @@ Set `MILIMO_COMFY_URL` or `MILIMO_SAM_PORT` to override either.
 | Variable | Purpose |
 |---|---|
 | `MILIMO_MEMORY_ENFORCE=0` | Disable admission (tests/benchmarks only) |
-| `MILIMO_MEMORY_RESERVE_GB`, `MILIMO_MPS_MEMORY_FRACTION` | Tune the measured budget |
+| `MILIMO_MEMORY_RESERVE_GB`, `MILIMO_MPS_MEMORY_FRACTION` | Tune the measured budget and the process cap |
+| `MILIMO_MEMORY_PRESSURE_BLOCK_SEC` | Admission block after warning/critical pressure (default 10 s) |
+| `MILIMO_MPS_REFERENCE_FRAMES` | Frame count at which the 1280×768 MPS pixel budget is measured (default 121) |
+| `MILIMO_RENDER_ENCODER`, `MILIMO_RENDER_CODEC` | `auto\|software\|videotoolbox`, `h264\|hevc` |
+| `MILIMO_RENDER_THREADS`, `MILIMO_VT_QUALITY` | x264 thread cap and explicit VideoToolbox quality |
+| `MILIMO_SQLITE_WAL`, `MILIMO_SQLITE_BUSY_TIMEOUT_MS` | SQLite WAL escape hatch and busy timeout |
 | `MILIMO_MEMORY_TTL_{VIDEO,IMAGE,LLM,SAM,DEPTH,COMFY}` | Idle eviction |
 | `MILIMO_FLUX_GGUF` | Quantized Flux 2 transformer |
 | `MILIMO_FLUX_GGUF_OFFLOAD=1` | Component offload on CUDA |
@@ -151,27 +160,30 @@ Set `MILIMO_COMFY_URL` or `MILIMO_SAM_PORT` to override either.
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # 222 backend tests
+./milimov/bin/python -m pytest                 # 270 backend tests
 ./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # 0 failures expected
 
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 95 Vitest tests
+npm test                                       # 118 Vitest tests
 npm run build
 npm run check:bundle
-npm run test:e2e                               # 22 Playwright tests
+npm run test:e2e                               # 32 Playwright tests
 ```
 
-Last verified: 222 backend, 95 Vitest, 22 Playwright; CI green on `main` and
-`develop` (backend + frontend). Render changes are checked with real FFmpeg pixels,
-not only filtergraph strings.
+Last verified: 270 backend, 118 Vitest, 32 Playwright; CI green on `main`
+(backend + frontend). The backend gate also runs `check_memory_truth.py` (ceiling
+must equal the real process cap) and `agent_memory_eval.py` (20 retrieval tasks,
+100% top-3 at ~199 tokens). Render changes are checked with real FFmpeg pixels, not
+only filtergraph strings. Studio initial gzip is 134.8 KiB (173.3 KiB with Story)
+under the 250 KiB budget.
 
 ## Documentation
 
 - [User Guide](docs/user_guide.md) — Studio-first manual
-- [Local API](docs/07_api.md) — REST, SSE, preflight, queue
+- [Local API](docs/07_api.md) — REST, SSE, preflight, queue, project agent memory
 - [ComfyUI bridge](docs/comfyui.md) — optional workflow setup and troubleshooting
 - [System Architecture](docs/01_system_architecture.md)
 - [Data Models](docs/02_data_models.md)
@@ -206,8 +218,18 @@ Milimo Video/      Project wiki
   audio) is verified; gated weights are not committed, and CUDA 32 GB validation
   is still pending. CUDA 8–24 GB Wan validation is also pending.
 - **Packaging:** no bundled Python/Torch sidecar binary yet.
-- **Memory:** costs are measured estimates, Strata has no unload endpoint, and a
-  cancelled job keeps its pipeline until the idle TTL.
+- **Memory:** admission uses the real process cap and a pressure guard, but costs
+  are still hand-tuned estimates rather than per-lane measured profiles; Strata has
+  no unload endpoint; a cancelled job keeps its pipeline until the idle TTL.
+  Measured model-load benchmarks, VAE quality pairs, and the MLX lane remain open.
+- **Render:** VideoToolbox is opt-in until a VMAF comparison gate exists; `auto`
+  keeps software x264. Proxies cover uploaded video; generated takes still play
+  from the original file.
+- **SQLite:** WAL runs on bundled 3.45.1, which predates the 3.51.3 reset fix;
+  `MILIMO_SQLITE_WAL=0` disables it.
+- **Agent memory:** retrieval is lexical FTS5/LIKE (no embeddings); automatic
+  extraction covers review comments/approvals, not takes; consolidation and a
+  larger evaluation suite remain open.
 - **ComfyUI:** workflow editing stays in ComfyUI; its native UI-format templates
   require **Save (API Format)** before import; residency is declared, not measured
   per model.

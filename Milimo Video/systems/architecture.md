@@ -36,9 +36,10 @@ microservice on port 8002, an optional ComfyUI server (port 8001 by default), an
 - **Legacy frontend** — the original NLE at `/`, using `timelineStore` and 7 slices.
   Frozen except for P0 fixes. `VITE_STUDIO_ENABLED=false` serves it at `/studio`.
 - **Backend (Python / FastAPI, port 8000)** — inference dispatch, project/assets,
-  durable GPU queue, SQLite via SQLModel, Alembic migrations, SSE. **Thirteen routers
-  / 145 operations** (verified 2026-11-18): projects, jobs, assets, storyboard,
-  elements, shots, models, planner, review, share, depth, settings, comfy.
+  durable GPU queue, SQLite via SQLModel, Alembic migrations, SSE. **Fifteen routers
+  / 167 operations across 144 paths** (verified 2026-11-18): projects, jobs, assets,
+  storyboard, elements, shots, models, planner, review, share, depth, settings,
+  system memory, comfy, and project agent memory.
 - **Task engine** — `tasks/video.py`, `tasks/chained.py`, `tasks/wan.py`,
   `tasks/image.py`, `tasks/comfy.py`, `tasks/depth.py`, `tasks/ai_parse.py`;
   `ModelManager` loads LTX-2; `FluxInpainter` wraps Flux 2; `WanEngine` wraps the
@@ -54,9 +55,15 @@ microservice on port 8002, an optional ComfyUI server (port 8001 by default), an
   AES-GCM credential sealing (`secretbox.py`). `backend/llm.py` is a compatibility
   facade. See [[llm-local-first-next-2026-11]].
 - **GPU scheduler** — `QueuedJob` ledger + one global semaphore + one OOM retry +
-  startup recovery + pause/resume + idempotent shot jobs. Slots are being upgraded
-  to a measured memory budget with external-engine accounting, leases, TTL eviction,
-  and pressure response; see [[memory-management-audit-2026-11]].
+  startup recovery + pause/resume + idempotent shot jobs. The measured budget
+  admits on the **real process cap**, leases slots, evicts on TTL, and a pressure
+  guard blocks/evicts/cancels before Jetsam; see
+  [[memory-management-audit-2026-11-18]] and
+  [[performance-memory-execution-2026-11-18]].
+- **Agentic memory** — `agent_memory.py` + `routes/agent_memory.py`: project-scoped
+  SQLite rows, FTS5 retrieval with LIKE fallback, token-budgeted context packs,
+  provenance/trust/quarantine, review extraction, planner RAG, and the Setup panel.
+  See [[agentic-memory]].
 - **SAM 3 microservice (port 8002)** — health, mask prediction, detection, text
   segmentation, and video tracking sessions. Proxied through the backend.
 - **ComfyUI bridge** — `services/comfy.py`, `tasks/comfy.py`, `routes/comfy.py`:
@@ -113,12 +120,13 @@ the single terminal emitter), `job_utils.py` (durable ledger, GPU semaphore,
 priority + same-slot ordering, bounded memory waits, retry, pause, cancellation),
 `schemas.py` (Pydantic boundaries), `model_engine.py` / `memory_manager.py`
 (residency, leases, admission), `services/memory/` (`models`, `costs`, `engines`,
-`budget`, `sampler`), `llm.py` (facade), `models/flux_wrapper.py`, `managers/`
+`budget`, `sampler`, `children`), `agent_memory.py`, `llm.py` (facade), `models/flux_wrapper.py`, `managers/`
 (element/inpainting/tracking), `services/` (script/ai storyboard, matcher, model
 registry/downloader, `llm/` settings+providers+runtime+discovery), `tasks/`
 (video, chained, image, depth, ai_parse), `routes/` (13 routers incl. `memory.py`),
-`alembic/` (baseline, render settings, seed lock, asset thumbnail, app settings,
-job progress), `benchmark_models.py` (M5 lane baselines), `utils/` (render
+`alembic/` (baseline through `0012_agent_memory`), `benchmark_models.py` (M5 lane
+baselines), `benchmark_performance.py`, `check_memory_truth.py`,
+`agent_memory_eval.py`, `utils/` (render
 filtergraph, captions, paths).
 
 **Frontend** (`web-app/src/`): `main.tsx` → `App.tsx` (Studio lazy route + legacy),

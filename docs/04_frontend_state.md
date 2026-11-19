@@ -194,6 +194,27 @@ graph LR
 ```
 Only `project` is persisted to localStorage. All transient state is reset on hydration.
 
+The Studio store (`milimo-studio-document`) is separate and stricter:
+
+```typescript
+{
+    name: 'milimo-studio-document',
+    storage: createJSONStorage(() => createThrottledStorage(400)),
+    partialize: (state) => ({
+        project: sanitizeProjectForStorage(state.project), // no runtime fields
+        savedBaseline: state.savedBaseline,
+        saveStatus: state.saveStatus,
+    }),
+}
+```
+
+`sanitizeProjectForStorage` strips `isGenerating`, `progress`, `statusMessage`,
+`currentPrompt`, `etaSeconds`, `enhancedPromptResult`, and `lastJobId` from every
+shot before writing. Writes are coalesced over 400 ms and flushed on `pagehide` or
+when the tab is hidden, so a progress update never serializes the full document
+multiple times. Undo keeps 30 project snapshots with the same runtime-field
+equality strip.
+
 ### Undo/Redo (`zundo`)
 ```typescript
 {
@@ -257,7 +278,17 @@ useEffect(() => {
 }, []);
 ```
 
-`PlaybackEngine` caches `computeTimelineLayout` in a `useRef`, only recomputing when `project.shots` changes — not every animation frame.
+`PlaybackEngine` caches `computeTimelineLayout` in a `useRef`, only recomputing when `project.shots` changes — not every animation frame. The Studio engine also caches the audio clip list and track-state predicate, runs `requestAnimationFrame` **only while `isPlaying` is true**, and performs one audio tick per paused seek or track toggle. A paused timeline costs no frames.
+
+### G. Studio route split and polling discipline
+- `App.tsx` lazily imports both route shells (`StudioApp`, `LegacyEditor`), and
+  `StudioApp` lazily imports every surface plus the Inspector. Initial studio gzip is
+  **134.8 KiB** (173.3 KiB including Story) under the 250 KiB budget.
+- Polling goes through `useVisibleInterval`: one interval per resource, skipped while
+  `document.hidden`, with one immediate refresh when the tab becomes visible.
+  TanStack Query reads keep `refetchIntervalInBackground` off.
+- The media viewer prefers a generated 720p proxy for video while the Library/asset
+  URL remains available at full resolution.
 
 ### E. GPU-Accelerated Layout
 `TimelineClip.tsx` uses `transform: translateX()` for clip positioning (GPU compositing layer) instead of `left` which triggers layout recalculation.

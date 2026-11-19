@@ -88,7 +88,7 @@ sequenceDiagram
 
     LTX-->>Worker: Return video tensor
 
-    Worker->>FFmpeg: encode_video(tensor, output_path) — libx264 + yuv420p + movflags faststart
+    Worker->>FFmpeg: encode_video(tensor, output_path) — encoder_args (libx264 or h264/hevc_videotoolbox) + yuv420p + faststart
     Note over Worker: encode runs in a worker thread; decoded buffers/caches are released after
     Worker->>FFmpeg: Asynchronous generate_thumbnail(video_path)
     Worker->>Utils: update_job_db(job_id, "completed", output_path, thumbnail_path)
@@ -271,7 +271,7 @@ sequenceDiagram
     
     API->>API: Configure Logging (reload is opt-in: MILIMO_RELOAD=1)
     API->>API: Create directories (projects/, uploads/, generated/)
-    API->>DB: init_db() — Alembic upgrade to head (0006_job_progress)
+    API->>DB: init_db() — Alembic upgrade to head (0012_agent_memory)
     
     Note over API: Lifespan: Startup
     API->>API: Capture event loop → job_utils.global_loop
@@ -280,8 +280,10 @@ sequenceDiagram
     API->>Utils: resume_queued_jobs() — dispatch with fresh memory admission
     API-->>UI: job.failed/job.queued for recovered rows
     
+    API->>DB: Apply SQLite pragmas (WAL, synchronous=NORMAL, busy_timeout)
     API->>API: Mount Static Files (/projects, /uploads, /generated)
-    API->>API: Register API Router (13 sub-routers incl. /system)
+    API->>API: Register API Router (15 sub-routers incl. /system and agent memory)
+    API->>API: Mount GZip for JSON/text above 1 KiB; cache /health for 1 s
     API->>API: Register /events SSE endpoint (Last-Event-ID replay)
 
     User->>Script: ./run_frontend.sh
@@ -485,6 +487,15 @@ sequenceDiagram
     API->>Utils: cancel_all_jobs() — flags all active maps
     API->>API: await asyncio.sleep(2.0) — allows threads to escape
 ```
+
+### 8.1 Upload and proxy flow
+
+`POST /upload` writes the file, extracts a poster for video (synchronous, because
+the response returns the poster URL), and schedules a 720p H.264 review proxy as a
+background task. `/uploads` returns `proxy` from `Asset.meta_json` and never runs
+ffmpeg inside the listing request; legacy rows without a poster are backfilled after
+the response. Library previews and the global media viewer use the proxy; exports
+always read the original.
 
 ## 9. Playback Engine Loop
 
