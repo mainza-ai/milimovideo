@@ -272,7 +272,6 @@ def test_relink_legacy_empty_path_uses_project_assets(app_client, project):
 def test_relink_purge_removes_old_thumbnail_and_respects_shared_references(app_client, project):
     import io
     import os
-    import subprocess
 
     from sqlmodel import Session
 
@@ -280,37 +279,29 @@ def test_relink_purge_removes_old_thumbnail_and_respects_shared_references(app_c
     from PIL import Image
 
     pid = project["id"]
-    first = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], "first.mp4")
-    second = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], "second.mp4")
-    for path, color in ((first, "red"), (second, "blue")):
-        subprocess.run(
-            ["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c={color}:s=64x48:d=0.4",
-             "-c:v", "libx264", "-pix_fmt", "yuv420p", path],
-            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    with open(first, "rb") as handle:
-        upload = app_client.post(
-            "/upload",
-            files={"file": ("first.mp4", handle, "video/mp4")},
-            data={"project_id": pid},
-        )
-    asset = upload.json()
-    old_thumb = os.path.join(
-        os.environ["MILIMO_PROJECTS_DIR"], pid, "thumbnails",
-        os.path.basename(asset["thumbnail"]),
-    )
-    assert os.path.exists(old_thumb)
+    uploaded = _upload(app_client, pid, "thumbs.png")
+    thumbs_dir = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], pid, "thumbnails")
+    os.makedirs(thumbs_dir, exist_ok=True)
+    old_thumb_path = os.path.join(thumbs_dir, "old_thumb.jpg")
+    Image.new("RGB", (16, 16), (50, 50, 50)).save(old_thumb_path, format="JPEG")
+    with Session(engine) as session:
+        asset = session.get(Asset, uploaded["asset_id"])
+        asset.thumbnail_url = f"/projects/{pid}/thumbnails/old_thumb.jpg"
+        session.add(asset)
+        session.commit()
 
-    with open(second, "rb") as handle:
-        replaced = app_client.post(
-            f"/assets/{asset['asset_id']}/replace",
-            files={"file": ("second.mp4", handle, "video/mp4")},
-            data={"purge_old": "true"},
-        )
+    buffer = io.BytesIO()
+    Image.new("RGB", (20, 20), (20, 20, 20)).save(buffer, format="PNG")
+    buffer.seek(0)
+    replaced = app_client.post(
+        f"/assets/{uploaded['asset_id']}/replace",
+        files={"file": ("thumbs-new.png", buffer, "image/png")},
+        data={"purge_old": "true"},
+    )
     assert replaced.status_code == 200, replaced.text
     data = replaced.json()
     assert data["old_removed"] is True
-    assert not os.path.exists(old_thumb)
+    assert not os.path.exists(old_thumb_path)
 
     # A duplicate Asset row pinning the same path blocks purge.
     other = _upload(app_client, pid, "shared.png")
