@@ -23,8 +23,14 @@ def test_sqlite_runs_wal_with_a_busy_timeout(app_client):
 def test_health_exposes_the_process_cap_and_sqlite_truth(app_client):
     body = app_client.get("/health").json()
     memory = body["memory"]
-    assert memory["ceiling_gb"] == pytest.approx(memory["process_cap_gb"])
-    assert memory["process_cap_gb"] <= memory["device_recommended_gb"]
+    if memory["device"] == "mps":
+        assert memory["ceiling_gb"] == pytest.approx(memory["process_cap_gb"])
+        assert memory["process_cap_gb"] <= memory["device_recommended_gb"]
+    else:
+        # CPU/CUDA runners have no MPS process fraction; the ceiling is the
+        # machine total minus reserve and the truth gate still applies.
+        assert memory["ceiling_gb"] > 0
+        assert memory["ceiling_gb"] <= memory["total_gb"]
     assert "journal_mode" in body["sqlite"]
     assert body["sqlite"]["journal_mode"] == "wal"
 

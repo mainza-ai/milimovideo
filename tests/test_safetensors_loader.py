@@ -2,9 +2,23 @@
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 from ltx_core.loader.sft_loader import SafetensorsStateDictLoader
+
+
+def _mps_available() -> bool:
+    try:
+        return bool(torch.backends.mps.is_available())
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _mps_available(),
+    reason="pread selection only applies to an MPS-linked torch build",
+)
 
 
 class _FakeHandle:
