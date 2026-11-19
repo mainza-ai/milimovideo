@@ -2,6 +2,8 @@ import { create } from 'zustand';
 
 export interface MediaPreviewItem {
     url: string;
+    /** 720p review proxy; the full-resolution URL stays available for delivery. */
+    proxyUrl?: string;
     title?: string;
     subtitle?: string;
     kind?: 'image' | 'video' | 'audio' | 'text';

@@ -6,6 +6,7 @@ import { apiUrl, getAssetUrl } from '../../config';
 import { HealthSchema, ReviewPayloadSchema } from '../../api/contracts';
 import { useStudioJobs } from '../state/jobStore';
 import { registerActiveJobs, registerStudioJob } from '../events/jobBridge';
+import { useVisibleInterval } from '../hooks/useVisibleInterval';
 import {
     useStudioEditor,
     type BoardArea,
@@ -81,11 +82,8 @@ export function useStudioModels() {
         return () => window.removeEventListener('milimo:model-event', handler);
     }, [refresh]);
 
-    useEffect(() => {
-        if (!models.some((model) => model.status === 'downloading')) return undefined;
-        const interval = window.setInterval(() => { void refresh(); }, 3000);
-        return () => window.clearInterval(interval);
-    }, [models, refresh]);
+    const downloading = models.some((model) => model.status === 'downloading');
+    useVisibleInterval(() => { void refresh(); }, 3000, { enabled: downloading });
 
     const setActive = useCallback(async (model: StudioModel, active: boolean) => {
         const response = await fetch(apiUrl(`/models/${model.id}/${active ? 'activate' : 'deactivate'}`), {
@@ -119,6 +117,7 @@ export interface StudioAsset {
     filename: string;
     type: string;
     thumbnail?: string | null;
+    proxy?: string | null;
     missing?: boolean;
     created_at: number;
 }
@@ -530,6 +529,35 @@ export interface MemoryStatus {
     active_slots?: string[];
     notes: string[];
     counters?: { loads: number; unloads: number; evictions: number; refusals: number };
+    physical_available_gb?: number;
+    swap_free_gb?: number;
+    device?: string;
+    device_recommended_gb?: number;
+    process_cap_gb?: number;
+    allocator_current_gb?: number;
+    allocator_cache_gb?: number;
+    sampler?: {
+        job_id?: string | null;
+        stage?: string;
+        peak_gb?: number;
+        peak_stage?: string;
+        current_gb?: number;
+        cache_gb?: number;
+        physical_min_gb?: number;
+        swap_peak_percent?: number;
+        samples?: number;
+    };
+    recent_jobs?: Array<{
+        job_id: string;
+        type: string;
+        status: string;
+        created_at?: number | null;
+        peak_gb?: number | null;
+        peak_stage?: string | null;
+        stages?: Record<string, number>;
+        physical_min_gb?: number | null;
+        swap_peak_percent?: number | null;
+    }>;
 }
 
 export interface MemoryDecision {
@@ -579,12 +607,15 @@ export function useStudioMemory(intervalMs = 5000) {
 
     useEffect(() => {
         void refresh();
-        const interval = window.setInterval(() => { void refresh(); }, intervalMs);
+    }, [refresh]);
+
+    useVisibleInterval(() => { void refresh(); }, intervalMs);
+
+    useEffect(() => {
         const handler = () => { void refresh(); };
         window.addEventListener('milimo:memory-event', handler);
         window.addEventListener('milimo:resync', handler);
         return () => {
-            window.clearInterval(interval);
             window.removeEventListener('milimo:memory-event', handler);
             window.removeEventListener('milimo:resync', handler);
         };
@@ -641,24 +672,21 @@ export interface JobMetrics {
 export function useStudioMetrics(days = 7) {
     const metrics = useStudioJobs((state) => state.metrics);
     const setMetrics = useStudioJobs((state) => state.setMetrics);
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const response = await fetch(apiUrl(`/metrics/jobs?days=${days}`));
-                const data = response.ok ? await response.json() : null;
-                setMetrics(
-                    data && !Array.isArray(data) && data.by_status && data.by_type
-                        ? data
-                        : null,
-                );
-            } catch {
-                setMetrics(null);
-            }
-        };
-        void load();
-        const interval = window.setInterval(load, 15000);
-        return () => window.clearInterval(interval);
+    const load = useCallback(async () => {
+        try {
+            const response = await fetch(apiUrl(`/metrics/jobs?days=${days}`));
+            const data = response.ok ? await response.json() : null;
+            setMetrics(
+                data && !Array.isArray(data) && data.by_status && data.by_type
+                    ? data
+                    : null,
+            );
+        } catch {
+            setMetrics(null);
+        }
     }, [days, setMetrics]);
+    useEffect(() => { void load(); }, [load]);
+    useVisibleInterval(() => { void load(); }, 15000);
     return metrics;
 }
 
@@ -816,17 +844,19 @@ export function useStudioActiveJobs(
 
     useEffect(() => {
         void refresh();
-        if (!poll) return undefined;
-        const interval = window.setInterval(() => { void refresh(); }, 2500);
+    }, [refresh]);
+
+    useVisibleInterval(() => { void refresh(); }, 2500, { enabled: poll });
+
+    useEffect(() => {
         const onResync = () => { void refresh(); };
         window.addEventListener('milimo:resync', onResync);
         window.addEventListener('milimo:job-terminal', onResync);
         return () => {
-            window.clearInterval(interval);
             window.removeEventListener('milimo:resync', onResync);
             window.removeEventListener('milimo:job-terminal', onResync);
         };
-    }, [poll, refresh]);
+    }, [refresh]);
     return { jobs, refresh };
 }
 
@@ -858,9 +888,9 @@ export function useStudioReview(projectId: string) {
 
     useEffect(() => {
         void refresh();
-        const interval = window.setInterval(refresh, 15000);
-        return () => window.clearInterval(interval);
     }, [refresh]);
+
+    useVisibleInterval(refresh, 15000);
 
     const addComment = useCallback(async (shotId: string | null, frame: number, body: string) => {
         const response = await fetch(apiUrl(`/projects/${projectId}/review/comments`), {
@@ -989,12 +1019,15 @@ export function useStudioRenders(projectId: string) {
     }, [projectId]);
     useEffect(() => {
         void refresh();
-        const interval = window.setInterval(refresh, 4000);
+    }, [refresh]);
+
+    useVisibleInterval(refresh, 4000);
+
+    useEffect(() => {
         const handler = () => { void refresh(); };
         window.addEventListener('milimo:render-event', handler);
         window.addEventListener('milimo:resync', handler);
         return () => {
-            window.clearInterval(interval);
             window.removeEventListener('milimo:render-event', handler);
             window.removeEventListener('milimo:resync', handler);
         };

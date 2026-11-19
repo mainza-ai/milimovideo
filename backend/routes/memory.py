@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlmodel import Session, select
+from database import Job, get_session
+import json
 from pydantic import BaseModel, Field
 
 from memory_manager import memory_manager
-from services.memory import budget, engines, sampler
+from services.memory import budget, children, engines, sampler
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +35,37 @@ class KeepWarmRequest(BaseModel):
 
 
 @router.get("/memory")
-def memory_status():
+def memory_status(session: Session = Depends(get_session)):
     snapshot = memory_manager.status()
     snapshot["sampler"] = sampler.current()
     snapshot["events"] = __import__("events", fromlist=["event_manager"]).event_manager.stats()
+    recent = session.exec(
+        select(Job)
+        .where(Job.memory_json.isnot(None))
+        .order_by(Job.created_at.desc())
+        .limit(8)
+    ).all()
+    rows = []
+    for job in recent:
+        try:
+            trace = json.loads(job.memory_json or "{}")
+        except json.JSONDecodeError:
+            continue
+        rows.append({
+            "job_id": job.id,
+            "type": job.type,
+            "status": job.status,
+            "created_at": job.created_at.timestamp() if job.created_at else None,
+            "peak_gb": trace.get("peak_gb"),
+            "peak_stage": trace.get("peak_stage"),
+            "stages": trace.get("stages") or {},
+            "physical_min_gb": trace.get("physical_min_gb"),
+            "swap_peak_percent": trace.get("swap_peak_percent"),
+        })
+    snapshot["recent_jobs"] = rows
+    child_rows = children.snapshot(force=True)
+    snapshot["children"] = child_rows["summary"]
+    snapshot["child_processes"] = child_rows["processes"]
     return snapshot
 
 

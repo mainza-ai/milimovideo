@@ -27,7 +27,7 @@ from typing import Any, Dict
 import torch
 
 import config
-from services.memory import budget, costs, engines
+from services.memory import budget, children, costs, engines
 from services.memory.models import AdmissionDecision, MemorySnapshot, SlotState
 
 logger = logging.getLogger(__name__)
@@ -43,6 +43,9 @@ class MemoryManager:
         self._monitor: threading.Thread | None = None
         self._monitor_stop = threading.Event()
         self._counters = {"loads": 0, "unloads": 0, "evictions": 0, "refusals": 0}
+        self._pressure = "normal"
+        self._admission_blocked_until = 0.0
+        self._pressure_cancels = 0
 
     # ── Slot Conflict Rules ──────────────────────────────────────
     # These slots cannot coexist in memory simultaneously.
@@ -61,6 +64,25 @@ class MemoryManager:
         with self._lock:
             if job_id in self._jobs:
                 return self._jobs[job_id]["decision"]
+            if self._pressure_blocked():
+                self._counters["refusals"] += 1
+                snapshot = budget.snapshot(self._slots, self._job_rows())
+                return AdmissionDecision(
+                    ok=False,
+                    kind=kind,
+                    reason=(
+                        f"System memory pressure is {self._pressure}; new heavy work is "
+                        "blocked until the OS reports normal pressure again."
+                    ),
+                    estimate=None,
+                    snapshot=snapshot,
+                    retryable=True,
+                    suggestions=[
+                        "Wait for the active job to finish",
+                        "Close memory-hungry apps",
+                        "Unload models from Setup",
+                    ],
+                )
             decision = budget.admit(
                 kind,
                 params or {},
@@ -407,6 +429,9 @@ class MemoryManager:
                 "active_slots": sorted(self._active_slots),
                 "jobs": self._job_rows(),
                 "counters": self.counters(),
+                "children": children.snapshot()["summary"],
+                "pressure": self._pressure,
+                "admission_blocked": self._pressure_blocked(),
             }
 
     def snapshot(self) -> MemorySnapshot:
@@ -415,6 +440,71 @@ class MemoryManager:
 
     def note_pressure(self) -> str:
         return budget.pressure()
+
+    def _pressure_blocked(self) -> bool:
+        return self._pressure == "critical" or time.time() < self._admission_blocked_until
+
+    def guard_pressure(self, pressure: str | None = None) -> dict[str, Any]:
+        """Escalate OS memory pressure before Jetsam picks a victim.
+
+        warning  -> evict idle models, block new admission for a short window
+        critical -> the same, plus mark the oldest active job for cancellation
+                    with a reason. The job's own loop emits the terminal event;
+                    this never kills the backend or a thread mid-write.
+        """
+        level = pressure or budget.pressure()
+        result: dict[str, Any] = {
+            "pressure": level,
+            "evicted": [],
+            "cancelled": [],
+        }
+        if level == "normal":
+            self._pressure = "normal"
+            self._admission_blocked_until = 0.0
+            return result
+
+        self._pressure = level
+        self._admission_blocked_until = time.time() + float(
+            getattr(config, "MEMORY_PRESSURE_BLOCK_SEC", 10.0)
+        )
+        result["evicted"] = self.evict_idle(force=True)
+        if level == "critical":
+            result["cancelled"] = self._cancel_oldest_for_pressure()
+        self._notify(
+            "memory.pressure",
+            {
+                "pressure": level,
+                "blocked_until": self._admission_blocked_until,
+                "evicted": result["evicted"],
+                "cancelled": result["cancelled"],
+                "snapshot": self.snapshot().as_dict(),
+            },
+        )
+        return result
+
+    def _cancel_oldest_for_pressure(self) -> list[str]:
+        try:
+            import job_utils
+
+            rows = job_utils.active_jobs
+        except Exception:
+            return []
+        for job_id, row in list(rows.items()):
+            if row.get("cancelled"):
+                continue
+            row["cancelled"] = True
+            row["status"] = "cancelling"
+            row["stage"] = "cancelling"
+            row["status_message"] = (
+                "Cancelled: system memory pressure is critical. "
+                "Free memory or lower the resolution before retrying."
+            )
+            self._pressure_cancels += 1
+            logger.warning(
+                "Memory pressure critical: cancelling job %s before Jetsam", job_id
+            )
+            return [job_id]
+        return []
 
     def counters(self) -> dict[str, int]:
         with self._lock:
@@ -436,13 +526,7 @@ class MemoryManager:
         while not self._monitor_stop.wait(config.MEMORY_MONITOR_INTERVAL_SEC):
             try:
                 self.evict_idle(force=False)
-                pressure = budget.pressure()
-                if pressure in ("warning", "critical"):
-                    self.evict_idle(force=True)
-                    self._notify(
-                        "memory.pressure",
-                        {"pressure": pressure, "snapshot": self.snapshot().as_dict()},
-                    )
+                self.guard_pressure()
             except Exception as exc:
                 logger.warning("Memory monitor failed: %s", exc)
 

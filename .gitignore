@@ -41,6 +41,8 @@ sam3/examples/
 backend/generated/
 backend/uploads/
 *.db
+*.db-wal
+*.db-shm
 backend/*.log
 backend/*.txt
 !backend/requirements.txt

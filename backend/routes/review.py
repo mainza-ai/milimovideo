@@ -1,5 +1,6 @@
 """Frame-accurate review: comments, resolutions, and per-shot approvals."""
 
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -10,6 +11,7 @@ from database import get_session, Project, ReviewItem, Shot
 from schemas import ReviewApprovalRequest, ReviewCommentRequest, ReviewCommentUpdate
 
 router = APIRouter(tags=["review"])
+logger = logging.getLogger(__name__)
 
 
 def _serialize(item: ReviewItem) -> dict:
@@ -66,6 +68,40 @@ def list_review(project_id: str, session: Session = Depends(get_session)):
     }
 
 
+def _extract_memory(
+    session: Session,
+    project_id: str,
+    text: str,
+    *,
+    shot_id: str | None,
+    source: str,
+) -> None:
+    """Promote explicit review signal into project memory.
+
+    Comments and approvals are already durable history; this makes them
+    retrievable by the agent with provenance. Extraction is best-effort: a
+    memory failure must never fail the review write.
+    """
+    if not text.strip():
+        return
+    try:
+        from agent_memory import remember
+
+        remember(
+            session,
+            project_id,
+            text,
+            scope="shot" if shot_id else "project",
+            kind="episodic",
+            shot_id=shot_id,
+            provenance="user",
+            trust="user",
+            metadata={"source": source},
+        )
+    except Exception:
+        logger.warning("Could not extract review memory", exc_info=True)
+
+
 @router.post("/projects/{project_id}/review/comments")
 def add_comment(
     project_id: str,
@@ -92,6 +128,13 @@ def add_comment(
     session.add(item)
     session.commit()
     session.refresh(item)
+    _extract_memory(
+        session,
+        project_id,
+        f"Review comment on shot {req.shot_id or 'project'}: {body}",
+        shot_id=req.shot_id,
+        source="review_comment",
+    )
     return _serialize(item)
 
 
@@ -118,6 +161,14 @@ def update_comment(
     session.add(item)
     session.commit()
     session.refresh(item)
+    if req.body is not None and item.shot_id:
+        _extract_memory(
+            session,
+            project_id,
+            f"Review comment on shot {item.shot_id}: {item.body}",
+            shot_id=item.shot_id,
+            source="review_comment",
+        )
     return _serialize(item)
 
 
@@ -170,4 +221,13 @@ def set_approval(
     session.add(item)
     session.commit()
     session.refresh(item)
+    decision = "approved" if req.status == "approved" else "changes requested"
+    note = (req.note or "").strip()
+    _extract_memory(
+        session,
+        project_id,
+        f"Shot {req.shot_id} {decision}." + (f" Note: {note}" if note else ""),
+        shot_id=req.shot_id,
+        source="review_approval",
+    )
     return _serialize(item)

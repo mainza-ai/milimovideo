@@ -10,6 +10,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 import uvicorn
 
 import config
@@ -159,7 +160,11 @@ app.add_middleware(
     expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
 )
 
-PUBLIC_PATHS = {"/health", "/docs", "/openapi.json", "/redoc"}
+# JSON and text above this size are compressed. Starlette already excludes
+# media/SSE content types, so Range video responses are untouched.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=5)
+
+PUBLIC_PATHS = {"/health", "/health/live", "/docs", "/openapi.json", "/redoc"}
 
 def _request_token(request: Request) -> str:
     auth = request.headers.get("authorization", "")
@@ -219,10 +224,36 @@ async def add_cors_headers(request: Request, call_next):
     return response
 
 
+_HEALTH_CACHE: dict = {"at": 0.0, "payload": None}
+_HEALTH_TTL_S = 1.0
+
+
+@app.get("/health/live")
+async def health_live():
+    """Cheap liveness probe: no torch, no psutil, no model probes."""
+    return {"status": "ok"}
+
+
 @app.get("/health")
 async def health():
+    """Full health snapshot, cached for one second.
+
+    Every studio surface polls this; `memory_manager.status()` probes torch,
+    psutil, and external engines, so an unbounded call rate turns a status
+    read into GPU/allocator work. One second keeps the queue/device truth fresh
+    without the probe storm.
+    """
+    import copy
     import shutil
+    import time
+
+    now = time.monotonic()
+    cached = _HEALTH_CACHE["payload"]
+    if cached is not None and now - _HEALTH_CACHE["at"] < _HEALTH_TTL_S:
+        return copy.deepcopy(cached)
+
     import torch
+    from database import sqlite_runtime
     from job_utils import is_gpu_busy, is_queue_paused
     from memory_manager import memory_manager
 
@@ -232,7 +263,7 @@ async def health():
     except OSError:
         free_bytes = None
     memory = memory_manager.status()
-    return {
+    payload = {
         "status": "ok",
         "device": device,
         "api_host": config.API_HOST,
@@ -243,7 +274,11 @@ async def health():
         "memory": memory,
         "sampler": memory_sampler.current(),
         "disk_free_bytes": free_bytes,
+        "sqlite": sqlite_runtime(),
     }
+    _HEALTH_CACHE["at"] = now
+    _HEALTH_CACHE["payload"] = payload
+    return copy.deepcopy(payload)
 
 # Include Routers (Must be before static mounts to avoid shadowing)
 app.include_router(api_router)

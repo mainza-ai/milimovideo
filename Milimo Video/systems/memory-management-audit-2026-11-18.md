@@ -315,3 +315,19 @@ privacy cannot be audited by the user.
 
 The memory plan (M0–M5) and its relationship to performance P2:
 [[../roadmap/memory-management-plan-2026-11-18.md]].
+
+## Implementation status (2026-11-18)
+
+Resolved on this branch: separate device-recommended/process-cap/ceiling values
+with admission on the cap (98.13 GB here), allocator current/cache, 0.5s
+per-stage sampler with physical/swap minima, job traces in `/system/memory` and
+MemoryPanel, pressure guard with block/evict/cancel actions, child-process RSS,
+sanitized/debounced persistence, paused-RAF playback, hidden-tab polling, and a
+project-scoped agent memory store with FTS5 retrieval, token budgets, provenance,
+quarantine/approve, export/delete, planner RAG, and a 20-task eval (top-1/top-3 100%,
+p95 ~1.6 ms).
+
+Still open: per-lane measured model profiles and VAE quality pairs, MLX cache
+controls, browser IndexedDB migration and media-buffer audit, consolidation and take
+extraction, and a larger evaluation suite. See
+[[../roadmap/memory-management-plan-2026-11-18]].

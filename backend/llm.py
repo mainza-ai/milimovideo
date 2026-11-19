@@ -11,7 +11,9 @@ Usage:
 """
 
 import logging
+import os
 import threading
+from collections import OrderedDict
 from typing import Callable
 
 from services.llm import runtime
@@ -33,6 +35,28 @@ __all__ = [
 ]
 
 _local = threading.local()
+
+# Reuse successful rewrites for identical prompt/seed/settings. The value is
+# small text, not model tensors; cap it so a long studio session cannot grow
+# without bound. Settings revision invalidates the cache on any plan change.
+_ENHANCE_CACHE: "OrderedDict[tuple, tuple[str, bool, dict]]" = OrderedDict()
+_ENHANCE_CACHE_MAX = 128
+_ENHANCE_CACHE_LOCK = threading.Lock()
+
+
+def _image_signature(path: str | None) -> tuple:
+    if not path:
+        return ("", 0, 0)
+    try:
+        stat = os.stat(path)
+        return (path, stat.st_size, int(stat.st_mtime))
+    except OSError:
+        return (path, 0, 0)
+
+
+def clear_prompt_cache() -> None:
+    with _ENHANCE_CACHE_LOCK:
+        _ENHANCE_CACHE.clear()
 
 
 def role_for(is_video: bool) -> str:
@@ -114,6 +138,25 @@ def enhance_prompt(
     """
     role = role_for(is_video)
     json_mode = system_prompt is None
+    settings_revision = llm_settings.get().revision
+    cache_key = (
+        settings_revision,
+        role,
+        prompt,
+        system_prompt or "",
+        seed,
+        has_input_image,
+        round(float(duration_seconds), 3),
+        _image_signature(image_path),
+    )
+    with _ENHANCE_CACHE_LOCK:
+        cached = _ENHANCE_CACHE.get(cache_key)
+        if cached is not None:
+            _ENHANCE_CACHE.move_to_end(cache_key)
+    if cached is not None:
+        text, is_reference, provenance = cached
+        _local.provenance = {**provenance, "cached": True}
+        return text, is_reference
 
     if not system_prompt:
         system_prompt = (
@@ -143,5 +186,11 @@ def enhance_prompt(
         "Enhanced %s prompt via %s/%s in %sms",
         role, result.provider, result.model, result.latency_ms,
     )
-    _local.provenance = result.provenance()
+    provenance = result.provenance()
+    _local.provenance = provenance
+    with _ENHANCE_CACHE_LOCK:
+        _ENHANCE_CACHE[cache_key] = (enhanced, is_reference_only, provenance)
+        _ENHANCE_CACHE.move_to_end(cache_key)
+        while len(_ENHANCE_CACHE) > _ENHANCE_CACHE_MAX:
+            _ENHANCE_CACHE.popitem(last=False)
     return enhanced, is_reference_only

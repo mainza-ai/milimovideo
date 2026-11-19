@@ -71,6 +71,24 @@ def _mps_ceiling_gb() -> float | None:
     return None
 
 
+def _allocator_state() -> tuple[float, float]:
+    """(current allocated GB, cache GB) for the active accelerator."""
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            current = float(torch.cuda.memory_allocated(0)) / 1e9
+            reserved = float(torch.cuda.memory_reserved(0)) / 1e9
+            return current, max(0.0, reserved - current)
+        if hasattr(torch, "mps") and torch.backends.mps.is_available():
+            current = float(torch.mps.current_allocated_memory()) / 1e9
+            driver = float(torch.mps.driver_allocated_memory()) / 1e9
+            return current, max(0.0, driver - current)
+    except Exception:
+        pass
+    return 0.0, 0.0
+
+
 _sam_cache: dict[str, float] = {"stamp": 0.0, "gb": 0.0}
 
 
@@ -103,19 +121,33 @@ def snapshot(
     swap = psutil.swap_memory()
     cuda = _cuda_state()
     recommended = _mps_ceiling_gb() if not cuda else None
+    allocator_current, allocator_cache = _allocator_state()
+    device_recommended = 0.0
+    process_cap = 0.0
     if cuda:
         free_vram, total, allocated = cuda
-        reserve = max(float(config.CUDA_RESERVE_GB), total * (1.0 - float(config.CUDA_MEMORY_FRACTION)))
-        ceiling = max(0.5, total - reserve)
+        fraction = max(0.1, min(0.99, float(config.CUDA_MEMORY_FRACTION)))
+        reserve = max(float(config.CUDA_RESERVE_GB), total * (1.0 - fraction))
+        device_recommended = total
+        process_cap = max(0.5, min(total * fraction, total - reserve))
+        ceiling = process_cap
         in_process = allocated
         device = "cuda"
         physical_available = free_vram
     else:
         total = vm.total / 1e9
         reserve = max(float(config.MEMORY_RESERVE_GB), total * 0.15)
-        ceiling = min(recommended, total - reserve) if recommended else total - reserve
+        if recommended:
+            fraction = max(0.1, min(0.95, float(config.MPS_MEMORY_FRACTION)))
+            device_recommended = recommended
+            # `set_per_process_memory_fraction` is relative to recommendedMaxWorkingSetSize.
+            process_cap = max(0.5, min(recommended * fraction, total - reserve))
+            ceiling = process_cap
+            device = "mps"
+        else:
+            ceiling = total - reserve
+            device = "cpu"
         in_process = _mps_gb()
-        device = "mps" if recommended else "cpu"
         physical_available = vm.available / 1e9
 
     resident_non_llm = sum(
@@ -151,7 +183,12 @@ def snapshot(
 
     notes: list[str] = []
     if recommended:
-        notes.append("MPS recommended working set")
+        notes.append(
+            f"MPS process cap {process_cap:.1f} GB "
+            f"({config.MPS_MEMORY_FRACTION:.0%} of {recommended:.1f} GB recommended)"
+        )
+    if allocator_cache > 0.05:
+        notes.append(f"allocator cache holds {allocator_cache:.1f} GB")
     if cuda:
         notes.append(f"CUDA VRAM budget ({total:.1f} GB, {config.CUDA_MEMORY_FRACTION:.0%} cap)")
     if swap_free < 2.0:
@@ -179,6 +216,10 @@ def snapshot(
         physical_available_gb=physical_available,
         swap_free_gb=swap_free,
         device=device,
+        device_recommended_gb=device_recommended,
+        process_cap_gb=process_cap,
+        allocator_current_gb=allocator_current,
+        allocator_cache_gb=allocator_cache,
     )
 
 

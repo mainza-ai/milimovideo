@@ -1,18 +1,21 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import './studio.css';
 import { ModeRail } from './components/ModeRail';
 import { TopBar } from './components/TopBar';
 import { StatusStrip } from './components/StatusStrip';
 import { CommandDock } from './components/CommandDock';
-import { Inspector } from './components/Inspector';
-import { StorySurface } from './surfaces/StorySurface';
-import { GenerateSurface } from './surfaces/GenerateSurface';
-import { EditSurface } from './surfaces/EditSurface';
-import { ReviewSurface } from './surfaces/ReviewSurface';
-import { LibrarySurface } from './surfaces/LibrarySurface';
-import { DeliverSurface } from './surfaces/DeliverSurface';
-import { SetupSurface } from './surfaces/SetupSurface';
-import { ShortsSurface } from './surfaces/ShortsSurface';
+
+// Route-level split: Story is the entry surface, everything else is loaded on
+// first visit. Keep the shell chrome (rail, top bar, status) in the main chunk.
+const StorySurface = lazy(() => import('./surfaces/StorySurface').then((m) => ({ default: m.StorySurface })));
+const GenerateSurface = lazy(() => import('./surfaces/GenerateSurface').then((m) => ({ default: m.GenerateSurface })));
+const EditSurface = lazy(() => import('./surfaces/EditSurface').then((m) => ({ default: m.EditSurface })));
+const ReviewSurface = lazy(() => import('./surfaces/ReviewSurface').then((m) => ({ default: m.ReviewSurface })));
+const LibrarySurface = lazy(() => import('./surfaces/LibrarySurface').then((m) => ({ default: m.LibrarySurface })));
+const DeliverSurface = lazy(() => import('./surfaces/DeliverSurface').then((m) => ({ default: m.DeliverSurface })));
+const SetupSurface = lazy(() => import('./surfaces/SetupSurface').then((m) => ({ default: m.SetupSurface })));
+const ShortsSurface = lazy(() => import('./surfaces/ShortsSurface').then((m) => ({ default: m.ShortsSurface })));
+const Inspector = lazy(() => import('./components/Inspector').then((m) => ({ default: m.Inspector })));
 import { useStudioEditor, type StudioSurface } from './state/editorStore';
 import { useStudioProject, useStudioActiveJobs, useStudioBoardSync, useStudioProjectBootstrap } from './data/useStudioData';
 import { useStudioDocumentStore } from './state/documentStore';
@@ -172,11 +175,23 @@ function StudioShell() {
                 <ModeRail />
                 <main className="st-main" id="studio-main" tabIndex={-1}>
                     <div className="st-surface" data-focus={focusMode}>
-                        {surface}
+                        <Suspense
+                            fallback={(
+                                <div className="st-empty" role="status" aria-live="polite">
+                                    <span>Loading {activeSurface}…</span>
+                                </div>
+                            )}
+                        >
+                            {surface}
+                        </Suspense>
                     </div>
                     <CommandDock />
                 </main>
-                {inspectorOpen && <Inspector />}
+                {inspectorOpen && (
+                    <Suspense fallback={null}>
+                        <Inspector />
+                    </Suspense>
+                )}
             </div>
             <StatusStrip />
             <StudioToastLayer />

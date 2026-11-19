@@ -67,7 +67,7 @@ export function MediaPreview() {
                 </div>
                 <div className="st-media-preview-body">
                     {kind === 'video' ? (
-                        <video src={item.url} controls autoPlay playsInline />
+                        <video src={item.proxyUrl || item.url} controls autoPlay playsInline />
                     ) : kind === 'audio' ? (
                         <audio src={item.url} controls autoPlay />
                     ) : kind === 'text' ? (

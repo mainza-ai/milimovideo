@@ -26,7 +26,23 @@ agentic memory.
 Priority: **measure → generation schedule/loader → memory/MLX → render/proxy →
 frontend idle work → storage/API → gates**.
 
-Status: **planned, not started**.
+Status: **P0/P1 core, P3 encoder/proxy core, P4, P5, and P6 gates
+implemented 2026-11-18; model-loaded benchmarks and the VMAF gate remain open.**
+
+## Implementation status (2026-11-18)
+
+| Phase | Landed | Still open / deliberately deferred |
+|---|---|---|
+| P0 | `backend/benchmark_performance.py` records memory truth, estimates, optional API latency, and real x264 vs VideoToolbox encodes; `benchmarks/` is gitignored and CI uploads the artifact | Fixed text→video/image prompts at 3 resolutions, quality frames, SSIM/PSNR/VMAF pair (needs loaded checkpoints and a dedicated run) |
+| P1 | MPS safetensors `backend="pread"`; prompt-rewrite LRU cache keyed by settings revision/prompt/seed/image signature; Draft 8 (CFG off) · Standard 20 · Final 40 presets | True distilled 8+4 two-stage schedule (upstream pipeline exposes one `num_inference_steps`); embedding-level cache; gradient-estimating preset evaluation |
+| P2 | Truthful process cap, allocator current/cache, per-stage sampler; frame-aware MPS pixel budget replacing the static 1280×768 cap; VAE tiling + `empty_cache` at chunk boundaries; measured Docker/Comfy child budget | VAE tile quality pair, torch 2.10 float32-VAE re-test, MLX spike, 481-frame validation |
+| P3 | `MILIMO_RENDER_ENCODER=auto\|software\|videotoolbox` with CRF→`-q:v` mapping, `MILIMO_RENDER_CODEC=h264\|hevc`, x264 thread cap, real encode test; 720p review proxies generated on upload and exposed through `/uploads` + the media viewer | VMAF gate and default-auto promotion, `-hwaccel` input path, CPU-under-load measurement |
+| P4 | Route-level lazy surfaces + lazy legacy editor; initial gzip 134.8 KiB studio shell / 173.3 KiB with Story (budget 250); RAF only while playing, cached clips/track state, single paused tick per seek; visibility-aware polling; sanitized + debounced persistence | React Compiler pilot, explicit 500-card/timeline recompute profiling, LUT 60fps path |
+| P5 | WAL + `synchronous=NORMAL` + `busy_timeout` with a 3.45.1 caveat; JSON gzip; 1s cached `/health` plus cheap `/health/live`; upload thumbnails/proxies out of the `/uploads` request | SQLite 3.51.3 packaging, `/uploads` 100+ asset p95 measurement, thumbnail cache-invalidation test |
+| P6 | `check:bundle` now walks the Vite manifest and enforces a 250 KiB initial-gzip route budget; CI runs the memory-truth gate, the agent-memory eval, and uploads the performance artifact | Nightly generation smoke and render-throughput/VMAF floors |
+
+CLI: `./milimov/bin/python backend/check_memory_truth.py` and
+`./milimov/bin/python backend/agent_memory_eval.py` are the two new hard gates.
 
 ## Findings → phases
 

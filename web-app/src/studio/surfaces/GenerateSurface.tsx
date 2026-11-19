@@ -753,6 +753,39 @@ export function GenerateSurface() {
                                     <input className="st-input" type="number" value={shot.height} onChange={(event) => updateShot(shot.id, { height: Number(event.target.value) })} />
                                 </label>
                             </div>
+                            <div className="st-button-row" style={{ marginTop: 6, alignItems: 'center' }}>
+                                <span className="st-label" style={{ margin: 0 }}>Preset</span>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    data-variant={(shot.numInferenceSteps ?? 40) <= 8 ? 'primary' : 'ghost'}
+                                    onClick={() => updateShot(shot.id, { numInferenceSteps: 8, upscale: false, cfgScale: 1 })}
+                                    title="Distilled preview: 8 steps, CFG off, no upscale. Use Final for delivery."
+                                >
+                                    Draft · 8
+                                </button>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    data-variant={(shot.numInferenceSteps ?? 40) === 20 ? 'primary' : 'ghost'}
+                                    onClick={() => updateShot(shot.id, { numInferenceSteps: 20 })}
+                                    title="Balanced preview: 20 steps."
+                                >
+                                    Standard · 20
+                                </button>
+                                <button
+                                    type="button"
+                                    className="st-button"
+                                    data-size="sm"
+                                    data-variant={(shot.numInferenceSteps ?? 40) >= 40 ? 'primary' : 'ghost'}
+                                    onClick={() => updateShot(shot.id, { numInferenceSteps: 40 })}
+                                    title="Delivery quality: 40 steps."
+                                >
+                                    Final · 40
+                                </button>
+                            </div>
                             <div className="st-row" style={{ marginTop: 8 }}>
                                 <label>
                                     <span className="st-label">CFG</span>

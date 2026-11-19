@@ -142,17 +142,26 @@ conflict/409, revision/CAS, document undo, and board undo are wired per route.
 - Generated OpenAPI client types: `npm run gen:api`; CI checks drift.
 - Durable GPU queue: `QueuedJob` ledger + one global semaphore + one budget-aware
   OOM retry + pause/resume dispatch.
-- Memory budget: `services/memory` measures total/reserve/MPS ceiling/physical
-  free/swap free/in-process slots/external engines; admission runs before every
-  heavy load, leases block eviction, idle TTL unloads, and the sampler records
-  peak per stage. `/health`, `/system/memory`, `/system/memory/preflight`,
+- Memory budget: `services/memory` measures total/reserve/device-recommended/
+  process cap/physical free/swap free/allocator current+cache/in-process slots/
+  external engines/child RSS; admission uses the real process cap and runs before
+  every heavy load, leases block eviction, idle TTL unloads, and the 0.5s sampler
+  records stage peaks. A pressure guard blocks admission on warning and marks the
+  oldest job for cancellation on critical. `/health` (1s cached) and
+  `/health/live`, `/system/memory`, `/system/memory/preflight`,
   `/system/memory/unload`, and `/system/memory/keep-warm`.
 - Job events: typed `job.*` envelope (`ts/event/job_id/shot_id/project_id/kind/
   stage/progress/step/total/eta_seconds/message`) with `seq` ids,
   `Last-Event-ID` replay, and a single terminal emitter. `job_events.terminal`
   writes the DB once and emits once.
-- Observability: `X-Request-ID`, timing logs, `/health`, `/metrics/jobs` (now with
-  memory peak and event stats).
+- Observability: `X-Request-ID`, timing logs, `/health`, `/health/live`,
+  `/metrics/jobs` (memory peak and event stats), and `check_memory_truth.py` /
+  `agent_memory_eval.py` as CI gates.
+- Agentic memory: project-scoped SQLite store (`AgentMemory`) with FTS5 retrieval
+  (LIKE fallback), working/episodic/semantic/procedural kinds, provenance/trust,
+  dedupe, token-budgeted context packs with retrieval reasons, quarantine +
+  approve, export/clear, planner RAG, and a Setup panel. See
+  `Milimo Video/roadmap/memory-management-plan-2026-11-18.md`.
 - Local security: loopback default, CORS allowlist, optional bearer token, safe
   media Range serving, upload allowlist/size cap.
 
@@ -244,9 +253,10 @@ Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The 2026-11-1
 performance and memory audits are planned, not implemented: see
 `Milimo Video/systems/performance-audit-2026-11-18.md` and
 `Milimo Video/systems/memory-management-audit-2026-11-18.md`, with the companion
-plans under `Milimo Video/roadmap/`. The reported MPS ceiling is 17.3 GB above the
-real process cap, active jobs are observed but not guarded, and agentic memory is
-absent. The current green baseline is 232 backend tests, 110 Vitest tests, and 32
+plans under `Milimo Video/roadmap/`. The reported MPS ceiling now equals the real process cap, the pressure guard
+blocks/evicts/cancels, and agentic memory is project-scoped SQLite with FTS5.
+Measured model-load profiles, VAE quality pairs, MLX, and memory consolidation
+remain open. The current green baseline is 270 backend tests, 118 Vitest tests, and 32
 Playwright tests, plus ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`,
 and `verify_setup`.
 
@@ -273,7 +283,9 @@ Do not claim these are done:
   `job_events` — do not add ad-hoc `event_manager.broadcast` calls for job state. See
   `Milimo Video/systems/job-notifications-audit-2026-11.md`.
 - Memory caveats: the cost registry is hand-tuned (measured estimate, not a
-  per-model profile); Strata has no unload endpoint and is budgeted from its
+  per-model profile); measured per-lane profiles and the MLX lane remain open;
+  SQLite runs WAL on bundled 3.45.1, which predates the 3.51.3 reset fix
+  (`MILIMO_SQLITE_WAL=0` disables); Strata has no unload endpoint and is budgeted from its
   `memory_gb` override; a cancelled job keeps its pipeline until the idle TTL;
   only the MPS decode path is tiled; memory waits are bounded at 20 retries; on
   CUDA the budget uses free VRAM and the FP8 40 GB base, but CPU offload and
@@ -339,13 +351,13 @@ Run from the repo root unless noted:
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # 232 backend tests
+./milimov/bin/python -m pytest                 # 270 backend tests
 ./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # env/model/ffmpeg/disk
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 110 Vitest tests
+npm test                                       # 118 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
 npm run test:e2e                               # 32 Playwright tests

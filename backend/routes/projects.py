@@ -1187,6 +1187,8 @@ async def _render_background(
                 track_states=track_states,
                 crf=settings.crf,
                 preset=settings.preset,
+                encoder=config.RENDER_ENCODER,
+                codec=config.RENDER_CODEC,
                 audio_bitrate=settings.audio_bitrate,
                 audio_normalize=settings.audio_normalize,
                 captions_path=captions_path,

@@ -1,7 +1,9 @@
 import os
+
+import config
 from sqlmodel import SQLModel, create_engine, Session, Field, Relationship
 from typing import Optional, List
-from sqlalchemy import Column, JSON, text
+from sqlalchemy import Column, JSON, event, text
 from datetime import datetime
 import uuid
 import logging
@@ -220,6 +222,32 @@ class ShareLink(SQLModel, table=True):
     revoked: bool = False
 
 
+class AgentMemory(SQLModel, table=True):
+    """Project-scoped agent memory: facts, decisions, feedback, preferences.
+
+    Local SQLite only. `trust` separates user-authored facts from agent guesses
+    and imported text; `quarantined` entries are retrievable by the UI but are
+    excluded from context packs until a human approves them. `content_hash`
+    deduplicates repeated writes of the same note in one project.
+    """
+    id: str = Field(default_factory=lambda: uuid.uuid4().hex, primary_key=True)
+    project_id: str = Field(index=True)
+    scope: str = Field(default="project", index=True)  # project | shot | session | agent
+    shot_id: Optional[str] = Field(default=None, index=True)
+    kind: str = Field(default="semantic", index=True)  # working | episodic | semantic | procedural
+    text: str = ""
+    metadata_json: Optional[str] = None
+    provenance: str = Field(default="user")  # user | agent | imported | system
+    trust: str = Field(default="user")  # user | verified | agent | imported
+    content_hash: str = Field(default="", index=True)
+    pinned: bool = Field(default=False)
+    quarantined: bool = Field(default=False)
+    use_count: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    last_used_at: Optional[datetime] = None
+
+
 class ReviewItem(SQLModel, table=True):
     """Frame-accurate review comments and per-shot approvals.
 
@@ -244,6 +272,47 @@ from config import DATABASE_URL
 # Increased pool size to prevent "QueuePool limit" errors during heavy polling
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, pool_size=20, max_overflow=40)
 
+
+def sqlite_runtime() -> dict:
+    """Version and pragma truth for /health and the storage tests."""
+    import sqlite3
+
+    with engine.connect() as connection:
+        journal = connection.exec_driver_sql("PRAGMA journal_mode").scalar()
+        busy = connection.exec_driver_sql("PRAGMA busy_timeout").scalar()
+        sync = connection.exec_driver_sql("PRAGMA synchronous").scalar()
+    return {
+        "version": sqlite3.sqlite_version,
+        "wal_reset_fix": tuple(int(p) for p in sqlite3.sqlite_version.split(".")[:3]) >= (3, 51, 3),
+        "journal_mode": journal,
+        "busy_timeout_ms": busy,
+        "synchronous": sync,
+    }
+
+
+@event.listens_for(engine, "connect")
+def _sqlite_pragmas(dbapi_connection, _record):
+    """One-writer WAL with a bounded busy wait.
+
+    `journal_mode` persists in the file, but busy_timeout/synchronous are
+    per-connection, so they are set on every checkout. Failures are non-fatal:
+    a non-SQLite URL or a locked legacy DB should not stop startup.
+    """
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute(f"PRAGMA busy_timeout={int(config.SQLITE_BUSY_TIMEOUT_MS)}")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        if config.SQLITE_WAL:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA wal_autocheckpoint=1000")
+        cursor.execute("PRAGMA foreign_keys=ON")
+    except Exception as exc:  # pragma: no cover - depends on filesystem/driver
+        logger.warning("Could not apply SQLite pragmas: %s", exc)
+    finally:
+        cursor.close()
+
 def _add_missing_columns() -> None:
     """Idempotent SQLite schema repair for installs created before a model field.
 
@@ -252,6 +321,11 @@ def _add_missing_columns() -> None:
     list forever.
     """
     migrations = {
+        "agentmemory": {
+            "quarantined": "BOOLEAN NOT NULL DEFAULT 0",
+            "use_count": "INTEGER NOT NULL DEFAULT 0",
+            "last_used_at": "DATETIME",
+        },
         "project": {
             "revision": "INTEGER NOT NULL DEFAULT 0",
             "board_layout": "TEXT",

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import { useShallow } from 'zustand/react/shallow';
-import type { TimelineState } from '../../stores/types';
+import type { Project, Shot, TimelineState } from '../../stores/types';
 import { documentSignature } from '../../stores/saveStatus';
 
 import { createProjectSlice } from '../../stores/slices/projectSlice';
@@ -13,6 +13,82 @@ import { createTrackSlice } from '../../stores/slices/trackSlice';
 import { createElementSlice } from '../../stores/slices/elementSlice';
 import { createServerSlice } from '../../stores/slices/serverSlice';
 import { createModelSlice } from '../../stores/slices/modelSlice';
+
+/**
+ * Runtime fields never belong in localStorage: they are per-session progress and
+ * LLM output, they churn every poll, and they can be large. Stripping them keeps
+ * the persisted document close to the save payload and shrinks writes.
+ */
+const RUNTIME_SHOT_FIELDS = [
+    'isGenerating',
+    'progress',
+    'statusMessage',
+    'currentPrompt',
+    'etaSeconds',
+    'enhancedPromptResult',
+    'lastJobId',
+] as const;
+
+export function sanitizeProjectForStorage(project: Project): Project {
+    return {
+        ...project,
+        shots: (project.shots || []).map((shot) => {
+            const clean: Record<string, unknown> = { ...shot };
+            for (const field of RUNTIME_SHOT_FIELDS) delete clean[field];
+            return clean as unknown as Shot;
+        }),
+    };
+}
+
+/**
+ * Debounced localStorage adapter. A save flow writes the whole document several
+ * times per user action (status transitions, shot patches); coalescing those
+ * writes keeps the main thread out of repeated multi-hundred-KiB JSON writes
+ * while still flushing on unload.
+ */
+function createThrottledStorage(delayMs = 400): StateStorage {
+    let timer: number | null = null;
+    let pending: { name: string; value: string } | null = null;
+
+    const flush = () => {
+        timer = null;
+        if (!pending) return;
+        const { name, value } = pending;
+        pending = null;
+        try {
+            window.localStorage.setItem(name, value);
+        } catch {
+            // Quota or private mode: the backend document is still authoritative.
+        }
+    };
+
+    if (typeof window !== 'undefined') {
+        window.addEventListener('pagehide', flush);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) flush();
+        });
+    }
+
+    return {
+        getItem: (name) => {
+            if (typeof window === 'undefined') return null;
+            if (pending && pending.name === name) return pending.value;
+            return window.localStorage.getItem(name);
+        },
+        setItem: (name, value) => {
+            pending = { name, value };
+            if (timer === null) timer = window.setTimeout(flush, delayMs);
+        },
+        removeItem: (name) => {
+            pending = null;
+            if (timer !== null) {
+                window.clearTimeout(timer);
+                timer = null;
+            }
+            window.localStorage.removeItem(name);
+        },
+    };
+}
 
 /**
  * Studio-owned document store.
@@ -37,8 +113,9 @@ export const useStudioDocumentStore = create<TimelineState>()(
             }),
             {
                 name: 'milimo-studio-document',
+                storage: createJSONStorage(() => createThrottledStorage()),
                 partialize: (state: TimelineState) => ({
-                    project: state.project,
+                    project: sanitizeProjectForStorage(state.project),
                     savedBaseline: state.savedBaseline,
                     saveStatus: state.saveStatus === 'saved'
                         || state.saveStatus === 'dirty'
