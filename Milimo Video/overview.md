@@ -87,11 +87,17 @@ The scoped P0–P5, F0–F5, and F6 chrome-stabilization work is complete:
   emitter, Studio toasts/activity/inline progress, resync/watchdog, desktop
   notifications, dock badge, webhook, and per-project mute;
 - the finishing pass: project 3D LUT, burned-in titles, A2 audio, V1 crossfades,
-  OTIO/FCPXML import/export, lens recipe packs, and an optional ComfyUI bridge.
+  OTIO/FCPXML import/export, lens recipe packs, and an optional ComfyUI bridge;
+- the 2026-11-18 performance/memory pass: real process-cap admission, pressure
+  guard, 0.5 s sampler, `pread` loader, prompt cache, presets, VideoToolbox,
+  proxies, lazy/paused-RAF frontend, WAL/gzip/health, and project-scoped agent
+  memory. See [[systems/performance-memory-execution-2026-11-18]] and
+  [[systems/agentic-memory]].
 
-Verification: **222 backend tests, 95 Vitest tests, 22 Playwright tests**, clean
-ruff/tsc/ESLint, build + bundle budget, `cargo check`, and `verify_setup` with zero
-failures.
+Verification: **270 backend tests, 118 Vitest tests, 32 Playwright tests**, clean
+ruff/tsc/ESLint, build + bundle budget (134.8 KiB studio initial gzip),
+`check_memory_truth`, `agent_memory_eval`, `cargo check`, and `verify_setup` with
+zero failures.
 
 Remaining/deferred work is explicit in
 [[roadmap/implementation-plan-2026-11.md]]: bundled Python sidecar runtime, legacy

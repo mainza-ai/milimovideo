@@ -66,6 +66,16 @@ model are chosen by the persisted **role plan**, not by a global config flag.
   `GET/PUT/PATCH /settings/llm`, `/models`, `/discover`, `/providers/{id}/verify`,
   `/test`, `/health`. Design and gaps: [[llm-settings-audit-2026-11]].
 
+## Prompt rewrite cache (2026-11-18)
+
+`backend/llm.py` keeps an LRU (128) of successful rewrites keyed by settings
+revision, role, prompt, system prompt, seed, `has_input_image`, duration, and the
+image file signature (path, size, mtime). A cache hit returns the same text and
+marks the provenance `cached: true`; a failed rewrite is never cached. Any change
+to the persisted LLM plan bumps the revision and invalidates every entry. This
+removes the repeated LLM pass when a user retries a take with the same prompt and
+seed, without hiding a plan change.
+
 ## Gotchas
 
 - The Gemma provider is only usable when the LTX-2 pipeline is loaded. Assigning
@@ -75,7 +85,10 @@ model are chosen by the persisted **role plan**, not by a global config flag.
   JSON parsing fails, the raw text is used and image conditioning is kept.
 - Prompt enhancement runs before pipeline selection, so its SSE `progress` update
   (with `enhanced_prompt`) arrives at ~5% — before any denoising.
-- A failed enhancement never fails the job: the original prompt is returned.
+- A failed enhancement never fails the job: the original prompt is returned and is
+  not cached.
+- A cache hit skips the provider entirely, including VRAM residency; that is the
+  intended behavior for a same-seed retry.
 - Wrapper-safe parsing accepts `enhanced_prompt`, `prompt`, `text`,
   `image_prompt`, `result`, `output`, or the longest string value, and returns the
   original prompt if a bare JSON object cannot be unwrapped. granite's

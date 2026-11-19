@@ -25,8 +25,16 @@ curl -H "Authorization: Bearer $MILIMO_API_TOKEN" \
 `EventSource` cannot set headers, so the SSE endpoint also accepts
 `?token=...`.
 
+`GET /health/live` is a torch-free liveness probe. `GET /health` is the full
+snapshot (device, queue, disk, memory truth, sampler, SQLite version/WAL) and is
+cached for one second because every surface polls it. JSON and text responses above
+1 KiB are gzipped when the client sends `Accept-Encoding: gzip`; media and SSE are
+excluded.
+
 CORS is an allowlist (`MILIMO_CORS_ORIGINS`); add the origin of a browser client.
-Uploads are capped by `MILIMO_MAX_UPLOAD_MB`.
+Uploads are capped by `MILIMO_MAX_UPLOAD_MB`. Video uploads return a poster
+immediately and schedule a 720p H.264 review proxy; `GET /uploads` exposes `proxy`
+alongside `url` and `thumbnail`.
 
 ## 1. Create a project
 
@@ -247,6 +255,10 @@ Update with `expected_revision`; a stale write returns 409. `POST
 
 `POST /projects/{project_id}/render` accepts `settings.lut` (a project `.cube`/
 `.3dl`/`.dat`/`.m3d` URL), `start_frame`/`end_frame`, `fit`, and encoding fields.
+The encoder is server policy: `MILIMO_RENDER_ENCODER=auto|software|videotoolbox`
+(`auto` keeps software x264) and `MILIMO_RENDER_CODEC=h264|hevc`; VideoToolbox maps
+CRF to `-q:v` and is opt-in until the VMAF gate exists. `MILIMO_RENDER_THREADS`
+caps x264 threads.
 Project `titles` are a list of `{text,start_frame,end_frame,x,y,size,color,box}` and
 are burned in after the LUT, before captions. Shot `transition_in` is a V1
 crossfade duration in frames. Set `pipeline_override: "ltx25"` for the gated
@@ -260,7 +272,36 @@ endpoint removes the asset file and poster, clears shot `video_url`/`thumbnail_u
 references, and marks matching jobs deleted. `DELETE /upload/{filename}` remains
 for legacy filename-based callers.
 
-## 11. Automation guardrails
+## 11. Project agent memory
+
+Every project has a local memory store for facts, decisions, review feedback, and
+preferences. Entries carry `scope`, `kind`, `provenance`, and `trust`; agent or
+imported text that looks like an instruction injection is quarantined and excluded
+from context packs until approved.
+
+```bash
+# remember a fact
+curl -s -X POST http://127.0.0.1:8000/projects/$PROJECT_ID/memory   -H 'Content-Type: application/json'   -d '{"text":"The courier wears a red raincoat.","kind":"semantic"}'
+
+# search / list
+curl -s 'http://127.0.0.1:8000/projects/'$PROJECT_ID'/memory?query=raincoat&limit=10'
+
+# token-budgeted retrieval for an agent prompt
+curl -s 'http://127.0.0.1:8000/projects/'$PROJECT_ID'/memory/context?query=wardrobe&budget_tokens=600'
+
+# approve a quarantined entry, then delete or export
+curl -s -X POST http://127.0.0.1:8000/projects/$PROJECT_ID/memory/$MEMORY_ID/approve
+curl -s -X DELETE http://127.0.0.1:8000/projects/$PROJECT_ID/memory/$MEMORY_ID
+curl -s http://127.0.0.1:8000/projects/$PROJECT_ID/memory/export
+curl -s -X DELETE http://127.0.0.1:8000/projects/$PROJECT_ID/memory
+```
+
+Search ranks lexical matches (FTS5 when available, token LIKE otherwise) with
+pinning, trust, recency, and a same-shot boost. The packer stops at the token
+budget and returns a `why` list per entry. Review comments and approvals are
+extracted automatically with `metadata.source = review_comment|review_approval`.
+
+## 12. Automation guardrails
 
 - The API is local-first. Cloud providers remain off unless `MILIMO_LLM_CLOUD=1`
   and air-gap is off; a batch cannot silently spend money.

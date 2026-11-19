@@ -396,6 +396,7 @@ classDiagram
 | `job` | `id` (string) | nullable project_id | Async task tracking with progress, stage, start time, per-job memory trace, and results. Status transitions: `pending/queued → processing → completed/failed/cancelled`. |
 | `queuedjob` | `id` (string) | job_id | Durable dispatch ledger: kind, params (incl. memory-retry markers), status, attempts, timestamps. |
 | `comfyworkflow` | `id` (UUID hex) | → project (FK) | Named API-format ComfyUI graph, bindings JSON, revision, default flag. |
+| `agentmemory` | `id` (UUID hex) | indexed project_id/shot_id | Project-scoped agent memory: scope (project/shot/session/agent), kind (working/episodic/semantic/procedural), text, metadata, provenance, trust, content hash, pin/quarantine flags, use count, timestamps. A `agentmemory_fts` FTS5 virtual table indexes text with triggers; retrieval falls back to LIKE when FTS5 is unavailable. |
 | `app_setting` | `key` (string) | none | Versioned JSON documents. `llm` holds `LLMSettings` v3 (provider instances with `memory_gb`, roles, budget, last eval, revision); `llm_spend` holds the daily cloud ledger; `comfy` holds URL/enabled/declared GB/token. |
 
 ### LLM settings document (`app_setting.key = "llm"`)
@@ -414,10 +415,11 @@ only `has_key`, `secret_source`, and `key_status`. The spend ledger is a separat
 
 ### Migrations
 
-Alembic head is `0011_comfy_workflows`. The chain covers render settings, seed
+Alembic head is `0012_agent_memory`. The chain covers render settings, seed
 lock, asset thumbnails, app settings, job progress, shot priority/steps, project
-LUT, project titles, shot `transition_in`, and named ComfyUI workflows. Legacy
-databases are repaired and stamped at startup.
+LUT, project titles, shot `transition_in`, named ComfyUI workflows, and the
+agent-memory store plus FTS5 index/triggers. Legacy databases are repaired and
+stamped at startup.
 
 ### Connection Configuration
 ```python
@@ -428,6 +430,12 @@ engine = create_engine(
     max_overflow=40  # Prevents QueuePool limit errors during heavy polling
 )
 ```
+
+Every SQLite connection applies `PRAGMA journal_mode=WAL`, `synchronous=NORMAL`,
+`busy_timeout=5000` (configurable), `wal_autocheckpoint=1000`, and
+`foreign_keys=ON`. The bundled SQLite is 3.45.1, which predates the 3.51.3
+WAL-reset fix; `MILIMO_SQLITE_WAL=0` is the escape hatch. `sqlite_runtime()` in
+`database.py` reports version/journal/busy/synchronous to `/health`.
 
 ### Zombie Job Recovery
 On server startup, lifespan fails `Job` rows whose worker died and marks the

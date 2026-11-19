@@ -41,12 +41,21 @@ The document store is **separate** from the legacy `timelineStore`. Studio route
 
 **Persistence:** the editor store persists view/layout preferences (active surface,
 board camera/areas/links/notes, inspector/timeline sizes, recipes, flags). The
-document store persists the last project reference and rehydrates from the server;
-transient job/progress state is not persisted.
+document store persists a **sanitized** project (runtime fields stripped) plus the
+saved baseline and save status, debounced by 400 ms and flushed on hide/pagehide;
+transient job/progress state is not persisted. The server remains authoritative and
+rehydrates on boot.
 
-**Undo:** document history covers user edits to the project document. Board
-move/resize/link/area/note history is a separate board stack. SSE/progress events do
-not enter undo.
+**Undo:** document history covers user edits to the project document (limit 30 in
+Studio). Board move/resize/link/area/note history is a separate board stack.
+SSE/progress events do not enter undo, and the undo equality check strips the same
+runtime fields as persistence.
+
+**Runtime discipline:** `PlaybackEngine` runs `requestAnimationFrame` only while
+playing and caches the clip list/track predicate; a paused seek performs one audio
+tick. Polling uses `useVisibleInterval` (one interval per resource, skipped while
+hidden, immediate refresh on visibility). `App.tsx` and every surface are lazy, so
+the studio shell stays inside the 250 KiB initial-gzip budget.
 
 **Save discipline:** saves are serialized; the top bar shows
 Unsaved/Saving/Saved/Save failed/Conflict. A revision mismatch returns 409 and the

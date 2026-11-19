@@ -62,7 +62,7 @@ The codebase is designed to run on Apple Silicon (MPS) with CUDA as the primary 
 - Memory management via `torch.mps.empty_cache()`
 
 ### 8. Central Memory Manager
-`MemoryManager` (in `memory_manager.py`) enforces mutual exclusion between heavy GPU models on unified memory, backed by a measured budget (`services/memory/`): total/reserve/MPS ceiling/physical free/free swap/pressure/in-process/external/SAM. Admission runs before every heavy load and returns `retryable` + a fitting downgrade. Slots carry leases and TTL/pin state; idle models are evicted, leased ones are not. The slot conflict system remains:
+`MemoryManager` (in `memory_manager.py`) enforces mutual exclusion between heavy GPU models on unified memory, backed by a measured budget (`services/memory/`): total/reserve/device-recommended/process cap/allocator current+cache/physical free/free swap/pressure/in-process/external/SAM/child RSS. Admission runs on the real process cap before every heavy load and returns `retryable` + a fitting downgrade; a pressure guard blocks/evicts/cancels before Jetsam. Agent memory is project-scoped SQLite with FTS5 retrieval (`agent_memory.py`). Slots carry leases and TTL/pin state; idle models are evicted, leased ones are not. The slot conflict system remains:
 - `model_engine.py` calls `prepare_for("video")` before loading LTX → unloads Flux
 - `flux_wrapper.py` calls `prepare_for("image")` before loading Flux → unloads LTX
 - `llm_http` marks a local LLM call; `prepare_for("video"/"image")` drops it, and

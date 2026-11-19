@@ -1,7 +1,7 @@
 ---
 type: concepts
 created: 2026-10-09
-updated: 2026-11-17
+updated: 2026-11-18
 tags: memory-management vram slots ollama omlx strata unified-memory
 sources:
   - docs/01_system_architecture.md
@@ -60,14 +60,17 @@ the worker died. See
 [[../systems/memory-management-audit-2026-11.md]] for the incident, model costs,
 and the M0–M5 plan.
 
-## Implemented behavior (2026-11-17)
+## Implemented behavior (2026-11-18)
 
 Slots are now backed by a measured budget rather than name-only exclusion.
 
 - **Budget** (`services/memory/budget.py`) reads total RAM, a 15% reserve, the MPS
-  recommended working set, physical free, free swap, kernel pressure, in-process
-  slots, external engines, and SAM. The cost registry estimates LTX-2 (76 GB base),
-  Flux (36 GB base), SAM, depth, and LLM residency from parameters.
+  recommended working set, the **real process cap** (`recommended ×
+  MILIMO_MPS_MEMORY_FRACTION`), allocator current/cache, physical free, free swap,
+  kernel pressure, in-process slots, external engines, SAM, and child RSS. On the
+  reference M3 Max the ceiling is **98.13 GB**, not the 115.45 GB recommended
+  value. The cost registry estimates LTX-2 (76 GB base), Flux (36 GB base), SAM,
+  depth, and LLM residency from parameters.
 - **Admission** runs before every heavy load (video, image, chained, ai_parse,
   inpaint, element, activation, warm). It counts reclaimable idle slots and
   unloadable engines, applies a physical-free and swap-safety margin, and returns
@@ -80,7 +83,15 @@ Slots are now backed by a measured budget rather than name-only exclusion.
 - **Engine adapters** measure Ollama (`/api/ps`), oMLX (`/v1/models/status`), and
   use a declared `memory_gb` for Strata/generic engines, with unload where
   supported. Strata is still unloadable only by the user.
-- **Peak sampler** records per-stage peak and swap for each job in `memory_json`.
+- **Peak sampler** runs at 0.5 s and records per-stage peak/minimum, physical
+  minimum, and swap peak for each job in `memory_json`; `/system/memory` returns
+  the recent traces.
+- **Pressure guard** runs every 1–2 s: warning blocks new admission and evicts idle
+  slots; critical also marks the oldest active job for cancellation with a reason.
+  It never kills the backend, and admission stays blocked for 10 s after a sample
+  (`MILIMO_MEMORY_PRESSURE_BLOCK_SEC`).
+- **Child processes** are measured (`services/memory/children.py`) so an encoder
+  cannot hide a gigabyte outside the slot accounting.
 - **MPS cap** (`set_per_process_memory_fraction`) makes PyTorch fail before macOS
   thrashes; encode runs off the event loop; load failures release the slot.
 - **Scheduling** is priority-aware with same-slot grouping, a bounded “waiting for
@@ -88,16 +99,22 @@ Slots are now backed by a measured budget rather than name-only exclusion.
 - **SAM** loads lazily on the first segmentation request and can be released via
   `/unload`; its idle budget cost is 0.5 GB instead of 8 GB.
 
-Remaining caveats: the cost registry is hand-tuned; Strata has no remote unload;
-a cancelled job keeps its pipeline until the TTL; only the MPS decode path is
-tiled. ComfyUI residency is declared, not measured per model, and uses port 8001 by
-default; SAM 3 uses 8002. See [[../systems/memory-management-audit-2026-11.md]] for the incident,
-measurements, and M0–M5 evidence.
+Remaining caveats: the cost registry is hand-tuned rather than per-lane measured;
+Strata has no remote unload; a cancelled job keeps its pipeline until the TTL; only
+the MPS decode path is tiled. ComfyUI residency is declared, not measured per model,
+and uses port 8001 by default; SAM 3 uses 8002. See
+[[../systems/memory-management-audit-2026-11-18.md]] for the incident, measurements,
+and [[../systems/performance-memory-execution-2026-11-18.md]] for the delivered
+phase map.
 
 ## Related
 
 - [[../systems/memory-management-audit-2026-11.md]] — measured budget, engine
-  adapters, admission, eviction, and the implementation plan
+  adapters, admission, eviction, and the earlier implementation
+- [[../systems/memory-management-audit-2026-11-18.md]] — M0–M5 findings and
+  resolution status
+- [[../systems/performance-memory-execution-2026-11-18.md]] — delivered P0–P6 /
+  M0–M5 evidence
 - [[../systems/engineering-audit-2026-11.md]] — original slot enforcement findings
 - [[../models/ltx-2.md]]
 - [[../models/flux-2.md]]

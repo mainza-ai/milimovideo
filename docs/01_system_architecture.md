@@ -147,7 +147,8 @@ graph TD
 | **Prompt Enhancement** | Role runtime (`services/llm`) | `llm.py` maps media kind to `prompt_video`/`prompt_image`; orders provider instances with fallbacks, checks context and budget, and records provenance. HTTP enhancement runs before the video pipeline loads; local models are released afterwards. |
 | **Backend → SAM** | HTTP REST (port 8002) | Segmentation (point, text, box), multi-object detection, and video tracking via SAM 3 microservice. The image model is lazy (`/load`/`/unload`); tracking lazy-loads its predictor. |
 | **Backend → ComfyUI** | HTTP REST + WebSocket | Optional `/comfy/*` bridge submits API-format workflows, relays progress, streams outputs into assets, and calls `/free` for residency. `MILIMO_COMFY_ENABLED=0` removes it. |
-| **Scheduler → memory** | In-process | Measured budget + admission + leases; a transient refusal becomes a bounded `job.waiting`, a permanent one applies a fitting preset before allocation. |
+| **Scheduler → memory** | In-process | Measured budget + admission + leases; a transient refusal becomes a bounded `job.waiting`, a permanent one applies a fitting preset before allocation. A 1–2 s pressure guard blocks admission on warning and marks the oldest job for cancellation on critical. |
+| **Backend → SQLite** | SQLAlchemy/SQLModel | WAL journal, `synchronous=NORMAL`, 5 s busy timeout, Alembic head `0012_agent_memory`. JSON responses over 1 KiB are gzipped. |
 | **Timeline → Player** | Headless rAF subscription | `PlaybackEngine` drives `currentTime` via `requestAnimationFrame` with cached layout. `CinematicPlayer` subscribes with throttled drift correction (250ms). |
 | **Playback → Audio** | `GlobalAudioManager` singleton | Web Audio API (`AudioContext` + `AudioBufferSourceNode`) for precise cross-browser playback. Buffers decoded upfront; drift tolerance 0.3s. |
 | **Static Media Serving** | HTTP Range Requests | `server.py` serves `.mp4`/`.mp3`/audio files with `206 Partial Content` and `Accept-Ranges: bytes` for Safari compatibility. |
@@ -194,7 +195,7 @@ Handles video, image, chained, and inpainting generation.
 | `services/element_matcher.py` | `ElementMatcher` — Intelligent production matching engine. Uses 8 signals (exact name, trigger word, scene heading, action keywords, etc.) to link script elements to project assets. |
 
 ### C. The API Layer (Backend)
-13 routers, 145 operations across 128 OpenAPI paths.
+15 routers, 167 operations across 144 OpenAPI paths.
 
 | Router | Prefix | Key Endpoints |
 |---|---|---|
@@ -211,6 +212,7 @@ Handles video, image, chained, and inpainting generation.
 | `depth.py` | `/projects/{id}/depth` | Queued depth overlay |
 | `settings.py` | `/settings/llm` | Provider instances/roles, discovery, verify/warm, eval/profiles, memory/unload |
 | `memory.py` | `/system` | `/memory`, `/memory/preflight`, `/memory/unload`, `/memory/keep-warm` |
+| `agent_memory.py` | `/projects/{id}/memory` | remember, search, context pack, approve, export, clear |
 | `comfy.py` | `/comfy` | `/health`, `/validate`, `/run`, `/free` (optional bridge) |
 
 ### D. The Player System (Frontend)
@@ -258,7 +260,7 @@ Isolated segmentation and tracking service.
 | Component | Role |
 |---|---|
 | `sam3/start_sam_server.py` | Optional FastAPI server (port 8002; ComfyUI keeps 8001). Starts with **no model**; loads `build_sam3_image_model` + `Sam3Processor` on the first image request under a lock. Video predictor lazy-loaded with MPS/CUDA/CPU device auto-detection. |
-| `GET /health` | Returns `{status, model_loaded, processor_ready, loading, lazy, error}` |
+| `GET /health` | Backend health: device, queue, disk, memory snapshot, sampler, SQLite version/WAL. Cached for 1 s. `GET /health/live` is a torch-free liveness probe. |
 | `POST /load` / `POST /unload` | Warm or release the image model; `unload` flushes caches |
 | `POST /predict/mask` | Point/box segmentation → binary PNG mask |
 | `POST /detect` | Text-prompted multi-object detection → JSON (masks, bboxes, scores) |
@@ -290,11 +292,15 @@ Measured, fail-closed scheduling and truthful progress.
 
 | Component | Role |
 |---|---|
-| `services/memory/budget.py` | Snapshot (total/reserve/MPS ceiling/physical free/free swap/pressure/in-process/external/SAM), admission, reclaimable set, fitting-preset ladder, retryability |
+| `services/memory/budget.py` | Snapshot (total/reserve/device recommended/**process cap**/allocator current+cache/physical free/free swap/pressure/in-process/external/SAM), admission on the cap, reclaimable set, fitting-preset ladder, retryability |
 | `services/memory/costs.py` | Per-lane peak estimator (LTX 76 GB base, Flux 36 GB, Wan 34 GB, declared ComfyUI residency, frames/resolution/upscale/workspace) |
 | `services/memory/engines.py` | Ollama `/api/ps`, oMLX `/v1/models/status`, generic `memory_gb` override, unload adapters |
-| `services/memory/sampler.py` | 1 s per-job sampler: peak, peak stage, per-stage peaks, swap peak |
-| `memory_manager.py` | Slots, leases, conflicts, TTL eviction, keep-warm, pressure monitor, counters, `status()` |
+| `services/memory/sampler.py` | 0.5 s per-job sampler: peak, peak stage, per-stage peaks/minima, physical minimum, swap peak |
+| `services/memory/children.py` | Descendant-process RSS/thread measurement (ffmpeg, PyAV, Comfy/SAM helpers) |
+| `memory_manager.py` | Slots, leases, conflicts, TTL eviction, keep-warm, pressure guard (block/evict/cancel), counters, `status()` |
+| `agent_memory.py` | Project-scoped SQLite memory, FTS5/LIKE retrieval, token-budgeted context pack, provenance/trust/quarantine |
+| `routes/agent_memory.py` | Memory CRUD, search, context, approve, export, clear |
 | `job_utils.py` | Durable ledger, GPU semaphore, priority/same-slot ordering, `MemoryDeferred` retry, OOM retry, progress persistence, queue-wait stats |
-| `routes/memory.py` | Status, preflight, unload, keep-warm |
+| `routes/memory.py` | Status with sampler/children/recent job traces, preflight, unload, keep-warm |
+| `backend/check_memory_truth.py` | CI gate: ceiling equals the real process cap and oversized jobs are refused |
 | `backend/benchmark_models.py` | M5 per-lane estimated/measured peak, load, and wall-time baseline |
