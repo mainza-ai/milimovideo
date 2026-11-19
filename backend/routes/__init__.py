@@ -13,6 +13,7 @@ from .depth import router as depth_router
 from .settings import router as settings_router
 from .memory import router as memory_router
 from .comfy import router as comfy_router
+from .agent_memory import router as agent_memory_router
 
 router = APIRouter()
 
@@ -30,4 +31,5 @@ router.include_router(depth_router)
 router.include_router(settings_router)
 router.include_router(memory_router)
 router.include_router(comfy_router)
+router.include_router(agent_memory_router)
 

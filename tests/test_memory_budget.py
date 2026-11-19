@@ -52,13 +52,13 @@ def _snapshot(**overrides) -> MemorySnapshot:
     base = dict(
         total_gb=128.0,
         reserve_gb=19.2,
-        ceiling_gb=115.4,
+        ceiling_gb=98.1,
         in_process_gb=0.0,
         resident_gb=0.0,
         external_gb=0.0,
         sam_gb=0.0,
         used_gb=0.0,
-        available_gb=115.4,
+        available_gb=98.1,
         swap_percent=0.0,
         pressure="normal",
         enforce=True,
@@ -170,7 +170,7 @@ def test_admission_allows_the_same_job_with_healthy_swap(enforced, monkeypatch):
         )
     )
     decision = budget.admit(
-        "video", {"num_frames": 121, "width": 768, "height": 512, "upscale": True}
+        "video", {"num_frames": 121, "width": 768, "height": 512}
     )
     assert decision.ok is True
 
@@ -264,7 +264,7 @@ def test_refusal_is_retryable_while_another_job_holds_memory(enforced, monkeypat
         budget, "snapshot", lambda *a, **k: _snapshot(physical_available_gb=90.0, swap_free_gb=20.0)
     )
     decision = budget.admit(
-        "video", {"num_frames": 121, "width": 768, "height": 512, "upscale": True},
+        "video", {"num_frames": 121, "width": 768, "height": 512},
         active_jobs=[{"job_id": "busy", "kind": "video", "started_at": 0}],
     )
     assert decision.ok is False

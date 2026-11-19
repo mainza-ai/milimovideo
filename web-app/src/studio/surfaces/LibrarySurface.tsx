@@ -548,6 +548,7 @@ export function LibrarySurface() {
                                     title={asset.filename}
                                     onClick={() => openMediaPreview({
                                         url: getAssetUrl(asset.url) || asset.url,
+                                        proxyUrl: asset.proxy ? getAssetUrl(asset.proxy) || asset.proxy : undefined,
                                         title: asset.filename,
                                         subtitle: `${assetKind(asset)} · ${new Date(asset.created_at * 1000).toLocaleDateString()}`,
                                         kind: assetKind(asset),
@@ -645,6 +646,7 @@ export function LibrarySurface() {
                                         if (item.type === 'asset') {
                                             openMediaPreview({
                                                 url: getAssetUrl(item.asset.url) || item.asset.url,
+                                                proxyUrl: item.asset.proxy ? getAssetUrl(item.asset.proxy) || item.asset.proxy : undefined,
                                                 title: item.asset.filename,
                                                 subtitle: item.asset.type,
                                                 kind: assetKind(item.asset),

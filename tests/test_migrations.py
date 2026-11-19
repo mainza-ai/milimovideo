@@ -8,7 +8,7 @@ def test_alembic_baseline_is_stamped(app_client):
     assert "alembic_version" in inspector.get_table_names()
     with engine.connect() as connection:
         version = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-    assert version == "0011_comfy_workflows"
+    assert version == "0012_agent_memory"
 
 
 def test_current_schema_columns_are_present(app_client):

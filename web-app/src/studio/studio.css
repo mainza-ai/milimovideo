@@ -213,7 +213,12 @@
     color: var(--st-text);
 }
 
-.st-project-menu-item .st-mono {
+.st-project-menu-item .st-grow {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.st-mono {
     margin-left: auto;
     color: var(--st-faint);
     font-size: 11px;
@@ -545,6 +550,11 @@
     color: var(--st-text);
     font-size: 12px;
     line-height: 1.55;
+}
+
+.st-grow {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .st-mono {
@@ -2781,7 +2791,12 @@
     background: var(--st-accent-soft);
 }
 
-.st-palette-item .st-mono {
+.st-palette-item .st-grow {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.st-mono {
     margin-left: auto;
     color: var(--st-muted);
 }

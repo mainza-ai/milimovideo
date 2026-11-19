@@ -295,3 +295,17 @@ WebGL canvas (or OffscreenCanvas worker) and avoid the 2D copy.
 
 Phased performance plan with acceptance criteria, effort, and dependencies:
 [[../roadmap/performance-plan-2026-11-18.md]].
+
+## Implementation status (2026-11-18)
+
+Resolved on this branch: truthful process cap and allocator telemetry; `pread`
+loader; prompt-rewrite cache; Draft/Standard/Final presets; frame-aware resolution
+clamp; VideoToolbox/HEVC encoder flag with a real encode test; background 720p
+proxies; lazy route surfaces with a measured 134.8 KiB initial studio gzip;
+paused-RAF and hidden-tab polling discipline; sanitized persisted documents; WAL,
+gzip, cached health, and listings without synchronous ffmpeg.
+
+Still open, deliberately: fixed-prompt model benchmarks and quality frames,
+SSIM/VMAF comparison and promoting `auto` to VideoToolbox, hardware-decode input,
+React Compiler pilot, SQLite 3.51.3 packaging, and `/uploads` p95 measurement.
+See [[../roadmap/performance-plan-2026-11-18]] for the phase-by-phase status.

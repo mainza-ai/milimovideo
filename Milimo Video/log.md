@@ -1920,3 +1920,43 @@ M3 Max 128 GB machine and 2026 research.
   [[systems/memory-management-audit-2026-11-18]] and
   [[roadmap/memory-management-plan-2026-11-18]]. The plan extends performance P2.
   No code fixes shipped in this pass.
+
+## [2026-11-18] action | Execute performance P0–P6 and memory M0–M5
+
+Shipped the plan core in dependency order; verification is in the companion
+entry below. Highlights:
+
+- **Truth (M0):** admission now uses the real MPS process cap, 98.13 GB of the
+  115.45 GB recommended ceiling, and reports allocator current/cache separately.
+  The sampler records stage peaks, physical minimum, and swap peak; jobs persist
+  `memory_json`, and `/system/memory` exposes recent traces plus child RSS.
+- **Runtime (M2):** the pressure monitor blocks admission on warning, evicts idle
+  slots, and marks the oldest active job for cancellation on critical with a
+  reason, without killing the backend. Child processes are measured.
+- **Loader/generation (M1/P1):** MPS safetensors loads use `backend="pread"`;
+  prompt rewrites are cached by settings revision/prompt/seed/image signature;
+  Draft 8 (CFG off) / Standard 20 / Final 40 presets ship; the MPS resolution cap
+  is frame-aware instead of a static 1280×768.
+- **Render (P3):** `MILIMO_RENDER_ENCODER` selects software or VideoToolbox with
+  CRF→`-q:v` mapping and HEVC support, verified by a real FFmpeg encode. Uploads
+  now produce a 720p review proxy in the background and Library previews it.
+- **Frontend (P4/M3):** route-level lazy surfaces and a lazy legacy editor cut
+  initial gzip to 134.8 KiB (173.3 KiB with Story, budget 250). PlaybackEngine
+  runs rAF only while playing; polling pauses when hidden; persistence strips
+  runtime fields and debounces writes.
+- **Storage (P5):** SQLite runs WAL/NORMAL/5s busy timeout (3.45.1 predates the
+  3.51.3 reset fix; `MILIMO_SQLITE_WAL=0` is the escape hatch), JSON is gzipped,
+  `/health` is cached for 1s with a cheap `/health/live`, and `/uploads` no longer
+  runs ffmpeg inside the listing request.
+- **Agentic memory (M4/M5):** project-scoped SQLite store with FTS5, scopes/kinds,
+  provenance/trust, dedupe, token-budgeted context packs with retrieval reasons,
+  quarantine + approve, export/clear, planner RAG, and a Setup panel. The 20-task
+  eval scores top-1/top-3 100% at ~199 tokens and p95 ~1.6 ms; poisoning and
+  deletion/export are tested.
+- **Gates (P6):** CI runs `check_memory_truth.py`, `agent_memory_eval.py`, the
+  manifest-based 250 KiB initial-gzip budget, and uploads the performance
+  artifact. `backend/benchmark_performance.py` remains the local baseline harness.
+
+Open: model-loaded P0/P2 benchmarks and VAE quality pairs, the VMAF gate before
+`auto` may choose VideoToolbox, MLX, IndexedDB migration, and automatic memory
+extraction/consolidation.

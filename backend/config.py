@@ -77,6 +77,23 @@ VRAM_ESTIMATE_IMAGE_GB = 24.0
 # ── Memory budget / residency ─────────────────────────────────────
 # Measured budget: model weights + workspace + external engines, not file sizes.
 MEMORY_ENFORCE = os.environ.get("MILIMO_MEMORY_ENFORCE", "1") == "1"
+
+# SQLite runs in WAL on the local file. The bundled 3.45.x predates the 3.51.3
+# WAL-reset fix, so the escape hatch exists for anyone hitting a reset/IO error.
+SQLITE_WAL = os.environ.get("MILIMO_SQLITE_WAL", "1") == "1"
+SQLITE_BUSY_TIMEOUT_MS = int(os.environ.get("MILIMO_SQLITE_BUSY_TIMEOUT_MS", "5000"))
+# Render encoder policy. `auto` keeps archival software x264; `videotoolbox`
+# uses the Media Engine (faster, larger files, keyframe placement differs) and
+# must be picked deliberately until the VMAF gate is wired into CI.
+RENDER_ENCODER = os.environ.get("MILIMO_RENDER_ENCODER", "auto").lower()
+RENDER_CODEC = os.environ.get("MILIMO_RENDER_CODEC", "h264").lower()
+RENDER_VIDEOTOOLBOX_QUALITY = int(os.environ.get("MILIMO_VT_QUALITY", "0"))
+RENDER_X264_THREADS = int(os.environ.get("MILIMO_RENDER_THREADS", "0"))
+RENDER_HWACCEL = os.environ.get("MILIMO_RENDER_HWACCEL", "0") == "1"
+
+# After a warning/critical pressure sample, refuse new heavy jobs for this long
+# even if the level recovers between monitor ticks.
+MEMORY_PRESSURE_BLOCK_SEC = float(os.environ.get("MILIMO_MEMORY_PRESSURE_BLOCK_SEC", "10"))
 MEMORY_RESERVE_GB = float(os.environ.get("MILIMO_MEMORY_RESERVE_GB", "16"))
 MEMORY_SWAP_LIMIT_PERCENT = float(os.environ.get("MILIMO_MEMORY_SWAP_LIMIT_PERCENT", "85"))
 MPS_MEMORY_FRACTION = float(os.environ.get("MILIMO_MPS_MEMORY_FRACTION", "0.85"))
@@ -170,6 +187,8 @@ os.makedirs(MODELS_DIR, exist_ok=True)
 MPS_MAX_RESOLUTION_W = 1280
 MPS_MAX_RESOLUTION_H = 768
 MPS_MAX_PIXELS = MPS_MAX_RESOLUTION_W * MPS_MAX_RESOLUTION_H  # ~983K pixels
+# The pixel ceiling was measured at this frame count; longer clips scale down.
+MPS_REFERENCE_FRAMES = int(os.environ.get("MILIMO_MPS_REFERENCE_FRAMES", "121"))
 
 PRESETS = {
     "Standard": {"width": 768, "height": 512},

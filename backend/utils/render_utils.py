@@ -92,6 +92,41 @@ def transform_expressions(
     }
 
 
+def encoder_args(
+    crf: int = 18,
+    preset: str = "fast",
+    encoder: str | None = None,
+    codec: str | None = None,
+    quality: int | None = None,
+) -> List[str]:
+    """Video encoder arguments, with an explicit software/hardware split.
+
+    `auto` is software: archive and delivery stay deterministic until the VMAF
+    comparison gate exists. `videotoolbox` maps CRF to `-q:v` (higher is better)
+    because the Media Engine ignores `-crf`, and it caps x264 threads when the
+    software path is selected so a render cannot starve the UI.
+    """
+    import config as _cfg
+
+    choice = (encoder or getattr(_cfg, "RENDER_ENCODER", "auto") or "auto").lower()
+    codec_name = (codec or getattr(_cfg, "RENDER_CODEC", "h264") or "h264").lower()
+    if choice in {"videotoolbox", "vt", "hardware"}:
+        quality_value = quality if quality is not None else int(
+            getattr(_cfg, "RENDER_VIDEOTOOLBOX_QUALITY", 0) or 0
+        )
+        if quality_value <= 0:
+            # CRF 0..51 (lower is better) -> q 1..100 (higher is better).
+            quality_value = max(1, min(100, round(100 - (max(0, min(51, crf)) / 51) * 70)))
+        encoder_name = "hevc_videotoolbox" if codec_name == "hevc" else "h264_videotoolbox"
+        return ["-c:v", encoder_name, "-q:v", str(quality_value), "-allow_sw", "1"]
+
+    args = ["-c:v", "libx264", "-preset", str(preset), "-crf", str(crf)]
+    threads = int(getattr(_cfg, "RENDER_X264_THREADS", 0) or 0)
+    if threads > 0:
+        args.extend(["-threads", str(threads)])
+    return args
+
+
 def build_complex_filtergraph(
     project_fps: int,
     project_width: int,
@@ -103,6 +138,8 @@ def build_complex_filtergraph(
     track_states: Optional[Dict[str, Dict[str, bool]]] = None,
     crf: int = 18,
     preset: str = "fast",
+    encoder: Optional[str] = None,
+    codec: Optional[str] = None,
     audio_bitrate: str = "192k",
     audio_normalize: bool = False,
     captions_path: Optional[str] = None,
@@ -389,10 +426,8 @@ def build_complex_filtergraph(
     output_duration = duration_seconds if duration_seconds is not None else duration_sec
     if start_seconds > 0:
         cmd.extend(["-ss", f"{max(0.0, start_seconds):.3f}"])
+    cmd.extend(encoder_args(crf=crf, preset=preset, encoder=encoder, codec=codec))
     cmd.extend([
-        "-c:v", "libx264",
-        "-preset", str(preset),
-        "-crf", str(crf),
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", str(audio_bitrate),

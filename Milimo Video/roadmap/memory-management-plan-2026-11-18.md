@@ -33,7 +33,23 @@ This plan **extends** [[performance-plan-2026-11-18]]:
 Priority: **truth → allocator/loader → runtime guard → browser → agentic memory →
 evaluation/security**.
 
-Status: **planned, not started**.
+Status: **M0, M2, M3, M4 core, and M5 gates implemented 2026-11-18;
+measured model profiles, VAE quality pairs, and the MLX lane remain open.**
+
+## Implementation status (2026-11-18)
+
+| Phase | Landed | Still open / deliberately deferred |
+|---|---|---|
+| M0 | `device_recommended_gb`, `process_cap_gb`, allocator current/cache; admission uses the real cap (98.13 GB on this 115.45 GB-recommended M3 Max); 0.5s sampler with stage peaks, physical minimum, swap peak; `/system/memory` job traces + children; MemoryPanel shows cap, allocator, sampler, recent peaks | Cost-registry `measured|estimated|declared` confidence labels per lane |
+| M1 | `pread` loader; transformer reuse path; VAE tiling; frame-aware resolution budget; prompt-rewrite cache | Per-lane measured profiles (±15%), VAE tile quality pair, MLX engine, residency policy UI |
+| M2 | 1–2s pressure guard: warning blocks admission + evicts idle; critical marks the oldest job for cancellation with a reason; `memory.pressure` event; child-process RSS/thread truth; external engines already budgeted | Reservation model for browser/VM/other apps; fake-pressure integration test through the running server |
+| M3 | Sanitized + debounced localStorage (runtime fields stripped), PlaybackEngine runs only while playing, visibility-aware polling, browser/document/undo/localStorage statistics in MemoryPanel | IndexedDB migration for very large documents, media buffer release audit, waveform cache cap |
+| M4 | Project-scoped SQLite memory with FTS5 (LIKE fallback), kinds/scopes, provenance/trust, dedupe, token-budgeted context pack with "why", quarantine + approve, export/clear, planner RAG, Setup panel | Automatic extraction from takes, consolidation/summarization, sqlite-vec hybrid |
+| M5 | 20-task retrieval eval (top-1/top-3 100%, ~199 tokens, p95 ~1.6 ms), poisoning fixtures, deletion/export audit, CI gates, memory store size is bounded by per-entry and budget limits | Larger 50-task suite, per-request token deny policy, store-size quota |
+
+Security evidence: `tests/test_agent_memory.py` rejects agent/imported text that
+matches instruction-injection signatures, keeps it out of context packs, and
+only admits it after explicit approval.
 
 ## Findings → phases
 

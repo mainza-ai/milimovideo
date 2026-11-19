@@ -108,6 +108,10 @@ class MemorySnapshot:
     physical_available_gb: float = 0.0
     swap_free_gb: float = 0.0
     device: str = "unknown"  # mps | cuda | cpu
+    device_recommended_gb: float = 0.0
+    process_cap_gb: float = 0.0
+    allocator_current_gb: float = 0.0
+    allocator_cache_gb: float = 0.0
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -131,6 +135,10 @@ class MemorySnapshot:
             "physical_available_gb": round(self.physical_available_gb, 2),
             "swap_free_gb": round(self.swap_free_gb, 2),
             "device": self.device,
+            "device_recommended_gb": round(self.device_recommended_gb, 2),
+            "process_cap_gb": round(self.process_cap_gb, 2),
+            "allocator_current_gb": round(self.allocator_current_gb, 2),
+            "allocator_cache_gb": round(self.allocator_cache_gb, 2),
         }
 
 

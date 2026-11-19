@@ -26,6 +26,18 @@ jobs:
         run: python -m compileall -q backend
       - name: Tests
         run: python -m pytest --cov=backend --cov-report=term
+      - name: Memory truth gate
+        run: python backend/check_memory_truth.py
+      - name: Agent memory retrieval eval
+        run: python backend/agent_memory_eval.py
+      - name: Performance baseline artifact
+        run: python backend/benchmark_performance.py
+      - name: Upload performance artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-baseline
+          path: benchmarks/performance.*
+          if-no-files-found: warn
       - name: Install linter
         run: pip install ruff
       - name: Lint (correctness rules; legacy style backlog baselined in ruff.toml)

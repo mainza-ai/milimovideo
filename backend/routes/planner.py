@@ -145,7 +145,13 @@ def _estimate(project: Project, shot: Shot, frames: int, width: int, height: int
     )
 
 
-def _ask_answer(project: Project, shot: Optional[Shot]) -> str:
+def _ask_answer(
+    project: Project,
+    shot: Optional[Shot],
+    *,
+    session: Session | None = None,
+    query: str = "",
+) -> str:
     total = len(project.shots)
     completed = sum(1 for item in project.shots if item.status == "completed")
     generating = sum(1 for item in project.shots if item.status == "generating")
@@ -162,6 +168,25 @@ def _ask_answer(project: Project, shot: Optional[Shot]) -> str:
             f" Selected shot {shot.id}: seed {shot.seed}, {shot.num_frames} frames, "
             f"model {shot.pipeline_override or 'auto'}."
         )
+    if session is not None:
+        # Retrieved project memory, packed to a small token budget. Quarantined
+        # entries are excluded by the packer, so agent/imported text cannot
+        # steer an answer before a human approves it.
+        try:
+            from agent_memory import context_pack
+
+            pack = context_pack(
+                session,
+                project.id,
+                query or project.name,
+                budget_tokens=220,
+                shot_id=shot.id if shot else None,
+            )
+        except Exception:
+            pack = {"entries": []}
+        if pack.get("entries"):
+            facts = "; ".join(entry["text"] for entry in pack["entries"][:4])
+            base += f" Project memory: {facts}"
     return base
 
 
@@ -180,7 +205,7 @@ def create_plan(
     mode = req.mode if req.mode in {"ask", "direct", "generate", "find"} else "direct"
 
     if mode == "ask":
-        answer = _ask_answer(project, shot)
+        answer = _ask_answer(project, shot, session=session, query=text)
         return PlanResponse(
             mode=mode,
             summary=answer,

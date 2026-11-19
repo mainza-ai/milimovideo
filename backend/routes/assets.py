@@ -1,6 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, UploadFile, File, Form, Depends, HTTPException
 from typing import Optional
 import asyncio
+import json
 import os
 import re
 import shutil
@@ -81,6 +82,71 @@ def _thumbnail_target(project_id: Optional[str], filename: str) -> tuple[str, st
     return os.path.join(folder, thumb_name), url
 
 
+def _proxy_target(project_id: Optional[str], filename: str) -> tuple[str, str]:
+    """Return (filesystem path, web URL) for a 720p review proxy."""
+    stem = Path(filename).stem
+    name = f"{stem}_proxy.mp4"
+    if project_id:
+        folder = os.path.join(config.PROJECTS_DIR, project_id, "proxies")
+        url = f"/projects/{project_id}/proxies/{name}"
+    else:
+        folder = os.path.join(UPLOAD_DIR, "proxies")
+        url = f"/uploads/proxies/{name}"
+    return os.path.join(folder, name), url
+
+
+def _make_proxy(source_path: str, proxy_path: str) -> bool:
+    """720p H.264 proxy for Edit/Review playback; exports keep the original."""
+    if os.path.exists(proxy_path) and os.path.getsize(proxy_path) > 0:
+        return True
+    os.makedirs(os.path.dirname(proxy_path), exist_ok=True)
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-y", "-i", source_path,
+                "-vf", "scale=-2:'min(720,ih)'",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "128k",
+                "-movflags", "+faststart",
+                proxy_path,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return os.path.exists(proxy_path) and os.path.getsize(proxy_path) > 0
+
+
+def _merge_asset_meta(asset, **values) -> dict:
+    try:
+        meta = json.loads(asset.meta_json) if asset.meta_json else {}
+    except (TypeError, ValueError):
+        meta = {}
+    if not isinstance(meta, dict):
+        meta = {}
+    meta.update({key: value for key, value in values.items() if value is not None})
+    return meta
+
+
+def _warm_proxy(asset_id: str, source_path: str, proxy_path: str, proxy_url: str) -> None:
+    from sqlmodel import Session as _Session
+
+    from database import Asset, engine
+
+    if not _make_proxy(source_path, proxy_path):
+        return
+    with _Session(engine) as session:
+        asset = session.get(Asset, asset_id)
+        if asset is None:
+            return
+        asset.meta_json = json.dumps(_merge_asset_meta(asset, proxy_url=proxy_url))
+        session.add(asset)
+        session.commit()
+
+
 def _make_video_thumbnail(video_path: str, thumb_path: str) -> bool:
     os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
     for offset in ("0.5", "0"):
@@ -112,6 +178,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/upload")
 def upload_file(
+    background: BackgroundTasks,
     file: UploadFile = File(...),
     project_id: Optional[str] = Form(None),
     type: Optional[str] = Form("general"), # general, element, reference, lut
@@ -229,12 +296,18 @@ def upload_file(
     session.add(new_asset)
     session.commit()
 
+    proxy_url = None
+    if asset_type == "video":
+        proxy_path, proxy_url = _proxy_target(project_id, filename)
+        background.add_task(_warm_proxy, new_asset.id, file_path, proxy_path, proxy_url)
+
     return {
         "url": access_url,
         "asset_id": new_asset.id,
         "type": new_asset.type,
         "filename": new_asset.filename,
         "thumbnail": new_asset.thumbnail_url,
+        "proxy": proxy_url if "proxy_url" in locals() else None,
         "size_bytes": written,
     }
 
@@ -303,8 +376,26 @@ async def get_shot_last_frame(job_id: str, session: Session = Depends(get_sessio
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _warm_thumbnail(asset_id: str, source_path: str, thumb_path: str, thumb_url: str) -> None:
+    """Poster backfill for legacy rows; runs after the response is sent."""
+    from sqlmodel import Session as _Session
+
+    from database import Asset, engine
+
+    if not _make_video_thumbnail(source_path, thumb_path):
+        return
+    with _Session(engine) as session:
+        asset = session.get(Asset, asset_id)
+        if asset is None or asset.thumbnail_url:
+            return
+        asset.thumbnail_url = thumb_url
+        session.add(asset)
+        session.commit()
+
+
 @router.get("/uploads")
 async def list_uploads(
+    background: BackgroundTasks,
     project_id: Optional[str] = None,
     session: Session = Depends(get_session),
 ):
@@ -333,12 +424,14 @@ async def list_uploads(
         thumb = a.thumbnail_url
         source_path = a.path if a.path and os.path.exists(a.path) else resolve_path(a.url)
         if a.type == "video" and not thumb and source_path and os.path.exists(source_path):
+            # Never run ffmpeg inside a listing request: a cold project with 100
+            # videos would serialize 100 decodes before the first card renders.
+            # Backfill after the response and let the card retry on next refresh.
             thumb_path, thumb_url = _thumbnail_target(a.project_id, a.filename)
-            if await asyncio.to_thread(_make_video_thumbnail, source_path, thumb_path):
-                a.thumbnail_url = thumb_url
-                session.add(a)
-                session.commit()
-                thumb = thumb_url
+            if len(background.tasks) < 4:
+                background.add_task(
+                    _warm_thumbnail, a.id, source_path, thumb_path, thumb_url,
+                )
         files.append({
             "id": a.id,
             "url": a.url,
@@ -346,6 +439,7 @@ async def list_uploads(
             "type": a.type,
             "filename": a.filename,
             "thumbnail": thumb,
+            "proxy": _merge_asset_meta(a).get("proxy_url"),
             "missing": not bool(source_path and os.path.exists(source_path)),
             "created_at": a.created_at.timestamp()
         })

@@ -28,30 +28,40 @@ from ltx_pipelines.utils.helpers import cleanup_memory
 
 logger = logging.getLogger(__name__)
 
-def clamp_resolution_for_device(width: int, height: int) -> tuple[int, int]:
-    """Clamp resolution to safe limits for the current device (MPS/CUDA).
-    
-    On MPS, the 19B float32 transformer's attention scales quadratically with 
-    token count. Resolutions above ~983K pixels (1280×768) cause OOM during 
-    scaled_dot_product_attention. This function scales down proportionally,
-    maintaining aspect ratio and mod64 alignment.
+def clamp_resolution_for_device(
+    width: int,
+    height: int,
+    num_frames: int = 121,
+) -> tuple[int, int]:
+    """Clamp resolution to a frame-aware pixel budget on MPS.
+
+    Attention cost grows with the token count (frames × pixels), so a static
+    1280×768 cap is both too generous for 481-frame clips and needlessly strict
+    for short ones. The 983K-pixel reference is the measured 121-frame ceiling;
+    longer clips scale the budget down inversely and shorter clips do not gain
+    headroom above that reference.
     """
     if not torch.backends.mps.is_available():
         return width, height  # CUDA handles larger resolutions
-    
-    max_pixels = config.MPS_MAX_PIXELS
+
+    reference_frames = max(1, int(config.MPS_REFERENCE_FRAMES))
+    frame_scale = min(1.0, reference_frames / max(1, int(num_frames)))
+    max_pixels = max(160_000, int(config.MPS_MAX_PIXELS * frame_scale))
     current_pixels = width * height
-    
+
     if current_pixels > max_pixels:
         scale = (max_pixels / current_pixels) ** 0.5
-        new_width = round(width * scale / 64) * 64
-        new_height = round(height * scale / 64) * 64
+        # Floor to mod64 so rounding never pushes the area back over budget.
+        new_width = max(64, int(width * scale) // 64 * 64)
+        new_height = max(64, int(height * scale) // 64 * 64)
         logger.warning(
-            f"⚠️ MPS Resolution Clamp: {width}x{height} → {new_width}x{new_height} "
-            f"(original {current_pixels:,} px exceeded {max_pixels:,} px safe limit)"
+            "MPS Resolution Clamp: %sx%s → %sx%s (%s frames, original %s px "
+            "exceeded the %s px budget)",
+            width, height, new_width, new_height, num_frames,
+            f"{current_pixels:,}", f"{max_pixels:,}",
         )
         return new_width, new_height
-    
+
     return width, height
 
 
@@ -138,10 +148,11 @@ async def generate_standard_video_task(job_id: str, params: dict, pipeline):
         height = round(height / 64) * 64
         width = round(width / 64) * 64
         
-        # MPS Safety: Clamp resolution to prevent OOM with 19B float32 model
-        width, height = clamp_resolution_for_device(width, height)
+        num_frames = params.get("num_frames", 121)
+
+        # MPS Safety: clamp to a frame-aware pixel budget before any load.
+        width, height = clamp_resolution_for_device(width, height, num_frames)
         
-        num_frames = params.get("num_frames", 121) 
         num_inference_steps = params.get("num_inference_steps", 40)
         cfg_scale = params.get("cfg_scale", 2.0)
         enhance_prompt = params.get("enhance_prompt", True)

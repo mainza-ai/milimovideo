@@ -1,3 +1,4 @@
+import inspect
 import json
 
 import safetensors
@@ -26,8 +27,15 @@ class SafetensorsStateDictLoader(StateDictLoader):
         dtype = set()
         device = device or torch.device("cpu")
         model_paths = path if isinstance(path, list) else [path]
+        open_kwargs = {}
+        if device.type == "mps" and "backend" in inspect.signature(safetensors.safe_open).parameters:
+            # safetensors' mmap path measured ~2x slower and 2.5x less stable than
+            # pread on Apple Silicon; pread is the MPS default here.
+            open_kwargs["backend"] = "pread"
         for shard_path in model_paths:
-            with safetensors.safe_open(shard_path, framework="pt", device=str(device)) as f:
+            with safetensors.safe_open(
+                shard_path, framework="pt", device=str(device), **open_kwargs
+            ) as f:
                 safetensor_keys = f.keys()
                 for name in safetensor_keys:
                     expected_name = name if sd_ops is None else sd_ops.apply_to_key(name)

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { HardDrive, Loader2, Pin, Snowflake, TriangleAlert } from 'lucide-react';
 import { useStudioMemory } from '../data/useStudioData';
 import { useStudioDocumentStore } from '../state/documentStore';
@@ -14,6 +15,48 @@ const SOURCE_LABEL: Record<string, string> = {
     unknown: 'unknown',
 };
 
+interface BrowserMemory {
+    heapUsedMb: number | null;
+    heapLimitMb: number | null;
+    documentKb: number;
+    undoSnapshots: number;
+    localStorageKb: number;
+}
+
+function readBrowserMemory(): BrowserMemory {
+    const project = useStudioDocumentStore.getState().project;
+    let documentKb = 0;
+    try {
+        documentKb = Math.round(new Blob([JSON.stringify(project)]).size / 1024);
+    } catch {
+        documentKb = 0;
+    }
+    let localStorageKb = 0;
+    try {
+        for (let index = 0; index < window.localStorage.length; index += 1) {
+            const key = window.localStorage.key(index) || '';
+            const value = window.localStorage.getItem(key) || '';
+            localStorageKb += (key.length + value.length) / 1024;
+        }
+    } catch {
+        localStorageKb = 0;
+    }
+    const temporal = (useStudioDocumentStore as unknown as {
+        temporal?: { getState: () => { pastStates: unknown[] } };
+    }).temporal;
+    const undoSnapshots = temporal ? temporal.getState().pastStates.length : 0;
+    const perf = (performance as unknown as {
+        memory?: { usedJSHeapSize: number; jsHeapSizeLimit: number };
+    }).memory;
+    return {
+        heapUsedMb: perf ? Math.round(perf.usedJSHeapSize / 1_048_576) : null,
+        heapLimitMb: perf ? Math.round(perf.jsHeapSizeLimit / 1_048_576) : null,
+        documentKb,
+        undoSnapshots,
+        localStorageKb: Math.round(localStorageKb),
+    };
+}
+
 const STAGE_LABEL: Record<string, string> = {
     normal: 'Normal',
     warning: 'Elevated',
@@ -27,6 +70,14 @@ const STAGE_LABEL: Record<string, string> = {
 export function MemoryPanel() {
     const { status, error, busy, refresh, unload, keepWarm } = useStudioMemory();
     const addToast = useStudioDocumentStore((state) => state.addToast);
+    const [browser, setBrowser] = useState<BrowserMemory | null>(null);
+
+    useEffect(() => {
+        const read = () => setBrowser(readBrowserMemory());
+        read();
+        const timer = window.setInterval(read, 3000);
+        return () => window.clearInterval(timer);
+    }, []);
 
     const run = async (label: string, action: () => Promise<unknown>) => {
         try {
@@ -101,10 +152,21 @@ export function MemoryPanel() {
                     </div>
                     <dl className="st-meta-grid" style={{ marginTop: 8 }}>
                         <dt>Used</dt>
-                        <dd>{gb(status.used_gb)} of {gb(status.ceiling_gb)} ceiling</dd>
+                        <dd>{gb(status.used_gb)} of {gb(status.ceiling_gb)} process cap</dd>
                         <dt>Available</dt><dd>{gb(status.available_gb)}</dd>
+                        <dt>Device</dt>
+                        <dd>
+                            {(status.device || 'cpu').toUpperCase()} · {gb(status.process_cap_gb)} cap
+                            {status.device_recommended_gb ? ` of ${gb(status.device_recommended_gb)} recommended` : ''}
+                        </dd>
+                        <dt>Physical free</dt><dd>{gb(status.physical_available_gb)}</dd>
+                        <dt>Swap free</dt><dd>{gb(status.swap_free_gb)}</dd>
                         <dt>Machine</dt><dd>{gb(status.total_gb)} total · {gb(status.reserve_gb)} reserve</dd>
-                        <dt>In process</dt><dd>{gb(status.in_process_gb)}</dd>
+                        <dt>In process</dt>
+                        <dd>
+                            {gb(status.in_process_gb)}
+                            {status.allocator_cache_gb ? ` · ${gb(status.allocator_cache_gb)} allocator cache` : ''}
+                        </dd>
                         <dt>External LLM</dt><dd>{gb(status.external_gb)}</dd>
                         <dt>SAM</dt><dd>{gb(status.sam_gb)}</dd>
                         <dt>Swap</dt><dd>{status.swap_percent.toFixed(0)}%</dd>
@@ -119,6 +181,47 @@ export function MemoryPanel() {
                                 {status.counters.refusals} refusal(s)
                             </span>
                         </div>
+                    )}
+
+                    {status.sampler?.job_id && (
+                        <div className="st-warning-note" style={{ marginTop: 8 }}>
+                            <HardDrive size={11} />
+                            <span>
+                                {status.sampler.stage || 'job'} · peak {gb(status.sampler.peak_gb)}
+                                {' · '}now {gb(status.sampler.current_gb)}
+                                {status.sampler.physical_min_gb ? ` · min free ${gb(status.sampler.physical_min_gb)}` : ''}
+                            </span>
+                        </div>
+                    )}
+
+                    {status.recent_jobs && status.recent_jobs.length > 0 && (
+                        <div className="st-link-list" style={{ marginTop: 10 }}>
+                            <div className="st-label">Recent job peaks</div>
+                            {status.recent_jobs.slice(0, 5).map((job) => (
+                                <div className="st-link-row" key={job.job_id}>
+                                    <span className="st-chip">{job.type}</span>
+                                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {job.job_id.slice(0, 10)} · {job.peak_stage || 'job'}
+                                    </span>
+                                    <span className="st-mono">{gb(job.peak_gb)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {browser && (
+                        <dl className="st-meta-grid" style={{ marginTop: 8 }}>
+                            <dt>Document</dt>
+                            <dd>{browser.documentKb.toLocaleString()} KB · {browser.undoSnapshots} undo snapshots</dd>
+                            <dt>Browser store</dt>
+                            <dd>{browser.localStorageKb.toLocaleString()} KB localStorage</dd>
+                            <dt>Webview heap</dt>
+                            <dd>
+                                {browser.heapUsedMb !== null
+                                    ? `${browser.heapUsedMb} MB${browser.heapLimitMb ? ` of ${browser.heapLimitMb} MB` : ''}`
+                                    : 'not exposed by this build'}
+                            </dd>
+                        </dl>
                     )}
 
                     {status.notes.length > 0 && (
