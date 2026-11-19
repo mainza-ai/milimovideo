@@ -116,11 +116,12 @@ def replace_take(
     job_id: str,
     file: UploadFile = File(...),
     purge_old: bool = Form(False),
+    allow_type_change: bool = Form(False),
     session: Session = Depends(get_session),
 ):
     """Relink a missing take in place, keeping its job/take identity."""
     from database import Asset
-    from routes.assets import _make_video_thumbnail, _thumbnail_target
+    from routes.assets import _make_video_thumbnail, _thumbnail_target, _other_asset_refs
 
     shot = session.get(Shot, shot_id)
     job = session.get(Job, job_id)
@@ -137,16 +138,29 @@ def replace_take(
 
     old_url = job.output_path
     old_path = resolve_path(old_url)
+    old_thumbnail = job.thumbnail_path
     old_video = (job.thumbnail_path is not None) or Path(old_url).suffix.lower() in {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
     image_extensions = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tiff"}
     new_video = extension not in image_extensions
-    if old_video != new_video:
+    if old_video != new_video and not allow_type_change:
         raise HTTPException(
             status_code=409,
-            detail="Replace a take with the same media kind (video for video, image for image)",
+            detail="Replace a take with the same media kind, or confirm the type change",
         )
 
-    folder = os.path.dirname(old_path) if old_path else os.path.join(config.PROJECTS_DIR, shot.project_id, "generated")
+    project_root = os.path.realpath(os.path.join(config.PROJECTS_DIR, shot.project_id))
+    folder = project_root
+    if old_path:
+        real_old = os.path.realpath(old_path)
+        try:
+            if os.path.commonpath([project_root, real_old]) == project_root and os.path.isdir(os.path.dirname(real_old)):
+                folder = os.path.dirname(real_old)
+            else:
+                folder = os.path.join(project_root, "generated")
+        except ValueError:
+            folder = os.path.join(project_root, "generated")
+    else:
+        folder = os.path.join(project_root, "generated")
     os.makedirs(folder, exist_ok=True)
     filename = f"{uuid.uuid4().hex[:8]}_{Path(original_name).stem[:120]}{extension}"
     file_path = os.path.join(folder, filename)
@@ -204,6 +218,7 @@ def replace_take(
         asset.filename = filename
         asset.thumbnail_url = thumbnail_url
         asset.type = "video" if new_video else "image"
+        asset.meta_json = None
         session.add(asset)
 
     project = session.get(Project, shot.project_id)
@@ -212,13 +227,23 @@ def replace_take(
         project.revision = (project.revision or 0) + 1
         session.add(project)
 
-    removed_old = False
-    if purge_old and old_path and old_path != file_path and os.path.exists(old_path):
-        try:
-            os.remove(old_path)
-            removed_old = True
-        except OSError:
-            removed_old = False
+    removed_paths: list[str] = []
+    shared_paths: set[str] = set()
+    if purge_old:
+        refs = {ref for ref in {old_url, old_path, old_thumbnail, resolve_path(old_thumbnail) if old_thumbnail else None} if ref}
+        shared_paths = _other_asset_refs(session, "", refs)
+        candidates = {old_path, resolve_path(old_thumbnail) if old_thumbnail else None}
+        for candidate in candidates:
+            if not candidate or candidate == file_path or not os.path.exists(candidate):
+                continue
+            if os.path.realpath(candidate) in {os.path.realpath(path) for path in shared_paths}:
+                continue
+            try:
+                os.remove(candidate)
+                removed_paths.append(candidate)
+            except OSError:
+                pass
+    removed_old = bool(old_path and old_path in removed_paths)
 
     session.commit()
     session.refresh(job)
@@ -232,7 +257,11 @@ def replace_take(
         "missing": False,
         "old_url": old_url,
         "old_path": old_path,
+        "old_thumbnail": old_thumbnail,
         "old_removed": removed_old,
+        "removed_paths": removed_paths,
+        "old_shared": bool(shared_paths),
+        "type_changed": old_video != new_video,
     }
 
 

@@ -32,9 +32,15 @@ export function StorySurface() {
     useEffect(() => {
         if (!mobileSpineOpen) return undefined;
         const host = spineRef.current;
-        const board = document.querySelector('.st-board-wrap');
+        const isolated = [
+            document.querySelector('.st-board-wrap'),
+            document.querySelector('.st-topbar'),
+            document.querySelector('.st-rail'),
+            document.querySelector('.st-command-dock'),
+            document.querySelector('.st-status-strip'),
+        ].filter((element): element is Element => !!element);
         const previous = document.activeElement as HTMLElement | null;
-        board?.setAttribute('inert', '');
+        isolated.forEach((element) => element.setAttribute('inert', ''));
         const focusable = () => Array.from(host?.querySelectorAll<HTMLElement>(
             'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
         ) || []).filter((element) => element.offsetParent !== null);
@@ -62,7 +68,7 @@ export function StorySurface() {
         document.addEventListener('keydown', onKeyDown, true);
         return () => {
             document.removeEventListener('keydown', onKeyDown, true);
-            board?.removeAttribute('inert');
+            isolated.forEach((element) => element.removeAttribute('inert'));
             previous?.focus?.();
         };
     }, [mobileSpineOpen, setMobileSpineOpen]);

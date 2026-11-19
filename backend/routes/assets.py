@@ -18,6 +18,56 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["assets"])
 
 
+def _project_asset_dir(project_id: str, preferred: Optional[str] = None) -> str:
+    """Choose a destination inside the project; never a legacy global folder."""
+    root = os.path.realpath(os.path.join(config.PROJECTS_DIR, project_id))
+    if preferred:
+        real = os.path.realpath(preferred)
+        try:
+            if os.path.commonpath([root, real]) == root and os.path.isdir(real):
+                return real
+        except ValueError:
+            pass
+    return os.path.join(root, "assets", "general")
+
+
+def _asset_url(project_id: Optional[str], file_path: str) -> str:
+    if project_id:
+        root = os.path.realpath(os.path.join(config.PROJECTS_DIR, project_id))
+        real = os.path.realpath(file_path)
+        try:
+            if os.path.commonpath([root, real]) == root:
+                rel = os.path.relpath(real, root).replace(os.sep, "/")
+                return f"/projects/{project_id}/{rel}"
+        except ValueError:
+            pass
+    return f"/uploads/{os.path.basename(file_path)}"
+
+
+def _other_asset_refs(session: Session, asset_id: str, refs: set[str]) -> set[str]:
+    """Paths/URLs still used by another Asset row (do not purge those)."""
+    from database import Asset
+    from sqlalchemy import or_
+    from sqlmodel import select
+
+    conditions = []
+    for ref in refs:
+        if not ref:
+            continue
+        conditions.extend([Asset.path == ref, Asset.url == ref, Asset.thumbnail_url == ref])
+    if not conditions:
+        return set()
+    rows = session.exec(select(Asset).where(Asset.id != asset_id, or_(*conditions))).all()
+    shared: set[str] = set()
+    for row in rows:
+        if row.path:
+            shared.add(row.path)
+        if row.url:
+            shared.add(row.url)
+        if row.thumbnail_url:
+            shared.add(row.thumbnail_url)
+    return shared
+
 def _thumbnail_target(project_id: Optional[str], filename: str) -> tuple[str, str]:
     """Return (filesystem path, web URL) for an uploaded video poster."""
     stem = Path(filename).stem
@@ -407,7 +457,10 @@ def replace_asset_file(
     if extension not in config.ALLOWED_UPLOAD_EXTENSIONS:
         raise HTTPException(status_code=415, detail=f"Unsupported file type '{extension or 'none'}'")
 
-    folder = os.path.dirname(asset.path) if asset.path else UPLOAD_DIR
+    folder = (
+        _project_asset_dir(asset.project_id, os.path.dirname(asset.path) if asset.path else None)
+        if asset.project_id else UPLOAD_DIR
+    )
     os.makedirs(folder, exist_ok=True)
     stem = Path(original_name).stem[:120]
     filename = f"{uuid.uuid4().hex[:8]}_{stem}{extension}"
@@ -461,16 +514,11 @@ def replace_asset_file(
             detail=f"This asset backs {len(jobs)} take(s); replace it with another {old_type} file",
         )
     asset.type = new_type
-    if asset.project_id:
-        try:
-            folder_name = os.path.basename(folder)
-            asset.url = f"/projects/{asset.project_id}/assets/{folder_name}/{filename}"
-        except Exception:
-            asset.url = f"/uploads/{filename}"
-    else:
-        asset.url = f"/uploads/{filename}"
+    asset.url = _asset_url(asset.project_id, file_path)
     asset.path = file_path
     asset.filename = filename
+    # A replacement invalidates prompt/seed/reference provenance.
+    asset.meta_json = None
     # Preserve the original import date; relinking is not a re-import.
     if asset.type == "video":
         thumb_path, thumb_url = _thumbnail_target(asset.project_id, filename)
@@ -521,14 +569,24 @@ def replace_asset_file(
                 workflow.updated_at = datetime.utcnow()
                 session.add(workflow)
 
-    removed_old = False
-    if purge_old and old_path and old_path != file_path and os.path.exists(old_path):
-        try:
-            os.remove(old_path)
-            removed_old = True
-        except OSError:
-            removed_old = False
+    removed_paths: list[str] = []
+    shared_paths: set[str] = set()
+    if purge_old:
+        refs = {ref for ref in {old_url, old_path, old_thumbnail, resolve_path(old_thumbnail) if old_thumbnail else None} if ref}
+        shared_paths = _other_asset_refs(session, asset.id, refs)
+        candidates = {old_path, resolve_path(old_thumbnail) if old_thumbnail else None}
+        for candidate in candidates:
+            if not candidate or candidate == file_path or not os.path.exists(candidate):
+                continue
+            if os.path.realpath(candidate) in {os.path.realpath(path) for path in shared_paths}:
+                continue
+            try:
+                os.remove(candidate)
+                removed_paths.append(candidate)
+            except OSError:
+                pass
 
+    removed_old = bool(old_path and old_path in removed_paths)
     session.add(asset)
     session.commit()
     session.refresh(asset)
@@ -543,7 +601,10 @@ def replace_asset_file(
         "created_at": asset.created_at.timestamp(),
         "old_url": old_url,
         "old_path": old_path,
+        "old_thumbnail": old_thumbnail,
         "old_removed": removed_old,
+        "removed_paths": removed_paths,
+        "old_shared": bool(shared_paths),
     }
 
 

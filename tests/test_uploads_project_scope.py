@@ -219,3 +219,148 @@ def test_take_replace_relinks_in_place_and_can_purge_old(app_client, project):
     assert shot["video_url"] == data["url"]
     takes = app_client.get("/shots/take-replace-shot/takes").json()["takes"]
     assert takes[0]["url"] == data["url"]
+
+    buffer = io.BytesIO(b"not a real video")
+    buffer.seek(0)
+    kind_change = app_client.post(
+        "/shots/take-replace-shot/takes/take-replace-job/replace",
+        files={"file": ("kind.mp4", buffer, "video/mp4")},
+    )
+    assert kind_change.status_code == 409
+
+    buffer = io.BytesIO(b"not a real video")
+    buffer.seek(0)
+    kind_change_allowed = app_client.post(
+        "/shots/take-replace-shot/takes/take-replace-job/replace",
+        files={"file": ("kind.mp4", buffer, "video/mp4")},
+        data={"allow_type_change": "true"},
+    )
+    assert kind_change_allowed.status_code == 200, kind_change_allowed.text
+    assert kind_change_allowed.json()["type_changed"] is True
+
+
+def test_relink_legacy_empty_path_uses_project_assets(app_client, project):
+    import io
+    import os
+
+    from PIL import Image
+    from sqlmodel import Session
+
+    from database import Asset, engine
+
+    pid = project["id"]
+    uploaded = _upload(app_client, pid, "legacy.png")
+    with Session(engine) as session:
+        asset = session.get(Asset, uploaded["asset_id"])
+        asset.path = ""
+        session.add(asset)
+        session.commit()
+
+    buffer = io.BytesIO()
+    Image.new("RGB", (20, 20), (20, 20, 20)).save(buffer, format="PNG")
+    buffer.seek(0)
+    replaced = app_client.post(
+        f"/assets/{uploaded['asset_id']}/replace",
+        files={"file": ("legacy-new.png", buffer, "image/png")},
+    )
+    assert replaced.status_code == 200, replaced.text
+    data = replaced.json()
+    assert data["url"].startswith(f"/projects/{pid}/assets/general/")
+    assert os.path.exists(data["path"])
+
+
+def test_relink_purge_removes_old_thumbnail_and_respects_shared_references(app_client, project):
+    import io
+    import os
+    import subprocess
+
+    from sqlmodel import Session
+
+    from database import Asset, engine
+    from PIL import Image
+
+    pid = project["id"]
+    first = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], "first.mp4")
+    second = os.path.join(os.environ["MILIMO_PROJECTS_DIR"], "second.mp4")
+    for path, color in ((first, "red"), (second, "blue")):
+        subprocess.run(
+            ["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c={color}:s=64x48:d=0.4",
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", path],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    with open(first, "rb") as handle:
+        upload = app_client.post(
+            "/upload",
+            files={"file": ("first.mp4", handle, "video/mp4")},
+            data={"project_id": pid},
+        )
+    asset = upload.json()
+    old_thumb = os.path.join(
+        os.environ["MILIMO_PROJECTS_DIR"], pid, "thumbnails",
+        os.path.basename(asset["thumbnail"]),
+    )
+    assert os.path.exists(old_thumb)
+
+    with open(second, "rb") as handle:
+        replaced = app_client.post(
+            f"/assets/{asset['asset_id']}/replace",
+            files={"file": ("second.mp4", handle, "video/mp4")},
+            data={"purge_old": "true"},
+        )
+    assert replaced.status_code == 200, replaced.text
+    data = replaced.json()
+    assert data["old_removed"] is True
+    assert not os.path.exists(old_thumb)
+
+    # A duplicate Asset row pinning the same path blocks purge.
+    other = _upload(app_client, pid, "shared.png")
+    with Session(engine) as session:
+        source = session.get(Asset, other["asset_id"])
+        session.add(Asset(
+            id="shared-copy", project_id=pid, type="image",
+            path=source.path, url=source.url, filename=source.filename,
+        ))
+        session.commit()
+    buffer = io.BytesIO()
+    Image.new("RGB", (18, 18), (5, 5, 5)).save(buffer, format="PNG")
+    buffer.seek(0)
+    shared = app_client.post(
+        f"/assets/{other['asset_id']}/replace",
+        files={"file": ("shared-new.png", buffer, "image/png")},
+        data={"purge_old": "true"},
+    )
+    assert shared.status_code == 200, shared.text
+    assert shared.json()["old_shared"] is True
+    assert shared.json()["old_removed"] is False
+
+
+def test_repair_clears_take_pointers_for_missing_video(app_client, project):
+    pid = project["id"]
+    state = {
+        "id": pid, "name": "Repair Lineage", "fps": 25, "seed": 42, "scenes": [],
+        "revision": project.get("revision", 0),
+        "shots": [{
+            "id": "f9-repair-shot", "project_id": pid, "index": 0, "sequence_index": 0,
+            "prompt": "missing", "seed": 1, "width": 32, "height": 24, "num_frames": 1,
+            "track_index": 0, "timeline": [], "status": "completed",
+            "video_url": f"/projects/{pid}/generated/missing.mp4",
+            "last_job_id": "missing-job", "selected_take_id": "missing-job",
+            "favorite_take_id": "missing-job",
+        }],
+    }
+    assert app_client.put(f"/projects/{pid}", json=state).status_code == 200
+    repair = app_client.post(f"/projects/{pid}/repair")
+    assert repair.status_code == 200, repair.text
+    shot = app_client.get(f"/projects/{pid}").json()["shots"][0]
+    assert shot["video_url"] is None
+    assert shot["selected_take_id"] is None
+    assert shot["favorite_take_id"] is None
+    assert shot["last_job_id"] is None
+    assert shot["status"] == "pending"
+    assert repair.json()["counts"]["take_pointer_cleared"] == 1
+
+
+def test_shot_created_at_is_read_only_in_schema(app_client):
+    schema = app_client.get("/openapi.json").json()
+    created_at = schema["components"]["schemas"]["ShotState"]["properties"]["created_at"]
+    assert created_at.get("readOnly") is True

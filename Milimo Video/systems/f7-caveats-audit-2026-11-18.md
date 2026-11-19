@@ -100,7 +100,8 @@ bundle green. LUT orientation and channel swap are asserted in `e2e/lut.spec.ts`
 
 Follow-up: the F9 audit [[f9-caveats-audit-2026-11-18]] found stale active-job
 cards, silent source-failure previews, relink cleanup gaps, repair/delete state,
-and mobile transport issues. See [[../roadmap/f9-caveats-plan-2026-11-18]].
+and mobile transport issues. All were fixed by the F9 plan:
+[[../roadmap/f9-caveats-plan-2026-11-18]].
 
 ## P1 findings
 

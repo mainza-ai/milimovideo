@@ -2906,6 +2906,11 @@ export interface components {
         /** Body_replace_take_shots__shot_id__takes__job_id__replace_post */
         Body_replace_take_shots__shot_id__takes__job_id__replace_post: {
             /**
+             * Allow Type Change
+             * @default false
+             */
+            allow_type_change: boolean;
+            /**
              * File
              * Format: binary
              */
@@ -4046,7 +4051,7 @@ export interface components {
             /** Character */
             character?: string | null;
             /** Created At */
-            created_at?: unknown | null;
+            readonly created_at?: string | null;
             /** Dialogue */
             dialogue?: string | null;
             /**

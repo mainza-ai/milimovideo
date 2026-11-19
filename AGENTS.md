@@ -204,9 +204,10 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
   FCPXML export of the computed V1/V2/A1/A2 cut.
 - Truthful shell state: one save vocabulary derived from a saved-document
   signature, so undo/redo and conflict states are truthful; sticky conflict with
-  reload/overwrite; active jobs hydrate on boot; shot status cross-checks media.
-  Per-surface inspector policy, `Tracks 5/5` visibility, a mobile Story dialog
-  drawer with focus/Escape, and a full-screen mobile timeline mode.
+  snapshot-backed overwrite; one shell-owned active-job poller reconciles vanished
+  jobs; shot status cross-checks media. Per-surface inspector policy, `Tracks 5/5`
+  visibility, a mobile Story dialog drawer with focus/Escape/inert background, a
+  full-screen mobile timeline with transport, and in-app confirm dialogs.
 - Media viewer: one global image/video/audio/text preview used by Library, Story,
   Generate, Edit, Inspector, and Review; legacy localhost URLs are rewritten to
   the current API origin with bearer-token support. Video uploads get real poster
@@ -240,7 +241,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 228 backend tests, 108 Vitest tests, and 29 Playwright tests, plus
+baseline is 232 backend tests, 110 Vitest tests, and 32 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -332,16 +333,16 @@ Run from the repo root unless noted:
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # 228 backend tests
+./milimov/bin/python -m pytest                 # 232 backend tests
 ./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # env/model/ffmpeg/disk
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 108 Vitest tests
+npm test                                       # 110 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 29 Playwright tests
+npm run test:e2e                               # 32 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```

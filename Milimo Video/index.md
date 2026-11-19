@@ -62,7 +62,8 @@ navigate, then drills into pages.
   caveat audit behind F8: **stale Running cards after job disappearance**, duplicate
   `/active_jobs` pollers, silent LUT source failures, orphaned relink thumbnails,
   legacy-path relink URLs, repair/delete lineage state, LUT compare/precision,
-  mobile transport, and 21 findings (`F9-01…F9-21`) with an F9 plan.
+  mobile transport, and 21 findings (`F9-01…F9-21`). **All F9 findings are fixed**;
+  resolution evidence is on the audit page.
 - [systems/llm-settings-audit-2026-11](systems/llm-settings-audit-2026-11.md) —
   LLM configuration audit **and implementation record**: Kubona reference patterns,
   the old Gemma/Ollama gaps, the shipped L0–L3 plane (persisted providers/roles,
@@ -201,7 +202,7 @@ navigate, then drills into pages.
 - [roadmap/f9-caveats-plan-2026-11-18](roadmap/f9-caveats-plan-2026-11-18.md) —
   the F9 caveat plan: F9-0 job truth → F9-1 relink/repair safety → F9-2 preview
   truth → F9-3 save/delete safety → F9-4 mobile transport/dialogs → F9-5 gate.
-  **Planned, not started.**
+  **Implemented 2026-11-18.**
 - [roadmap/implementation-plan-2026-11](roadmap/implementation-plan-2026-11.md) —
   the sequenced fix-and-ship plan. Scoped P0–P5, F0–F5, and F6 are complete; the page
   lists remaining/deferred work (bundled sidecar, legacy cutover, Phase 6 v2 lane,

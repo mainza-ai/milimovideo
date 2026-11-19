@@ -75,9 +75,11 @@ test('mobile story has a usable board and a shot-list drawer', async ({ page }) 
     const spine = page.locator('.st-spine');
     await expect(spine).toHaveAttribute('role', 'dialog');
     await expect(spine).toHaveAttribute('aria-modal', 'true');
+    await expect(page.locator('.st-topbar')).toHaveAttribute('inert', '');
 
     await page.keyboard.press('Escape');
     await expect(page.locator('.st-mobile-backdrop')).toHaveCount(0);
+    await expect(page.locator('.st-topbar')).not.toHaveAttribute('inert', '');
     await expect(toggle).toBeFocused();
 });
 
@@ -98,6 +100,8 @@ test('mobile edit can expand the timeline and reach every track', async ({ page 
     expect(expanded.timeline).toBeGreaterThan(400);
     expect(expanded.tracks).toBe(5);
     await expect(page.getByRole('button', { name: 'Collapse timeline' })).toBeVisible();
+    await expect(page.locator('.st-timeline-transport')).toBeVisible();
+    await expect(page.locator('.st-timeline-transport').getByRole('button', { name: 'Play' })).toBeVisible();
 });
 
 test('generate defaults to one right rail and hides params when the inspector opens', async ({ page }) => {

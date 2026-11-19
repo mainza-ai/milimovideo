@@ -4,6 +4,7 @@ import type { TimelineState, ProjectSlice, Project } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { getAssetUrl } from '../../config';
 import { documentSignature } from '../saveStatus';
+import { saveTextFile } from '../../desktop';
 
 const DEFAULT_NEGATIVE_PROMPT = "low quality, worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless";
 
@@ -417,6 +418,26 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
             const response = await fetch(`${API_BASE_URL}/projects/${project.id}`);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const server = await response.json();
+            const snapshot = {
+                captured_at: new Date().toISOString(),
+                project: server,
+            };
+            try {
+                localStorage.setItem(
+                    `milimo-conflict-snapshot:${project.id}`,
+                    JSON.stringify(snapshot),
+                );
+            } catch {
+                // Storage full is not a reason to block the explicit overwrite.
+            }
+            try {
+                saveTextFile(
+                    `milimo-server-snapshot-${project.id}-${Date.now()}.json`,
+                    JSON.stringify(snapshot, null, 2),
+                );
+            } catch {
+                // Download may be blocked; the localStorage copy remains.
+            }
             set(state => ({
                 project: {
                     ...state.project,
@@ -445,8 +466,15 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
 
                 set({
                     project: defaultProj,
-                    selectedShotId: defaultProj.shots[0].id
+                    selectedShotId: defaultProj.shots[0].id,
+                    saveStatus: 'idle',
+                    savedBaseline: null,
+                    saveError: null,
                 });
+                // The project-change subscription compares against the null
+                // baseline and marks the placeholder dirty; reset it after the
+                // replacement has settled.
+                set({ saveStatus: 'idle', savedBaseline: null });
             }
         } catch (e) {
             console.error(e);

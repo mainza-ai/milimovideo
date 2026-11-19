@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Captions, Eye, EyeOff, Maximize2, Minimize2, Music, Minus, MousePointer2, Plus, Scissors, Trash2,
-    MoveHorizontal, UnfoldHorizontal, Upload,
+    Captions, Eye, EyeOff, Maximize2, Minimize2, Music, Minus, MousePointer2, Pause, Play, Plus,
+    Scissors, SkipBack, Trash2, MoveHorizontal, UnfoldHorizontal, Upload,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStudioDocumentStore, type CaptionCue, type Shot } from '../state/documentStore';
@@ -48,13 +48,16 @@ interface Preview {
 export function StudioTimeline() {
     const project = useStudioDocumentStore((state) => state.project);
     const {
-        selectedShotId, selectShot, setCurrentTime, updateShot,
+        selectedShotId, selectShot, setCurrentTime, currentTime, isPlaying, setIsPlaying, updateShot,
         splitShot, deleteShot, addToast, setProject, addShot, reorderShots,
         trackStates, toggleTrackMute, toggleTrackSolo,
     } = useStudioDocumentStore(useShallow((state) => ({
         selectedShotId: state.selectedShotId,
         selectShot: state.selectShot,
         setCurrentTime: state.setCurrentTime,
+        currentTime: state.currentTime,
+        isPlaying: state.isPlaying,
+        setIsPlaying: state.setIsPlaying,
         updateShot: state.updateShot,
         splitShot: state.splitShot,
         deleteShot: state.deleteShot,
@@ -523,6 +526,23 @@ export function StudioTimeline() {
                 >
                     {tableView ? 'Timeline' : 'Table'}
                 </button>
+            </div>
+
+            <div className="st-timeline-transport" aria-label="Timeline transport">
+                <button type="button" className="st-icon-button" aria-label="Go to start" onClick={() => setCurrentTime(0)}>
+                    <SkipBack size={14} />
+                </button>
+                <button
+                    type="button"
+                    className="st-icon-button"
+                    aria-label={isPlaying ? 'Pause' : 'Play'}
+                    onClick={() => setIsPlaying(!isPlaying)}
+                >
+                    {isPlaying ? <Pause size={14} /> : <Play size={14} />}
+                </button>
+                <span className="st-mono" style={{ color: 'var(--st-muted)', fontSize: 11 }}>
+                    {formatDuration(currentTime * fps, fps)} / {formatDuration(duration * fps, fps)}
+                </span>
             </div>
 
             {audioPickerOpen && (

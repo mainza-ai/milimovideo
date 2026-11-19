@@ -53,7 +53,7 @@ export function GenerateSurface() {
     const [batchBusy, setBatchBusy] = useState(false);
     const [preview, setPreview] = useState<{ url: string | null; status: string; path?: string } | null>(null);
     const [lensOpen, setLensOpen] = useState(false);
-    const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(project.id);
+    const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(project.id, { poll: false });
     const { health } = useStudioHealth();
     const [queueBusy, setQueueBusy] = useState(false);
 

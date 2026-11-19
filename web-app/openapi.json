@@ -392,6 +392,11 @@
       },
       "Body_replace_take_shots__shot_id__takes__job_id__replace_post": {
         "properties": {
+          "allow_type_change": {
+            "default": false,
+            "title": "Allow Type Change",
+            "type": "boolean"
+          },
           "file": {
             "format": "binary",
             "title": "File",
@@ -2814,11 +2819,15 @@
           },
           "created_at": {
             "anyOf": [
-              {},
+              {
+                "format": "date-time",
+                "type": "string"
+              },
               {
                 "type": "null"
               }
             ],
+            "readOnly": true,
             "title": "Created At"
           },
           "dialogue": {

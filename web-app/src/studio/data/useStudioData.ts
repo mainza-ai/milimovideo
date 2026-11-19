@@ -718,61 +718,107 @@ export function useStudioLoras(slot: 'video' | 'image' = 'video') {
     return { loras, refresh, setStrength };
 }
 
-export function useStudioActiveJobs(projectId: string) {
+export function useStudioActiveJobs(
+    projectId: string,
+    options: { poll?: boolean } = {},
+) {
+    const poll = options.poll !== false;
     const jobs = useStudioJobs((state) => state.activeJobs);
     const setJobs = useStudioJobs((state) => state.setActiveJobs);
-    const refresh = useCallback(async () => {
-        try {
-            const response = await fetch(apiUrl(`/projects/${projectId}/active_jobs`));
-            const data = response.ok ? await response.json() : [];
-            const rows = Array.isArray(data) ? data : [];
-            setJobs(rows);
-            registerActiveJobs(rows);
-        } catch {
-            setJobs([]);
-        }
-    }, [projectId, setJobs]);
 
-    const reconcile = useCallback(async () => {
-        const shots = useStudioDocumentStore.getState().project.shots.filter(
-            (shot) => shot.isGenerating && shot.lastJobId,
-        );
-        const activeIds = new Set(useStudioJobs.getState().activeJobs.map((job) => job.job_id));
+    const reconcile = useCallback(async (active: ActiveJob[]) => {
+        const activeIds = new Set(active.map((job) => job.job_id));
+        const store = useStudioDocumentStore.getState();
+        const shots = store.project.shots.filter((shot) => shot.isGenerating);
         for (const shot of shots) {
-            if (!shot.lastJobId || activeIds.has(shot.lastJobId)) continue;
+            if (shot.lastJobId && activeIds.has(shot.lastJobId)) continue;
+            if (!shot.lastJobId) {
+                store.updateShot(shot.id, {
+                    isGenerating: false,
+                    status: 'failed',
+                    progress: 0,
+                    stage: 'failed',
+                    statusMessage: 'No job attached',
+                    etaSeconds: undefined,
+                });
+                continue;
+            }
             try {
-                const status = await fetch(apiUrl(`/status/${shot.lastJobId}`)).then((response) => response.json());
+                const response = await fetch(apiUrl(`/status/${shot.lastJobId}`));
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const status = await response.json();
                 if (status.status === 'completed') {
-                    useStudioDocumentStore.getState().updateShot(shot.id, {
+                    store.updateShot(shot.id, {
                         isGenerating: false, status: 'completed', progress: 100,
                         statusMessage: 'Complete', stage: 'completed',
+                        etaSeconds: undefined,
                         videoUrl: status.video_url ? (getAssetUrl(status.video_url) || status.video_url) : undefined,
                         thumbnailUrl: status.thumbnail_url
                             ? (getAssetUrl(status.thumbnail_url) || status.thumbnail_url)
                             : undefined,
                     });
                 } else if (status.status === 'failed' || status.status === 'cancelled') {
-                    useStudioDocumentStore.getState().updateShot(shot.id, {
+                    store.updateShot(shot.id, {
                         isGenerating: false,
                         status: status.status === 'failed' ? 'failed' : 'pending',
                         progress: 0,
                         statusMessage: status.error || (status.status === 'failed' ? 'Failed' : 'Cancelled'),
                         stage: status.status,
+                        etaSeconds: undefined,
+                    });
+                } else if (['running', 'queued', 'processing'].includes(status.status)) {
+                    // Still running, just not in this snapshot; keep the state.
+                    store.updateShot(shot.id, {
+                        isGenerating: true,
+                        status: 'generating',
+                        progress: status.progress ?? shot.progress ?? 0,
+                        stage: status.stage || shot.stage || 'queued',
+                        statusMessage: status.status_message || shot.statusMessage || 'Working…',
+                        etaSeconds: status.eta_seconds ?? shot.etaSeconds,
+                    });
+                } else {
+                    store.updateShot(shot.id, {
+                        isGenerating: false,
+                        status: 'failed',
+                        progress: 0,
+                        stage: 'failed',
+                        statusMessage: status.error || 'Job state unknown',
+                        etaSeconds: undefined,
                     });
                 }
             } catch {
-                useStudioDocumentStore.getState().updateShot(shot.id, {
-                    isGenerating: false, statusMessage: 'Unknown', stage: 'failed',
+                store.updateShot(shot.id, {
+                    isGenerating: false,
+                    status: 'failed',
+                    progress: 0,
+                    stage: 'failed',
+                    statusMessage: 'Job state unavailable',
+                    etaSeconds: undefined,
                 });
             }
         }
     }, []);
 
+    const refresh = useCallback(async () => {
+        try {
+            const response = await fetch(apiUrl(`/projects/${projectId}/active_jobs`));
+            const data = response.ok ? await response.json() : [];
+            const rows: ActiveJob[] = Array.isArray(data) ? data : [];
+            setJobs(rows);
+            registerActiveJobs(rows);
+            await reconcile(rows);
+        } catch {
+            // Do not reconcile on a transport failure: a temporarily offline
+            // backend must not turn every running shot into Failed.
+            setJobs([]);
+        }
+    }, [projectId, reconcile, setJobs]);
+
     useEffect(() => {
         void refresh();
-        void reconcile();
+        if (!poll) return undefined;
         const interval = window.setInterval(() => { void refresh(); }, 2500);
-        const onResync = () => { void refresh(); void reconcile(); };
+        const onResync = () => { void refresh(); };
         window.addEventListener('milimo:resync', onResync);
         window.addEventListener('milimo:job-terminal', onResync);
         return () => {
@@ -780,7 +826,7 @@ export function useStudioActiveJobs(projectId: string) {
             window.removeEventListener('milimo:resync', onResync);
             window.removeEventListener('milimo:job-terminal', onResync);
         };
-    }, [refresh, reconcile]);
+    }, [poll, refresh]);
     return { jobs, refresh };
 }
 

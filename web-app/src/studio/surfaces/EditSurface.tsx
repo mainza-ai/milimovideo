@@ -414,16 +414,20 @@ export function EditSurface() {
                         {(lutUrl || (project.titles || []).length > 0) && (
                             <span
                                 className="st-status-pill"
-                                data-tone={lutExportOnly || lutPreviewFailed ? 'warn' : hasV2AtPlayhead ? 'warn' : undefined}
+                                data-tone={lutExportOnly || lutPreviewFailed || hasV2AtPlayhead || compareMode !== 'off' ? 'warn' : undefined}
                                 title={lutExportOnly || lutPreviewFailed
                                     ? 'This LUT cannot be previewed in the browser; it is applied on export'
-                                    : hasV2AtPlayhead
-                                        ? 'The preview LUT applies to the active clip; V2 is composited on export'
-                                        : 'Titles and LUT are previewed here; export stays authoritative'}
+                                    : compareMode !== 'off'
+                                        ? 'Compare B is shown ungraded; only A previews the LUT'
+                                        : hasV2AtPlayhead
+                                            ? 'The preview LUT applies to the active clip; V2 is composited on export'
+                                            : 'Preview is an 8-bit, 1280px approximation; export is full-resolution and authoritative'}
                             >
                                 {lutExportOnly || lutPreviewFailed
                                     ? 'LUT on export'
-                                    : hasV2AtPlayhead ? 'LUT · active clip' : 'preview'}
+                                    : compareMode !== 'off'
+                                        ? 'LUT · A only'
+                                        : hasV2AtPlayhead ? 'LUT · active clip' : 'preview'}
                             </span>
                         )}
                         {(['grid', 'safe', 'thirds'] as const).map((guide) => (

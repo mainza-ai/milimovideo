@@ -1,4 +1,5 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Literal
 
 class TimelineItem(BaseModel):
@@ -141,7 +142,7 @@ class ShotState(BaseModel):
     audio_fade_in: float = 0.0
     audio_fade_out: float = 0.0
     speed: float = 1.0
-    created_at: Optional[Any] = None
+    created_at: Optional[datetime] = Field(default=None, json_schema_extra={"readOnly": True})
 
 
 class ProjectState(BaseModel):

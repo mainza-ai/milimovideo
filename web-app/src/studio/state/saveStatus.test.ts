@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
     documentSignature, effectiveShotStatus, isDocumentChange, saveStatusLabel,
     saveStatusTone, shotHasTake,
@@ -82,6 +82,30 @@ describe('document dirty tracking', () => {
             status: 'completed', progress: 100, videoUrl: '/projects/p/generated/new.mp4',
         });
         expect(useStudioDocumentStore.getState().saveStatus).toBe('saved');
+    });
+
+    it('resets the baseline when the open project is deleted', async () => {
+        const project = {
+            ...useStudioDocumentStore.getState().project,
+            id: 'delete-me',
+            name: 'Delete Me',
+        };
+        useStudioDocumentStore.setState({
+            project,
+            savedBaseline: documentSignature(project),
+            saveStatus: 'saved',
+        });
+        const original = globalThis.fetch;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        globalThis.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) })) as any;
+        try {
+            await useStudioDocumentStore.getState().deleteProject('delete-me');
+        } finally {
+            globalThis.fetch = original;
+        }
+        expect(useStudioDocumentStore.getState().project.id).not.toBe('delete-me');
+        expect(useStudioDocumentStore.getState().saveStatus).toBe('idle');
+        expect(useStudioDocumentStore.getState().savedBaseline).toBeNull();
     });
 
     it('derives card status from media as well as the status field', () => {

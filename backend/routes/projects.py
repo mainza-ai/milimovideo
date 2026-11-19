@@ -582,6 +582,26 @@ def project_integrity(project_id: str, session: Session = Depends(get_session)):
                 "message": f"Shot {shot.id} has no sequence index",
             })
 
+    from database import Job
+
+    jobs = session.exec(
+        select(Job)
+        .where(Job.project_id == project_id)
+        .where(Job.status == "completed")
+        .where(Job.output_path.isnot(None))
+    ).all()
+    for job in jobs:
+        resolved = resolve_path(job.output_path)
+        if not resolved or not os.path.exists(resolved):
+            issues.append({
+                "kind": "missing_take",
+                "severity": "warning",
+                "shot_id": job.shot_id,
+                "job_id": job.id,
+                "path": job.output_path,
+                "message": f"Missing take media for job {job.id}",
+            })
+
     for scene in scenes:
         if not any(shot.scene_id == scene.id for shot in shots):
             issues.append({
@@ -654,6 +674,7 @@ def repair_project(project_id: str, session: Session = Depends(get_session)):
         "orphan_board_nodes": 0,
         "orphan_board_links": 0,
         "captions_sanitized": 0,
+        "take_pointer_cleared": 0,
     }
 
     ordered = sorted(
@@ -672,6 +693,7 @@ def repair_project(project_id: str, session: Session = Depends(get_session)):
         if shot.scene_id and shot.scene_id not in scene_ids:
             shot.scene_id = None
             counts["orphan_scene"] += 1
+        video_missing = False
         for field, key in (("video_url", "missing_video"), ("thumbnail_url", "missing_thumbnail")):
             value = getattr(shot, field)
             if not value:
@@ -680,6 +702,15 @@ def repair_project(project_id: str, session: Session = Depends(get_session)):
             if not resolved or not os.path.exists(resolved):
                 setattr(shot, field, None)
                 counts[key] += 1
+                if field == "video_url":
+                    video_missing = True
+        if video_missing:
+            if shot.selected_take_id or shot.favorite_take_id or shot.last_job_id:
+                shot.selected_take_id = None
+                shot.favorite_take_id = None
+                shot.last_job_id = None
+                counts["take_pointer_cleared"] += 1
+            shot.status = "pending"
         session.add(shot)
 
     layout = _parse_json_field(project.board_layout, None)

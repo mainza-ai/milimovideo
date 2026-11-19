@@ -62,9 +62,9 @@ a test; "open" means no code or no verified path.
   relink provenance and take repair, sticky conflict and baseline undo truth,
   GET→PUT round-trip, mobile full-screen timeline, dialog drawer. See
   [[../systems/f7-caveats-audit-2026-11-18]] and [[f7-caveats-plan-2026-11-18]].
-- **F9 caveat resolution** — audited 2026-11-18 but **not implemented**: stale
-  Running recovery/duplicate pollers, relink thumbnail/legacy-path/purge safety,
-  silent LUT source failures, repair/delete lineage, mobile transport. See
+- **F9 caveat resolution** — **done 2026-11-18**: single job poller with stale
+  recovery, relink thumbnail/legacy-path/purge safety, LUT source/context-loss
+  truth, repair/delete lineage, mobile transport and dialogs. See
   [[../systems/f9-caveats-audit-2026-11-18]] and [[f9-caveats-plan-2026-11-18]].
 
 ## 2. Market scan (2026-11-17)

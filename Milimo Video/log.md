@@ -1854,3 +1854,28 @@ Re-audited the F8 caveats with code review and live probes.
 - Filed 21 findings (`F9-01…F9-21`):
   [[systems/f9-caveats-audit-2026-11-18]] and
   [[roadmap/f9-caveats-plan-2026-11-18]]. No code fixes shipped in this pass.
+
+## [2026-11-18] implement | F9 caveat resolution
+
+Executed all six F9 phases from [[roadmap/f9-caveats-plan-2026-11-18]].
+
+- **F9-0:** the shell owns the active-job interval; Generate/Comfy poll once;
+  every refresh reconciles vanished jobs, and status failures become Failed
+  rather than a stuck Running.
+- **F9-1:** relink writes into project assets even for legacy/empty paths, purges
+  old thumbnails, refuses shared-reference deletion, invalidates metadata;
+  repair clears stale take pointers and integrity reports missing takes; take
+  relink has purge/type confirmation.
+- **F9-2:** missing/blocked sources and WebGL context loss show `LUT on export`;
+  Compare is labelled `LUT · A only`; uploads cap at 30fps; video LUT playback is
+  pixel-tested. 1024×576 headless benchmark: **27.3fps**.
+- **F9-3:** deleting the open project resets the baseline; overwrite snapshots the
+  server project to localStorage + JSON download; `created_at` is readOnly.
+- **F9-4:** expanded mobile timeline keeps play/seek transport; drawer makes the
+  rest of the shell inert; in-app confirm dialog replaces repair/purge/overwrite
+  confirms; mobile rail keeps labels.
+- **F9-5:** stale-job/poll-budget, missing-source LUT, video LUT, relink/repair,
+  confirm/delete tests added.
+
+Verification: 232 backend, 110 Vitest, 32 Playwright, ruff/tsc/ESLint clean,
+build + bundle green.

@@ -449,7 +449,7 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
     );
     const { health } = useComfyHealth();
     const { assets } = useStudioAssets(projectId);
-    const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(projectId);
+    const { jobs: activeJobs, refresh: refreshJobs } = useStudioActiveJobs(projectId, { poll: false });
     const openMediaPreview = useMediaPreview((state) => state.open);
     const [text, setText] = useState(() => {
         try {

@@ -23,6 +23,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { CommandPalette, ShortcutSheet } from './components/CommandPalette';
 import { MediaPreview } from './components/MediaPreview';
 import { StudioToastLayer } from './components/StudioToastLayer';
+import { ConfirmDialog } from './components/ConfirmDialog';
 import { enabledStudioSurfaces, isStudioSurfaceEnabled } from './features';
 
 const SURFACES: StudioSurface[] = enabledStudioSurfaces();
@@ -179,6 +180,7 @@ function StudioShell() {
             </div>
             <StatusStrip />
             <StudioToastLayer />
+            <ConfirmDialog />
             <MediaPreview />
             <CommandPalette
                 open={paletteOpen}

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { rankSearch, type SearchRecord } from '../search/localSearch';
 import { middleEllipsis } from '../data/format';
+import { requestConfirm } from '../state/confirmStore';
 import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
 import { MediaThumb } from '../components/MediaThumb';
@@ -206,10 +207,31 @@ export function LibrarySurface() {
             useStudioDocumentStore.getState().addToast('Take has no shot to relink', 'error');
             return;
         }
+        const imageFile = /\.(png|jpe?g|webp|gif|bmp|tiff)$/i.test(file.name);
+        const imageTake = /\.(png|jpe?g|webp|gif|bmp|tiff)$/i.test(target.url);
+        let allowTypeChange = false;
+        if (imageFile !== imageTake) {
+            const proceed = await requestConfirm({
+                title: 'Change this take’s media kind?',
+                body: `This take currently holds ${imageTake ? 'an image' : 'a video'}; the replacement is ${imageFile ? 'an image' : 'a video'}. The shot media will change kind.`,
+                confirmLabel: 'Replace anyway',
+                tone: 'danger',
+            });
+            if (!proceed) return;
+            allowTypeChange = true;
+        }
         setBulkBusy(true);
         try {
             const form = new FormData();
             form.append('file', file);
+            form.append('allow_type_change', String(allowTypeChange));
+            form.append('purge_old', String(await requestConfirm({
+                title: 'Delete the old take file?',
+                body: 'The take will point at the replacement either way. Keeping the old file preserves a recovery copy.',
+                confirmLabel: 'Delete old take file',
+                cancelLabel: 'Keep old take file',
+                tone: 'danger',
+            })));
             const response = await fetch(
                 apiUrl(`/shots/${target.shot_id}/takes/${target.job_id}/replace`),
                 { method: 'POST', body: form },
@@ -238,9 +260,13 @@ export function LibrarySurface() {
             const form = new FormData();
             form.append('file', file);
             // Explicit, non-silent cleanup: the default keeps the old file.
-            const purge = window.confirm(
-                'Delete the old file after relinking?\n\nCancel keeps it on disk for recovery.',
-            );
+            const purge = await requestConfirm({
+                title: 'Delete the old file?',
+                body: 'The asset will point at the replacement either way. Keeping the old file preserves a recovery copy.',
+                confirmLabel: 'Delete old file',
+                cancelLabel: 'Keep old file',
+                tone: 'danger',
+            });
             form.append('purge_old', String(purge));
             const response = await fetch(apiUrl(`/assets/${target.id}/replace`), { method: 'POST', body: form });
             const data = await response.json().catch(() => ({}));
@@ -312,10 +338,13 @@ export function LibrarySurface() {
             const errors = report?.counts?.errors ?? 0;
             const issues = report?.issues?.length ?? 0;
             if (issues > 0) {
-                const proceed = window.confirm(
-                    `Integrity scan found ${issues} issue(s), including ${errors} missing-media error(s).\n\n`
-                    + 'Repair clears broken pointers and safe inconsistencies. Files stay on disk for relinking. Continue?',
-                );
+                const proceed = await requestConfirm({
+                    title: 'Repair project?',
+                    body: `Integrity scan found ${issues} issue(s), including ${errors} missing-media error(s). `
+                        + 'Repair clears broken pointers and safe inconsistencies. Files stay on disk for relinking.',
+                    confirmLabel: 'Repair safe issues',
+                    tone: 'danger',
+                });
                 if (!proceed) return;
                 const repaired = await fetch(apiUrl(`/projects/${project.id}/repair`), { method: 'POST' });
                 const data = repaired.json ? await repaired.json().catch(() => ({})) : {};

@@ -145,7 +145,7 @@ export function LutPreview({ source, lutUrl, onError }: Props) {
                 if (cancelled) return;
 
                 const glCanvas = document.createElement('canvas');
-                const gl = glCanvas.getContext('webgl2', { premultipliedAlpha: false, preserveDrawingBuffer: true });
+                const gl = glCanvas.getContext('webgl2', { premultipliedAlpha: false });
                 if (!gl) throw new Error('WebGL2 unavailable');
                 // Draw the WebGL result into a visible 2D canvas. Some browsers
                 // compose hardware video above a sibling WebGL canvas; the 2D
@@ -221,7 +221,28 @@ export function LutPreview({ source, lutUrl, onError }: Props) {
                 const context = sourceCanvas.getContext('2d', { willReadFrequently: false });
                 if (!context) throw new Error('2D canvas unavailable');
 
+                const fail = () => {
+                    if (cancelled) return;
+                    setFailed(true);
+                    onErrorRef.current?.();
+                };
+                const onContextLost = (event: Event) => {
+                    event.preventDefault();
+                    fail();
+                };
+                glCanvas.addEventListener('webglcontextlost', onContextLost);
+                source.addEventListener('error', fail);
+                source.addEventListener('abort', fail);
+                const loadTimer = window.setTimeout(() => {
+                    if (!drawn) fail();
+                }, 6000);
+                if (!isVideo(source) && source.complete && source.naturalWidth === 0) {
+                    fail();
+                }
+
                 let drawn = false;
+                let framesDrawn = 0;
+                let lastDrawAt = 0;
                 let lastTime = -1;
                 const draw = () => {
                     if (!sourceReady(source)) return false;
@@ -245,8 +266,11 @@ export function LutPreview({ source, lutUrl, onError }: Props) {
                     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
                     gl.drawArrays(gl.TRIANGLES, 0, 6);
                     output.drawImage(glCanvas, 0, 0);
+                    framesDrawn += 1;
+                    canvas.dataset.frames = String(framesDrawn);
                     if (!drawn) {
                         drawn = true;
+                        window.clearTimeout(loadTimer);
                         host.appendChild(canvas);
                         // Hardware video overlays can paint above a sibling canvas;
                         // hide the source once the filtered frame is visible.
@@ -263,8 +287,14 @@ export function LutPreview({ source, lutUrl, onError }: Props) {
                             // the first ready frame.
                             const changed = Math.abs(source.currentTime - lastTime) >= 1 / 60;
                             if (changed || !drawn) {
-                                lastTime = source.currentTime;
-                                draw();
+                                const now = performance.now();
+                                // Cap texture uploads to ~30fps; seeked/loaded events
+                                // still force an immediate redraw.
+                                if (!drawn || !changed || now - lastDrawAt >= 33) {
+                                    lastTime = source.currentTime;
+                                    lastDrawAt = now;
+                                    draw();
+                                }
                             }
                         } else if (!drawn) {
                             draw();
@@ -287,6 +317,10 @@ export function LutPreview({ source, lutUrl, onError }: Props) {
 
                 cleanup = () => {
                     window.cancelAnimationFrame(frame);
+                    window.clearTimeout(loadTimer);
+                    glCanvas.removeEventListener('webglcontextlost', onContextLost);
+                    source.removeEventListener('error', fail);
+                    source.removeEventListener('abort', fail);
                     source.style.visibility = '';
                     if (isVideo(source)) {
                         source.removeEventListener('seeked', redraw);

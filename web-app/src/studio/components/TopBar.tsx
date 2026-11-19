@@ -11,6 +11,7 @@ import { useStudioData, useStudioReview } from '../data/useStudioData';
 import { useStudioEditor, type StudioSurface } from '../state/editorStore';
 import { useStudioDocumentStore } from '../state/documentStore';
 import { saveStatusLabel, saveStatusTone } from '../../stores/saveStatus';
+import { requestConfirm } from '../state/confirmStore';
 import { ActivityCenter } from './ActivityCenter';
 
 const SURFACES: Array<{ id: StudioSurface; label: string }> = [
@@ -261,11 +262,14 @@ export function TopBar() {
                     data-tone={saveTone}
                     onClick={() => {
                         if (saveStatus === 'conflict') {
-                            const overwrite = window.confirm(
-                                'Overwrite the server copy with your local changes?\n\nCancel reloads the server copy instead.',
-                            );
-                            if (overwrite) void overwriteProject();
-                            else void loadProject(project.id);
+                            void requestConfirm({
+                                title: 'Save conflict',
+                                body: 'Overwrite the server copy with your local changes? A timestamped JSON snapshot of the server copy will be saved before the overwrite.',
+                                confirmLabel: 'Overwrite server copy',
+                                tone: 'danger',
+                            }).then((overwrite) => {
+                                if (overwrite) void overwriteProject();
+                            });
                             return;
                         }
                         void saveProject();

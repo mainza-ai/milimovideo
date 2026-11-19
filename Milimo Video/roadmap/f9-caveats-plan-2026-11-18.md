@@ -21,7 +21,17 @@ caveats.
 Priority: **job truth → destructive-operation safety → preview truth → save
 safety → mobile/dialog → verification**.
 
-Status: **planned, not started**.
+Status: **implemented — 2026-11-18**. Evidence is in
+[[../systems/f9-caveats-audit-2026-11-18]] and the verification gate below.
+
+| Phase | Status | What shipped |
+|---|---|---|
+| **F9-0** | ✅ | Shell-owned poller (surfaces poll once, no intervals), reconcile on every refresh, vanished jobs clear within one interval, real failed state |
+| **F9-1** | ✅ | Project-scoped relink destination, thumbnail purge, shared-reference refusal, metadata invalidation, repair clears take pointers, integrity reports missing takes, take purge/confirmed type change |
+| **F9-2** | ✅ | Source error/abort/timeout and context-loss states, 30fps cap, no preserve buffer, compare labelled `LUT · A only`, precision tooltip, video LUT pixel test |
+| **F9-3** | ✅ | Delete resets baseline, overwrite snapshots the server copy (localStorage + JSON download), read-only `created_at` in OpenAPI |
+| **F9-4** | ✅ | Compact transport in expanded mobile timeline, TopBar/rail inert while drawer open, in-app confirm dialog for repair/purge/overwrite, labeled mobile rail |
+| **F9-5** | ✅ | Stale-job/poll-budget E2E, missing-source LUT E2E, video LUT playback E2E, relink/repair backend tests, confirm/delete Vitest |
 
 ## Findings → phases
 

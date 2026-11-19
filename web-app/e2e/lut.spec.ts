@@ -111,3 +111,41 @@ test('edit preview applies a cube LUT to a still image', async ({ page, request 
     expect(near(pixels.BL, [255, 0, 0]), JSON.stringify(pixels)).toBe(true);
     expect(near(pixels.BR, [255, 255, 255]), JSON.stringify(pixels)).toBe(true);
 });
+
+test('a missing media source surfaces LUT export-only instead of a fake preview', async ({ page, request }) => {
+    const project = await (await request.post(`${API}/projects`, {
+        data: { name: 'LUT Missing Source', resolution_w: 1024, resolution_h: 576, fps: 25 },
+    })).json();
+    const lut = await upload(request, project.id, 'swap.cube', 'text/plain', Buffer.from(SWAP_CUBE));
+    const state = {
+        ...project,
+        shots: [{
+            id: `missing-${project.id}`,
+            project_id: project.id,
+            index: 0,
+            sequence_index: 0,
+            prompt: 'missing',
+            seed: 1,
+            width: 64,
+            height: 64,
+            num_frames: 1,
+            fps: 25,
+            track_index: 0,
+            start_frame: 0,
+            trim_in: 0,
+            trim_out: 0,
+            timeline: [],
+            video_url: `/projects/${project.id}/generated/missing.mp4`,
+            status: 'completed',
+        }],
+        render_lut: lut.url,
+    };
+    expect((await request.put(`${API}/projects/${project.id}`, { data: state })).ok()).toBe(true);
+
+    await page.addInitScript((id) => localStorage.setItem('milimo_last_project_id', id), project.id);
+    await page.goto('/studio');
+    await expect(page.getByText('Story spine')).toBeVisible();
+    await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+    await expect(page.locator('.st-status-pill', { hasText: 'LUT on export' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.st-lut-canvas')).toHaveCount(0);
+});

@@ -61,6 +61,35 @@ and several test gaps.
 - Mobile full-screen timeline and dialog drawer work; axe remains clean.
 - Contract round-trip, relink provenance, and LUT pixel tests are green.
 
+## Resolution — 2026-11-18
+
+All F9 findings were implemented the same day. Original findings remain as the
+audit trail.
+
+| Finding | Resolution | Evidence |
+|---|---|---|
+| F9-01 | `refresh()` reconciles every poll; vanished jobs complete/fail within one interval | `e2e/jobs.spec.ts`: Running → Done |
+| F9-02 | Shell owns the interval; Generate/Comfy use `poll:false` | request budget ≤5 in the stale-job test |
+| F9-03 | Source `error`/`abort`/6s no-frame and context loss set export-only | `e2e/lut.spec.ts` missing-source test |
+| F9-04 | Purge removes media + thumbnail; shared refs are refused | relink thumbnail/shared tests |
+| F9-05 | Project-scoped destination/URL helper; legacy empty path test | `test_relink_legacy_empty_path_uses_project_assets` |
+| F9-06 | Repair clears take pointers and reports missing takes | `test_repair_clears_take_pointers_for_missing_video` |
+| F9-07 | Delete resets baseline/status to idle | `saveStatus.test.ts` delete test |
+| F9-08 | Reconcile error sets `failed`, not `generating` | hook refactor |
+| F9-09 | `_other_asset_refs` blocks purge of shared paths | shared-reference test |
+| F9-10 | Overwrite snapshots server JSON (localStorage + download) before PUT | `overwriteProject` |
+| F9-11 | Compare badge reads `LUT · A only` | EditSurface |
+| F9-12 | 8-bit/1280px documented in the preview tooltip | EditSurface |
+| F9-13 | WebGL context-loss handler restores the source + badge | LutPreview |
+| F9-14 | Non-cube formats keep explicit `LUT on export` | badge |
+| F9-15 | Expanded mobile timeline keeps play/seek transport | `ux-matrix` test |
+| F9-16 | TopBar/rail/status/dock inert while drawer open | `ux-matrix` inert assertion |
+| F9-17 | In-app confirm dialog replaces repair/purge/overwrite confirms | `ConfirmDialog` + store test |
+| F9-18 | `created_at` is readOnly in OpenAPI | schema test |
+| F9-19 | Uploads capped at 30fps, preserve buffer removed | 1024×576 headless: **27.3fps** |
+| F9-20 | Take relink has purge/type confirmation and cleans thumbnails | take replace test |
+| F9-21 | Tests added for all major paths | 232 backend / 110 Vitest / 32 Playwright |
+
 ## P1 findings
 
 ### F9-01 — A disappeared active job leaves a permanent “Running” card

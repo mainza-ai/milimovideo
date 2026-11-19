@@ -174,7 +174,7 @@ Total: roughly **3–4 working weeks** for one engineer.
 
 The F9 audit [[../systems/f9-caveats-audit-2026-11-18]] found stale active-job
 cards, silent LUT source failures, thumbnail/relink cleanup gaps, repair/delete
-state, and mobile transport issues. See the F9 plan
+state, and mobile transport issues. The F9 plan fixed all of them:
 [[f9-caveats-plan-2026-11-18]].
 
 ## Definition of done
