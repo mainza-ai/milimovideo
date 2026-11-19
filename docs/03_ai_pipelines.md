@@ -204,7 +204,25 @@ flowchart TD
 
 **Why "Quantum"**: The latent grid quantizes continuous pixel space into 8-pixel steps. Overlap must be aligned to this grid to avoid discontinuities. Misaligned overlaps cause "frozen anchor" artifacts where the overlap region appears static.
 
-### 2.5 MPS Compatibility (LTX-2)
+### 2.5 Draft, Standard, and Final presets
+
+Generate exposes three step presets on the shot:
+
+| Preset | Steps | CFG | Upscale | Use |
+|---|---:|---:|---|---|
+| Draft | 8 | 1.0 (off) | no | iteration and blocking |
+| Standard | 20 | shot value | shot value | previz |
+| Final | 40 | shot value | shot value | delivery |
+
+The scheduler is upstream `LTX2Scheduler`, so steps select the sigma schedule; the
+distilled checkpoint can run with fewer steps when CFG is off. A true 8+4 two-stage
+schedule is not exposed by the current upstream API and remains open.
+
+Prompt rewrites are cached in `backend/llm.py` by settings revision, role, prompt,
+system prompt, seed, duration, and image signature (LRU 128). A failed rewrite is
+never cached, and a settings-plan change invalidates every entry.
+
+### 2.6 MPS Compatibility (LTX-2)
 
 | Issue | Fix | Location |
 |---|---|---|
@@ -416,10 +434,14 @@ flowchart TD
 ```
 
 **Budget inputs:** total RAM, a 15% reserve, `torch.mps.recommended_max_memory()`,
-`psutil.virtual_memory().available`, free swap, `kern.memorystatus_vm_pressure_level`,
-resident slots, external engines, and SAM. Swap **occupancy** is reported but is not
-itself a refusal: macOS keeps swap allocated after a heavy job, so admission uses
-free swap + physical free + pressure.
+the **real process cap** (`recommended × MILIMO_MPS_MEMORY_FRACTION`, which is what
+`set_per_process_memory_fraction` enforces), allocator current/cache, physical free,
+free swap, `kern.memorystatus_vm_pressure_level`, resident slots, external engines,
+SAM, and measured child-process RSS. The reported ceiling is the minimum of the
+device cap and machine headroom; on the reference M3 Max that is **98.13 GB**, not
+the 115.45 GB recommended value. Swap **occupancy** is reported but is not itself a
+refusal: macOS keeps swap allocated after a heavy job, so admission uses free swap +
+physical free + pressure.
 
 **Admission runs before every heavy load** — video, image, chained, ai_parse,
 inpaint, element, pipeline activation, LLM warm/reserve. The decision carries
@@ -440,7 +462,13 @@ and persists it to the Job/QueuedJob/Shot before any allocation.
 - Engine adapters measure Ollama (`/api/ps`), oMLX (`/v1/models/status`), and use a
   declared `memory_gb` for Strata/generic engines. SAM is lazy and released via
   `/unload`.
-- The sampler records a 1 s peak trace per stage into `Job.memory_json`.
+- The 0.5 s sampler records per-stage peak/minimum, physical minimum, and swap peak
+  into `Job.memory_json`; `/system/memory` returns recent traces.
+- A 1–2 s pressure guard blocks new admission on warning, evicts idle slots, and on
+  critical marks the oldest active job for cancellation with a reason. It never
+  kills the backend or a thread mid-write.
+- The MPS resolution cap is frame-aware: the 1280×768 (983K px) reference is measured
+  at 121 frames, and longer clips scale the pixel budget down proportionally.
 
 **Scheduling:** the durable `QueuedJob` ledger feeds one GPU semaphore. Dispatch is
 ordered by priority (video/image 20, inpaint 30, element 50, ai_parse/depth 60),

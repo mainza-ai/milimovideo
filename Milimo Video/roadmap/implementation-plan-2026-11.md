@@ -470,6 +470,13 @@ without OOM; `/system/memory` exposed the measured budget and counters. The M5
 artifact swaps remain a model program, not app code. See
 [[../systems/memory-management-audit-2026-11]].
 
+**2026-11-18 follow-up:** the newer [[memory-management-plan-2026-11-18]] M0–M5
+pass is now implemented in its core: the reported ceiling equals the real process
+cap (98.13 GB), the sampler runs at 0.5 s with stage peaks, a pressure guard
+blocks/evicts/cancels, child RSS is measured, and agentic memory ships as a
+project-scoped SQLite store with FTS5 retrieval. Evidence and open items:
+[[../systems/performance-memory-execution-2026-11-18]].
+
 ## ComfyUI Frontend Track (Delivered / partial)
 
 The bridge backend and the reusable frontend surface are shipped. The 2026-11
@@ -494,7 +501,7 @@ ComfyUI remains optional throughout.
 | **G2** | Golden export equals the cut: timing, V2 alpha, audio, track state | Calling the product an NLE |
 | **G3** | One GPU queue; restart recovery; cancellation converges | Multi-job use, batch generation |
 | **G4** | Model activation real; fresh install boots; downloads resume | Model upgrades |
-| **G5** | CI green; Playwright smoke; lint/type gates | v2 work |
+| **G5** | CI green; Playwright smoke; lint/type gates; memory-truth and retrieval-eval gates; 250 KiB initial-gzip budget | v2 work |
 
 ## Test Matrix (Minimum)
 

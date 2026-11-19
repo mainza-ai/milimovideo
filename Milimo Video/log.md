@@ -1960,3 +1960,27 @@ entry below. Highlights:
 Open: model-loaded P0/P2 benchmarks and VAE quality pairs, the VMAF gate before
 `auto` may choose VideoToolbox, MLX, IndexedDB migration, and automatic memory
 extraction/consolidation.
+
+## [2026-11-18] ingest | Sync docs, wiki, and README with the executed plans
+
+Documentation pass over the delivered performance/memory work:
+
+- **README:** architecture counts (15 routers / 167 operations, Alembic 0012),
+  process-cap/pressure/child memory, agent memory, WAL/gzip/health, proxy-first
+  Library, VideoToolbox policy, new env vars, and verification counts
+  (270 backend / 118 Vitest / 32 Playwright, 134.8 KiB studio initial gzip).
+  Known limitations now name the open VMAF gate, model-loaded benchmarks, SQLite
+  3.45.1 WAL caveat, and lexical-only agent retrieval.
+- **docs/:** 01 architecture (routers, memory plane, storage), 02 data models
+  (`agentmemory`, FTS5, `0012`, SQLite pragmas), 03 pipelines (process cap,
+  0.5 s sampler, pressure guard, presets, prompt cache, frame-aware clamp),
+  04 frontend (sanitized/debounced Studio persistence, paused-RAF, hidden-tab
+  polling, lazy routes), 05 execution (encoder args, startup head/routers,
+  health/gzip, upload/proxy flow), 07 API (health/live, gzip, proxies, encoder
+  env, agent-memory endpoints), user guide (presets, memory panels, limitations),
+  and the codebase analysis memory summary.
+- **Wiki:** new [[systems/agentic-memory]] and
+  [[systems/performance-memory-execution-2026-11-18]] pages; index statuses for
+  both plans and audits; updated memory-slots, architecture, data-models,
+  prompt-enhancement, frontend-state, nle-timeline, studio-shell, overview, and
+  the implementation-plan gate row.

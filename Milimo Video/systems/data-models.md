@@ -44,6 +44,7 @@ models introduced between revisions.
 | `sharelink` | token, project_id, created_at, revoked | capability links for review |
 | `reviewitem` | project_id, shot_id, kind (comment\|approval), frame, body, status, author, created_at | frame comments and approvals |
 | `appsetting` | key (PK), value_json, updated_at | versioned JSON documents: `llm` (`LLMSettings` v3) and `llm_spend` (daily cloud ledger) |
+| `agentmemory` | project_id, scope, shot_id, kind, text, metadata_json, provenance, trust, content_hash, pinned, quarantined, use_count, created/updated/last_used_at | N→1 project; `agentmemory_fts` FTS5 index with insert/update/delete triggers |
 
 **LLM settings document** (`app_setting.key = "llm"`): `schema_version` 3 and a
 `revision` CAS token; `providers` keyed by instance id (`ollama`,
@@ -82,6 +83,8 @@ contracts cover health/plans/review/share.
 | `0004_asset_thumbnail` | `asset.thumbnail_url` for uploaded-video posters |
 | `0005_app_settings` | `app_setting` table for the revisioned LLM settings document and spend ledger |
 | `0006_job_progress` | `job.stage`, `job.started_at`, `job.memory_json` for stage progress and per-job memory traces |
+| `0007_shot_priority_steps` … `0011_comfy_workflows` | Shot priority/steps, project LUT, titles, V1 transition, named ComfyUI workflows |
+| `0012_agent_memory` | `agentmemory` store plus FTS5 table/triggers (guarded; retrieval falls back to LIKE) |
 
 **On-disk storage** (under `backend/`): `projects/{id}/generated/`,
 `projects/{id}/thumbnails/`, `projects/{id}/assets/{general,references,elements}/`,
@@ -119,7 +122,13 @@ contracts cover health/plans/review/share.
 - `Job.stage`/`started_at` are written by the throttled progress path and the
   terminal emitter; `/status` returns them so a reload sees the latest stage.
 - `Job.memory_json` stores the sampler trace (`peak_gb`, `peak_stage`, per-stage
-  peaks, swap peak); `/metrics/jobs` aggregates the peak.
+  peaks/minima, physical minimum, swap peak, samples); `/metrics/jobs` aggregates
+  the peak and `/system/memory` returns recent traces.
+- Every SQLite connection applies WAL, `synchronous=NORMAL`, a 5 s busy timeout,
+  and `foreign_keys=ON`. The bundled 3.45.1 predates the 3.51.3 WAL-reset fix;
+  `MILIMO_SQLITE_WAL=0` disables WAL.
+- `agentmemory` is project-scoped and deletable; FTS5 is an accelerator, not the
+  source of truth, so a build without FTS5 still retrieves via LIKE.
 - The LLM document is v3; v1/v2 are migrated on read. `memory_gb` is a declared
   residency override for engines that cannot report it.
 - `QueuedJob` is the scheduler truth; `Job` is the user-facing status. Terminal

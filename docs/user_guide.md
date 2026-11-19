@@ -72,8 +72,10 @@ checkout. Bundled Python sidecar packaging is still a follow-up.
 curl http://127.0.0.1:8000/health
 ```
 
-The response reports device, GPU busy/queued, active memory slots, auth mode, and
-free disk. Every HTTP response carries `X-Request-ID`; backend logs include it.
+The response reports device, GPU busy/queued, active memory slots, auth mode, free
+disk, the real process cap, allocator state, sampler state, and SQLite
+version/WAL. It is cached for one second; use `/health/live` for a torch-free probe.
+Every HTTP response carries `X-Request-ID`; backend logs include it.
 
 ---
 
@@ -188,7 +190,10 @@ Select a shot in Generate to work on its prompt, ingredients, parameters, and ta
 ### Advanced parameters
 
 Open **Advanced parameters** for negative prompt, seed, frame count, width/height,
-CFG, pipeline override, prompt enhancement, and upscale.
+CFG, pipeline override, prompt enhancement, and upscale. **Draft · 8** sets 8 steps,
+CFG off, and no upscale for fast iteration; **Standard · 20** is previz; **Final ·
+40** is delivery. Prompt rewriting is cached per prompt/seed/settings, so a retry
+with the same inputs skips the LLM pass.
 
 Keep LTX frame counts at `8k+1` (for example 49, 81, 121). The pipeline lens warns
 when the count is invalid. The lens copies/saves a reproducible recipe as JSON and
@@ -418,7 +423,10 @@ Recipes save a plan by name and can be reloaded against the current selection. U
 - **Render range**: in/out seconds; full-cut reset.
 - **Fit** chooses letterbox (**Pad**) or center-crop (**Crop**) for a different output aspect.
 - **Encoding** sets CRF (quality/size), encoder speed, audio bitrate, and optional
-  loudness normalization. **Add 3D LUT** loads a `.cube`/`.3dl`/`.dat`/`.m3d` file
+  loudness normalization. The encoder itself is server policy:
+  `MILIMO_RENDER_ENCODER=software|videotoolbox` (auto stays software) and
+  `MILIMO_RENDER_CODEC=h264|hevc`. VideoToolbox is faster but changes keyframe
+  placement, so keep software for archival masters. **Add 3D LUT** loads a `.cube`/`.3dl`/`.dat`/`.m3d` file
   and applies it to the V1/V2 composite before captions. These values persist
   with the project.
 - **Titles** adds a burned-in text overlay (text, in/out, size, color). Titles
@@ -469,10 +477,17 @@ speed, fades, keyframes, captions, and range. The FFmpeg output is the cut.
   orphan board nodes/links, and invalid caption ranges. **Repair safe issues**
   clears broken pointers, normalizes sequence order, and sanitizes captions
   without deleting files.
-- **Memory budget**: measured used/available/ceiling, physical free, free swap,
-  pressure, SAM, per-slot model/bytes/leases with **Release**/**Pin**, external LLM
-  engines with **Release**, and load/unload/eviction/refusal counters. **Release
-  all** frees every resident model; **Pin** skips idle eviction.
+- **Memory budget**: measured used/available against the **real process cap**,
+  device-recommended/cap split, physical free, free swap, allocator cache, active
+  sampler, per-stage job peaks, child-process RSS, pressure, SAM, per-slot
+  model/bytes/leases with **Release**/**Pin**, external LLM engines with
+  **Release**, and load/unload/eviction/refusal counters. **Release all** frees
+  every resident model; **Pin** skips idle eviction. A browser block reports
+  document size, undo snapshots, localStorage use, and webview heap when exposed.
+- **Agent memory**: project-scoped notes/decisions/feedback with search, kind, pin,
+  delete, export, clear-all, and quarantine review. Review comments and approvals
+  are extracted automatically. Quarantined entries never reach the model until
+  **Approve**.
 - **Notifications**: in-app toasts, sound cue, desktop notifications (macOS uses
   Notification Center), and per-project mute. Toasts/activity always keep history;
   mute only suppresses the interruption.
@@ -610,10 +625,13 @@ Common issues:
   Shorts template packs remain. Search is ranked
   lexical matching, not embeddings.
 - The depth model is downloaded separately; it is not shipped with the repo.
-- **Memory**: costs are a measured estimate, not a per-model profile; Strata has no
-  remote unload; a cancelled job keeps its pipeline until the idle TTL; memory
-  waits are bounded (20 retries); swap exhaustion can refuse jobs until the machine
-  is restarted. See `Milimo Video/systems/memory-management-audit-2026-11.md`.
+- **Memory**: admission now uses the real process cap (98.13 GB on the reference
+  128 GB M3 Max), a pressure guard blocks/evicts/cancels before Jetsam, and child
+  processes are measured. Costs are still a hand-tuned estimate rather than a
+  per-model profile; Strata has no remote unload; a cancelled job keeps its pipeline
+  until the idle TTL; memory waits are bounded (20 retries). SQLite runs WAL on
+  bundled 3.45.1, which predates the 3.51.3 reset fix (`MILIMO_SQLITE_WAL=0`
+  disables). See `Milimo Video/systems/memory-management-audit-2026-11-18.md`.
 - **ComfyUI**: graphs are imported as API-format JSON, not edited in Milimo;
   residency is a declared `MILIMO_COMFY_GB`, not measured per model; a sub-second
   graph can finish before the websocket connects, so completion falls back to

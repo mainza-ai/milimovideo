@@ -60,14 +60,24 @@ navigate, then drills into pages.
   is on the audit page.
 - [systems/memory-management-audit-2026-11-18](systems/memory-management-audit-2026-11-18.md) —
   2026-11 memory audit: live M3 Max snapshot, MPS/MLX allocator research, agentic
-  memory/context research, and 20 findings (`MEM-01…MEM-20`). Headline: the
-  reported ceiling is **17.3 GB above the real process cap**, active jobs are
-  observed but not guarded, and agentic memory is effectively absent.
+  memory/context research, and 20 findings (`MEM-01…MEM-20`). Original headline:
+  the ceiling was 17.3 GB above the real process cap, active jobs were unguarded,
+  and agentic memory was absent. **Resolved 2026-11-18**; status section records
+  the delivered cap, guard, sampler, and memory store.
+- [systems/performance-memory-execution-2026-11-18](systems/performance-memory-execution-2026-11-18.md) —
+  implementation record for P0–P6 and M0–M5: files, phase map, local
+  measurements (98.13 GB cap, 0.506 s x264 vs 0.621 s VideoToolbox, 100% retrieval
+  top-3, 134.8 KiB initial gzip), verification, and the still-open model-loaded
+  benchmarks.
+- [systems/agentic-memory](systems/agentic-memory.md) — project-scoped SQLite
+  memory: schema, FTS5/LIKE retrieval, token-budgeted context packs, provenance/
+  trust/quarantine, review extraction, planner RAG, API/UI, and the 20-task eval.
 - [systems/performance-audit-2026-11-18](systems/performance-audit-2026-11-18.md) —
   2026-11 performance audit: local M3 Max benchmarks, 2026 research on LTX/MLX,
   MPS, VideoToolbox, SQLite/WAL, React/WebCodecs, and 22 findings
-  (`PERF-01…PERF-22`). Headline: a 40-step CFG schedule drives a distilled
-  checkpoint; the MPS loader still uses slow mmap; VideoToolbox is unused.
+  (`PERF-01…PERF-22`). Original headline: a 40-step CFG schedule drove a distilled
+  checkpoint, the MPS loader used slow mmap, and VideoToolbox was unused.
+  **Resolved 2026-11-18**; remaining items are the model-loaded benchmark/VMAF gate.
 - [systems/f9-caveats-audit-2026-11-18](systems/f9-caveats-audit-2026-11-18.md) —
   caveat audit behind F8: **stale Running cards after job disappearance**, duplicate
   `/active_jobs` pollers, silent LUT source failures, orphaned relink thumbnails,
@@ -212,11 +222,13 @@ navigate, then drills into pages.
 - [roadmap/memory-management-plan-2026-11-18](roadmap/memory-management-plan-2026-11-18.md) —
   the M0–M5 memory plan: truth/allocator stats → calibration/loader/residency/MLX
   → runtime guard/children → browser/document → agentic memory/context → eval and
-  security. Extends performance P2. **Planned, not started.**
+  security. Extends performance P2. **M0/M2/M3/M4/M5 core implemented 2026-11-18;
+  measured model profiles, VAE pairs, MLX, and consolidation remain open.**
 - [roadmap/performance-plan-2026-11-18](roadmap/performance-plan-2026-11-18.md) —
   the P0–P6 performance plan: measurement lab → distilled schedule/loader/prompt
   cache → memory/VAE/MLX/machine tiers → VideoToolbox/proxies → frontend runtime
-  → SQLite/API → CI gates. **Planned, not started.**
+  → SQLite/API → CI gates. **P0/P1 core, P3 encoder/proxy, P4, P5, and P6 gates
+  implemented 2026-11-18; model-loaded benchmarks and the VMAF gate remain open.**
 - [roadmap/f9-caveats-plan-2026-11-18](roadmap/f9-caveats-plan-2026-11-18.md) —
   the F9 caveat plan: F9-0 job truth → F9-1 relink/repair safety → F9-2 preview
   truth → F9-3 save/delete safety → F9-4 mobile transport/dialogs → F9-5 gate.
