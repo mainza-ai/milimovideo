@@ -33,7 +33,7 @@ Status: **implemented — 2026-11-18**. All seven phases landed; evidence is in
 | **F7-1** | ✅ | `/uploads?project_id=`, `missing` flags, missing filter, refresh/repair, stable-id relink endpoint, bulk delete for assets and takes, error thumbnails |
 | **F7-2** | ✅ | Per-surface rail memory, Generate params and Inspector are mutually exclusive, ComfyUI Run/Bindings/Outputs tabs, 28px+ hit targets |
 | **F7-3** | ✅ | 56px mobile rail, full-width Story board (334px at 390), spine drawer, collapsible command dock, compact mobile status strip |
-| **F7-4** | ⚠ | Five tracks fit 900px, track visibility menu, title overlay, grouped title form. The LUT canvas is present but blocked by CORS — see F8-01 |
+| **F7-4** | ✅ | Five tracks fit 900px, track visibility menu, title overlay, grouped title form, and a working LUT preview after F8-01 |
 | **F7-5** | ✅ | Readable memory warnings, neutral tone for zero states, pluralization/vocabulary pass, middle ellipsis, styled color/range controls |
 | **F7-6** | ✅ | `e2e/ux-matrix.spec.ts`, project-scope backend tests, save-status Vitest, regenerated OpenAPI |
 
@@ -216,11 +216,11 @@ parallelizable.
 
 ## Known caveats carried forward
 
-An 2026-11-18 caveat audit found that F7-11's LUT preview is blocked by
-cross-origin video taint and that relink/state/mobile have remaining gaps. See
-[[../systems/f7-caveats-audit-2026-11-18]] and the F8 plan
-[[f7-caveats-plan-2026-11-18]]. F7 is still complete for its stated phases; the
-preview claim is corrected there.
+An 2026-11-18 caveat audit found F7-11's LUT preview was blocked by cross-origin
+video taint plus relink/state/mobile gaps. The F8 plan fixed all of them; the LUT
+preview now renders `.cube` LUTs for video and stills with a pixel test. See
+[[../systems/f7-caveats-audit-2026-11-18]] and
+[[f7-caveats-plan-2026-11-18]].
 
 ## Definition of done
 

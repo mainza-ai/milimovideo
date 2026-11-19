@@ -1805,3 +1805,29 @@ Re-tested the caveats reported at F7 close with a live quadrant-video probe,
 - Filed 18 findings (`F8-01…F8-18`) and the F8 plan:
   [[systems/f7-caveats-audit-2026-11-18]] and
   [[roadmap/f7-caveats-plan-2026-11-18]]. No code fixes shipped in this pass.
+
+## [2026-11-18] implement | F8 caveat resolution
+
+Executed all six F8 phases from [[roadmap/f7-caveats-plan-2026-11-18]].
+
+- **F8-0:** `created_at` is server-owned and stripped from project writes;
+  GET→PUT→GET round-trip test for shots/scenes/captions/titles.
+- **F8-1:** Saved/Unsaved derives from a saved-document signature (undo/redo
+  correct); conflict is sticky with reload/overwrite; active jobs hydrate on
+  load and on the global shell; card status cross-checks media presence.
+- **F8-2:** LUT preview fixed: `crossOrigin` with cache-busted source, RGBA8 3D
+  texture, visible 2D output surface, DOMAIN/INPUT_RANGE parsing, 1D/grid
+  rejection, still-image support, active-clip/V2 labelling, throttled uploads.
+- **F8-3:** Relink migrates Job/take/shots/project LUT/Comfy references,
+  preserves timestamps, reports and optionally purges the old file; take replace
+  endpoint + missing flags; Library repair invokes integrity/repair; bulk
+  partial-failure reporting.
+- **F8-4:** Mobile full-screen timeline, scroll hint, dialog drawer with
+  aria-modal/focus trap/Escape/focus restore, shared middle-ellipsis, table
+  honours hidden tracks.
+- **F8-5:** `e2e/lut.spec.ts` asserts channel-swap pixels; mobile drawer/timeline
+  tests; relink provenance and contract round-trip backend tests; conflict/undo
+  and status Vitest.
+
+Verification: 228 backend, 108 Vitest, 29 Playwright, ruff/tsc/ESLint clean,
+build + bundle green.

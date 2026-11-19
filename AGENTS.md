@@ -195,16 +195,18 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 - Review/agent: frame comments/approvals, activity, needs-you pill, share links,
   deterministic plan previews, undoable apply, recipes, `@Agent` handoff.
 - Library/Deliver: project-scoped uploads with missing-file repair and stable-id
-  relink, bulk asset/take delete, direct uploads, master-reference CRUD (trigger,
-  image, description), takes, ranked local search, presets, pad/crop reframing,
-  titles (previewed in Edit), 3D LUT (export; the browser `.cube` preview is
-  currently blocked by cross-origin video taint — see F8-01), caption
-  toggle/preview, persisted encoding controls, render history/cancel, OTIO
-  export/import and FCPXML export of the computed V1/V2/A1/A2 cut.
-- Truthful shell state: one save vocabulary (`Saved`/`Unsaved`/`Saving…`/
-  conflict/failed) with dirty tracking that ignores job progress; shot status and
-  take state hydrate after reload. Per-surface inspector policy, `Tracks 5/5`
-  visibility, and a mobile Story spine drawer with a full-width board.
+  relink that migrates jobs, takes, project LUT, and Comfy references, optional
+  old-file purge, bulk asset/take delete, take-level relink, direct uploads,
+  master-reference CRUD (trigger, image, description), takes, ranked local
+  search, presets, pad/crop reframing, titles (previewed in Edit), 3D LUT with a
+  CORS-capable `.cube` preview for video and stills, caption toggle/preview,
+  persisted encoding controls, render history/cancel, OTIO export/import and
+  FCPXML export of the computed V1/V2/A1/A2 cut.
+- Truthful shell state: one save vocabulary derived from a saved-document
+  signature, so undo/redo and conflict states are truthful; sticky conflict with
+  reload/overwrite; active jobs hydrate on boot; shot status cross-checks media.
+  Per-surface inspector policy, `Tracks 5/5` visibility, a mobile Story dialog
+  drawer with focus/Escape, and a full-screen mobile timeline mode.
 - Media viewer: one global image/video/audio/text preview used by Library, Story,
   Generate, Edit, Inspector, and Review; legacy localhost URLs are rewritten to
   the current API origin with bearer-token support. Video uploads get real poster
@@ -238,7 +240,7 @@ Deliver/Shorts. Verify with real FFmpeg renders, not just filtergraph strings.
 ### Plan status and known gaps
 
 Scoped P0–P5 / F0–F5 and F6 chrome stabilization are complete. The current green
-baseline is 225 backend tests, 102 Vitest tests, and 27 Playwright tests, plus
+baseline is 228 backend tests, 108 Vitest tests, and 29 Playwright tests, plus
 ruff/tsc/ESLint, Vite build, bundle budget, `cargo check`, and `verify_setup`.
 
 Do not claim these are done:
@@ -330,16 +332,16 @@ Run from the repo root unless noted:
 
 ```bash
 ./milimov/bin/python -m compileall -q backend
-./milimov/bin/python -m pytest                 # 225 backend tests
+./milimov/bin/python -m pytest                 # 228 backend tests
 ./milimov/bin/python -m ruff check backend     # correctness baseline
 ./milimov/bin/python backend/verify_setup.py   # env/model/ffmpeg/disk
 cd web-app
 npx tsc -b --pretty false
 npm run lint
-npm test                                       # 102 Vitest tests
+npm test                                       # 108 Vitest tests
 npm run build
 npm run check:bundle                           # JS budget
-npm run test:e2e                               # 27 Playwright tests
+npm run test:e2e                               # 29 Playwright tests
 npm run gen:api && git diff --exit-code openapi.json src/api/schema.d.ts
 cd src-tauri && cargo check                    # desktop changes only
 ```

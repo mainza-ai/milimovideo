@@ -372,6 +372,7 @@ async def list_uploads(
 def replace_asset_file(
     asset_id: str,
     file: UploadFile = File(...),
+    purge_old: bool = Form(False),
     session: Session = Depends(get_session),
 ):
     """Relink a missing Library asset by replacing its file and URL.
@@ -380,13 +381,23 @@ def replace_asset_file(
     the new one. Nothing is deleted implicitly: a caller that wants the record
     gone still uses DELETE.
     """
-    from database import Asset, Shot
+    from database import Asset, ComfyWorkflow, Job, Project, Shot
     from datetime import datetime, timezone
     from sqlmodel import select
 
     asset = session.get(Asset, asset_id)
     if not asset:
         raise HTTPException(status_code=404, detail="Asset not found")
+
+    old_url = asset.url
+    old_path = asset.path
+    old_thumbnail = asset.thumbnail_url
+    old_type = asset.type
+    jobs = session.exec(
+        select(Job).where(
+            (Job.output_path == old_url) | (Job.thumbnail_path == old_url)
+        )
+    ).all()
 
     original_name = Path(file.filename or "upload").name
     original_name = re.sub(r"[\x00-\x1f]", "", original_name).strip()
@@ -430,7 +441,7 @@ def replace_asset_file(
     caption_extensions = {".srt", ".vtt"}
     text_extensions = {".json", ".txt", ".md"}
     lut_extensions = {".cube", ".3dl", ".dat", ".m3d"}
-    asset.type = (
+    new_type = (
         "image" if extension in image_extensions
         else "audio" if extension in audio_extensions
         else "caption" if extension in caption_extensions
@@ -438,7 +449,18 @@ def replace_asset_file(
         else "lut" if extension in lut_extensions
         else "video"
     )
-    old_url = asset.url
+    if jobs and new_type != old_type:
+        for path in (temp_path, file_path):
+            try:
+                if os.path.exists(path):
+                    os.remove(path)
+            except OSError:
+                pass
+        raise HTTPException(
+            status_code=409,
+            detail=f"This asset backs {len(jobs)} take(s); replace it with another {old_type} file",
+        )
+    asset.type = new_type
     if asset.project_id:
         try:
             folder_name = os.path.basename(folder)
@@ -449,7 +471,7 @@ def replace_asset_file(
         asset.url = f"/uploads/{filename}"
     asset.path = file_path
     asset.filename = filename
-    asset.created_at = datetime.now(timezone.utc)
+    # Preserve the original import date; relinking is not a re-import.
     if asset.type == "video":
         thumb_path, thumb_url = _thumbnail_target(asset.project_id, filename)
         asset.thumbnail_url = thumb_url if _make_video_thumbnail(file_path, thumb_path) else None
@@ -457,15 +479,55 @@ def replace_asset_file(
         asset.thumbnail_url = None
 
     if old_url and old_url != asset.url:
+        old_refs = [ref for ref in {old_url, old_thumbnail} if ref]
         shots = session.exec(
-            select(Shot).where((Shot.video_url == old_url) | (Shot.thumbnail_url == old_url))
+            select(Shot).where(
+                (Shot.video_url.in_(old_refs)) | (Shot.thumbnail_url.in_(old_refs))
+            )
         ).all()
         for shot in shots:
-            if shot.video_url == old_url:
+            if shot.video_url in old_refs:
                 shot.video_url = asset.url
-            if shot.thumbnail_url == old_url:
-                shot.thumbnail_url = asset.url
+            if shot.thumbnail_url in old_refs:
+                shot.thumbnail_url = asset.thumbnail_url or asset.url
             session.add(shot)
+
+        for job in jobs:
+            if job.output_path in {old_url, old_thumbnail}:
+                job.output_path = asset.url
+            if job.thumbnail_path in {old_url, old_thumbnail}:
+                job.thumbnail_path = asset.thumbnail_url
+            session.add(job)
+
+        projects = session.exec(select(Project).where(Project.render_lut == old_url)).all()
+        for project in projects:
+            project.render_lut = asset.url
+            project.revision = (project.revision or 0) + 1
+            project.updated_at = datetime.utcnow()
+            session.add(project)
+
+        workflows = session.exec(
+            select(ComfyWorkflow).where(ComfyWorkflow.project_id == asset.project_id)
+        ).all()
+        for workflow in workflows:
+            changed = False
+            for field in ("graph_json", "bindings_json"):
+                value = getattr(workflow, field) or ""
+                if old_url in value:
+                    setattr(workflow, field, value.replace(old_url, asset.url))
+                    changed = True
+            if changed:
+                workflow.revision = (workflow.revision or 0) + 1
+                workflow.updated_at = datetime.utcnow()
+                session.add(workflow)
+
+    removed_old = False
+    if purge_old and old_path and old_path != file_path and os.path.exists(old_path):
+        try:
+            os.remove(old_path)
+            removed_old = True
+        except OSError:
+            removed_old = False
 
     session.add(asset)
     session.commit()
@@ -479,6 +541,9 @@ def replace_asset_file(
         "thumbnail": asset.thumbnail_url,
         "missing": False,
         "created_at": asset.created_at.timestamp(),
+        "old_url": old_url,
+        "old_path": old_path,
+        "old_removed": removed_old,
     }
 
 

@@ -48,11 +48,19 @@ for (const viewport of [
 
 test('save pill and status strip agree after load', async ({ page }) => {
     await openStudio(page);
-    const pill = await page.locator('.st-status-pill').filter({ hasText: /Saved|Unsaved|Not saved|Saving|conflict|failed/ }).first().textContent();
-    const footer = await page.locator('.st-status-save').textContent();
-    const pillText = (pill || '').replace(/\s+/g, ' ').trim();
-    const footerText = (footer || '').replace(/\s+/g, ' ').trim();
-    expect(footerText).toContain(pillText.replace(/^.*?(Saved|Unsaved|Not saved|Saving…|Save conflict|Save failed).*$/s, '$1'));
+    // Read both from the same DOM snapshot; project bootstrap may settle one
+    // tick after the shell paints.
+    const { pill, footer } = await page.evaluate(() => {
+        const pillElement = [...document.querySelectorAll('.st-status-pill')].find((element) =>
+            /Saved|Unsaved|Not saved|Saving|conflict|failed/.test(element.textContent || ''),
+        );
+        return {
+            pill: (pillElement?.textContent || '').replace(/\s+/g, ' ').trim(),
+            footer: (document.querySelector('.st-status-save')?.textContent || '').replace(/\s+/g, ' ').trim(),
+        };
+    });
+    const footerStatus = footer.replace(/^Save\s*/i, '');
+    expect(footerStatus, `pill="${pill}" footer="${footer}"`).toBe(pill);
 });
 
 test('mobile story has a usable board and a shot-list drawer', async ({ page }) => {
@@ -61,9 +69,35 @@ test('mobile story has a usable board and a shot-list drawer', async ({ page }) 
     const board = await page.locator('.st-board-wrap').boundingBox();
     expect(board?.width ?? 0).toBeGreaterThanOrEqual(320);
 
-    await page.getByRole('button', { name: 'Show shot list' }).click();
+    const toggle = page.getByRole('button', { name: 'Show shot list' });
+    await toggle.click();
     await expect(page.getByText('Story spine')).toBeVisible();
-    await page.getByRole('button', { name: 'Close story spine' }).click();
+    const spine = page.locator('.st-spine');
+    await expect(spine).toHaveAttribute('role', 'dialog');
+    await expect(spine).toHaveAttribute('aria-modal', 'true');
+
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.st-mobile-backdrop')).toHaveCount(0);
+    await expect(toggle).toBeFocused();
+});
+
+test('mobile edit can expand the timeline and reach every track', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openStudio(page);
+    await page.getByRole('button', { name: 'Edit', exact: true }).first().click();
+    await page.waitForTimeout(300);
+
+    await page.getByRole('button', { name: 'Expand timeline' }).click();
+    const expanded = await page.evaluate(() => ({
+        stage: document.querySelector('.st-stage')
+            ? getComputedStyle(document.querySelector('.st-stage')!).display : null,
+        timeline: document.querySelector('.st-timeline')?.getBoundingClientRect().height ?? 0,
+        tracks: document.querySelectorAll('.st-timeline-track').length,
+    }));
+    expect(expanded.stage).toBe('none');
+    expect(expanded.timeline).toBeGreaterThan(400);
+    expect(expanded.tracks).toBe(5);
+    await expect(page.getByRole('button', { name: 'Collapse timeline' })).toBeVisible();
 });
 
 test('generate defaults to one right rail and hides params when the inspector opens', async ({ page }) => {

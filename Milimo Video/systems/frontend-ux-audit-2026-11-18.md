@@ -70,7 +70,7 @@ trail; this table is the fix record.
 | F7-08 | Inspector defaults closed on Library/Deliver/Setup/Shorts and remembers per surface | `DEFAULT_INSPECTOR_BY_SURFACE` |
 | F7-09 | Five tracks fit 900px; `Tracks 5/5` visibility menu; visible scroll on short viewports | live: scrollHeight === clientHeight 299 |
 | F7-10 | Title form grouped; add action on its own row; color swatch instead of raw bar | Deliver screenshot/JSX |
-| F7-11 | Titles preview in the Edit stage; LUT canvas attempted for `.cube` with an export-only badge | **Corrected 2026-11-18:** canvas exists but WebGL upload is blocked by cross-origin taint. See [[f7-caveats-audit-2026-11-18]] F8-01 |
+| F7-11 | Titles and `.cube` LUT preview in the Edit stage (WebGL, video and stills); export-only badge for other formats | Fixed from the F8-01 caveat; `e2e/lut.spec.ts` asserts channel swap pixels |
 | F7-12 | Command dock is collapsible; mobile status strip keeps device/queue/save only | `CommandDock.tsx`, mobile CSS |
 | F7-13 | Asset/take selection, bulk delete, context actions, middle ellipsis | Library surface |
 | F7-14 | ComfyUI panel split into Run job / Bindings / Outputs tabs | `ComfyUIPanel.tsx` |

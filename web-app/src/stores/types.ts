@@ -187,9 +187,11 @@ export interface ProjectSlice {
 
     saveStatus: 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'conflict';
     saveError: string | null;
+    savedBaseline: string | null;
 
     // Async
     saveProject: () => Promise<void>;
+    overwriteProject: () => Promise<void>;
     createNewProject: (name: string, settings?: { resolutionW: number; resolutionH: number; fps: number; seed: number }) => Promise<void>;
     loadProject: (id: string) => Promise<void>;
     deleteProject: (id: string) => Promise<void>;

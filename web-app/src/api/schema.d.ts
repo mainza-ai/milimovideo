@@ -2431,6 +2431,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/shots/{shot_id}/takes/{job_id}/replace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replace Take
+         * @description Relink a missing take in place, keeping its job/take identity.
+         */
+        post: operations["replace_take_shots__shot_id__takes__job_id__replace_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/status/{job_id}": {
         parameters: {
             query?: never;
@@ -2877,6 +2897,24 @@ export interface components {
              * Format: binary
              */
             file: string;
+            /**
+             * Purge Old
+             * @default false
+             */
+            purge_old: boolean;
+        };
+        /** Body_replace_take_shots__shot_id__takes__job_id__replace_post */
+        Body_replace_take_shots__shot_id__takes__job_id__replace_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+            /**
+             * Purge Old
+             * @default false
+             */
+            purge_old: boolean;
         };
         /** Body_segment_by_text_edit_segment_text_post */
         Body_segment_by_text_edit_segment_text_post: {
@@ -8741,6 +8779,42 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replace_take_shots__shot_id__takes__job_id__replace_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                shot_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_take_shots__shot_id__takes__job_id__replace_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

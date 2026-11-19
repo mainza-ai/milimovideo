@@ -377,12 +377,36 @@
             "format": "binary",
             "title": "File",
             "type": "string"
+          },
+          "purge_old": {
+            "default": false,
+            "title": "Purge Old",
+            "type": "boolean"
           }
         },
         "required": [
           "file"
         ],
         "title": "Body_replace_asset_file_assets__asset_id__replace_post",
+        "type": "object"
+      },
+      "Body_replace_take_shots__shot_id__takes__job_id__replace_post": {
+        "properties": {
+          "file": {
+            "format": "binary",
+            "title": "File",
+            "type": "string"
+          },
+          "purge_old": {
+            "default": false,
+            "title": "Purge Old",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_replace_take_shots__shot_id__takes__job_id__replace_post",
         "type": "object"
       },
       "Body_segment_by_text_edit_segment_text_post": {
@@ -9489,6 +9513,66 @@
           }
         },
         "summary": "List Takes",
+        "tags": [
+          "shots"
+        ]
+      }
+    },
+    "/shots/{shot_id}/takes/{job_id}/replace": {
+      "post": {
+        "description": "Relink a missing take in place, keeping its job/take identity.",
+        "operationId": "replace_take_shots__shot_id__takes__job_id__replace_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shot_id",
+            "required": true,
+            "schema": {
+              "title": "Shot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_replace_take_shots__shot_id__takes__job_id__replace_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replace Take",
         "tags": [
           "shots"
         ]

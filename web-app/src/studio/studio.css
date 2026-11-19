@@ -3477,3 +3477,48 @@
 }
 
 .studio-root input[type="range"] { accent-color: var(--st-accent); }
+
+.st-shot-card-status[data-status="missing"] { color: var(--st-warning); }
+
+/* F8 mobile timeline mode */
+.st-mobile-timeline-toggle { display: none; }
+.st-track-menu-note {
+    padding: 6px 7px 2px;
+    color: var(--st-faint);
+    font-size: 10px;
+}
+.st-timeline-scroll-hint {
+    position: absolute;
+    right: 12px;
+    bottom: 6px;
+    z-index: 20;
+    padding: 3px 8px;
+    border: 1px solid var(--st-border-strong);
+    border-radius: 999px;
+    background: rgba(8, 9, 10, 0.86);
+    color: var(--st-muted);
+    font-size: 10px;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+}
+
+@media (max-width: 900px) {
+    .st-mobile-timeline-toggle { display: inline-flex; }
+    .st-edit[data-timeline-expanded="true"] .st-stage,
+    .st-edit[data-timeline-expanded="true"] .st-transport {
+        display: none;
+    }
+    .st-edit[data-timeline-expanded="true"] .st-timeline {
+        height: auto;
+        flex: 1 1 auto;
+    }
+    .st-timeline-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: var(--st-border-strong) transparent;
+    }
+    .st-timeline-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+    .st-timeline-scroll::-webkit-scrollbar-thumb {
+        background: var(--st-border-strong);
+        border-radius: 999px;
+    }
+}

@@ -61,7 +61,8 @@ single-engineer guidance.
 | Memory & model residency | **Done — M0–M5 code side, 2026-11-17** | measured budget/admission, leases + TTL eviction, engine adapters, priority/same-slot queue, bounded memory waits, downgrade ladder, metrics, sampler, MPS cap, SAM lazy load, and the model-lane benchmark. See [[../systems/memory-management-audit-2026-11]] |
 | Job notification plane | **Done — N0–N5, 2026-11-17** | typed `job.*` envelope/replay, single terminal emitter, Studio toasts/activity/inline progress, resync/watchdog, per-surface handlers, metrics, history retry, ETA, desktop notifications, dock badge, webhook, per-project mute. See [[../systems/job-notifications-audit-2026-11]] |
 | LLM configuration plane | **Done — L0–L3, 2026-11-17** | persisted `app_setting` document with revision CAS, six providers, six roles with fallback, discovery/verify/model catalog, sealed keys, air-gap + cloud opt-in, Studio AI & LLM panel, legacy popover compatibility; L4 governance deferred. See [[../systems/llm-settings-audit-2026-11]] |
-| Front-end F7 UX | **Done — 2026-11-18; caveats audited** | truthful save/shot status, project-scoped Library with relink/repair, one rail per surface, mobile Story drawer, five-track timeline, title preview, warning/copy semantics, and a surface matrix gate. **LUT preview is blocked by CORS and relink/state/mobile gaps remain** — see [[../systems/f7-caveats-audit-2026-11-18]] and [[f7-caveats-plan-2026-11-18]] |
+| Front-end F7 UX | **Done — 2026-11-18** | truthful save/shot status, project-scoped Library with relink/repair, one rail per surface, mobile Story drawer, five-track timeline, title/LUT preview, warning/copy semantics, and a surface matrix gate. See [[../systems/frontend-ux-audit-2026-11-18]] and [[frontend-ux-plan-2026-11-18]] |
+| Front-end F8 caveats | **Done — 2026-11-18** | contract round-trip, baseline-derived save truth, sticky conflict, active-job hydration, CORS/RGBA LUT preview with pixel test, provenance-preserving relink and take repair, mobile full-screen timeline, dialog drawer. See [[../systems/f7-caveats-audit-2026-11-18]] and [[f7-caveats-plan-2026-11-18]] |
 
 **Still open / deferred:**
 
@@ -95,10 +96,10 @@ single-engineer guidance.
   drawer, five-track timeline, title preview, and the surface matrix gate. The
   caveat audit [[../systems/f7-caveats-audit-2026-11-18]] corrected the LUT
   preview claim (CORS-blocked) and filed F8.
-- **F8 caveat resolution** — audited and planned 2026-11-18, **not implemented**:
-  contract round-trip, sticky conflict/undo truth, LUT preview truth, relink
-  provenance, mobile Edit/drawer. See
-  [[../systems/f7-caveats-audit-2026-11-18]] and [[f7-caveats-plan-2026-11-18]].
+- **F8 caveat resolution** — completed 2026-11-18: contract round-trip, sticky
+  conflict/undo truth, LUT preview truth, relink provenance, mobile Edit/drawer.
+  See [[../systems/f7-caveats-audit-2026-11-18]] and
+  [[f7-caveats-plan-2026-11-18]].
 - **Memory M0/M1/M3/M4** — completed 2026-11-17: measured budget, admission,
   leases/TTL eviction, pressure monitor, sampler, engine adapters, Setup panel,
   preflight, load rollback, a priority queue with same-slot grouping, a bounded

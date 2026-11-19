@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    Captions, Eye, EyeOff, Music, Minus, MousePointer2, Plus, Scissors, Trash2, MoveHorizontal,
-    UnfoldHorizontal, Upload,
+    Captions, Eye, EyeOff, Maximize2, Minimize2, Music, Minus, MousePointer2, Plus, Scissors, Trash2,
+    MoveHorizontal, UnfoldHorizontal, Upload,
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStudioDocumentStore, type CaptionCue, type Shot } from '../state/documentStore';
@@ -22,6 +22,8 @@ const TRACKS = [
     { id: 2, label: 'A1', tone: 'var(--st-a1)' },
     { id: 3, label: 'A2', tone: 'var(--st-a2)' },
 ];
+
+const TRACK_COUNT = TRACKS.length + 1; // V1/V2/A1/A2 + captions
 
 type Tool = 'select' | 'slip' | 'roll';
 
@@ -64,7 +66,10 @@ export function StudioTimeline() {
         toggleTrackMute: state.toggleTrackMute,
         toggleTrackSolo: state.toggleTrackSolo,
     })));
-    const { timelineZoom, setTimelineZoom, hiddenTracks, toggleTrackVisibility } = useStudioEditor();
+    const {
+        timelineZoom, setTimelineZoom, hiddenTracks, toggleTrackVisibility,
+        mobileTimelineExpanded, setMobileTimelineExpanded,
+    } = useStudioEditor();
     const [tool, setTool] = useState<Tool>('select');
     const [preview, setPreview] = useState<Preview | null>(null);
     const [selectedCueId, setSelectedCueId] = useState<string | null>(null);
@@ -74,6 +79,7 @@ export function StudioTimeline() {
     const [scrollLeft, setScrollLeft] = useState(0);
     const [viewportWidth, setViewportWidth] = useState(900);
     const [trackMenuOpen, setTrackMenuOpen] = useState(false);
+    const [overflowing, setOverflowing] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
     const captionFileRef = useRef<HTMLInputElement>(null);
     const { assets } = useStudioAssets(project.id);
@@ -86,11 +92,15 @@ export function StudioTimeline() {
     useEffect(() => {
         const host = scrollRef.current;
         if (!host) return;
-        const observer = new ResizeObserver(() => setViewportWidth(host.clientWidth));
+        const measure = () => {
+            setViewportWidth(host.clientWidth);
+            setOverflowing(host.scrollHeight > host.clientHeight + 2);
+        };
+        const observer = new ResizeObserver(measure);
         observer.observe(host);
-        setViewportWidth(host.clientWidth);
+        measure();
         return () => observer.disconnect();
-    }, [tableView]);
+    }, [hiddenTracks, tableView]);
 
     const layout = useMemo(() => computeTimelineLayout(project), [project]);
     const duration = Math.max(10, ...layout.map((clip) => clip.end)) + 2;
@@ -455,6 +465,17 @@ export function StudioTimeline() {
                 <span style={{ color: 'var(--st-faint)', fontSize: 11 }}>
                     B blade · R ripple · [ ] slide
                 </span>
+                <button
+                    type="button"
+                    className="st-button st-mobile-timeline-toggle"
+                    data-size="sm"
+                    data-variant={mobileTimelineExpanded ? 'primary' : 'ghost'}
+                    onClick={() => setMobileTimelineExpanded(!mobileTimelineExpanded)}
+                    title={mobileTimelineExpanded ? 'Collapse timeline' : 'Expand timeline to the full surface'}
+                    aria-label={mobileTimelineExpanded ? 'Collapse timeline' : 'Expand timeline'}
+                >
+                    {mobileTimelineExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                </button>
                 <div style={{ position: 'relative' }}>
                     <button
                         type="button"
@@ -466,7 +487,7 @@ export function StudioTimeline() {
                         onClick={() => setTrackMenuOpen(!trackMenuOpen)}
                         title="Choose which tracks are visible"
                     >
-                        <Eye size={12} /> Tracks {5 - hiddenTracks.length}/5
+                        <Eye size={12} /> Tracks {TRACK_COUNT - hiddenTracks.length}/{TRACK_COUNT}
                     </button>
                     {trackMenuOpen && (
                         <div className="st-track-menu" role="menu" aria-label="Visible tracks">
@@ -489,6 +510,7 @@ export function StudioTimeline() {
                                     </button>
                                 );
                             })}
+                            <div className="st-track-menu-note">Applies to timeline and table</div>
                         </div>
                     )}
                 </div>
@@ -617,7 +639,10 @@ export function StudioTimeline() {
                             </tr>
                         </thead>
                         <tbody>
-                            {[...layout].sort((a, b) => a.track - b.track || a.start - b.start).map((clip) => {
+                            {[...layout]
+                                .filter((clip) => !hiddenTracks.includes(clip.track))
+                                .sort((a, b) => a.track - b.track || a.start - b.start)
+                                .map((clip) => {
                                 const sourceFrames = Math.max(
                                     1,
                                     (clip.shot.numFrames || 0) - (clip.shot.trimIn || 0) - (clip.shot.trimOut || 0),
@@ -885,6 +910,11 @@ export function StudioTimeline() {
                     <Playhead timelineZoom={timelineZoom} />
                 </div>
             </div>
+            )}
+            {overflowing && !tableView && (
+                <span className="st-timeline-scroll-hint" aria-hidden="true">
+                    Scroll for more tracks
+                </span>
             )}
         </section>
     );

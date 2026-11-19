@@ -239,7 +239,7 @@ export function ReviewSurface() {
                                 </div>
                                 <div className="st-take-body">
                                     <strong style={{ color: 'var(--st-text)' }}>{index + 1}. {clip.shot.action || clip.shot.prompt || 'Shot'}</strong>
-                                    <div>{shotStatusLabel(clip.shot.status)} · {clip.shot.numFrames}f</div>
+                                    <div>{shotStatusLabel(clip.shot)} · {clip.shot.numFrames}f</div>
                                     {review.approvals.find((item) => item.shot_id === clip.id) && (
                                         <div style={{ color: review.approvals.find((item) => item.shot_id === clip.id)?.status === 'approved' ? 'var(--st-success)' : 'var(--st-warning)' }}>
                                             {review.approvals.find((item) => item.shot_id === clip.id)?.status.replace('_', ' ')}

@@ -22,4 +22,20 @@ describe('parseCubeLut', () => {
     it('rejects a cube without size or data', () => {
         expect(() => parseCubeLut('LUT_3D_SIZE 2\n0 0 0')).toThrow(/LUT_3D_SIZE/);
     });
+
+    it('parses input domains and ranges', () => {
+        const rows = ['LUT_3D_SIZE 2', 'DOMAIN_MIN 0 0.1 0', 'DOMAIN_MAX 1 0.9 1'];
+        for (let index = 0; index < 8; index += 1) rows.push('0 0 0');
+        expect(parseCubeLut(rows.join('\n')).inputMin).toEqual([0, 0.1, 0]);
+
+        const ranged = ['LUT_3D_SIZE 2', 'LUT_3D_INPUT_RANGE 0 2'];
+        for (let index = 0; index < 8; index += 1) ranged.push('0 0 0');
+        const parsed = parseCubeLut(ranged.join('\n'));
+        expect(parsed.inputMin).toEqual([0, 0, 0]);
+        expect(parsed.inputMax).toEqual([2, 2, 2]);
+    });
+
+    it('rejects 1D LUTs explicitly', () => {
+        expect(() => parseCubeLut('LUT_1D_SIZE 16\n0 0 0')).toThrow(/1D/);
+    });
 });

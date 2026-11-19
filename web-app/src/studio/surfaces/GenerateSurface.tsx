@@ -627,7 +627,7 @@ export function GenerateSurface() {
                                 >
                                     <td className="st-mono">{index + 1}</td>
                                     <td>{item.action || item.prompt || 'Untitled'}</td>
-                                    <td>{shotStatusLabel(item.status)}</td>
+                                    <td>{shotStatusLabel(item)}</td>
                                     <td className="st-mono">{item.progress != null ? `${item.progress}%` : '—'}</td>
                                     <td onClick={(event) => event.stopPropagation()}>
                                         <div className="st-button-row">
@@ -712,7 +712,7 @@ export function GenerateSurface() {
                         <dt>Seed</dt><dd>{shot.seed}</dd>
                         <dt>Frames</dt><dd>{shot.numFrames}</dd>
                         <dt>Resolution</dt><dd>{shot.width}×{shot.height}</dd>
-                        <dt>Status</dt><dd>{shotStatusLabel(shot.status)}</dd>
+                        <dt>Status</dt><dd>{shotStatusLabel(shot)}</dd>
                     </dl>
                     <details className="st-advanced">
                         <summary>Advanced parameters</summary>

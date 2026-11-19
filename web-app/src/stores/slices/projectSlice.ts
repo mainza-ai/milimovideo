@@ -3,6 +3,7 @@ import { API_BASE_URL } from '../../config';
 import type { TimelineState, ProjectSlice, Project } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { getAssetUrl } from '../../config';
+import { documentSignature } from '../saveStatus';
 
 const DEFAULT_NEGATIVE_PROMPT = "low quality, worst quality, inconsistent motion, blurry, jittery, distorted, watermark, text, static, freeze, loop, pause, still image, motionless";
 
@@ -62,12 +63,17 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
     assetRefreshVersion: 0,
     saveStatus: 'idle',
     saveError: null,
+    savedBaseline: null,
 
-    setProject: (p) => set({ project: p, saveStatus: 'dirty' }),
+    setProject: (p) => set({ project: p }),
 
     triggerAssetRefresh: () => set(state => ({ assetRefreshVersion: state.assetRefreshVersion + 1 })),
 
     saveProject: async () => {
+        if (get().saveStatus === 'conflict') {
+            get().addToast('Resolve the save conflict: reload or overwrite first.', 'error');
+            return;
+        }
         if (saveInFlight) {
             saveQueued = true;
             return saveInFlight;
@@ -172,13 +178,13 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
 
             if (res.ok) {
                 const data = await res.json().catch(() => ({}));
-                set(state => ({
-                    project: {
+                set(state => {
+                    const project = {
                         ...state.project,
-                        revision: typeof data.revision === "number" ? data.revision : state.project.revision
-                    }
-                }));
-                set({ saveStatus: 'saved' });
+                        revision: typeof data.revision === "number" ? data.revision : state.project.revision,
+                    };
+                    return { project, saveStatus: 'saved' as const, savedBaseline: documentSignature(project) };
+                });
                 addToast("Project saved successfully", "success");
             } else {
                 const err = await res.json().catch(() => ({}));
@@ -239,7 +245,13 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 revision: typeof data.revision === "number" ? data.revision : 0,
             };
 
-            set({ project: newProject, selectedShotId: null, saveStatus: 'saved', saveError: null });
+            set({
+                project: newProject,
+                selectedShotId: null,
+                saveStatus: 'saved',
+                savedBaseline: documentSignature(newProject),
+                saveError: null,
+            });
             addToast("New project created", "success");
         } catch (e) {
             console.error(e);
@@ -360,9 +372,34 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
                 project: loadedProject,
                 selectedShotId: loadedProject.shots[0]?.id || null,
                 saveStatus: 'saved',
+                savedBaseline: documentSignature(loadedProject),
                 saveError: null,
             });
             saveLastProjectId(id);  // Remember last opened project
+
+            // Hydrate a job that was already running before this reload. Without
+            // this the shot shows Pending until the next SSE stage event.
+            try {
+                const active = await fetch(`${API_BASE_URL}/projects/${id}/active_jobs`)
+                    .then((response) => response.ok ? response.json() : [])
+                    .catch(() => []);
+                if (Array.isArray(active)) {
+                    for (const job of active) {
+                        if (!job?.shot_id || !['running', 'queued'].includes(job.status)) continue;
+                        get().updateShot(job.shot_id, {
+                            isGenerating: true,
+                            status: 'generating',
+                            progress: job.progress ?? 0,
+                            stage: job.stage || 'queued',
+                            statusMessage: job.status_message || (job.status === 'queued' ? 'Queued…' : 'Working…'),
+                            etaSeconds: job.eta_seconds ?? undefined,
+                            lastJobId: job.job_id,
+                        });
+                    }
+                }
+            } catch {
+                // A missing active-jobs endpoint must not block project load.
+            }
             addToast("Project loaded", "success");
         } catch (e) {
             console.error("Load failed for project:", id, e);
@@ -370,7 +407,27 @@ export const createProjectSlice: StateCreator<TimelineState, [], [], ProjectSlic
 
             // If load fails (e.g. 404), likely project was deleted or invalid.
             saveLastProjectId("");
-            set({ project: DEFAULT_PROJECT });
+            set({ project: DEFAULT_PROJECT, saveStatus: 'idle', savedBaseline: null });
+        }
+    },
+
+    overwriteProject: async () => {
+        const { project, addToast } = get();
+        try {
+            const response = await fetch(`${API_BASE_URL}/projects/${project.id}`);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const server = await response.json();
+            set(state => ({
+                project: {
+                    ...state.project,
+                    revision: typeof server.revision === 'number' ? server.revision : state.project.revision,
+                },
+                saveStatus: 'dirty',
+                saveError: null,
+            }));
+            await get().saveProject();
+        } catch (error) {
+            addToast(error instanceof Error ? error.message : 'Could not overwrite the server copy', 'error');
         }
     },
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, Sparkles } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStudioDocumentStore } from '../state/documentStore';
@@ -27,6 +27,45 @@ export function StorySurface() {
     const { elements } = useStudioElements(project.id);
     const [query, setQuery] = useState('');
     const [elementFilter, setElementFilter] = useState<string | null>(null);
+    const spineRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => {
+        if (!mobileSpineOpen) return undefined;
+        const host = spineRef.current;
+        const board = document.querySelector('.st-board-wrap');
+        const previous = document.activeElement as HTMLElement | null;
+        board?.setAttribute('inert', '');
+        const focusable = () => Array.from(host?.querySelectorAll<HTMLElement>(
+            'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) || []).filter((element) => element.offsetParent !== null);
+        focusable()[0]?.focus();
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                setMobileSpineOpen(false);
+                return;
+            }
+            if (event.key !== 'Tab') return;
+            const items = focusable();
+            if (items.length === 0) return;
+            const first = items[0];
+            const last = items[items.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        };
+        document.addEventListener('keydown', onKeyDown, true);
+        return () => {
+            document.removeEventListener('keydown', onKeyDown, true);
+            board?.removeAttribute('inert');
+            previous?.focus?.();
+        };
+    }, [mobileSpineOpen, setMobileSpineOpen]);
 
     const groups = useMemo(() => {
         const scenes = project.scenes || [];
@@ -69,7 +108,10 @@ export function StorySurface() {
             <aside
                 className="st-spine"
                 aria-label="Story spine"
+                role={mobileSpineOpen ? 'dialog' : undefined}
+                aria-modal={mobileSpineOpen ? true : undefined}
                 data-mobile-open={mobileSpineOpen}
+                ref={spineRef}
             >
                 <div className="st-spine-head">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>

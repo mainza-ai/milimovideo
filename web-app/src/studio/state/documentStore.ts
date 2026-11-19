@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import { useShallow } from 'zustand/react/shallow';
 import type { TimelineState } from '../../stores/types';
+import { documentSignature } from '../../stores/saveStatus';
 
 import { createProjectSlice } from '../../stores/slices/projectSlice';
 import { createShotSlice } from '../../stores/slices/shotSlice';
@@ -36,7 +37,16 @@ export const useStudioDocumentStore = create<TimelineState>()(
             }),
             {
                 name: 'milimo-studio-document',
-                partialize: (state: TimelineState) => ({ project: state.project }),
+                partialize: (state: TimelineState) => ({
+                    project: state.project,
+                    savedBaseline: state.savedBaseline,
+                    saveStatus: state.saveStatus === 'saved'
+                        || state.saveStatus === 'dirty'
+                        || state.saveStatus === 'idle'
+                        || state.saveStatus === 'conflict'
+                        ? state.saveStatus
+                        : 'dirty',
+                }),
                 merge: (persistedState: unknown, currentState: TimelineState) => {
                     const persisted = (persistedState as Partial<TimelineState>) || {};
                     const persistedProject = persisted.project;
@@ -83,6 +93,20 @@ export const useStudioDocumentStore = create<TimelineState>()(
         },
     ),
 );
+
+// Derive Saved/Unsaved from the last successful save, so undo, redo, board
+// applies, and zundo restores are all truthful. A conflict stays sticky until
+// the user reloads or explicitly overwrites.
+useStudioDocumentStore.subscribe((state, previous) => {
+    if (state.project === previous.project) return;
+    if (state.saveStatus === 'conflict' || state.saveStatus === 'saving') return;
+    const next = state.savedBaseline
+        ? (documentSignature(state.project) === state.savedBaseline ? 'saved' : 'dirty')
+        : 'dirty';
+    if (state.saveStatus !== next) {
+        useStudioDocumentStore.setState({ saveStatus: next });
+    }
+});
 
 export function useStudioDocument() {
     return useStudioDocumentStore(useShallow((state) => ({

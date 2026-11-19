@@ -1511,7 +1511,7 @@ export function BoardCanvas() {
                                         </select>
                                     </td>
                                     <td className="st-mono">{shot.numFrames}</td>
-                                    <td>{shotStatusLabel(shot.status)}</td>
+                                    <td>{shotStatusLabel(shot)}</td>
                                     <td>{shot.videoUrl ? 'selected' : '—'}</td>
                                 </tr>
                             ))}

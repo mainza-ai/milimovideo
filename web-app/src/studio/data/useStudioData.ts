@@ -144,6 +144,7 @@ export interface StudioTake {
     created_at?: string | null;
     selected: boolean;
     favorite?: boolean;
+    missing?: boolean;
 }
 
 export interface ReviewComment {

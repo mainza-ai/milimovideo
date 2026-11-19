@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
     CheckCircle2, ChevronDown, FolderOpen, MessageSquare, MonitorPlay, PanelLeft,
-    Plus, Redo2, Save, Share2, TriangleAlert, Undo2,
+    Plus, Redo2, RefreshCw, Save, Share2, TriangleAlert, Undo2,
 } from 'lucide-react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -35,7 +35,7 @@ export function TopBar() {
             setInspectorOpen: state.setInspectorOpen,
         })),
     );
-    const { saveStatus, saveError, saveProject } = useStudioDocumentStore();
+    const { saveStatus, saveError, saveProject, overwriteProject } = useStudioDocumentStore();
     const setMobileSpineOpen = useStudioEditor((state) => state.setMobileSpineOpen);
     const addToast = useStudioDocumentStore((state) => state.addToast);
     const loadProject = useStudioDocumentStore((state) => state.loadProject);
@@ -259,12 +259,33 @@ export function TopBar() {
                     type="button"
                     className="st-status-pill"
                     data-tone={saveTone}
-                    onClick={() => void saveProject()}
-                    title={saveError || 'Save project'}
+                    onClick={() => {
+                        if (saveStatus === 'conflict') {
+                            const overwrite = window.confirm(
+                                'Overwrite the server copy with your local changes?\n\nCancel reloads the server copy instead.',
+                            );
+                            if (overwrite) void overwriteProject();
+                            else void loadProject(project.id);
+                            return;
+                        }
+                        void saveProject();
+                    }}
+                    title={saveError || (saveStatus === 'conflict' ? 'Save conflict — click to overwrite, cancel to reload' : 'Save project')}
                 >
                     {saveStatus === 'saved' ? <CheckCircle2 size={11} /> : saveStatus === 'error' || saveStatus === 'conflict' ? <TriangleAlert size={11} /> : <Save size={11} />}
                     {saveLabel}
                 </button>
+                {saveStatus === 'conflict' && (
+                    <button
+                        type="button"
+                        className="st-icon-button"
+                        aria-label="Reload the server copy"
+                        title="Reload the server copy"
+                        onClick={() => void loadProject(project.id)}
+                    >
+                        <RefreshCw size={14} />
+                    </button>
+                )}
                 {error && (
                     <button
                         type="button"

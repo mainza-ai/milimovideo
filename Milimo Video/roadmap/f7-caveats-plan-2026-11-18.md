@@ -24,7 +24,17 @@ Priority order: **contract truth → state truth → preview truth → provenanc
 mobile → verification**. The contract and state phases are small and unblock
 trustworthy testing of the rest.
 
-Status: **planned, not started**.
+Status: **implemented — 2026-11-18**. Evidence is in
+[[../systems/f7-caveats-audit-2026-11-18]] and the verification gate below.
+
+| Phase | Status | What shipped |
+|---|---|---|
+| **F8-0** | ✅ | `created_at` stripped from writes; GET→PUT→GET round-trip test |
+| **F8-1** | ✅ | Baseline-derived Saved/Unsaved, sticky conflict with reload/overwrite, active-job hydration on boot, status/media cross-check |
+| **F8-2** | ✅ | CORS-capable LUT source with cache-busting, RGBA8 3D texture, 2D visible surface, domain/range parsing, image support, active-clip badge, throttled uploads |
+| **F8-3** | ✅ | Relink migrates jobs/takes/LUT/workflows, preserves timestamps, optional purge with explicit confirm; take replace endpoint and missing flags; real Library repair; per-item bulk errors |
+| **F8-4** | ✅ | Mobile full-screen timeline, scroll hint, dialog drawer with focus trap/Escape, shared filename ellipsis, table respects hidden tracks |
+| **F8-5** | ✅ | LUT pixel E2E, mobile drawer/timeline E2E, relink provenance tests, contract round-trip test, conflict/undo Vitest |
 
 ## Findings → phases
 

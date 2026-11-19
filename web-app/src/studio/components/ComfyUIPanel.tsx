@@ -6,6 +6,7 @@ import {
 import { apiFetch, apiUrl, getAssetUrl } from '../../config';
 import { saveTextFile } from '../../desktop';
 import { useStudioDocumentStore } from '../state/documentStore';
+import { middleEllipsis } from '../data/format';
 import { useStudioJobs } from '../state/jobStore';
 import { useStudioActiveJobs, useStudioAssets } from '../data/useStudioData';
 import { registerStudioJob } from '../events/jobBridge';
@@ -1418,7 +1419,12 @@ export function ComfyWorkflowPanel({ projectId, shotId }: { projectId: string; s
                                         )}
                                     </button>
                                     <div className="st-take-body">
-                                        <strong>{String(record.source_filename || `output ${index + 1}`)}</strong>
+                                        <strong
+                                            className="st-filename"
+                                            title={String(record.source_filename || `output ${index + 1}`)}
+                                        >
+                                            {middleEllipsis(String(record.source_filename || `output ${index + 1}`))}
+                                        </strong>
                                         <div>{kind} · node {String(record.node_id || '—')}</div>
                                         <button type="button" className="st-button" data-size="sm" onClick={() => attachOutput(record)}>
                                             Use as shot media

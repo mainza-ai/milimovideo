@@ -105,6 +105,7 @@ interface EditorState {
     mobileSpineOpen: boolean;
     hiddenTracks: number[];
     commandDockCollapsed: boolean;
+    mobileTimelineExpanded: boolean;
     commandOpen: boolean;
     commandMode: 'ask' | 'direct' | 'generate' | 'find';
     commandDraft: string;
@@ -158,6 +159,7 @@ interface EditorState {
     setMobileSpineOpen: (open: boolean) => void;
     toggleTrackVisibility: (trackId: number) => void;
     setCommandDockCollapsed: (collapsed: boolean) => void;
+    setMobileTimelineExpanded: (expanded: boolean) => void;
     setCommandOpen: (open: boolean) => void;
     setCommandMode: (mode: EditorState['commandMode']) => void;
     setCommandDraft: (draft: string) => void;
@@ -224,6 +226,7 @@ export const useStudioEditor = create<EditorState>()(
             mobileSpineOpen: false,
             hiddenTracks: [],
             commandDockCollapsed: false,
+            mobileTimelineExpanded: false,
             commandOpen: false,
             commandMode: 'direct',
             commandDraft: '',
@@ -384,6 +387,7 @@ export const useStudioEditor = create<EditorState>()(
                     : [...state.hiddenTracks, trackId],
             })),
             setCommandDockCollapsed: (commandDockCollapsed) => set({ commandDockCollapsed }),
+            setMobileTimelineExpanded: (mobileTimelineExpanded) => set({ mobileTimelineExpanded }),
             setCommandOpen: (commandOpen) => set({ commandOpen }),
             setCommandMode: (commandMode) => set({ commandMode }),
             setCommandDraft: (commandDraft) => set({ commandDraft }),
@@ -451,6 +455,7 @@ export const useStudioEditor = create<EditorState>()(
                 mobileSpineOpen: state.mobileSpineOpen,
                 hiddenTracks: state.hiddenTracks,
                 commandDockCollapsed: state.commandDockCollapsed,
+                mobileTimelineExpanded: state.mobileTimelineExpanded,
                 commandOpen: state.commandOpen,
                 commandMode: state.commandMode,
                 spineCollapsed: state.spineCollapsed,

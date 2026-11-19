@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStudioDocumentStore } from '../state/documentStore';
+import { useStudioEditor } from '../state/editorStore';
 import { useMediaPreview } from '../state/mediaPreviewStore';
 import { apiUrl, getAssetUrl } from '../../config';
 import { computeTimelineLayout } from '../../utils/timelineUtils';
@@ -19,12 +20,14 @@ import { formatDuration, useAssetUrl, useStudioTakes } from '../data/useStudioDa
 
 export function EditSurface() {
     const openMediaPreview = useMediaPreview((state) => state.open);
+    const mobileTimelineExpanded = useStudioEditor((state) => state.mobileTimelineExpanded);
     const project = useStudioDocumentStore((state) => state.project);
-    const { isPlaying, setIsPlaying, setCurrentTime, selectedShotId } = useStudioDocumentStore(useShallow((state) => ({
+    const { isPlaying, setIsPlaying, setCurrentTime, selectedShotId, currentTime } = useStudioDocumentStore(useShallow((state) => ({
         isPlaying: state.isPlaying,
         setIsPlaying: state.setIsPlaying,
         setCurrentTime: state.setCurrentTime,
         selectedShotId: state.selectedShotId,
+        currentTime: state.currentTime,
     })));
     const videoRef = useRef<HTMLVideoElement>(null);
     const compareVideoRef = useRef<HTMLVideoElement>(null);
@@ -42,6 +45,7 @@ export function EditSurface() {
     const [trackingOpen, setTrackingOpen] = useState(false);
     const [lutPreviewFailed, setLutPreviewFailed] = useState(false);
     const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
+    const [imageElement, setImageElement] = useState<HTMLImageElement | null>(null);
     const [maskPrompt, setMaskPrompt] = useState('');
     const [inpaintPrompt, setInpaintPrompt] = useState('');
     const [inpaintStatus, setInpaintStatus] = useState<string | null>(null);
@@ -88,6 +92,17 @@ export function EditSurface() {
     const compareUrl = useAssetUrl(compareTake?.url);
     const compareIsImage = !!compareUrl?.match(/\.(jpg|jpeg|png|webp)$/i);
     const fps = project.fps || 25;
+    const lutUrl = project.renderLut || '';
+    const lutExportOnly = !!lutUrl && !/\.cube($|\?)/i.test(lutUrl);
+    // A CORS image/video can reuse a cached non-CORS response for the same URL
+    // and fail with a taint error. A distinct query string guarantees a fresh
+    // CORS response for the LUT-preview source.
+    const previewMediaUrl = mediaUrl && lutUrl && !lutExportOnly
+        ? `${mediaUrl}${mediaUrl.includes('?') ? '&' : '?'}lutPreview=1`
+        : mediaUrl;
+    const hasV2AtPlayhead = layout.some(
+        (clip) => clip.track === 1 && currentTime >= clip.start && currentTime < clip.end,
+    );
 
     // The clock writes currentTime every frame. Sync media and the active clip
     // through a subscription instead of re-rendering the whole edit surface.
@@ -273,7 +288,7 @@ export function EditSurface() {
     };
 
     return (
-        <div className="st-edit">
+        <div className="st-edit" data-timeline-expanded={mobileTimelineExpanded}>
             <PlaybackEngine />
             <div className="st-stage">
                 <div
@@ -293,14 +308,20 @@ export function EditSurface() {
                             style={{ cursor: 'zoom-in' }}
                         >
                             {isImage ? (
-                                <img src={mediaUrl} alt="" />
+                                <img
+                                    crossOrigin="anonymous"
+                                    src={previewMediaUrl}
+                                    alt=""
+                                    ref={(element) => setImageElement(element)}
+                                />
                             ) : (
                                 <video
                                     ref={(element) => {
                                         videoRef.current = element;
                                         setVideoElement(element);
                                     }}
-                                    src={mediaUrl}
+                                    crossOrigin="anonymous"
+                                    src={previewMediaUrl}
                                     muted
                                     playsInline
                                     preload="metadata"
@@ -332,7 +353,13 @@ export function EditSurface() {
                             {compareIsImage ? (
                                 <img src={compareUrl} alt="" />
                             ) : (
-                                <video ref={compareVideoRef} src={compareUrl} muted playsInline preload="metadata" />
+                                <video
+                                    ref={compareVideoRef}
+                                    src={compareUrl}
+                                    muted
+                                    playsInline
+                                    preload="metadata"
+                                />
                             )}
                             <span className="st-compare-badge">
                                 {compareMode === 'side' ? 'B · alternate take' : 'B'}
@@ -355,10 +382,10 @@ export function EditSurface() {
                         </div>
                     )}
 
-                    {mediaUrl && !isImage && project.renderLut && (
+                    {mediaUrl && lutUrl && !lutExportOnly && (
                         <LutPreview
-                            video={videoElement}
-                            lutUrl={project.renderLut}
+                            source={isImage ? imageElement : videoElement}
+                            lutUrl={lutUrl}
                             onError={() => setLutPreviewFailed(true)}
                         />
                     )}
@@ -384,15 +411,19 @@ export function EditSurface() {
                         <span className="st-status-pill">V{active?.track === 1 ? 2 : 1}</span>
                         <span className="st-status-pill">{project.resolutionW}×{project.resolutionH}</span>
                         <span className="st-status-pill">{fps} fps</span>
-                        {(project.renderLut || (project.titles || []).length > 0) && (
+                        {(lutUrl || (project.titles || []).length > 0) && (
                             <span
                                 className="st-status-pill"
-                                data-tone={project.renderLut && lutPreviewFailed ? 'warn' : undefined}
-                                title={project.renderLut && lutPreviewFailed
-                                    ? 'This LUT format is export-only in the browser preview'
-                                    : 'Titles and LUT are previewed here; export stays authoritative'}
+                                data-tone={lutExportOnly || lutPreviewFailed ? 'warn' : hasV2AtPlayhead ? 'warn' : undefined}
+                                title={lutExportOnly || lutPreviewFailed
+                                    ? 'This LUT cannot be previewed in the browser; it is applied on export'
+                                    : hasV2AtPlayhead
+                                        ? 'The preview LUT applies to the active clip; V2 is composited on export'
+                                        : 'Titles and LUT are previewed here; export stays authoritative'}
                             >
-                                {project.renderLut && lutPreviewFailed ? 'LUT on export' : 'preview'}
+                                {lutExportOnly || lutPreviewFailed
+                                    ? 'LUT on export'
+                                    : hasV2AtPlayhead ? 'LUT · active clip' : 'preview'}
                             </span>
                         )}
                         {(['grid', 'safe', 'thirds'] as const).map((guide) => (

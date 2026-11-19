@@ -433,7 +433,7 @@ export function Inspector() {
                                     Compare takes, comment at the current frame, and approve the selected version in Review.
                                 </div>
                                 <dl className="st-meta-grid" style={{ marginTop: 10 }}>
-                                    <dt>Status</dt><dd>{shotStatusLabel(shot.status)}</dd>
+                                    <dt>Status</dt><dd>{shotStatusLabel(shot)}</dd>
                                     <dt>Last job</dt><dd className="st-mono">{shot.lastJobId || '—'}</dd>
                                 </dl>
                             </div>

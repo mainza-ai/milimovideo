@@ -58,9 +58,9 @@ a test; "open" means no code or no verified path.
   surface, mobile Story drawer, five-track timeline, title preview, and the
   surface matrix gate. See [[../systems/frontend-ux-audit-2026-11-18]] and
   [[frontend-ux-plan-2026-11-18]].
-- **F8 caveat resolution** — audited 2026-11-18 but **not implemented**: LUT
-  preview CORS block, relink provenance/old files, sticky conflict and undo
-  truth, GET→PUT 500, mobile Edit timeline, drawer semantics. See
+- **F8 caveat resolution** — **done 2026-11-18**: LUT preview CORS/RGBA fixes,
+  relink provenance and take repair, sticky conflict and baseline undo truth,
+  GET→PUT round-trip, mobile full-screen timeline, dialog drawer. See
   [[../systems/f7-caveats-audit-2026-11-18]] and [[f7-caveats-plan-2026-11-18]].
 
 ## 2. Market scan (2026-11-17)

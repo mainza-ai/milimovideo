@@ -69,6 +69,35 @@ Summary by theme:
 - Backend project rep/relink tests pass; 225 pytest / 102 Vitest / 27 Playwright
   were green at F7 close.
 
+## Resolution — 2026-11-18
+
+All 18 findings were implemented the same day. Original findings remain as the
+audit trail.
+
+| Finding | Resolution | Evidence |
+|---|---|---|
+| F8-01 | Verified root cause and fixed: `crossOrigin`, cache-busted source URL, RGBA8 3D texture, visible 2D canvas, source hidden only after a successful draw | LUT E2E reads TL blue / TR green / BL red / BR white from a quadrant image |
+| F8-02 | Relink now migrates Job output/thumbnail, shots, selected take, project LUT, Comfy workflow JSON; preserves `created_at`; reports/optionally purges the old file | `test_relink_migrates_job_take_and_lut_references`, `test_take_replace_relinks_in_place_and_can_purge_old` |
+| F8-03 | Conflict is sticky; edits cannot downgrade it; TopBar offers reload or explicit overwrite | `keeps a save conflict sticky through edits` |
+| F8-04 | Saved/Unsaved derives from a document signature baseline, so undo/redo are truthful | `marks undo after a save dirty and redo saved again` |
+| F8-05 | `created_at` is server-owned and stripped before writes | `test_project_get_put_round_trip` |
+| F8-06 | Active jobs hydrate on load and on the global shell hook; card shows spinner + Running | live probe: spinner 1 with a running queued job |
+| F8-07 | Mobile full-screen timeline mode; tracks fill the surface; scroll hint; visible thin scrollbar | `ux-matrix` mobile expand test: stage hidden, timeline >400px, 5 tracks |
+| F8-08 | Drawer is a dialog with `aria-modal`, focus trap, Escape, focus restore, background inert | `ux-matrix` drawer test asserts Escape and focus return |
+| F8-09 | Takes expose `missing`; Takes tab has missing filter, relink, delete | backend project/shot take responses; Library UI |
+| F8-10 | LUT preview supports images; image/V2 states are labelled truthfully | LUT E2E uses a still image |
+| F8-11 | Parser supports DOMAIN/INPUT_RANGE, rejects 1D and >129 grids; non-cube shows export-only | `LutPreview.test.ts` |
+| F8-12 | Relink preserves metadata and project/workflow references; type changes under a take are refused | backend relink tests |
+| F8-13 | Library repair runs integrity scan + repair with confirmation | `LibrarySurface.repairMedia` |
+| F8-14 | Bulk delete reports partial failures instead of a false total | Library bulk handlers |
+| F8-15 | Card status derives from status + media; completed-without-media shows Missing media | `effectiveShotStatus` tests |
+| F8-16 | Shared middle-ellipsis util used by Library assets and Comfy outputs | `data/format.ts` |
+| F8-17 | Uploads are throttled to frame changes, paused/offscreen, downscaled to 1280 | `LutPreview.tsx` |
+| F8-18 | Table view honours hidden tracks; track count computed | `StudioTimeline.tsx` |
+
+Verification: 228 backend, 108 Vitest, 29 Playwright, ruff/tsc/ESLint, build and
+bundle green. LUT orientation and channel swap are asserted in `e2e/lut.spec.ts`.
+
 ## P1 findings
 
 ### F8-01 — LUT preview is blocked by cross-origin video taint

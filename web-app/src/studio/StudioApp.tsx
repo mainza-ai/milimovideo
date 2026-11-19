@@ -14,7 +14,7 @@ import { DeliverSurface } from './surfaces/DeliverSurface';
 import { SetupSurface } from './surfaces/SetupSurface';
 import { ShortsSurface } from './surfaces/ShortsSurface';
 import { useStudioEditor, type StudioSurface } from './state/editorStore';
-import { useStudioProject, useStudioBoardSync, useStudioProjectBootstrap } from './data/useStudioData';
+import { useStudioProject, useStudioActiveJobs, useStudioBoardSync, useStudioProjectBootstrap } from './data/useStudioData';
 import { useStudioDocumentStore } from './state/documentStore';
 import { SharedReviewPage } from './SharedReviewPage';
 import { studioQueryClient } from './state/queryClient';
@@ -68,6 +68,7 @@ function StudioShell() {
     const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const project = useStudioProject();
     useStudioProjectBootstrap();
+    useStudioActiveJobs(project.id);
     useStudioBoardSync(project.id);
     const isPlaying = useStudioDocumentStore((state) => state.isPlaying);
     const setIsPlaying = useStudioDocumentStore((state) => state.setIsPlaying);

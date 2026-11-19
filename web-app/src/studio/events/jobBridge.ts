@@ -257,6 +257,11 @@ export function registerActiveJobs(
         project_id?: string | null;
         type?: string;
         kind?: string;
+        status?: string | null;
+        stage?: string | null;
+        progress?: number | null;
+        status_message?: string | null;
+        eta_seconds?: number | null;
     }>,
 ): void {
     for (const job of jobs) {
@@ -264,6 +269,18 @@ export function registerActiveJobs(
             shotId: job.shot_id,
             projectId: job.project_id,
             kind: job.kind || job.type,
+        });
+        if (!job.shot_id || !['running', 'queued'].includes(job.status || '')) continue;
+        const shotStore = useStudioDocumentStore.getState();
+        if (!shotStore.project.shots.some((shot) => shot.id === job.shot_id)) continue;
+        shotStore.updateShot(job.shot_id, {
+            isGenerating: true,
+            status: 'generating',
+            progress: job.progress ?? 0,
+            stage: job.stage || 'queued',
+            statusMessage: job.status_message || (job.status === 'queued' ? 'Queued…' : 'Working…'),
+            etaSeconds: job.eta_seconds ?? undefined,
+            lastJobId: job.job_id,
         });
     }
 }

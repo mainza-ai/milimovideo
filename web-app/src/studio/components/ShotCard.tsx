@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Clapperboard, Copy, Eye, GripVertical, Loader2, Sparkles } from 'lucide-react';
 import type { Shot } from '../state/documentStore';
 import { MediaThumb } from './MediaThumb';
-import { shotStatusLabel } from '../../stores/saveStatus';
+import { shotStatusKey, shotStatusLabel } from '../../stores/saveStatus';
 import type { BoardPosition } from '../state/editorStore';
 
 interface Props {
@@ -64,8 +64,8 @@ export function ShotCard({
                     hovered={hovered}
                 />
                 <span className="st-shot-card-badge">{shot.shotType || `S${index + 1}`}</span>
-                <span className="st-shot-card-status" data-status={shot.status || 'pending'}>
-                    {shot.isGenerating ? <Loader2 size={9} className="animate-spin" /> : shotStatusLabel(shot.status)}
+                <span className="st-shot-card-status" data-status={shotStatusKey(shot)}>
+                    {shot.isGenerating ? <><Loader2 size={9} className="animate-spin" /> Running</> : shotStatusLabel(shot)}
                 </span>
                 <div
                     className="st-shot-card-actions"

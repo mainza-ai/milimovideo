@@ -435,6 +435,9 @@ async def save_project(project_id: str, state: ProjectState, session: Session = 
 
         # Clean input data. The payload array is the canonical story order.
         clean_data = {k: v for k, v in s_data.items() if k in valid_keys}
+        # `created_at` is server-owned and read-only. A GET→PUT round-trip used
+        # to send it back as an ISO string and crash SQLite's DateTime bind.
+        clean_data.pop("created_at", None)
         clean_data["project_id"] = project_id
         clean_data["sequence_index"] = order
         if "timeline" in clean_data:
@@ -739,11 +742,14 @@ def list_project_takes(
 
     shots = session.exec(select(Shot).where(Shot.project_id == project_id)).all()
     shot_map = {shot.id: shot for shot in shots}
+    from file_utils import resolve_path
 
     takes = []
     for job in jobs:
         shot = shot_map.get(job.shot_id or "")
         params = _parse_json_field(job.params_json, {})
+        resolved = resolve_path(job.output_path)
+        missing = not bool(resolved and os.path.exists(resolved))
         takes.append({
             "job_id": job.id,
             "shot_id": job.shot_id,
@@ -763,6 +769,7 @@ def list_project_takes(
             "created_at": job.created_at.isoformat() if job.created_at else None,
             "selected": bool(shot and (shot.selected_take_id or shot.last_job_id) == job.id),
             "favorite": bool(shot and shot.favorite_take_id == job.id),
+            "missing": missing,
         })
     return {"takes": takes, "count": len(takes)}
 

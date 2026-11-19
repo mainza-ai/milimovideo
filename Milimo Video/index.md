@@ -56,7 +56,8 @@ navigate, then drills into pages.
   caveat audit behind F7: **LUT preview blocked by cross-origin taint**, relink
   leaves take/job provenance and old files stale, save conflict/undo truth gaps,
   GET→PUT 500 on `created_at`, 121px mobile Edit timeline, drawer semantics, and
-  18 findings (`F8-01…F8-18`) with a phased F8 plan.
+  18 findings (`F8-01…F8-18`). **All F8 findings are fixed**; resolution evidence
+  is on the audit page.
 - [systems/llm-settings-audit-2026-11](systems/llm-settings-audit-2026-11.md) —
   LLM configuration audit **and implementation record**: Kubona reference patterns,
   the old Gemma/Ollama gaps, the shipped L0–L3 plane (persisted providers/roles,
@@ -191,7 +192,7 @@ navigate, then drills into pages.
 - [roadmap/f7-caveats-plan-2026-11-18](roadmap/f7-caveats-plan-2026-11-18.md) —
   the F8 caveat plan: F8-0 contract round-trip → F8-1 save/shot truth → F8-2 LUT
   preview truth → F8-3 relink/repair provenance → F8-4 mobile Edit/drawer →
-  F8-5 verification. **Planned, not started.**
+  F8-5 verification. **Implemented 2026-11-18.**
 - [roadmap/implementation-plan-2026-11](roadmap/implementation-plan-2026-11.md) —
   the sequenced fix-and-ship plan. Scoped P0–P5, F0–F5, and F6 are complete; the page
   lists remaining/deferred work (bundled sidecar, legacy cutover, Phase 6 v2 lane,
